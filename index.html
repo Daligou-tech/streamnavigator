@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>StreamNavigator — The AI subscription manager for streaming</title>
+<meta name="description" content="StreamNavigator is a monthly subscription that monitors your streaming subscriptions based on what you actually watch, and tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FBF4E9;
+    --bg-alt:#F5EAD9;
+    --surface:#FFFFFF;
+    --surface-2:#FFF1DD;
+    --ink:#1F1B16;
+    --border:rgba(31,27,22,0.12);
+    --border-strong:rgba(31,27,22,0.22);
+    --text:#201A14;
+    --text-dim:#5B5347;
+    --text-dimmer:#7A7163;
+    --accent:#4FB6E8;
+    --accent-deep:#1668A5;
+    --accent-2:#4ADE9E;
+    --accent-2-deep:#146B4A;
+    --accent-3:#2EC4B6;
+    --accent-3-deep:#0F8A7D;
+    --yellow:#FFC93C;
+    --status-active:#1E9E64;
+    --status-active-deep:#157A4E;
+    --status-paused:#9C9282;
+    --gradient: linear-gradient(135deg, #4FB6E8 0%, #4ADE9E 100%);
+    --gradient-text: linear-gradient(135deg, #1668A5 0%, #146B4A 100%);
+    --gradient-warm: linear-gradient(135deg, #4ADE9E 0%, #FFC93C 100%);
+    --radius: 20px;
+    --radius-sm: 12px;
+    --shadow-hard: 6px 6px 0 var(--ink);
+    --shadow-hard-sm: 4px 4px 0 var(--ink);
+    --shadow-hard-xs: 3px 3px 0 var(--ink);
+    --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
+    --shadow-glow: 0 0 0 1px rgba(79,182,232,0.20), 0 20px 50px -20px rgba(79,182,232,0.32);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  h1,h2,h3,h4{ font-family:'Sora','Inter',sans-serif; letter-spacing:-0.02em; font-weight:700; color:var(--text); }
+  a{ color:inherit; text-decoration:none; }
+  img{ max-width:100%; display:block; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
+  .bg-noise{
+    position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:radial-gradient(circle at 15% 8%, rgba(79,182,232,0.12), transparent 42%),
+                      radial-gradient(circle at 88% 14%, rgba(46,196,182,0.12), transparent 42%),
+                      radial-gradient(circle at 50% 95%, rgba(74,222,158,0.10), transparent 46%),
+                      radial-gradient(circle at 10% 70%, rgba(255,201,60,0.10), transparent 40%);
+  }
+
+  /* ---------- Nav ---------- */
+  header{
+    position:sticky; top:0; z-index:100;
+    backdrop-filter: blur(14px) saturate(140%);
+    background:rgba(251,244,233,0.78);
+    border-bottom:2px solid var(--ink);
+  }
+  nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:1180px; margin:0 auto; }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; font-family:'Sora',sans-serif; color:var(--text); }
+  .logo-mark{
+    width:30px; height:30px; border-radius:9px; background:var(--gradient);
+    display:flex; align-items:center; justify-content:center; position:relative;
+    border:2px solid var(--ink); box-shadow: var(--shadow-hard-xs);
+  }
+  .logo-mark svg{ width:16px; height:16px; }
+  .nav-links{ display:flex; gap:32px; align-items:center; }
+  .nav-links a{ font-size:14px; color:var(--text-dim); font-weight:600; transition:color .2s; }
+  .nav-links a:hover{ color:var(--text); }
+  .nav-cta{ display:flex; align-items:center; gap:16px; }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px 20px; border-radius:999px; font-weight:700; font-size:14px;
+    border:2px solid var(--ink); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .2s ease;
+    white-space:nowrap;
+  }
+  .btn:active{ transform:translate(3px,3px); box-shadow:none !important; }
+  .btn-primary{
+    background:var(--accent); color:var(--ink); font-weight:800;
+    box-shadow:var(--shadow-hard-sm);
+  }
+  .btn-primary:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px); }
+  .btn-ghost{
+    background:var(--surface); color:var(--text); border-color:var(--ink);
+    box-shadow:var(--shadow-hard-xs);
+  }
+  .btn-ghost:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  .btn-sm{ padding:8px 16px; font-size:13px; }
+  .mobile-toggle{ display:none; background:none; border:none; color:var(--text); font-size:22px; cursor:pointer; }
+
+  /* ---------- Hero ---------- */
+  .hero{ position:relative; padding:96px 24px 60px; text-align:center; z-index:1; }
+  .pill{
+    display:inline-flex; align-items:center; gap:8px; padding:6px 14px 6px 6px;
+    border-radius:999px; background:var(--surface); border:2px solid var(--ink);
+    font-size:13px; color:var(--text-dim); font-weight:600; margin-bottom:28px; box-shadow:var(--shadow-hard-xs);
+  }
+  .pill span.dot{ width:20px;height:20px;border-radius:999px; background:var(--gradient); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--ink); }
+  .hero h1{
+    font-size:clamp(2.4rem, 5.6vw, 4.4rem); line-height:1.06; max-width:900px; margin:0 auto 22px;
+  }
+  .hero h1 .grad{
+    background:var(--gradient-text); -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .hero p.sub{
+    max-width:620px; margin:0 auto 40px; color:var(--text-dim); font-size:19px;
+  }
+  .hero-form{
+    display:flex; gap:10px; justify-content:center; max-width:480px; margin:0 auto 18px; flex-wrap:wrap;
+  }
+  .hero-form input[type="email"]{
+    flex:1; min-width:240px; padding:14px 18px; border-radius:999px; border:2px solid var(--ink);
+    background:var(--surface); color:var(--text); font-size:15px; outline:none; transition:border-color .2s, box-shadow .2s;
+  }
+  .hero-form input[type="email"]:focus{ border-color:var(--accent-deep); box-shadow:var(--shadow-hard-xs); }
+  .hero-note{ font-size:13px; color:var(--text-dimmer); margin-bottom:56px; }
+  .hero-note strong{ color:var(--text-dim); }
+
+  /* Hero visual: browser mockup */
+  .browser-mock{
+    max-width:960px; margin:0 auto; border-radius:18px; overflow:hidden;
+    background:var(--surface); border:2px solid var(--ink); box-shadow:var(--shadow-hard), 0 30px 70px -35px rgba(31,27,22,0.18);
+    position:relative;
+  }
+  .browser-bar{ display:flex; align-items:center; gap:8px; padding:12px 16px; background:var(--surface-2); border-bottom:2px solid var(--ink); }
+  .browser-bar .dots{ display:flex; gap:6px; }
+  .browser-bar .dots span{ width:10px; height:10px; border-radius:50%; background:var(--border-strong); }
+  .browser-bar .dots span:nth-child(1){ background:#4FB6E8; }
+  .browser-bar .dots span:nth-child(2){ background:#FFC93C; }
+  .browser-bar .dots span:nth-child(3){ background:#2EC4B6; }
+  .browser-bar .url{
+    margin:0 auto; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:8px; padding:5px 14px;
+    font-size:12px; color:var(--text-dimmer); display:flex; align-items:center; gap:6px;
+  }
+  .browser-body{ padding:28px; background:
+    linear-gradient(180deg, rgba(79,182,232,0.05), transparent 40%), var(--bg-alt); }
+  .app-shell{ display:grid; grid-template-columns:220px 1fr; gap:20px; text-align:left; }
+  .app-side{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  .app-side .side-item{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:13px; color:var(--text-dim); margin-bottom:4px; }
+  .app-side .side-item.active{ background:rgba(79,182,232,0.12); color:var(--accent-deep); }
+  .app-side .side-item .ico{ width:16px; height:16px; border-radius:4px; background:rgba(31,27,22,0.08); flex-shrink:0; }
+  .app-main{ display:flex; flex-direction:column; gap:14px; }
+
+  /* ---------- Program guide (12-month pause/resume strip) ---------- */
+  .program-guide{
+    max-width:960px; margin:0 auto 24px; text-align:left; background:var(--surface); border:2px solid var(--ink);
+    border-radius:18px; padding:22px 24px 20px; box-shadow:var(--shadow-hard), 0 24px 60px -30px rgba(31,27,22,0.14);
+  }
+  .pg-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap; margin-bottom:18px; }
+  .pg-head-copy h3{ font-size:1.05rem; margin-bottom:4px; }
+  .pg-head-copy p{ font-size:12.5px; color:var(--text-dimmer); max-width:420px; }
+  .pg-legend{ display:flex; gap:14px; flex-wrap:wrap; padding-top:2px; }
+  .pg-legend-item{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); font-weight:600; white-space:nowrap; }
+  .pg-swatch{ width:12px; height:12px; border-radius:3px; display:inline-block; flex-shrink:0; }
+  .pg-swatch.active{ background:var(--status-active); }
+  .pg-swatch.paused{ background:var(--status-paused); background-image:repeating-linear-gradient(45deg, rgba(31,27,22,0.20) 0 2px, transparent 2px 5px); }
+  .pg-swatch.resume{ background:var(--status-active); box-shadow:0 0 0 2px var(--ink); }
+  .pg-grid-scroll{ overflow-x:auto; padding-bottom:2px; }
+  .pg-grid{ display:grid; grid-template-columns:100px repeat(12, minmax(38px, 1fr)); gap:4px; align-items:center; min-width:600px; }
+  .pg-row-label{ font-size:12px; color:var(--text-dim); font-weight:600; padding-right:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pg-month-label{ font-size:10px; color:var(--text-dimmer); text-align:center; text-transform:uppercase; letter-spacing:0.03em; padding-bottom:5px; }
+  .pg-cell{
+    position:relative; height:22px; border-radius:5px; border:none; cursor:pointer; padding:0; width:100%;
+    background:var(--status-paused); transition:transform .12s ease, box-shadow .12s ease; outline-offset:2px;
+  }
+  .pg-cell:hover, .pg-cell:focus-visible{ transform:scaleY(1.28); box-shadow:0 0 0 2px var(--ink); z-index:2; }
+  .pg-cell.state-active{ background:var(--status-active); }
+  .pg-cell.state-paused{ background:var(--status-paused); background-image:repeating-linear-gradient(45deg, rgba(31,27,22,0.18) 0 2px, transparent 2px 5px); }
+  .pg-cell.is-resume::after{
+    content:''; position:absolute; top:-3px; left:-3px; right:-3px; bottom:-3px; border-radius:8px;
+    border:2px solid var(--ink); pointer-events:none;
+  }
+  .pg-cell.is-resume::before{
+    content:'▶'; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:7px; color:var(--ink); pointer-events:none;
+  }
+  .pg-savings{ margin-top:16px; padding-top:14px; border-top:1px solid var(--border); font-size:13px; color:var(--text-dim); text-align:center; }
+  .pg-savings strong{ color:var(--status-active-deep); }
+  .pg-tooltip{
+    position:fixed; pointer-events:none; z-index:1000; background:var(--surface); border:2px solid var(--ink);
+    border-radius:8px; padding:8px 12px; font-size:12px; color:var(--text); box-shadow:var(--shadow-hard-xs);
+    max-width:230px; opacity:0; transform:translateY(4px); transition:opacity .12s ease, transform .12s ease;
+  }
+  .pg-tooltip.show{ opacity:1; transform:translateY(0); }
+  .pg-tooltip .pg-tt-title{ font-weight:700; margin-bottom:2px; }
+  .pg-tooltip .pg-tt-body{ color:var(--text-dim); }
+  @media (max-width: 640px){
+    .pg-head{ flex-direction:column; }
+  }
+
+  /* ---------- Analyzer (live in hero) ---------- */
+  .analyzer{ text-align:left; display:flex; flex-direction:column; gap:22px; }
+  .analyzer-head h3{ font-size:1.25rem; margin-bottom:6px; }
+  .analyzer-head p{ font-size:13.5px; color:var(--text-dimmer); }
+  .analyzer-section{ display:flex; flex-direction:column; gap:10px; }
+  .analyzer-section.two-col{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+  .a-label{ font-size:12.5px; font-weight:700; letter-spacing:0.03em; color:var(--text-dim); text-transform:uppercase; }
+  .svc-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .svc-grid > div{ display:contents; }
+  .svc-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px;
+    background:var(--surface-2); border:1.5px solid var(--border-strong); color:var(--text-dim);
+    font-size:13.5px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
+  }
+  .svc-chip:hover{ border-color:var(--ink); color:var(--text); }
+  .svc-chip.active{ background:var(--gradient); color:var(--ink); border-color:var(--ink); }
+  .svc-chip-add{ background:none; border-style:dashed; margin-top:2px; }
+  .svc-chip-add:hover{ color:var(--accent-3-deep); border-color:var(--accent-3-deep); }
+  .custom-add-form input::placeholder{ color:var(--text-dimmer); }
+  .svc-detail{
+    display:none; grid-template-columns:1fr 1fr; gap:10px; background:var(--surface); border:1.5px solid var(--border-strong);
+    border-radius:10px; padding:12px; margin-top:-2px; width:100%;
+  }
+  .svc-detail.show{ display:grid; }
+  .svc-detail-full{ grid-column:1 / -1; font-size:12.5px; color:var(--text-dimmer); margin-bottom:-2px; }
+  .a-select{
+    width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg);
+    color:var(--text); font-size:13px; font-family:inherit; outline:none;
+  }
+  .a-select:focus{ border-color:var(--accent-deep); }
+  .tag-field{ display:flex; }
+  .tag-field input{
+    width:100%; padding:10px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface);
+    color:var(--text); font-size:13.5px; font-family:inherit; outline:none;
+  }
+  .tag-field input:focus{ border-color:var(--accent-deep); }
+  .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
+  .tag-pill{
+    display:inline-flex; align-items:center; gap:6px; background:rgba(79,182,232,0.12); color:var(--accent-deep);
+    border:1px solid rgba(79,182,232,0.3); font-size:12.5px; padding:5px 8px 5px 12px; border-radius:999px;
+  }
+  .tag-pill button{ background:none; border:none; color:inherit; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip-toggle{
+    padding:8px 14px; border-radius:999px; background:var(--surface-2); border:1.5px solid var(--border-strong);
+    color:var(--text-dim); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
+  }
+  .chip-toggle:hover{ border-color:var(--accent-3-deep); color:var(--text); }
+  .chip-toggle.active{ background:rgba(46,196,182,0.18); border-color:var(--accent-3-deep); color:var(--accent-3-deep); }
+  .check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--text-dim); margin-bottom:12px; cursor:pointer; }
+  .check-row input{ width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
+  .budget-field{ display:flex; align-items:center; gap:6px; background:var(--bg); border:1.5px solid var(--border-strong); border-radius:8px; padding:9px 12px; }
+  .budget-field span{ color:var(--text-dimmer); font-size:13px; }
+  .budget-field input{ flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13.5px; font-family:inherit; width:100%; }
+  .analyze-btn{ width:100%; padding:14px; font-size:15px; }
+  .analyzer-results{ display:flex; flex-direction:column; gap:18px; padding-top:6px; border-top:1px solid var(--border); }
+  .result-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .stat-box{ flex:1; min-width:130px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
+  .stat-box.featured-stat{ border-color:var(--accent); box-shadow:var(--shadow-glow); }
+  .stat-box.save-stat{ border-color:var(--status-active); }
+  .stat-label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:8px; }
+  .stat-value{ display:block; font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
+  .stat-box.save-stat .stat-value{ color:var(--status-active-deep); }
+  .stat-arrow{ color:var(--text-dimmer); font-size:20px; flex-shrink:0; }
+  .actions-list{ display:flex; flex-direction:column; gap:10px; }
+  .action-card{ display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .action-badge{
+    flex-shrink:0; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:800;
+  }
+  .action-badge.cancel{ background:rgba(29,95,168,0.13); color:#1D5FA8; }
+  .action-badge.downgrade{ background:rgba(11,111,132,0.14); color:#0B6F84; }
+  .action-badge.pause{ background:rgba(15,138,125,0.14); color:#0F7E73; }
+  .action-badge.add{ background:rgba(27,122,61,0.14); color:#1B7A3D; }
+  .action-badge.bundle{ background:rgba(106,63,196,0.14); color:#6A3FC4; }
+  .action-badge.keep{ background:rgba(31,27,22,0.06); color:var(--text-dim); }
+  .action-badge.info{ background:rgba(31,27,22,0.045); color:var(--text-dimmer); }
+  .action-copy .a-title{ font-size:13.5px; font-weight:700; margin-bottom:2px; }
+  .action-copy .a-desc{ font-size:13px; color:var(--text-dim); }
+  .a-link{ display:inline-flex; align-items:center; gap:4px; margin-top:8px; font-size:12.5px; font-weight:700; color:var(--accent-3-deep); text-decoration:none; }
+  .a-link:hover{ text-decoration:underline; }
+  .analyzer-disclaimer{ font-size:11.5px; color:var(--text-dimmer); text-align:center; }
+  .analyzer-empty{ font-size:13px; color:var(--text-dimmer); padding:8px 2px; }
+  @media (max-width: 640px){
+    .analyzer-section.two-col{ grid-template-columns:1fr; }
+    .svc-detail{ grid-template-columns:1fr; }
+    .result-stats{ flex-direction:column; }
+    .stat-arrow{ transform:rotate(90deg); }
+  }
+  .search-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:12px 16px; }
+  .search-row .ico{ width:16px;height:16px; color:var(--text-dimmer); flex-shrink:0; }
+  .search-row span{ font-size:13.5px; color:var(--text-dim); }
+  .search-row span.hl{ color:var(--text); }
+  .result-card{ background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px; display:flex; gap:14px; align-items:center; }
+  .thumb{ width:96px; height:56px; border-radius:8px; flex-shrink:0; background:var(--gradient); opacity:0.9; position:relative; overflow:hidden; }
+  .thumb::after{ content:''; position:absolute; inset:0; background:linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%); }
+  .result-meta h4{ font-size:14px; margin-bottom:4px; }
+  .result-meta p{ font-size:12.5px; color:var(--text-dimmer); }
+  .timestamp-chip{ display:inline-flex; align-items:center; gap:4px; background:rgba(15,138,125,0.12); color:#0F7E73; border:1px solid rgba(15,138,125,0.28); font-size:11px; padding:2px 8px; border-radius:999px; margin-top:6px; }
+  .chip-save{ background:rgba(27,122,61,0.12); color:#1B7A3D; border-color:rgba(27,122,61,0.28); }
+  .chip-alert{ background:rgba(11,111,132,0.12); color:#0B6F84; border-color:rgba(11,111,132,0.3); }
+  .chip-danger{ background:rgba(29,95,168,0.12); color:#1D5FA8; border-color:rgba(29,95,168,0.3); }
+
+  /* ---------- Trust bar ---------- */
+  .trust{ padding:10px 24px 70px; text-align:center; position:relative; z-index:1; }
+  .trust p{ font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:22px; font-weight:600; }
+  .trust-logos{ display:flex; flex-wrap:wrap; gap:36px; justify-content:center; align-items:center; opacity:0.75; }
+  .trust-logos span{ font-family:'Sora',sans-serif; font-weight:700; font-size:16px; color:var(--text-dim); }
+
+  /* ---------- Section shared ---------- */
+  section{ position:relative; z-index:1; padding:110px 24px; }
+  .section-head{ max-width:640px; margin:0 auto 64px; text-align:center; }
+  .eyebrow{ font-size:12.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent-3-deep); margin-bottom:14px; }
+  .section-head h2{ font-size:clamp(1.9rem, 3.4vw, 2.7rem); margin-bottom:16px; }
+  .section-head p{ color:var(--text-dim); font-size:17px; }
+
+  /* ---------- Product explanation ---------- */
+  .product{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
+  .product-grid{ display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; max-width:1180px; margin:0 auto; }
+  .product-visual{
+    background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); padding:24px;
+    box-shadow:var(--shadow-hard);
+  }
+  .timeline-track{ background:var(--bg); border-radius:10px; height:64px; position:relative; overflow:hidden; margin-bottom:16px; border:1.5px solid var(--border-strong); }
+  .timeline-fill{ position:absolute; inset:0; background:linear-gradient(90deg, rgba(79,182,232,0.30), rgba(74,222,158,0.14)); width:38%; }
+  .timeline-marker{ position:absolute; top:0; bottom:0; width:2px; background:var(--accent-2-deep); left:38%; }
+  .timeline-marker::after{ content:'⟶ "used 2 hrs this month"'; position:absolute; top:-26px; left:8px; font-size:11px; color:var(--accent-2-deep); white-space:nowrap; font-weight:600; }
+  .chat-bubble{ background:var(--surface-2); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; font-size:13.5px; color:var(--text-dim); margin-bottom:10px; }
+  .chat-bubble.you{ background:rgba(79,182,232,0.10); color:var(--accent-deep); border-color:rgba(79,182,232,0.28); font-weight:600; }
+  .product-copy h3{ font-size:1.6rem; margin-bottom:16px; }
+  .product-copy p{ color:var(--text-dim); font-size:16px; margin-bottom:16px; }
+  .check-list{ list-style:none; margin-top:24px; display:flex; flex-direction:column; gap:12px; }
+  .check-list li{ display:flex; gap:12px; align-items:flex-start; font-size:15px; color:var(--text-dim); }
+  .check-list .tick{ width:20px; height:20px; border-radius:6px; background:var(--status-active); color:var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; font-size:12px; font-weight:800; }
+
+  /* ---------- Features ---------- */
+  .features-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; max-width:1180px; margin:0 auto; }
+  .feature-card{
+    background:var(--surface); border:2px solid var(--border-strong); border-radius:var(--radius); padding:28px;
+    transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  }
+  .feature-card:hover{ transform:translateY(-4px); border-color:var(--ink); box-shadow:var(--shadow-hard-sm); }
+  .feature-icon{
+    width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+    background:var(--gradient); margin-bottom:20px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
+  }
+  .feature-icon svg{ width:22px; height:22px; color:var(--ink); }
+  .feature-card h4{ font-size:17px; margin-bottom:10px; }
+  .feature-card p{ font-size:14.5px; color:var(--text-dim); }
+
+  /* ---------- Screenshots ---------- */
+  .screens{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
+  .screens-grid{ display:grid; grid-template-columns:1.3fr 1fr; grid-template-rows:auto auto; gap:20px; max-width:1180px; margin:0 auto; }
+  .screen-card{
+    background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); overflow:hidden;
+    box-shadow:var(--shadow-hard-sm);
+  }
+  .screen-card.tall{ grid-row:span 2; }
+  .screen-card .shot-bar{ display:flex; gap:6px; padding:10px 14px; border-bottom:2px solid var(--ink); background:var(--surface-2); }
+  .screen-card .shot-bar span{ width:8px;height:8px;border-radius:50%; background:var(--border-strong); }
+  .screen-card .shot-bar span:nth-child(1){ background:#4FB6E8; }
+  .screen-card .shot-bar span:nth-child(2){ background:#FFC93C; }
+  .screen-card .shot-bar span:nth-child(3){ background:#2EC4B6; }
+  .screen-card .shot-body{ padding:20px; }
+  .screen-card figcaption{ padding:14px 18px 18px; font-size:13px; color:var(--text-dim); border-top:1px solid var(--border); }
+  .bar-chart{ display:flex; align-items:flex-end; gap:6px; height:110px; }
+  .bar-chart div{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; }
+  .grid-thumbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); }
+  .summary-lines{ display:flex; flex-direction:column; gap:8px; }
+  .summary-lines .ln{ height:9px; border-radius:5px; background:rgba(31,27,22,0.08); }
+
+  /* ---------- Pricing ---------- */
+  .pricing-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:22px; max-width:1080px; margin:0 auto; align-items:stretch; }
+  .price-card{
+    background:var(--surface); border:2px solid var(--border-strong); border-radius:var(--radius); padding:32px 28px;
+    display:flex; flex-direction:column;
+  }
+  .price-card.featured{
+    border-color:var(--ink); background:linear-gradient(180deg, rgba(79,182,232,0.06), var(--surface) 40%);
+    position:relative; box-shadow:var(--shadow-hard);
+  }
+  .price-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); }
+  .price-card h3{ font-size:19px; margin-bottom:6px; }
+  .price-card .desc{ font-size:13.5px; color:var(--text-dimmer); margin-bottom:20px; }
+  .price-amount{ font-size:2.5rem; font-family:'Sora',sans-serif; font-weight:800; margin-bottom:4px; }
+  .price-amount span{ font-size:15px; color:var(--text-dimmer); font-weight:500; font-family:'Inter',sans-serif; }
+  .price-period{ font-size:13px; color:var(--text-dimmer); margin-bottom:24px; }
+  .price-feats{ list-style:none; display:flex; flex-direction:column; gap:12px; margin-bottom:28px; flex:1; }
+  .price-feats li{ font-size:14px; color:var(--text-dim); display:flex; gap:10px; align-items:flex-start; }
+  .price-feats .tick{ color:var(--status-active-deep); flex-shrink:0; font-weight:800; }
+  .price-card .btn{ width:100%; }
+  .price-secure{ text-align:center; font-size:11.5px; color:var(--text-dimmer); margin-top:10px; font-weight:600; }
+  .pricing-footnote{ text-align:center; font-size:13px; color:var(--text-dimmer); max-width:560px; margin:40px auto 0; }
+  .footnote-link{ color:var(--accent-deep); font-weight:700; text-decoration:underline; }
+
+  /* ---------- FAQ ---------- */
+  .faq-list{ max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:12px; }
+  .faq-item{ background:var(--surface); border:2px solid var(--border-strong); border-radius:var(--radius-sm); overflow:hidden; transition:border-color .2s ease; }
+  .faq-item.open{ border-color:var(--ink); }
+  .faq-q{
+    width:100%; text-align:left; padding:20px 22px; background:none; border:none; color:var(--text);
+    font-size:15.5px; font-weight:700; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:16px;
+    font-family:inherit;
+  }
+  .faq-q .plus{ flex-shrink:0; width:22px; height:22px; border-radius:6px; background:var(--surface-2); border:1.5px solid var(--border-strong); display:flex; align-items:center; justify-content:center; transition:transform .25s ease; font-size:16px; color:var(--text-dim); }
+  .faq-item.open .faq-q .plus{ transform:rotate(45deg); background:var(--accent); border-color:var(--ink); color:var(--ink); }
+  .faq-a{ max-height:0; overflow:hidden; transition:max-height .3s ease; }
+  .faq-a-inner{ padding:0 22px 20px; font-size:14.5px; color:var(--text-dim); }
+  .faq-item.open .faq-a{ max-height:240px; }
+
+  /* ---------- Final CTA ---------- */
+  .cta-final{
+    text-align:center; margin:0 24px; border-radius:28px; padding:80px 32px;
+    background:radial-gradient(120% 140% at 50% 0%, rgba(79,182,232,0.14), transparent 60%), var(--surface);
+    border:2px solid var(--ink); box-shadow:var(--shadow-hard); max-width:1180px; margin-left:auto; margin-right:auto;
+  }
+  .cta-final h2{ font-size:clamp(1.8rem, 3.6vw, 2.6rem); margin-bottom:16px; }
+  .cta-final p{ color:var(--text-dim); font-size:16px; max-width:480px; margin:0 auto 32px; }
+
+  /* ---------- Footer ---------- */
+  footer{ padding:70px 24px 32px; position:relative; z-index:1; }
+  .footer-grid{ display:grid; grid-template-columns:1.4fr repeat(3, 1fr); gap:40px; max-width:1180px; margin:0 auto 50px; }
+  .footer-brand p{ color:var(--text-dimmer); font-size:14px; margin-top:14px; max-width:280px; }
+  .footer-col h5{ font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:16px; font-weight:700; }
+  .footer-col ul{ list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .footer-col a{ font-size:14px; color:var(--text-dim); transition:color .2s; }
+  .footer-col a:hover{ color:var(--accent-deep); }
+  .contact-item{ display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text-dim); margin-bottom:10px; }
+  .contact-item .ico{ width:18px; height:18px; color:var(--accent-3-deep); flex-shrink:0; }
+  .footer-bottom{
+    max-width:1180px; margin:0 auto; padding-top:28px; border-top:2px solid var(--ink);
+    display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
+  }
+  .footer-bottom p{ font-size:13px; color:var(--text-dimmer); }
+  .footer-disclaimer{ max-width:1180px; margin:0 auto 24px; padding-top:24px; border-top:1px solid var(--border); font-size:12px; line-height:1.6; color:var(--text-dimmer); }
+  .social-links{ display:flex; gap:14px; }
+  .social-links a{ width:34px; height:34px; border-radius:9px; background:var(--surface); border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; color:var(--text-dim); transition:all .2s; }
+  .social-links a:hover{ color:var(--ink); background:var(--yellow); }
+
+  /* toast */
+  .toast{
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%);
+    background:var(--surface); border:2px solid var(--ink); color:var(--text);
+    padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px;
+    box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2);
+  }
+  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast .ico{ color:var(--status-active-deep); }
+
+  /* reveal animation */
+  .reveal{ opacity:0; transform:translateY(24px); transition:opacity .7s ease, transform .7s ease; }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 900px){
+    .product-grid{ grid-template-columns:1fr; gap:40px; }
+    .features-grid{ grid-template-columns:repeat(2,1fr); }
+    .screens-grid{ grid-template-columns:1fr; }
+    .screen-card.tall{ grid-row:auto; }
+    .pricing-grid{ grid-template-columns:1fr; max-width:420px; }
+    .footer-grid{ grid-template-columns:1fr 1fr; }
+  }
+  @media (max-width: 640px){
+    .nav-links{ display:none; }
+    .app-shell{ grid-template-columns:1fr; }
+    .app-side{ display:none; }
+    .features-grid{ grid-template-columns:1fr; }
+    .footer-grid{ grid-template-columns:1fr; }
+    .hero{ padding:64px 20px 40px; }
+    section{ padding:72px 20px; }
+    .browser-body{ padding:16px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-noise"></div>
+
+<header>
+  <nav>
+    <a href="#top" class="logo">
+      <span class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>
+      </span>
+      StreamNavigator
+    </a>
+    <div class="nav-links">
+      <a href="#product">Product</a>
+      <a href="#features">Features</a>
+      <a href="#screenshots">Screenshots</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div class="nav-cta">
+      <a href="#waitlist" class="btn btn-primary btn-sm">Join Waitlist</a>
+    </div>
+  </nav>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero" style="padding-top:96px;">
+    <div class="pill"><span class="dot">✦</span> Now in private beta &mdash; 4,200+ on the waitlist</div>
+    <h1>Stop paying for streaming<br/>you <span class="grad">don't even watch</span>.</h1>
+    <p class="sub">StreamNavigator is your AI subscription manager. It tracks every streaming service you're paying for, learns what you actually watch, and tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
+
+    <form class="hero-form" id="waitlist-form">
+      <input type="email" id="waitlist-email" placeholder="you@email.com" required aria-label="Email address" />
+      <button type="submit" class="btn btn-primary">Join Waitlist</button>
+    </form>
+    <p class="hero-note"><strong>Free to join.</strong> Early users save an average of $600 a year.</p>
+
+    <div class="program-guide reveal" id="program-guide">
+      <div class="pg-head">
+        <div class="pg-head-copy">
+          <h3>We tell you when to pause. You tap the link.</h3>
+          <p>One sample household's subscriptions over 12 months — real months, illustrative household. Hover any tile.</p>
+        </div>
+        <div class="pg-legend">
+          <span class="pg-legend-item"><span class="pg-swatch active"></span>Active</span>
+          <span class="pg-legend-item"><span class="pg-swatch paused"></span>Pause reminder sent</span>
+          <span class="pg-legend-item"><span class="pg-swatch resume"></span>Resume reminder sent</span>
+        </div>
+      </div>
+      <div class="pg-grid-scroll"><div class="pg-grid" id="pg-grid"></div></div>
+      <p class="pg-savings" id="pg-savings"></p>
+    </div>
+
+    <div class="browser-mock reveal">
+      <div class="browser-bar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="url">🔒 app.streamnavigator.ai</div>
+        <div style="width:44px"></div>
+      </div>
+      <div class="browser-body">
+        <div class="analyzer" id="analyzer">
+          <div class="analyzer-head">
+            <h3>Try the real analyzer</h3>
+            <p>Tell it what you've got. This runs entirely in your browser using real published pricing — nothing is sent anywhere.</p>
+          </div>
+
+          <div class="analyzer-section">
+            <label class="a-label">Which services do you subscribe to?</label>
+            <div class="svc-grid" id="svc-grid"></div>
+
+            <div class="tag-list" id="custom-svc-list"></div>
+
+            <button type="button" class="svc-chip svc-chip-add" id="add-custom-btn">+ Add a service not listed</button>
+            <div class="svc-detail custom-add-form" id="custom-add-form">
+              <div class="svc-detail-full">Add a custom service</div>
+              <div><input type="text" id="custom-name" class="a-select" placeholder="Service name, e.g. Britbox" /></div>
+              <div><div class="budget-field"><span>$</span><input type="number" id="custom-price" placeholder="e.g. 15" min="0" step="0.01" /><span>/mo</span></div></div>
+              <div>
+                <select id="custom-freq" class="a-select">
+                  <option value="daily">Watch daily</option>
+                  <option value="weekly" selected>Watch weekly</option>
+                  <option value="occasionally">Occasionally</option>
+                  <option value="rarely">Rarely</option>
+                  <option value="never">Never / forgot I had it</option>
+                </select>
+              </div>
+              <div><button type="button" class="btn btn-primary btn-sm" id="custom-add-confirm" style="width:100%;">Add it</button></div>
+            </div>
+          </div>
+
+          <div class="analyzer-section two-col">
+            <div>
+              <label class="a-label">Favorite shows or movies</label>
+              <div class="tag-field"><input type="text" id="fav-text" placeholder="Type a title, hit Enter" /></div>
+              <div class="tag-list" id="fav-tags"></div>
+            </div>
+            <div>
+              <label class="a-label">Sports you care about</label>
+              <div class="chip-row" id="sports-grid"></div>
+            </div>
+          </div>
+
+          <div class="analyzer-section two-col">
+            <div>
+              <label class="a-label">Household size</label>
+              <select id="household" class="a-select">
+                <option value="1">Just me</option>
+                <option value="2">2 people</option>
+                <option value="4">3&ndash;4 people</option>
+                <option value="5">5+ people</option>
+              </select>
+              <label class="a-label" style="display:block; margin:14px 0 8px;">Monthly budget</label>
+              <div class="budget-field"><span>$</span><input type="number" id="budget" placeholder="e.g. 80" min="0" step="1" /><span>/mo</span></div>
+            </div>
+            <div>
+              <label class="a-label" style="display:block; margin-bottom:8px;">Preferences</label>
+              <label class="check-row"><input type="checkbox" id="ads-ok" checked /> I don't mind ads to save money</label>
+              <label class="check-row"><input type="checkbox" id="kids-important" /> Kid-friendly content matters</label>
+            </div>
+          </div>
+
+          <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
+
+          <div class="analyzer-results" id="analyzer-results" hidden>
+            <div class="result-stats">
+              <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
+              <div class="stat-arrow">→</div>
+              <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
+              <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings">$0/yr</span></div>
+            </div>
+            <div class="actions-list" id="actions-list"></div>
+            <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TRUST -->
+  <div class="trust">
+    <p>Tracks subscriptions across your favorite platforms</p>
+    <div class="trust-logos">
+      <span>Netflix</span><span>YouTube</span><span>Prime Video</span><span>Disney+</span><span>Hulu</span><span>Max</span>
+    </div>
+  </div>
+
+  <!-- PRODUCT EXPLANATION -->
+  <section class="product" id="product">
+    <div class="product-grid">
+      <div class="product-visual reveal">
+        <div class="timeline-track">
+          <div class="timeline-fill" style="width:22%"></div>
+          <div class="timeline-marker" style="left:22%"></div>
+        </div>
+        <div class="chat-bubble you">"I haven't opened Max in weeks."</div>
+        <div class="chat-bubble">Time to pause Max &mdash; you'll save $16.99/mo. Here's your direct link to do it in one tap. I'll remind you to bring it back when the next big season premieres.</div>
+      </div>
+      <div class="product-copy reveal">
+        <div class="eyebrow">What is StreamNavigator</div>
+        <h3>We tell you exactly what to do. You make the change.</h3>
+        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. StreamNavigator connects to your accounts, tracks what you actually watch, and shows you exactly where you're overpaying.</p>
+        <p>Then it tells you what to do about it &mdash; when to pause a subscription you're not using right now, and when to bring it back based on what that service actually has to offer, like a new season, a marquee release, or your team's season opener. Every recommendation comes with a direct link straight to that service's account page, so you make the change yourself in one tap.</p>
+        <ul class="check-list">
+          <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
+          <li><span class="tick">✓</span> A reminder to bring it back, timed to what's worth watching</li>
+          <li><span class="tick">✓</span> Instant alerts before a price hike hits your card</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="section-head reveal">
+      <div class="eyebrow">Features</div>
+      <h2>Everything you need to stop overpaying.</h2>
+      <p>Built for people juggling too many streaming subscriptions &mdash; and tired of playing detective on their own bank statement.</p>
+    </div>
+    <div class="features-grid">
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <h4>Auto-detect subscriptions</h4>
+        <p>Securely scans your accounts and card statements to find every streaming subscription you're paying for &mdash; even the ones you forgot about.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+        <h4>Real usage tracking</h4>
+        <p>See exactly how many hours you spend on each service, so recommendations are based on your real habits, not guesses.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
+        <h4>Pause &amp; resume reminders</h4>
+        <p>We tell you exactly when to pause the subscriptions you're not using right now &mdash; and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+        <h4>Price hike alerts</h4>
+        <p>Get notified the moment a service raises its price &mdash; before it silently hits your card.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
+        <h4>Direct-link cancel</h4>
+        <p>No hunting through menus or retention-agent phone calls &mdash; every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
+        <h4>Bank-level security</h4>
+        <p>Read-only, encrypted connections. StreamNavigator can see your subscriptions &mdash; it can never move your money.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SCREENSHOTS -->
+  <section class="screens" id="screenshots">
+    <div class="section-head reveal">
+      <div class="eyebrow">Screenshots</div>
+      <h2>A closer look inside StreamNavigator.</h2>
+      <p>Clean, clear, and built to show you exactly where your money is going.</p>
+    </div>
+    <div class="screens-grid">
+
+      <figure class="screen-card tall reveal">
+        <div class="shot-bar"><span></span><span></span><span></span></div>
+        <div class="shot-body">
+          <div class="search-row" style="margin-bottom:16px;">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 11-14h-7l1-6z"/></svg>
+            <span class="hl">$187/mo in potential savings found</span>
+          </div>
+          <div class="result-card" style="margin-bottom:10px;">
+            <div class="thumb"></div>
+            <div class="result-meta"><h4>Disney+ — Premium Bundle</h4><p>$19.99/mo &middot; Not opened in 45 days</p><span class="timestamp-chip chip-danger">✕ Cancel to save $19.99/mo</span></div>
+          </div>
+          <div class="result-card" style="margin-bottom:10px;">
+            <div class="thumb" style="background:var(--gradient-warm)"></div>
+            <div class="result-meta"><h4>Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Used 3 hrs this month</p><span class="timestamp-chip chip-alert">⚠ Downgrade to save $7/mo</span></div>
+          </div>
+          <div class="result-card">
+            <div class="thumb" style="background:linear-gradient(135deg,#2EC4B6,#FFC93C)"></div>
+            <div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Used 22 hrs this month</p><span class="timestamp-chip chip-save">✓ Optimized</span></div>
+          </div>
+        </div>
+        <figcaption>Every subscription, its real cost, and what to do about it — in one view.</figcaption>
+      </figure>
+
+      <figure class="screen-card reveal">
+        <div class="shot-bar"><span></span><span></span><span></span></div>
+        <div class="shot-body">
+          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Money saved — last 7 months</p>
+          <div class="bar-chart">
+            <div style="height:20%"></div><div style="height:35%"></div><div style="height:30%"></div>
+            <div style="height:55%"></div><div style="height:70%"></div><div style="height:60%"></div><div style="height:90%"></div>
+          </div>
+        </div>
+        <figcaption>Track how much you've saved, month over month.</figcaption>
+      </figure>
+
+      <figure class="screen-card reveal">
+        <div class="shot-bar"><span></span><span></span><span></span></div>
+        <div class="shot-body">
+          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">This Month's Report</p>
+          <div class="summary-lines">
+            <div class="ln" style="width:96%"></div>
+            <div class="ln" style="width:88%"></div>
+            <div class="ln" style="width:92%"></div>
+            <div class="ln" style="width:60%"></div>
+          </div>
+        </div>
+        <figcaption>A plain-English summary of what changed, and why, every month.</figcaption>
+      </figure>
+
+      <figure class="screen-card reveal">
+        <div class="shot-bar"><span></span><span></span><span></span></div>
+        <div class="shot-body">
+          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Connected services</p>
+          <div class="grid-thumbs">
+            <div class="g"></div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)"></div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)"></div>
+          </div>
+        </div>
+        <figcaption>See every connected subscription at a glance.</figcaption>
+      </figure>
+
+    </div>
+  </section>
+
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Links — no backend required)
+    ============================================================================
+    The two "Subscribe" buttons below (Pro and Family) link straight to Stripe's
+    own hosted checkout page, so real payments work without any server code.
+    To go live:
+      1. Log into your Stripe Dashboard (dashboard.stripe.com). Use test mode
+         first, switch to live mode when you're ready to accept real cards.
+      2. Product catalog → add two recurring Products/Prices:
+           "StreamNavigator Pro"    — $4.99 / month
+           "StreamNavigator Family" — $8.99 / month
+      3. Payment links → New → pick each Price → Create link. Stripe gives you
+         a URL like https://buy.stripe.com/xxxxxxxxxxxx for each one.
+      4. In the "After payment" step of each Payment Link, you can set a custom
+         confirmation page or redirect back to this site (e.g. this page's URL
+         with #welcome appended) instead of Stripe's default receipt screen.
+      5. Paste the two URLs over the data-stripe-link placeholders on the
+         "Subscribe to Pro" and "Subscribe to Family" buttons just below.
+      6. For existing subscribers to cancel or update a card themselves:
+         Settings → Billing → Customer portal → activate the no-code portal
+         link, then paste that URL over the data-stripe-link placeholder on
+         the "Manage billing" link in the footer.
+    Payment Links handle PCI compliance, 3D Secure, receipts, taxes, and
+    subscription renewals entirely on Stripe's side — nothing card-related
+    ever touches this page or its JavaScript.
+    ============================================================================
+  -->
+  <!-- PRICING -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Pricing</div>
+      <h2>Simple pricing that pays for itself.</h2>
+      <p>Start free. Upgrade for real-time reminders and direct links the moment it's time to act.</p>
+    </div>
+    <div class="pricing-grid">
+
+      <div class="price-card reveal">
+        <h3>Starter</h3>
+        <p class="desc">For a first look at what you're overpaying for.</p>
+        <div class="price-amount">$0</div>
+        <div class="price-period">forever free</div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Track up to 5 subscriptions</li>
+          <li><span class="tick">✓</span> Monthly usage insights</li>
+          <li><span class="tick">✓</span> Pause &amp; cancel guidance, checked monthly</li>
+          <li><span class="tick">✓</span> Email price-hike alerts</li>
+        </ul>
+        <a href="#waitlist" class="btn btn-ghost">Get Started Free</a>
+      </div>
+
+      <div class="price-card featured reveal">
+        <span class="price-badge">Most Popular</span>
+        <h3>Pro</h3>
+        <p class="desc">For people ready to actually save.</p>
+        <div class="price-amount">$4.99<span>/mo</span></div>
+        <div class="price-period">billed monthly, cancel anytime</div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Unlimited subscription tracking</li>
+          <li><span class="tick">✓</span> Real-time pause &amp; resume reminders, timed to what's worth watching</li>
+          <li><span class="tick">✓</span> Direct links to cancel &amp; downgrade in one tap</li>
+          <li><span class="tick">✓</span> Real-time price-hike alerts</li>
+          <li><span class="tick">✓</span> Monthly savings report</li>
+        </ul>
+        <a href="https://buy.stripe.com/test_dRm28r352cFAaUka9g3gk02" data-stripe-link="pro" class="btn btn-primary">Subscribe to Pro →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+
+      <div class="price-card reveal">
+        <h3>Family</h3>
+        <p class="desc">For households splitting streaming costs.</p>
+        <div class="price-amount">$8.99<span>/mo</span></div>
+        <div class="price-period">per household, up to 6 members</div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Everything in Pro</li>
+          <li><span class="tick">✓</span> Up to 6 shared accounts</li>
+          <li><span class="tick">✓</span> Household usage breakdown</li>
+          <li><span class="tick">✓</span> Duplicate subscription detection</li>
+        </ul>
+        <a href="https://buy.stripe.com/test_bJedR95da0WS9Qgcho3gk01" data-stripe-link="family" class="btn btn-ghost">Subscribe to Family →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. You can cancel anytime from the <a href="#contact-billing" class="footnote-link">billing portal</a>.</p>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+      <p>Can't find what you're looking for? Reach out — we read every email.</p>
+    </div>
+    <div class="faq-list">
+
+      <div class="faq-item reveal">
+        <button class="faq-q">How does StreamNavigator find my subscriptions? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Securely connect your bank or card statements (read-only), or add subscriptions manually. StreamNavigator automatically detects recurring streaming charges and keeps the list up to date from there.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">Is my financial data safe? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes. Connections are read-only and bank-level encrypted. StreamNavigator can see your subscription charges — it never has the ability to move money or make purchases on your behalf.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">How does pausing and resuming work? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">When a service isn't worth what you're paying right now, StreamNavigator tells you to pause it instead of cancelling it for good — and sends a direct link to that service's account page so you can do it in one tap. It keeps watching that service's offering on your behalf, and sends you a resume reminder, with another direct link, right before there's something worth watching again — a new season premiere, a big release, or the start of your team's season. You stay in control of every change; StreamNavigator just makes sure you never miss the right moment.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">Can it actually cancel subscriptions for me? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — and we'd be skeptical of any subscription app that claims it can. Almost no streaming service offers a public API for cancelling, pausing, or changing your plan on someone else's behalf, so StreamNavigator can't (and won't pretend to) execute those changes for you. What it does do: tell you exactly when to cancel, downgrade, or pause something, and hand you a direct link straight to that service's account page so you can do it yourself in one tap.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">Which streaming services does it support? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">At launch: Netflix, Hulu, Disney+, Max, Prime Video, and YouTube Premium. More services are being added based on waitlist requests — let us know what you need in the signup form.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">How much can I expect to save? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Early users save an average of $600 per year by pausing subscriptions between seasons, cancelling ones they never open, downgrading plans they've outgrown, and catching price hikes before they hit.</div></div>
+      </div>
+
+      <div class="faq-item reveal">
+        <button class="faq-q">Does it cost anything? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">The Starter plan is free forever. Pro and Family plans unlock real-time pause-and-resume reminders, direct-link cancellation, and real-time price alerts starting at $4.99/mo.</div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section id="waitlist" style="padding-top:20px;">
+    <div class="cta-final reveal">
+      <h2>Stop paying for what you don't watch.</h2>
+      <p>Join thousands of early users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
+      <form class="hero-form" id="waitlist-form-2">
+        <input type="email" id="waitlist-email-2" placeholder="you@email.com" required aria-label="Email address" />
+        <button type="submit" class="btn btn-primary">Join Waitlist</button>
+      </form>
+      <p class="hero-note" style="margin-bottom:0;">Free to join. Early users save an average of $600 a year.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer id="contact">
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a href="#top" class="logo">
+        <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+        StreamNavigator
+      </a>
+      <p>The AI subscription manager for streaming. We tell you exactly when to pause what you're not watching and when to bring it back — with a direct link so you can make the change yourself in one tap.</p>
+    </div>
+
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#product">How it works</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#screenshots">Screenshots</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" data-stripe-link="portal" id="contact-billing">Manage billing</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h5>Company</h5>
+      <ul>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#">About</a></li>
+        <li><a href="#">Careers</a></li>
+        <li><a href="#">Blog</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <div class="contact-item">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6L12 13 2 6"/><path d="M2 6h20v12H2z"/></svg>
+        hello@streamnavigator.ai
+      </div>
+      <div class="contact-item">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.68 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.32 1.85.55 2.81.68A2 2 0 0 1 22 16.92z"/></svg>
+        +1 (415) 555-0148
+      </div>
+      <div class="contact-item">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        San Francisco, CA
+      </div>
+    </div>
+  </div>
+
+  <p class="footer-disclaimer">StreamNavigator is a reminder and direct-link service, not an automated execution service. It does not have the ability to cancel, pause, downgrade, or otherwise change your subscriptions on your behalf — most streaming services simply don't offer that kind of API to any third party. StreamNavigator tells you when to act and links you straight to the right page; you make every change yourself.</p>
+
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+    <div class="social-links">
+      <a href="#" aria-label="Twitter / X">𝕏</a>
+      <a href="#" aria-label="LinkedIn">in</a>
+      <a href="#" aria-label="Instagram">◎</a>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text">You're on the list! We'll be in touch.</span>
+</div>
+
+<script>
+  // Reveal on scroll
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  revealEls.forEach(el => io.observe(el));
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-item').forEach(item => {
+    const btn = item.querySelector('.faq-q');
+    btn.addEventListener('click', () => {
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+
+  // Waitlist forms -> toast confirmation
+  function isValidEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+  function showToast(msg){
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-text').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  }
+  // Payment portal links (Stripe Payment Links / Customer Portal) — until the
+  // real URLs are pasted in over the REPLACE_WITH_* placeholders, clicking
+  // these shows a friendly notice instead of navigating to a broken link.
+  document.querySelectorAll('[data-stripe-link]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      if (link.getAttribute('href').includes('REPLACE_WITH_')) {
+        e.preventDefault();
+        showToast('Payment portal not connected yet — add your Stripe link to enable checkout.');
+      }
+    });
+  });
+
+  ['waitlist-form', 'waitlist-form-2'].forEach(id => {
+    const form = document.getElementById(id);
+    if (!form) return;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = form.querySelector('input[type="email"]');
+      if (isValidEmail(input.value)) {
+        showToast("You're on the list! We'll be in touch at " + input.value);
+        input.value = '';
+      } else {
+        showToast('Please enter a valid email address.');
+      }
+    });
+  });
+</script>
+
+<script>
+/* =========================================================================
+   StreamNavigator subscription analyzer
+   Pricing grounded in published list prices as of August 2026. Sources:
+   Tom's Guide streaming price roundup, TechRadar (Paramount+ 2026 pricing),
+   DealNews (YouTube TV 2026 plans), and disneyplus.com (official bundle page).
+   Sports coverage based on 2026 rights reporting (Sports Video Group,
+   SportsMediaWatch, Yahoo Sports). Runs entirely client-side.
+   ========================================================================= */
+(function(){
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const SERVICES = {
+    netflix: { id:'netflix', name:'Netflix',
+      tiers:[ {id:'ads', name:'Standard with Ads', price:7.99, adFree:false, streams:2},
+              {id:'standard', name:'Standard', price:17.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:4} ],
+      sports:[], kidFriendly:true,
+      flagship:['stranger things','wednesday','squid game','the crown','bridgerton','emily in paris','outer banks'] },
+
+    max: { id:'max', name:'Max',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'adfree', name:'Ad-Free', price:16.99, adFree:true, streams:2},
+              {id:'ultimate', name:'Ultimate', price:20.99, adFree:true, streams:4} ],
+      sports:['nhl','mlb','college'], kidFriendly:false,
+      flagship:['house of the dragon','the last of us','euphoria','the white lotus','hacks','peacemaker'] },
+
+    hulu: { id:'hulu', name:'Hulu',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'noads', name:'No Ads', price:18.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['the bear','only murders in the building','shogun','american horror story',"handmaid's tale"] },
+
+    disney: { id:'disney', name:'Disney+',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'noads', name:'No Ads', price:16.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium 4K', price:18.99, adFree:true, streams:4} ],
+      sports:['college'], kidFriendly:true,
+      flagship:['the mandalorian','andor','loki','moana','marvel','star wars','percy jackson'] },
+
+    paramount: { id:'paramount', name:'Paramount+',
+      tiers:[ {id:'essential', name:'Essential', price:8.99, adFree:false, streams:2},
+              {id:'showtime', name:'with Showtime', price:13.99, adFree:true, streams:3} ],
+      sports:['nfl','college','other_soccer'], kidFriendly:false,
+      flagship:['yellowstone','landman','tulsa king','star trek','1923','mayor of kingstown'] },
+
+    peacock: { id:'peacock', name:'Peacock',
+      tiers:[ {id:'select', name:'Select', price:7.99, adFree:false, streams:2},
+              {id:'premium', name:'Premium', price:10.99, adFree:false, streams:3},
+              {id:'premiumplus', name:'Premium Plus', price:16.99, adFree:true, streams:3} ],
+      sports:['nfl','nba','mlb','epl','college'], kidFriendly:true,
+      flagship:['the office','days of our lives','poker face','love island usa','bel-air'] },
+
+    youtubetv: { id:'youtubetv', name:'YouTube TV',
+      tiers:[ {id:'entertainment', name:'Entertainment Plan', price:54.99, adFree:false, streams:3},
+              {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
+              {id:'sportsnews', name:'Sports + News Plan', price:71.99, adFree:false, streams:3},
+              {id:'base', name:'Base Plan (all channels)', price:82.99, adFree:false, streams:3} ],
+      sports:['nfl','nba','mlb','nhl','college'], kidFriendly:true,
+      flagship:[] },
+
+    appletv: { id:'appletv', name:'Apple TV',
+      tiers:[ {id:'standard', name:'Apple TV', price:12.99, adFree:true, streams:6} ],
+      sports:['mls'], kidFriendly:true,
+      flagship:['ted lasso','severance','slow horses','the morning show','foundation','silo'] },
+
+    primevideo: { id:'primevideo', name:'Amazon Prime Video',
+      tiers:[ {id:'ads', name:'With Ads', price:8.99, adFree:false, streams:3},
+              {id:'noads', name:'Ad-Free', price:11.99, adFree:true, streams:3},
+              {id:'withprime', name:'Bundled with Prime', price:14.99, adFree:false, streams:3} ],
+      sports:['nfl'], kidFriendly:true,
+      flagship:['the boys','fallout','reacher','the wheel of time','invincible','jack ryan'] },
+
+    espn: { id:'espn', name:'ESPN',
+      tiers:[ {id:'select', name:'ESPN Select', price:12.99, adFree:false, streams:2},
+              {id:'unlimited', name:'ESPN Unlimited', price:29.99, adFree:false, streams:2} ],
+      sports:['nfl','nba','mlb','nhl','college','laliga'], kidFriendly:false,
+      flagship:[] },
+
+    discoveryplus: { id:'discoveryplus', name:'Discovery+',
+      tiers:[ {id:'ads', name:'With Ads', price:5.99, adFree:false, streams:2},
+              {id:'noads', name:'Ad-Free', price:9.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['deadliest catch','the pioneer woman','moonshiners','my 600-lb life'] },
+
+    starz: { id:'starz', name:'Starz',
+      tiers:[ {id:'standard', name:'Starz', price:11.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['power','outlander','the girlfriend experience'] },
+
+    amcplus: { id:'amcplus', name:'AMC+',
+      tiers:[ {id:'standard', name:'AMC+', price:10.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['the walking dead','better call saul','interview with the vampire'] },
+
+    fubotv: { id:'fubotv', name:'Fubo',
+      tiers:[ {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
+              {id:'pro', name:'Pro Plan', price:88.99, adFree:false, streams:3} ],
+      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
+      flagship:[] },
+
+    slingtv: { id:'slingtv', name:'Sling TV',
+      tiers:[ {id:'onecolor', name:'Orange or Blue', price:45.99, adFree:false, streams:1},
+              {id:'both', name:'Orange + Blue', price:65.99, adFree:false, streams:4} ],
+      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
+      flagship:[] },
+
+    crunchyroll: { id:'crunchyroll', name:'Crunchyroll',
+      tiers:[ {id:'fan', name:'Fan', price:9.99, adFree:true, streams:1},
+              {id:'megafan', name:'Mega Fan', price:13.99, adFree:true, streams:4},
+              {id:'ultimatefan', name:'Ultimate Fan', price:17.99, adFree:true, streams:6} ],
+      sports:[], kidFriendly:false,
+      flagship:['one piece','jujutsu kaisen','attack on titan','demon slayer','my hero academia'] },
+
+    mlbtv: { id:'mlbtv', name:'MLB.TV',
+      tiers:[ {id:'allteams', name:'All Teams', price:29.99, adFree:true, streams:2} ],
+      sports:['mlb'], kidFriendly:false,
+      flagship:[] },
+
+    nbaleaguepass: { id:'nbaleaguepass', name:'NBA League Pass',
+      tiers:[ {id:'teampass', name:'Team Pass', price:13.99, adFree:true, streams:2},
+              {id:'standard', name:'Standard', price:16.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:2} ],
+      sports:['nba'], kidFriendly:false,
+      flagship:[] },
+
+    nflplus: { id:'nflplus', name:'NFL+',
+      tiers:[ {id:'regular', name:'Regular', price:6.99, adFree:false, streams:2},
+              {id:'premium', name:'Premium', price:14.99, adFree:true, streams:2} ],
+      sports:['nfl'], kidFriendly:false,
+      flagship:[] },
+  };
+
+  const BUNDLES = [
+    { id:'disneyhulumax', services:['disney','hulu','max'], price:{ads:19.99, noads:32.99}, name:'Disney+ / Hulu / Max Trio Bundle' },
+    { id:'disneyhuluespn', services:['disney','hulu','espn'], price:{ads:35.99, noads:44.99}, name:'Disney+ / Hulu / ESPN Unlimited Bundle' },
+    { id:'disneyhulu', services:['disney','hulu'], price:{ads:12.99, noads:19.99}, name:'Disney+ / Hulu Duo Bundle' },
+  ];
+
+  // Direct links to each service's own account/plan page — this is the mechanism behind
+  // "we tell you, you make the change": every actionable card links straight here rather
+  // than StreamNavigator executing anything on the user's behalf.
+  const MANAGE_URLS = {
+    netflix:'https://www.netflix.com/account',
+    max:'https://www.max.com/settings/subscription',
+    hulu:'https://secure.hulu.com/account',
+    disney:'https://www.disneyplus.com/account/subscription',
+    paramount:'https://www.paramountplus.com/account/',
+    peacock:'https://www.peacocktv.com/account/subscription',
+    youtubetv:'https://tv.youtube.com/subscription/',
+    appletv:'https://tv.apple.com/settings',
+    primevideo:'https://www.amazon.com/mc/pipelines/subscription',
+    espn:'https://www.espn.com/subscription/manage',
+    discoveryplus:'https://www.discoveryplus.com/account',
+    starz:'https://www.starz.com/account',
+    amcplus:'https://www.amcplus.com/account',
+    fubotv:'https://www.fubo.tv/welcome/account',
+    slingtv:'https://www.sling.com/account',
+    crunchyroll:'https://www.crunchyroll.com/account/membership',
+    mlbtv:'https://www.mlb.com/account',
+    nbaleaguepass:'https://www.nba.com/leaguepass/account',
+    nflplus:'https://www.nfl.com/account/profile',
+    disneyhulumax:'https://www.disneyplus.com/account/subscription',
+    disneyhuluespn:'https://www.disneyplus.com/account/subscription',
+    disneyhulu:'https://www.disneyplus.com/account/subscription',
+  };
+  function manageLink(serviceId, name){
+    const url = MANAGE_URLS[serviceId] || `https://www.google.com/search?q=${encodeURIComponent((name || serviceId) + ' manage subscription')}`;
+    const label = MANAGE_URLS[serviceId] ? `Manage on ${name || serviceId}` : `Search: manage ${name || serviceId}`;
+    return { url, label };
+  }
+
+  const SPORT_SEASONS = {
+    nfl: {startMonth:9, endMonth:2, label:'NFL season (Sep–Feb)'},
+    nba: {startMonth:10, endMonth:6, label:'NBA season (Oct–Jun)'},
+    mlb: {startMonth:4, endMonth:10, label:'MLB season (Apr–Oct)'},
+    nhl: {startMonth:10, endMonth:6, label:'NHL season (Oct–Jun)'},
+    epl: {startMonth:8, endMonth:5, label:'Premier League season (Aug–May)'},
+    laliga: {startMonth:8, endMonth:5, label:'La Liga season (Aug–May)'},
+    bundesliga: {startMonth:8, endMonth:5, label:'Bundesliga season (Aug–May)'},
+    mls: {startMonth:2, endMonth:12, label:'MLS season (Feb–Dec)'},
+    other_soccer: {startMonth:8, endMonth:5, label:'European club season (Aug–May)'},
+    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'}
+  };
+  const SPORT_LABELS = {
+    nfl:'NFL', nba:'NBA', mlb:'MLB', nhl:'NHL',
+    epl:'EPL', laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer',
+    college:'College Football'
+  };
+
+  function activeMonths(season){
+    const {startMonth, endMonth} = season;
+    if (startMonth <= endMonth) return endMonth - startMonth + 1;
+    return (12 - startMonth + 1) + endMonth;
+  }
+
+  function fmt(n){ return '$' + n.toFixed(2).replace(/\.00$/,''); }
+  function cheapest(tiers){ return [...tiers].sort((a,b)=>a.price-b.price)[0]; }
+  function cheapestAdFree(tiers){ const f=[...tiers].filter(t=>t.adFree).sort((a,b)=>a.price-b.price); return f[0] || cheapest(tiers); }
+
+  function favoritesMatch(favorites, flagship){
+    return favorites.some(f => {
+      const fl = f.trim().toLowerCase();
+      if (!fl) return false;
+      return flagship.some(t => t.includes(fl) || fl.includes(t));
+    });
+  }
+
+  function analyze(input){
+    const { subscriptions, customSubscriptions = [], favorites = [], sports = [], household = 1, adsOk = true, kidsImportant = false, budget = Infinity } = input;
+
+    const currentTotal = subscriptions.reduce((sum, s) => {
+      const svc = SERVICES[s.serviceId];
+      const tier = svc.tiers.find(t => t.id === s.tierId) || svc.tiers[0];
+      return sum + tier.price;
+    }, 0) + customSubscriptions.reduce((sum, c) => sum + c.price, 0);
+
+    const actionsMap = {};
+    const kept = {};
+
+    // Custom services (typed in by the user, not in our catalog) — we can't match them
+    // against known tiers, sports, or flagship titles, so scoring is usage-frequency only.
+    customSubscriptions.forEach(c => {
+      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[c.frequency] ?? 1;
+      if (freqScore === 0) {
+        actionsMap[c.id] = { service: c.id, name: c.name, action:'cancel',
+          reason: `You said you never open ${c.name} — cancelling frees up ${fmt(c.price)}/mo.`,
+          amount: c.price };
+        return;
+      }
+      actionsMap[c.id] = { service: c.id, name: c.name, action:'keep',
+        reason: `${c.name} isn't in our catalog yet, so we can't fine-tune its plan — but based on how often you use it, it's worth keeping for now.`,
+        amount: 0 };
+      kept[c.id] = { tierId:'custom', monthly: c.price, score: freqScore, name: c.name };
+    });
+
+    subscriptions.forEach(sub => {
+      const svc = SERVICES[sub.serviceId];
+      const currentTier = svc.tiers.find(t => t.id === sub.tierId) || svc.tiers[0];
+      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[sub.frequency] ?? 1;
+
+      let score = freqScore;
+      const favMatch = favoritesMatch(favorites, svc.flagship);
+      if (favMatch) score += 3;
+      const sportMatches = sports.filter(sp => svc.sports.includes(sp));
+      score += sportMatches.length * 2;
+      if (kidsImportant && svc.kidFriendly) score += 1;
+
+      // "Never" is a strong, explicit signal — cancel outright even if a favorite title or
+      // sport nominally matches this service, since the user has told us they don't open it.
+      if (freqScore === 0) {
+        actionsMap[svc.id] = { service: svc.id, action:'cancel',
+          reason: `You said you never open ${svc.name} — cancelling frees up ${fmt(currentTier.price)}/mo.`,
+          amount: currentTier.price };
+        return;
+      }
+      if (score === 0) {
+        actionsMap[svc.id] = { service: svc.id, action:'cancel',
+          reason: `You rated usage as "${sub.frequency}" with no matching shows or sports — cancelling frees up ${fmt(currentTier.price)}/mo.`,
+          amount: currentTier.price };
+        return;
+      }
+
+      let idealTier;
+      if (svc.id === 'youtubetv') {
+        const wantsSports = sportMatches.length > 0;
+        const wantsGeneral = freqScore >= 3;
+        if (wantsSports && wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'sportsnews');
+        else if (wantsSports) idealTier = svc.tiers.find(t => t.id === 'sports');
+        else if (wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'base');
+        else idealTier = svc.tiers.find(t => t.id === 'entertainment');
+      } else {
+        idealTier = adsOk ? cheapest(svc.tiers) : cheapestAdFree(svc.tiers);
+        if (household >= 4) {
+          const need = svc.tiers.filter(t => t.streams >= 3 && (adsOk || t.adFree)).sort((a,b) => a.price - b.price);
+          if (need.length) idealTier = need[0];
+        }
+      }
+
+      const seasonalOnly = svc.id !== 'youtubetv' && sportMatches.length > 0 && freqScore <= 2 && !favMatch;
+      if (seasonalOnly) {
+        const sp = sportMatches[0];
+        const season = SPORT_SEASONS[sp];
+        const months = activeMonths(season);
+        const avgMonthly = idealTier.price * (months / 12);
+        actionsMap[svc.id] = { service: svc.id, action:'pause',
+          reason: `You mainly use ${svc.name} for ${SPORT_LABELS[sp]} — pause it outside the ${season.label} to save ${fmt(idealTier.price)}/mo in the off-season, then use the link below when it's time.`,
+          amount: idealTier.price };
+        kept[svc.id] = { tierId: idealTier.id, monthly: avgMonthly, score, seasonal:true, sport: sp };
+        return;
+      }
+
+      if (idealTier.price < currentTier.price - 0.01) {
+        actionsMap[svc.id] = { service: svc.id, action:'downgrade',
+          reason: `Switch ${svc.name} to "${idealTier.name}" — it covers how you actually use it and saves ${fmt(currentTier.price - idealTier.price)}/mo.`,
+          amount: currentTier.price - idealTier.price };
+        kept[svc.id] = { tierId: idealTier.id, monthly: idealTier.price, score };
+      } else {
+        actionsMap[svc.id] = { service: svc.id, action:'keep',
+          reason: `${svc.name} is already on the right plan for how you use it.`,
+          amount: 0 };
+        kept[svc.id] = { tierId: currentTier.id, monthly: currentTier.price, score };
+      }
+    });
+
+    const coveredSports = new Set();
+    Object.entries(kept).forEach(([sid, k]) => {
+      if (k.seasonal) coveredSports.add(k.sport);
+      else if (SERVICES[sid]) SERVICES[sid].sports.forEach(sp => coveredSports.add(sp));
+    });
+    const alreadySubscribed = new Set(subscriptions.map(s => s.serviceId));
+
+    sports.filter(sp => !coveredSports.has(sp)).forEach(sp => {
+      const candidates = Object.values(SERVICES)
+        .filter(s => s.sports.includes(sp) && !alreadySubscribed.has(s.id) && !kept[s.id]);
+
+      if (!candidates.length) {
+        if (sp === 'bundesliga') {
+          actionsMap['bundesliga-info'] = { service:'bundesliga', action:'info',
+            reason: `Bundesliga doesn't need a new subscription — most matches stream free via Fandango, with select games also on USA Network and Peacock.`,
+            amount: 0 };
+        }
+        return;
+      }
+
+      candidates.sort((a, b) => Math.min(...a.tiers.map(t => t.price)) - Math.min(...b.tiers.map(t => t.price)));
+      const pick = candidates[0];
+      const tier = cheapest(pick.tiers);
+      const season = SPORT_SEASONS[sp];
+      const months = activeMonths(season);
+      const startName = MONTH_NAMES[season.startMonth - 1];
+      const avgMonthly = tier.price * (months / 12);
+      actionsMap[pick.id] = { service: pick.id, action:'add',
+        reason: `Add ${pick.name} (${tier.name}) around ${startName} to catch ${SPORT_LABELS[sp]} for ${fmt(tier.price)}/mo — pause or cancel once the season wraps.`,
+        amount: -tier.price };
+      kept[pick.id] = { tierId: tier.id, monthly: avgMonthly, score: 99, seasonal:true, sport: sp, added:true };
+      alreadySubscribed.add(pick.id);
+    });
+
+    let bundleRec = null;
+    for (const bundle of BUNDLES) {
+      const members = bundle.services.filter(id => kept[id] && !kept[id].seasonal);
+      if (members.length !== bundle.services.length) continue;
+      const sumPrice = members.reduce((s, id) => s + kept[id].monthly, 0);
+      const bundlePrice = adsOk ? bundle.price.ads : bundle.price.noads;
+      if (bundlePrice < sumPrice - 0.01) { bundleRec = { bundle, members, sumPrice, bundlePrice }; break; }
+    }
+    if (bundleRec) {
+      bundleRec.members.forEach(id => { delete actionsMap[id]; kept[id].monthly = 0; kept[id].bundled = true; });
+      actionsMap[bundleRec.bundle.id] = { service: bundleRec.bundle.id, action:'bundle',
+        reason: `Switch ${bundleRec.members.map(id => SERVICES[id].name).join(' + ')} to the ${bundleRec.bundle.name} — saves ${fmt(bundleRec.sumPrice - bundleRec.bundlePrice)}/mo over paying separately.`,
+        amount: bundleRec.sumPrice - bundleRec.bundlePrice };
+      kept[bundleRec.bundle.id] = { tierId: adsOk ? 'ads' : 'noads', monthly: bundleRec.bundlePrice, score: 99, isBundle:true };
+    }
+
+    function recommendedTotal(){ return Object.values(kept).reduce((s, k) => s + (k.monthly || 0), 0); }
+    let guard = 0;
+    while (recommendedTotal() > budget && guard < 30) {
+      guard++;
+      const trimmable = Object.entries(kept)
+        .filter(([id, k]) => !k.isBundle && (k.monthly || 0) > 0 && !k.added)
+        .sort((a, b) => (a[1].score ?? 0) - (b[1].score ?? 0));
+      if (!trimmable.length) break;
+      const [id, k] = trimmable[0];
+      const name = SERVICES[id] ? SERVICES[id].name : (k.name || (BUNDLES.find(b=>b.id===id) || {}).name || id);
+      actionsMap[id] = { service: id, name: k.name, action:'cancel',
+        reason: k.seasonal
+          ? `To fit your ${fmt(budget)}/mo budget, cancel ${name} outright rather than just pausing it seasonally — it scored lowest on usage, shows, and sports fit.`
+          : `To fit your ${fmt(budget)}/mo budget, cancel ${name} — it scored lowest on usage, shows, and sports fit.`,
+        amount: k.monthly };
+      delete kept[id];
+    }
+
+    const recommendedMonthly = recommendedTotal();
+    const savingsYearly = Math.max(0, (currentTotal - recommendedMonthly) * 12);
+
+    return {
+      currentTotal: Math.round(currentTotal * 100) / 100,
+      recommendedMonthly: Math.round(recommendedMonthly * 100) / 100,
+      savingsYearly: Math.round(savingsYearly * 100) / 100,
+      actions: Object.values(actionsMap)
+    };
+  }
+
+  /* ---------------- Program guide (12-month pause/resume strip) ----------------
+     Status is a fixed, reserved encoding (active/paused/resume) — never the
+     categorical theme — always paired with an icon/label, never color alone.
+     A sample, illustrative household: Netflix stays on year-round; the other
+     rows pause outside the window they're actually worth paying for, three of
+     them keyed to real, recurring sports seasons (NFL, Champions League, MLS). */
+  (function buildProgramGuide(){
+    const grid = document.getElementById('pg-grid');
+    if (!grid) return;
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const P = 'paused', A = 'active';
+    const ROWS = [
+      { name:'Netflix', price:17.99,
+        cells:[A,A,A,A,A,A,A,A,A,A,A,A],
+        note:'Used daily, year-round — never worth pausing.' },
+      { name:'Max', price:16.99,
+        cells:[P,P,P,P,A,A,A,A,P,P,P,P],
+        resumeNote:'Resume reminder sent — the next big season just premiered.' },
+      { name:'Peacock', price:10.99,
+        cells:[A,A,P,P,P,P,P,P,A,A,A,A],
+        resumeNote:'Resume reminder sent — NFL season kicks off.' },
+      { name:'Paramount+', price:13.99,
+        cells:[A,A,A,A,A,P,P,A,A,A,A,A],
+        resumeNote:'Resume reminder sent — Champions League returns.' },
+      { name:'Apple TV', price:12.99,
+        cells:[P,A,A,A,A,A,A,A,A,A,A,A],
+        resumeNote:'Resume reminder sent — MLS season is underway.' },
+    ];
+
+    // header row
+    const corner = document.createElement('div');
+    grid.appendChild(corner);
+    MONTHS.forEach(m => {
+      const lbl = document.createElement('div');
+      lbl.className = 'pg-month-label';
+      lbl.textContent = m;
+      grid.appendChild(lbl);
+    });
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'pg-tooltip';
+    tooltip.innerHTML = '<div class="pg-tt-title"></div><div class="pg-tt-body"></div>';
+    document.body.appendChild(tooltip);
+
+    function showTooltip(el, title, body){
+      tooltip.querySelector('.pg-tt-title').textContent = title;
+      tooltip.querySelector('.pg-tt-body').textContent = body;
+      const r = el.getBoundingClientRect();
+      tooltip.style.left = Math.round(r.left + r.width / 2) + 'px';
+      tooltip.style.top = Math.round(r.top - 10) + 'px';
+      tooltip.style.transform = 'translate(-50%, -100%)';
+      tooltip.classList.add('show');
+    }
+    function hideTooltip(){ tooltip.classList.remove('show'); }
+
+    let totalPauseSavings = 0;
+
+    ROWS.forEach(row => {
+      const label = document.createElement('div');
+      label.className = 'pg-row-label';
+      label.textContent = row.name;
+      grid.appendChild(label);
+
+      let prevPaused = row.cells[11] === P; // wrap: Dec feeds into Jan's transition check
+      row.cells.forEach((state, i) => {
+        const isResume = state === A && prevPaused;
+        prevPaused = state === P;
+        if (state === P) totalPauseSavings += row.price;
+
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'pg-cell state-' + state + (isResume ? ' is-resume' : '');
+        cell.setAttribute('aria-label', `${row.name}, ${MONTHS[i]}: ${isResume ? 'Resume reminder sent' : (state === A ? 'Active' : 'Pause reminder sent')}`);
+
+        let body;
+        if (isResume) body = row.resumeNote || 'Resume reminder sent.';
+        else if (state === A) body = row.note || 'Active this month.';
+        else body = `Pause reminder sent — a direct link to save ${fmt(row.price)}/mo while it's not worth it.`;
+
+        const title = `${row.name} — ${MONTHS[i]}`;
+        cell.addEventListener('mouseenter', () => showTooltip(cell, title, body));
+        cell.addEventListener('mouseleave', hideTooltip);
+        cell.addEventListener('focus', () => showTooltip(cell, title, body));
+        cell.addEventListener('blur', hideTooltip);
+
+        grid.appendChild(cell);
+      });
+    });
+
+    const savingsEl = document.getElementById('pg-savings');
+    if (savingsEl) {
+      savingsEl.innerHTML = `This household could save <strong>${fmt(totalPauseSavings)}/yr</strong> by acting on pause reminders instead of paying for every service, year-round.`;
+    }
+  })();
+
+  /* ---------------- DOM wiring ---------------- */
+  const svcGrid = document.getElementById('svc-grid');
+  const sportsGrid = document.getElementById('sports-grid');
+  const favText = document.getElementById('fav-text');
+  const favTags = document.getElementById('fav-tags');
+  const resultsEl = document.getElementById('analyzer-results');
+  const actionsListEl = document.getElementById('actions-list');
+  if (!svcGrid) return; // analyzer not on this page
+
+  const selectedServices = {}; // id -> true
+  const selectedSports = {};   // id -> true
+  const favorites = [];
+
+  function bestDefaultTier(svc){
+    const adFreeTiers = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
+    return (adFreeTiers[0] || svc.tiers[svc.tiers.length-1]).id;
+  }
+
+  Object.values(SERVICES).forEach(svc => {
+    const wrap = document.createElement('div');
+    wrap.style.width = '100%';
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'svc-chip';
+    chip.textContent = svc.name;
+    wrap.appendChild(chip);
+
+    const detail = document.createElement('div');
+    detail.className = 'svc-detail';
+    detail.innerHTML = `
+      <div class="svc-detail-full">${svc.name} — current plan &amp; usage</div>
+      <div>
+        <select class="a-select tier-select" data-service="${svc.id}">
+          ${svc.tiers.map(t => `<option value="${t.id}">${t.name} — ${fmt(t.price)}/mo</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <select class="a-select freq-select" data-service="${svc.id}">
+          <option value="daily">Watch daily</option>
+          <option value="weekly" selected>Watch weekly</option>
+          <option value="occasionally">Occasionally</option>
+          <option value="rarely">Rarely</option>
+          <option value="never">Never / forgot I had it</option>
+        </select>
+      </div>`;
+    wrap.appendChild(detail);
+    svcGrid.appendChild(wrap);
+
+    const tierSelect = detail.querySelector('.tier-select');
+    tierSelect.value = bestDefaultTier(svc);
+
+    chip.addEventListener('click', () => {
+      const active = chip.classList.toggle('active');
+      detail.classList.toggle('show', active);
+      if (active) selectedServices[svc.id] = true; else delete selectedServices[svc.id];
+    });
+  });
+
+  Object.keys(SPORT_LABELS).forEach(sp => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-toggle';
+    chip.textContent = SPORT_LABELS[sp];
+    chip.addEventListener('click', () => {
+      const active = chip.classList.toggle('active');
+      if (active) selectedSports[sp] = true; else delete selectedSports[sp];
+    });
+    sportsGrid.appendChild(chip);
+  });
+
+  function renderTags(){
+    favTags.innerHTML = '';
+    favorites.forEach((f, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.innerHTML = `${f} <button type="button" aria-label="Remove">✕</button>`;
+      pill.querySelector('button').addEventListener('click', () => { favorites.splice(i, 1); renderTags(); });
+      favTags.appendChild(pill);
+    });
+  }
+  favText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && favText.value.trim()) {
+      e.preventDefault();
+      favorites.push(favText.value.trim());
+      favText.value = '';
+      renderTags();
+    }
+  });
+
+  // Custom services — for anything not in our built-in catalog (a niche or regional
+  // streaming app, a work perk, etc). Scored on usage frequency only, since we have no
+  // pricing tiers or content catalog to match against.
+  const customServices = [];
+  let customCounter = 0;
+  const customList = document.getElementById('custom-svc-list');
+  const addCustomBtn = document.getElementById('add-custom-btn');
+  const customAddForm = document.getElementById('custom-add-form');
+  const customNameInput = document.getElementById('custom-name');
+  const customPriceInput = document.getElementById('custom-price');
+  const customFreqSelect = document.getElementById('custom-freq');
+
+  addCustomBtn.addEventListener('click', () => {
+    customAddForm.classList.toggle('show');
+    if (customAddForm.classList.contains('show')) customNameInput.focus();
+  });
+
+  function renderCustomList(){
+    customList.innerHTML = '';
+    customServices.forEach((c, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.innerHTML = `${c.name} — ${fmt(c.price)}/mo <button type="button" aria-label="Remove">✕</button>`;
+      pill.querySelector('button').addEventListener('click', () => { customServices.splice(i, 1); renderCustomList(); });
+      customList.appendChild(pill);
+    });
+  }
+
+  function addCustomService(){
+    const name = customNameInput.value.trim();
+    const price = parseFloat(customPriceInput.value);
+    const nameOk = !!name;
+    const priceOk = !isNaN(price) && price > 0;
+    customNameInput.style.borderColor = nameOk ? '' : '#1D5FA8';
+    customPriceInput.parentElement.style.borderColor = priceOk ? '' : '#1D5FA8';
+    if (!nameOk || !priceOk) return;
+
+    customCounter++;
+    customServices.push({ id: 'custom-' + customCounter, name, price, frequency: customFreqSelect.value });
+    renderCustomList();
+
+    customNameInput.value = '';
+    customPriceInput.value = '';
+    customFreqSelect.value = 'weekly';
+    customNameInput.style.borderColor = '';
+    customPriceInput.parentElement.style.borderColor = '';
+    customAddForm.classList.remove('show');
+  }
+  document.getElementById('custom-add-confirm').addEventListener('click', addCustomService);
+  customPriceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
+  customNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
+
+  const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
+  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', add:'+', bundle:'◆', keep:'✓', info:'i' };
+  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
+
+  document.getElementById('analyze-btn').addEventListener('click', () => {
+    const subscriptions = Object.keys(selectedServices).map(id => {
+      const tierSel = svcGrid.querySelector(`.tier-select[data-service="${id}"]`);
+      const freqSel = svcGrid.querySelector(`.freq-select[data-service="${id}"]`);
+      return { serviceId:id, tierId: tierSel.value, frequency: freqSel.value };
+    });
+
+    const hasSports = Object.keys(selectedSports).length > 0;
+    const hasFavorites = favorites.length > 0;
+    const hasCustom = customServices.length > 0;
+    if (!subscriptions.length && !hasCustom && !hasSports && !hasFavorites) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Select at least one subscription, sport, or favorite above to run the analysis.</p>';
+      document.getElementById('stat-current').textContent = '$0/mo';
+      document.getElementById('stat-recommended').textContent = '$0/mo';
+      document.getElementById('stat-savings').textContent = '$0/yr';
+      resultsEl.hidden = false;
+      resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      return;
+    }
+
+    const budgetInput = document.getElementById('budget').value;
+    const result = analyze({
+      subscriptions,
+      customSubscriptions: customServices,
+      favorites,
+      sports: Object.keys(selectedSports),
+      household: parseInt(document.getElementById('household').value, 10) || 1,
+      adsOk: document.getElementById('ads-ok').checked,
+      kidsImportant: document.getElementById('kids-important').checked,
+      budget: budgetInput ? parseFloat(budgetInput) : Infinity
+    });
+
+    document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
+    document.getElementById('stat-recommended').textContent = fmt(result.recommendedMonthly) + '/mo';
+    document.getElementById('stat-savings').textContent = fmt(result.savingsYearly) + '/yr';
+
+    const sorted = result.actions.slice().sort((a,b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
+    actionsListEl.innerHTML = '';
+    if (!sorted.length) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Your setup already looks optimized.</p>';
+    }
+    const LINKABLE = { cancel:1, downgrade:1, pause:1, add:1, bundle:1 };
+    sorted.forEach(a => {
+      const svc = SERVICES[a.service] || BUNDLES.find(b => b.id === a.service) || { name: a.name || SPORT_LABELS[a.service] || a.service };
+      const card = document.createElement('div');
+      card.className = 'action-card';
+      const title = ACTION_TITLE[a.action] || a.action;
+      const titleEl = document.createElement('div');
+      titleEl.className = 'a-title';
+      titleEl.textContent = title + (svc.name ? ' — ' + svc.name : '');
+      const descEl = document.createElement('div');
+      descEl.className = 'a-desc';
+      descEl.textContent = a.reason;
+      const copyEl = document.createElement('div');
+      copyEl.className = 'action-copy';
+      copyEl.appendChild(titleEl);
+      copyEl.appendChild(descEl);
+      if (LINKABLE[a.action]) {
+        const { url, label } = manageLink(a.service, svc.name);
+        const linkEl = document.createElement('a');
+        linkEl.className = 'a-link';
+        linkEl.href = url;
+        linkEl.target = '_blank';
+        linkEl.rel = 'noopener noreferrer';
+        linkEl.textContent = label + ' →';
+        copyEl.appendChild(linkEl);
+      }
+      const badgeEl = document.createElement('div');
+      badgeEl.className = 'action-badge ' + a.action;
+      badgeEl.textContent = ACTION_ICON[a.action] || '•';
+      card.appendChild(badgeEl);
+      card.appendChild(copyEl);
+      actionsListEl.appendChild(card);
+    });
+
+    resultsEl.hidden = false;
+    resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  });
+})();
+</script>
+
+</body>
+</html>
