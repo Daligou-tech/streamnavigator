@@ -423,7 +423,7 @@
 
   /* ---------- Footer ---------- */
   footer{ padding:70px 24px 32px; position:relative; z-index:1; }
-  .footer-grid{ display:grid; grid-template-columns:1.4fr repeat(3, 1fr); gap:40px; max-width:1180px; margin:0 auto 50px; }
+  .footer-grid{ display:grid; grid-template-columns:1.4fr repeat(2, 1fr); gap:40px; max-width:1180px; margin:0 auto 50px; }
   .footer-brand p{ color:var(--text-dimmer); font-size:14px; margin-top:14px; max-width:280px; }
   .footer-col h5{ font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:16px; font-weight:700; }
   .footer-col ul{ list-style:none; display:flex; flex-direction:column; gap:10px; }
@@ -437,9 +437,6 @@
   }
   .footer-bottom p{ font-size:13px; color:var(--text-dimmer); }
   .footer-disclaimer{ max-width:1180px; margin:0 auto 24px; padding-top:24px; border-top:1px solid var(--border); font-size:12px; line-height:1.6; color:var(--text-dimmer); }
-  .social-links{ display:flex; gap:14px; }
-  .social-links a{ width:34px; height:34px; border-radius:9px; background:var(--surface); border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; color:var(--text-dim); transition:all .2s; }
-  .social-links a:hover{ color:var(--ink); background:var(--yellow); }
 
   /* toast */
   .toast{
@@ -496,6 +493,7 @@
       <a href="#contact">Contact</a>
     </div>
     <div class="nav-cta">
+      <a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" data-stripe-link="portal" class="btn btn-ghost btn-sm">Customer Login</a>
       <a href="#waitlist" class="btn btn-primary btn-sm">Join Waitlist</a>
     </div>
   </nav>
@@ -503,14 +501,35 @@
 
 <main id="top">
 
+  <!--
+    ============================================================================
+    WAITLIST EMAIL CAPTURE — setup required
+    Both "Join Waitlist" forms below post to Formspree (formspree.io), a
+    hosted form backend — no server or database needed on your end.
+      1. Go to formspree.io and sign up (free tier covers 50 submissions/mo).
+      2. Create a new form (e.g. "StreamNavigator Waitlist"). Formspree gives
+         you an endpoint like https://formspree.io/f/abcdwxyz.
+      3. Paste that endpoint over BOTH REPLACE_WITH_FORMSPREE_ID placeholders
+         below (in the hero form and the final-CTA form near the footer) —
+         same endpoint for both is fine, each submission includes a hidden
+         "source" field ("hero" or "final-cta") so you can tell them apart.
+      4. In Formspree's dashboard, you can turn on an email notification for
+         every new submission, or export the whole list as CSV anytime.
+    Until a real endpoint is pasted in, clicking "Join Waitlist" shows a
+    friendly notice instead of losing the visitor's email.
+    ============================================================================
+  -->
+
   <!-- HERO -->
   <section class="hero" style="padding-top:96px;">
     <div class="pill"><span class="dot">✦</span> Now in private beta &mdash; 4,200+ on the waitlist</div>
     <h1>Stop paying for streaming<br/>you <span class="grad">don't even watch</span>.</h1>
     <p class="sub">StreamNavigator is your AI subscription manager. It tracks every streaming service you're paying for, learns what you actually watch, and tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
 
-    <form class="hero-form" id="waitlist-form">
-      <input type="email" id="waitlist-email" placeholder="you@email.com" required aria-label="Email address" />
+    <form class="hero-form" id="waitlist-form" data-waitlist-form action="https://formspree.io/f/xeajpnzq" method="POST">
+      <input type="hidden" name="_subject" value="New StreamNavigator waitlist signup" />
+      <input type="hidden" name="source" value="hero" />
+      <input type="email" name="email" id="waitlist-email" placeholder="you@email.com" required aria-label="Email address" />
       <button type="submit" class="btn btn-primary">Join Waitlist</button>
     </form>
     <p class="hero-note"><strong>Free to join.</strong> Early users save an average of $600 a year.</p>
@@ -913,8 +932,10 @@
     <div class="cta-final reveal">
       <h2>Stop paying for what you don't watch.</h2>
       <p>Join thousands of early users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
-      <form class="hero-form" id="waitlist-form-2">
-        <input type="email" id="waitlist-email-2" placeholder="you@email.com" required aria-label="Email address" />
+      <form class="hero-form" id="waitlist-form-2" data-waitlist-form action="https://formspree.io/f/xeajpnzq" method="POST">
+        <input type="hidden" name="_subject" value="New StreamNavigator waitlist signup" />
+        <input type="hidden" name="source" value="final-cta" />
+        <input type="email" name="email" id="waitlist-email-2" placeholder="you@email.com" required aria-label="Email address" />
         <button type="submit" class="btn btn-primary">Join Waitlist</button>
       </form>
       <p class="hero-note" style="margin-bottom:0;">Free to join. Early users save an average of $600 a year.</p>
@@ -942,16 +963,7 @@
         <li><a href="#pricing">Pricing</a></li>
         <li><a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" data-stripe-link="portal" id="contact-billing">Manage billing</a></li>
         <li><a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" data-stripe-link="portal">Cancel subscription</a></li>
-      </ul>
-    </div>
-
-    <div class="footer-col">
-      <h5>Company</h5>
-      <ul>
         <li><a href="#faq">FAQ</a></li>
-        <li><a href="#">About</a></li>
-        <li><a href="#">Careers</a></li>
-        <li><a href="#">Blog</a></li>
       </ul>
     </div>
 
@@ -976,11 +988,6 @@
 
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
-    <div class="social-links">
-      <a href="#" aria-label="Twitter / X">𝕏</a>
-      <a href="#" aria-label="LinkedIn">in</a>
-      <a href="#" aria-label="Instagram">◎</a>
-    </div>
   </div>
 </footer>
 
@@ -1032,17 +1039,43 @@
     });
   });
 
-  ['waitlist-form', 'waitlist-form-2'].forEach(id => {
-    const form = document.getElementById(id);
-    if (!form) return;
-    form.addEventListener('submit', (e) => {
+  // Waitlist signups — posted to Formspree (a hosted form endpoint) so every
+  // email is actually captured and delivered to your inbox / dashboard.
+  // Until you paste in a real endpoint below, submissions are blocked with a
+  // friendly notice instead of silently disappearing.
+  document.querySelectorAll('[data-waitlist-form]').forEach(form => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = form.querySelector('input[type="email"]');
-      if (isValidEmail(input.value)) {
-        showToast("You're on the list! We'll be in touch at " + input.value);
-        input.value = '';
-      } else {
+      if (!isValidEmail(input.value)) {
         showToast('Please enter a valid email address.');
+        return;
+      }
+      if (form.getAttribute('action').includes('REPLACE_WITH_')) {
+        showToast('Waitlist isn\'t connected yet — add your Formspree endpoint to start collecting emails.');
+        return;
+      }
+      const submitBtn = form.querySelector('button[type="submit"]');
+      const originalLabel = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Joining…';
+      try {
+        const res = await fetch(form.getAttribute('action'), {
+          method: 'POST',
+          headers: { 'Accept': 'application/json' },
+          body: new FormData(form)
+        });
+        if (res.ok) {
+          showToast("You're on the list! We'll be in touch at " + input.value);
+          input.value = '';
+        } else {
+          showToast("Something went wrong — please try again.");
+        }
+      } catch (err) {
+        showToast("Something went wrong — please try again.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
       }
     });
   });
