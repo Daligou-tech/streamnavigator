@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your Dashboard — StreamNavigator</title>
+<meta name="description" content="Log in to see the streaming subscriptions you're tracking, what you're spending, and your next pause or resume reminders." />
+<meta name="robots" content="noindex" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<!--
+  ============================================================================
+  CUSTOMER DASHBOARD — setup required (this is a real, functional account
+  system — not a demo — once you complete these steps)
+
+  This page uses Supabase (supabase.com) for two things: real email+password
+  accounts (Supabase Auth) and a database that stores each customer's tracked
+  subscriptions, with Row Level Security so a customer can only ever see
+  their own data — never anyone else's, even though everyone shares one
+  database. Nothing about this page requires a server you have to run.
+
+    1. Go to supabase.com and create a free account, then "New Project."
+       Pick any name/region/database password (save that password somewhere
+       safe — it's for direct DB access, separate from customer passwords).
+    2. Once the project finishes provisioning, open the SQL Editor (left
+       sidebar) → "New query," paste in the contents of the supabase_setup.sql
+       file provided alongside this page, and click "Run." This creates the
+       tracked_subscriptions table and locks it down with Row Level Security.
+    3. Go to Project Settings → API. Copy the "Project URL" and the
+       "anon public" key (NOT the "service_role" key — that one must never
+       appear in client-side code like this page).
+    4. Paste those two values over SUPABASE_URL_PLACEHOLDER and
+       SUPABASE_ANON_KEY_PLACEHOLDER in the <script> block near the bottom
+       of this file.
+    5. Optional: under Authentication → Sign In / Providers → Email, you can
+       toggle "Confirm email" off if you'd rather let new customers in
+       immediately instead of requiring them to click a verification link
+       first (verification on is the safer default).
+
+  The anon key is safe to expose in this page's source — it only grants the
+  access your Row Level Security policies allow, which is "your own rows
+  only." It is not a secret in the way an API secret key is.
+
+  What this does NOT include yet: automated emailed/pushed reminders on the
+  pause/resume dates a customer sets. The date is stored and shown on this
+  dashboard when they log in, but sending it to them proactively would need
+  a scheduled job plus an email service — a reasonable next step once this
+  is live, not built here.
+  ============================================================================
+-->
+<style>
+  :root{
+    --bg:#FBF4E9;
+    --bg-alt:#F5EAD9;
+    --surface:#FFFFFF;
+    --surface-2:#FFF1DD;
+    --ink:#1F1B16;
+    --border:rgba(31,27,22,0.12);
+    --border-strong:rgba(31,27,22,0.22);
+    --text:#201A14;
+    --text-dim:#5B5347;
+    --text-dimmer:#7A7163;
+    --accent:#4FB6E8;
+    --accent-deep:#1668A5;
+    --accent-2:#4ADE9E;
+    --accent-2-deep:#146B4A;
+    --accent-3:#2EC4B6;
+    --accent-3-deep:#0F8A7D;
+    --yellow:#FFC93C;
+    --status-active:#1E9E64;
+    --status-active-deep:#157A4E;
+    --status-paused:#9C9282;
+    --danger-deep:#B23A3A;
+    --gradient: linear-gradient(135deg, #4FB6E8 0%, #4ADE9E 100%);
+    --gradient-text: linear-gradient(135deg, #1668A5 0%, #146B4A 100%);
+    --radius: 20px;
+    --radius-sm: 12px;
+    --shadow-hard: 6px 6px 0 var(--ink);
+    --shadow-hard-sm: 4px 4px 0 var(--ink);
+    --shadow-hard-xs: 3px 3px 0 var(--ink);
+    --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{ font-family:'Sora','Inter',sans-serif; letter-spacing:-0.02em; font-weight:700; color:var(--text); }
+  a{ color:inherit; text-decoration:none; }
+  .wrap{ max-width:900px; margin:0 auto; padding:0 24px; }
+
+  header{ position:sticky; top:0; z-index:100; background:rgba(251,244,233,0.9); backdrop-filter:blur(14px); border-bottom:2px solid var(--ink); }
+  nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:900px; margin:0 auto; }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; font-family:'Sora',sans-serif; }
+  .logo-mark{ width:30px; height:30px; border-radius:9px; background:var(--gradient); display:flex; align-items:center; justify-content:center; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs); }
+  .logo-mark svg{ width:16px; height:16px; }
+  .nav-right{ display:flex; align-items:center; gap:10px; }
+
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 18px; border-radius:999px; font-weight:700; font-size:14px; border:2px solid var(--ink); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .2s ease; white-space:nowrap; font-family:inherit; }
+  .btn:active{ transform:translate(3px,3px); box-shadow:none !important; }
+  .btn-primary{ background:var(--accent); color:var(--ink); font-weight:800; box-shadow:var(--shadow-hard-sm); }
+  .btn-primary:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px); }
+  .btn-ghost{ background:var(--surface); color:var(--text); box-shadow:var(--shadow-hard-xs); }
+  .btn-ghost:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  .btn-sm{ padding:7px 14px; font-size:13px; }
+  .btn:disabled{ opacity:0.55; cursor:not-allowed; }
+  .btn:disabled:hover{ transform:none; box-shadow:var(--shadow-hard-sm); }
+
+  main{ padding:48px 0 100px; }
+  [hidden]{ display:none !important; }
+
+  /* ---- Auth view ---- */
+  .auth-card{ max-width:420px; margin:40px auto 0; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:34px; }
+  .auth-tabs{ display:flex; gap:8px; margin-bottom:22px; background:var(--surface-2); border:2px solid var(--ink); border-radius:999px; padding:4px; }
+  .auth-tab{ flex:1; text-align:center; padding:8px 0; border-radius:999px; font-weight:700; font-size:13.5px; cursor:pointer; color:var(--text-dim); }
+  .auth-tab.active{ background:var(--ink); color:#fff; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--text-dim); margin-bottom:6px; }
+  .field input{ width:100%; padding:12px 14px; border-radius:var(--radius-sm); border:2px solid var(--ink); background:var(--surface); color:var(--text); font-size:14.5px; outline:none; font-family:inherit; }
+  .field input:focus{ border-color:var(--accent-deep); box-shadow:var(--shadow-hard-xs); }
+  .auth-submit{ width:100%; margin-top:6px; }
+  .auth-msg{ font-size:13px; margin-top:12px; text-align:center; }
+  .auth-msg.error{ color:var(--danger-deep); font-weight:600; }
+  .auth-msg.ok{ color:var(--status-active-deep); font-weight:600; }
+  .auth-note{ font-size:11.5px; color:var(--text-dimmer); text-align:center; margin-top:16px; }
+  .auth-guard{ max-width:520px; margin:60px auto; text-align:center; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:34px; }
+
+  /* ---- Dashboard view ---- */
+  .dash-head{ margin-bottom:28px; }
+  .dash-head p{ color:var(--text-dim); font-size:14.5px; }
+  .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:36px; }
+  .stat-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow-hard-xs); }
+  .stat-card .label{ font-size:11.5px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+  .stat-card .value{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
+  @media (max-width:680px){ .stat-row{ grid-template-columns:1fr 1fr; } }
+
+  .panel{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; margin-bottom:28px; }
+  .panel h3{ font-size:1.1rem; margin-bottom:16px; }
+  .add-grid{ display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr auto; gap:10px; align-items:end; }
+  @media (max-width:820px){ .add-grid{ grid-template-columns:1fr 1fr; } }
+  .add-grid .field{ margin-bottom:0; }
+
+  .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .sub-row:first-child{ border-top:none; }
+  .sub-name{ font-weight:700; min-width:140px; }
+  .sub-price{ color:var(--text-dim); font-size:13.5px; min-width:70px; }
+  .badge{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; }
+  .badge.active{ background:rgba(30,158,100,0.14); color:var(--status-active-deep); }
+  .badge.paused{ background:rgba(156,146,130,0.18); color:var(--text-dim); }
+  .sub-reminder{ font-size:12px; color:var(--text-dimmer); }
+  .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
+
+  .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
+  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast .ico{ color:var(--status-active-deep); }
+</style>
+</head>
+<body>
+
+<header>
+  <nav>
+    <a href="index.html" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator
+    </a>
+    <div class="nav-right">
+      <a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" class="btn btn-ghost btn-sm">Manage Billing</a>
+      <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
+    </div>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <!-- Shown until the Supabase project keys below are filled in -->
+  <div id="setup-guard" class="auth-guard" hidden>
+    <h2>Dashboard not connected yet</h2>
+    <p style="margin-top:10px; color:var(--text-dim); font-size:14px;">This page needs a Supabase project URL and public key to work. See the setup comment at the top of this file's source for the 5-step walkthrough.</p>
+  </div>
+
+  <!-- Auth: shown when logged out -->
+  <div id="auth-view" hidden>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <div class="auth-tab active" data-mode="login">Log In</div>
+        <div class="auth-tab" data-mode="signup">Sign Up</div>
+      </div>
+      <form id="auth-form">
+        <div class="field">
+          <label for="auth-email">Email</label>
+          <input type="email" id="auth-email" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="auth-password">Password</label>
+          <input type="password" id="auth-password" required autocomplete="current-password" minlength="6" />
+        </div>
+        <button type="submit" class="btn btn-primary auth-submit" id="auth-submit-btn">Log In</button>
+      </form>
+      <p class="auth-msg" id="auth-msg"></p>
+      <p class="auth-note">Passwords are hashed and stored securely by Supabase — StreamNavigator never sees or stores them in plain text.</p>
+    </div>
+  </div>
+
+  <!-- Dashboard: shown when logged in -->
+  <div id="dashboard-view" hidden>
+    <div class="dash-head">
+      <h1>Welcome back<span id="welcome-email"></span>.</h1>
+      <p>Here's everything you're tracking and what it's costing you.</p>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="label">Monthly spend</div><div class="value" id="stat-monthly">$0</div></div>
+      <div class="stat-card"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
+      <div class="stat-card"><div class="label">Paused</div><div class="value" id="stat-paused">0</div></div>
+      <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
+    </div>
+
+    <div class="panel">
+      <h3>Add a subscription to track</h3>
+      <form id="add-form" class="add-grid">
+        <div class="field">
+          <label for="add-name">Service</label>
+          <input type="text" id="add-name" list="service-suggestions" placeholder="Netflix" required />
+          <datalist id="service-suggestions">
+            <option value="Netflix"></option>
+            <option value="Hulu"></option>
+            <option value="Disney+"></option>
+            <option value="Max"></option>
+            <option value="Prime Video"></option>
+            <option value="YouTube Premium"></option>
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="add-price">$/mo</label>
+          <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
+        </div>
+        <div class="field">
+          <label for="add-status">Status</label>
+          <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="add-reminder">Reminder date</label>
+          <input type="date" id="add-reminder" />
+        </div>
+        <button type="submit" class="btn btn-primary">Add</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h3>Your tracked subscriptions</h3>
+      <div id="sub-list"></div>
+      <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription above.</p>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"><span class="ico">✓</span> <span id="toast-text"></span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(function(){
+  // ---- 1. Configure your Supabase project here ----
+  const SUPABASE_URL = 'https://xugqhyfdiwbbenclmpon.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_rJXBUjeNaGA2iRsEZC4fxw_RoNepfbV';
+
+  const isConfigured = !SUPABASE_URL.includes('PLACEHOLDER') && !SUPABASE_ANON_KEY.includes('PLACEHOLDER');
+
+  const setupGuard = document.getElementById('setup-guard');
+  const authView = document.getElementById('auth-view');
+  const dashView = document.getElementById('dashboard-view');
+  const logoutBtn = document.getElementById('logout-btn');
+
+  if (!isConfigured) {
+    setupGuard.hidden = false;
+    return; // don't attempt to load the Supabase client at all
+  }
+
+  const { createClient } = supabase;
+  const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ---- Direct "manage on service" links, reused from the main site ----
+  const MANAGE_URLS = {
+    netflix:'https://www.netflix.com/account',
+    hulu:'https://secure.hulu.com/account',
+    'disney+':'https://www.disneyplus.com/account/subscription',
+    max:'https://www.max.com/settings/subscription',
+    'prime video':'https://www.amazon.com/mc/pipelines/subscription',
+    'youtube premium':'https://myaccount.google.com/subscriptions'
+  };
+  function manageUrlFor(name){
+    const key = (name || '').trim().toLowerCase();
+    return MANAGE_URLS[key] || ('https://www.google.com/search?q=' + encodeURIComponent(name + ' manage subscription'));
+  }
+
+  function showToast(msg){
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-text').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+  }
+  function fmt(n){ return '$' + Number(n || 0).toFixed(2); }
+
+  // ---- Auth tab switching ----
+  let mode = 'login';
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      mode = tab.dataset.mode;
+      document.getElementById('auth-submit-btn').textContent = mode === 'signup' ? 'Sign Up' : 'Log In';
+      document.getElementById('auth-msg').textContent = '';
+    });
+  });
+
+  document.getElementById('auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const msgEl = document.getElementById('auth-msg');
+    const btn = document.getElementById('auth-submit-btn');
+    msgEl.textContent = '';
+    msgEl.className = 'auth-msg';
+    btn.disabled = true;
+
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await client.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.session) {
+          msgEl.textContent = "Account created! You're logged in.";
+        } else {
+          msgEl.textContent = 'Account created — check your email to confirm before logging in.';
+        }
+        msgEl.classList.add('ok');
+      } else {
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (err) {
+      msgEl.textContent = err.message || 'Something went wrong.';
+      msgEl.classList.add('error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    await client.auth.signOut();
+  });
+
+  // ---- Subscriptions CRUD ----
+  async function loadSubscriptions(){
+    const { data, error } = await client
+      .from('tracked_subscriptions')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) { showToast('Could not load your subscriptions.'); return; }
+    renderSubscriptions(data || []);
+  }
+
+  function renderSubscriptions(rows){
+    const list = document.getElementById('sub-list');
+    const empty = document.getElementById('empty-state');
+    list.innerHTML = '';
+    empty.hidden = rows.length > 0;
+
+    let monthly = 0, activeCount = 0, pausedCount = 0, pausedMonthly = 0;
+    rows.forEach(r => {
+      if (r.status === 'active') { monthly += Number(r.monthly_price); activeCount++; }
+      else { pausedCount++; pausedMonthly += Number(r.monthly_price); }
+
+      const row = document.createElement('div');
+      row.className = 'sub-row';
+      const reminderText = r.next_reminder_date
+        ? `${r.reminder_type === 'resume' ? 'Resume' : 'Pause'} reminder: ${r.next_reminder_date}`
+        : '';
+      row.innerHTML = `
+        <span class="sub-name">${escapeHtml(r.service_name)}</span>
+        <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
+        <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
+        <span class="sub-reminder">${reminderText}</span>
+        <span class="sub-actions">
+          <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
+          <button class="btn btn-ghost btn-sm" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause' : 'Resume'}</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
+        </span>
+      `;
+      list.appendChild(row);
+    });
+
+    document.getElementById('stat-monthly').textContent = fmt(monthly);
+    document.getElementById('stat-active').textContent = activeCount;
+    document.getElementById('stat-paused').textContent = pausedCount;
+    document.getElementById('stat-savings').textContent = fmt(pausedMonthly * 12);
+  }
+
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  document.getElementById('sub-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    if (btn.dataset.action === 'delete') {
+      const { error } = await client.from('tracked_subscriptions').delete().eq('id', id);
+      if (error) { showToast('Could not remove that.'); return; }
+      showToast('Removed.');
+      loadSubscriptions();
+    } else if (btn.dataset.action === 'toggle') {
+      const next = btn.dataset.status === 'active' ? 'paused' : 'active';
+      const { error } = await client.from('tracked_subscriptions').update({ status: next }).eq('id', id);
+      if (error) { showToast('Could not update that.'); return; }
+      loadSubscriptions();
+    }
+  });
+
+  document.getElementById('add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+    const name = document.getElementById('add-name').value.trim();
+    const price = parseFloat(document.getElementById('add-price').value);
+    const status = document.getElementById('add-status').value;
+    const reminderDate = document.getElementById('add-reminder').value || null;
+
+    const { error } = await client.from('tracked_subscriptions').insert({
+      user_id: user.id,
+      service_id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      service_name: name,
+      monthly_price: isNaN(price) ? 0 : price,
+      status,
+      next_reminder_date: reminderDate,
+      reminder_type: reminderDate ? (status === 'active' ? 'pause' : 'resume') : null
+    });
+    if (error) { showToast('Could not add that subscription.'); return; }
+    showToast(name + ' added.');
+    e.target.reset();
+    loadSubscriptions();
+  });
+
+  // ---- Auth state -> which view is visible ----
+  function showLoggedIn(user){
+    authView.hidden = true;
+    dashView.hidden = false;
+    logoutBtn.hidden = false;
+    document.getElementById('welcome-email').textContent = ', ' + user.email;
+    loadSubscriptions();
+  }
+  function showLoggedOut(){
+    authView.hidden = false;
+    dashView.hidden = true;
+    logoutBtn.hidden = true;
+  }
+
+  client.auth.onAuthStateChange((_event, session) => {
+    if (session && session.user) showLoggedIn(session.user);
+    else showLoggedOut();
+  });
+
+  client.auth.getSession().then(({ data: { session } }) => {
+    if (session && session.user) showLoggedIn(session.user);
+    else showLoggedOut();
+  });
+})();
+</script>
+
+</body>
+</html>
