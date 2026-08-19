@@ -454,6 +454,7 @@
 
   /* ---------- Responsive ---------- */
   @media (max-width: 900px){
+    .nav-links{ display:none; }
     .product-grid{ grid-template-columns:1fr; gap:40px; }
     .features-grid{ grid-template-columns:repeat(2,1fr); }
     .screens-grid{ grid-template-columns:1fr; }
@@ -461,8 +462,11 @@
     .pricing-grid{ grid-template-columns:1fr; max-width:420px; }
     .footer-grid{ grid-template-columns:1fr 1fr; }
   }
+  @media (max-width: 480px){
+    nav{ flex-wrap:wrap; row-gap:10px; }
+    .nav-cta{ width:100%; justify-content:flex-end; }
+  }
   @media (max-width: 640px){
-    .nav-links{ display:none; }
     .app-shell{ grid-template-columns:1fr; }
     .app-side{ display:none; }
     .features-grid{ grid-template-columns:1fr; }
@@ -493,7 +497,7 @@
       <a href="#contact">Contact</a>
     </div>
     <div class="nav-cta">
-      <a href="dashboard.html" class="btn btn-ghost btn-sm">Customer Login</a>
+      <a href="dashboard.html" class="btn btn-ghost btn-sm">Log In / Sign Up</a>
       <a href="#waitlist" class="btn btn-primary btn-sm">Join Waitlist</a>
     </div>
   </nav>
