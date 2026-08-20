@@ -168,6 +168,9 @@
   .upgrade-feats{ list-style:none; padding:0; margin:0 0 20px; display:flex; flex-direction:column; gap:9px; flex:1; }
   .upgrade-feats li{ font-size:13.5px; color:var(--text-dim); padding-left:22px; position:relative; }
   .upgrade-feats li::before{ content:"✓"; position:absolute; left:0; top:0; color:var(--accent-2-deep); font-weight:800; }
+  .upgrade-lock{ background:var(--surface-2); border:2px dashed var(--border-strong); border-radius:var(--radius); padding:18px 20px; margin:14px 0 18px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .upgrade-lock p{ margin:0; font-size:13.5px; color:var(--text-dim); flex:1; min-width:220px; }
+  .upgrade-lock strong{ color:var(--text); }
 
   .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
   .sub-row:first-child{ border-top:none; }
@@ -328,8 +331,9 @@
       <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
     </div>
 
-    <div class="upgrade-section">
+    <div class="upgrade-section" id="upgrade-section">
       <h3>Upgrade your plan</h3>
+      <p class="field-hint" id="current-plan-note" style="margin-top:-10px;">Checking your plan…</p>
       <div class="upgrade-grid">
         <div class="upgrade-card featured">
           <span class="upgrade-badge">Most Popular</span>
@@ -340,7 +344,7 @@
             <li>Direct links to cancel &amp; downgrade</li>
             <li>Real-time price-hike alerts</li>
           </ul>
-          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-primary" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
+          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-primary" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
         </div>
         <div class="upgrade-card">
           <h4>Family</h4>
@@ -350,7 +354,7 @@
             <li>Up to 6 shared accounts</li>
             <li>Household usage breakdown</li>
           </ul>
-          <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" style="width:100%; justify-content:center;">Subscribe to Family →</a>
+          <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
         </div>
       </div>
     </div>
@@ -420,52 +424,59 @@
       <h3>Shows &amp; sports you like to watch</h3>
       <p class="field-hint">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and typical U.S. season windows for sports.</p>
 
-      <div class="fav-add-grid">
-        <div class="field">
-          <label for="fav-show-title">Show or movie title</label>
-          <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
-          <p class="show-preview" id="fav-show-preview"></p>
-        </div>
-        <div class="field">
-          <label for="fav-show-service">On which service?</label>
-          <select id="fav-show-service"></select>
-        </div>
-        <div class="field">
-          <button type="button" class="btn btn-primary" id="fav-show-add" style="width:100%;">Add show</button>
-        </div>
+      <div class="upgrade-lock" id="fav-panel-locked" hidden>
+        <p><strong>Real-time pause &amp; resume reminders are a Pro feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
+        <a href="#upgrade-pro-link" class="btn btn-primary btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
       </div>
 
-      <div class="fav-add-grid">
-        <div class="field">
-          <label for="fav-sport-select">Sport / league</label>
-          <select id="fav-sport-select">
-            <option value="nfl">NFL</option>
-            <option value="nba">NBA</option>
-            <option value="mlb">MLB</option>
-            <option value="nhl">NHL</option>
-            <option value="epl">Premier League</option>
-            <option value="laliga">La Liga</option>
-            <option value="bundesliga">Bundesliga</option>
-            <option value="mls">MLS</option>
-            <option value="other_soccer">Other Soccer</option>
-            <option value="college">College Football</option>
-            <option value="cable">Cable TV</option>
-          </select>
+      <div id="fav-panel-body">
+        <div class="fav-add-grid">
+          <div class="field">
+            <label for="fav-show-title">Show or movie title</label>
+            <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
+            <p class="show-preview" id="fav-show-preview"></p>
+          </div>
+          <div class="field">
+            <label for="fav-show-service">On which service?</label>
+            <select id="fav-show-service"></select>
+          </div>
+          <div class="field">
+            <button type="button" class="btn btn-primary" id="fav-show-add" style="width:100%;">Add show</button>
+          </div>
         </div>
-        <div class="field">
-          <label for="fav-sport-service">On which service?</label>
-          <select id="fav-sport-service"></select>
+
+        <div class="fav-add-grid">
+          <div class="field">
+            <label for="fav-sport-select">Sport / league</label>
+            <select id="fav-sport-select">
+              <option value="nfl">NFL</option>
+              <option value="nba">NBA</option>
+              <option value="mlb">MLB</option>
+              <option value="nhl">NHL</option>
+              <option value="epl">Premier League</option>
+              <option value="laliga">La Liga</option>
+              <option value="bundesliga">Bundesliga</option>
+              <option value="mls">MLS</option>
+              <option value="other_soccer">Other Soccer</option>
+              <option value="college">College Football</option>
+              <option value="cable">Cable TV</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fav-sport-service">On which service?</label>
+            <select id="fav-sport-service"></select>
+          </div>
+          <div class="field">
+            <button type="button" class="btn btn-primary" id="fav-sport-add" style="width:100%;">Add sport</button>
+          </div>
         </div>
-        <div class="field">
-          <button type="button" class="btn btn-primary" id="fav-sport-add" style="width:100%;">Add sport</button>
-        </div>
+
+        <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription above first, so you have a service to link these to.</p>
+
+        <div class="fav-list" id="fav-list"></div>
+        <p class="empty-state" id="fav-empty" hidden>Nothing added yet — tag a show or sport above and we'll watch it for you.</p>
+        <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
       </div>
-
-      <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription above first, so you have a service to link these to.</p>
-
-      <div class="fav-list" id="fav-list"></div>
-      <p class="empty-state" id="fav-empty" hidden>Nothing added yet — tag a show or sport above and we'll watch it for you.</p>
-      <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
     </div>
 
     <div class="panel">
@@ -725,6 +736,61 @@
     const month = new Date().getMonth() + 1; // 1-12
     const { startMonth, endMonth } = season;
     return startMonth <= endMonth ? (month >= startMonth && month <= endMonth) : (month >= startMonth || month <= endMonth);
+  }
+
+  // ---- Plan / paywall ----
+  // The real-time reminders panel below (and the suggestion text it drives
+  // on each subscription row) is a Pro feature. Whether someone actually
+  // paid lives in Supabase's `subscribers` table, written only by the
+  // Stripe webhook (api/stripe-webhook.js) using the service_role key — the
+  // logged-in customer has read-only access to their own row, so this is a
+  // real, server-verified plan check, not something a customer could spoof
+  // from the browser.
+  let userPlan = 'free';
+  function isPro(){ return userPlan === 'pro' || userPlan === 'family'; }
+
+  async function loadPlan(user){
+    const { data, error } = await client
+      .from('subscribers')
+      .select('plan')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    userPlan = (!error && data && (data.plan === 'pro' || data.plan === 'family')) ? data.plan : 'free';
+    applyPlanGating();
+  }
+
+  function applyPlanGating(){
+    const body = document.getElementById('fav-panel-body');
+    const locked = document.getElementById('fav-panel-locked');
+    const note = document.getElementById('current-plan-note');
+    const pro = isPro();
+    if (body) body.hidden = !pro;
+    if (locked) locked.hidden = pro;
+    if (note) {
+      note.textContent = pro
+        ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders are unlocked below.`
+        : "You're on the Free plan. Upgrade to unlock real-time pause & resume reminders.";
+    }
+    // Row-level suggestion text is Pro-gated too, so re-render with the
+    // current plan now applied.
+    if (window.__lastSubRows) renderSubscriptions(window.__lastSubRows);
+  }
+
+  // Stripe Payment Links can carry who's checking out via client_reference_id
+  // and prefilled_email — this is what lets the webhook match a completed
+  // checkout back to the right Supabase account. Without this, a purchase
+  // has no way to know which customer to unlock.
+  function wireUpgradeLinks(user){
+    ['upgrade-pro-link', 'upgrade-family-link'].forEach(id => {
+      const a = document.getElementById(id);
+      if (!a) return;
+      try {
+        const url = new URL(a.href);
+        url.searchParams.set('client_reference_id', user.id);
+        if (user.email) url.searchParams.set('prefilled_email', user.email);
+        a.href = url.toString();
+      } catch (err) { /* leave link as-is if anything's malformed */ }
+    });
   }
 
   // ---- Favorites (shows & sports) CRUD ----
@@ -1032,7 +1098,10 @@
       // suggestion (real air date / in-season sport) is more specific, so it
       // wins when both apply. The routine check-in cadence is the fallback,
       // and only speaks up once it's actually due — see computeCadencePrompt.
-      const suggestion = computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r);
+      // Real-time reminders are a Pro feature — a Free-plan customer sees
+      // their subscriptions and can still pause/activate manually, but
+      // doesn't get the "worth activating/pausing" prompts.
+      const suggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r)) : null;
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
@@ -1373,6 +1442,8 @@
     logoutBtn.hidden = false;
     document.getElementById('welcome-email').textContent = ', ' + user.email;
     setBillingLink(user.email);
+    wireUpgradeLinks(user);
+    loadPlan(user);
     loadSubscriptions();
     loadFavorites();
   }
