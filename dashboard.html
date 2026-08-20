@@ -193,6 +193,14 @@
   .split-legend{ display:flex; justify-content:center; gap:20px; font-size:13px; color:var(--text-dim); }
   .split-legend .dot{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 
+  .savings-banner{ display:flex; align-items:center; gap:12px; background:rgba(74,222,158,0.16); border:2px solid var(--status-active-deep); border-radius:var(--radius-sm); padding:14px 20px; margin-bottom:24px; font-weight:700; color:var(--status-active-deep); font-size:14.5px; }
+  .savings-banner-icon{ font-size:18px; }
+
+  .connected-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:8px; }
+  .connected-tile{ aspect-ratio:1; border-radius:10px; border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.25); }
+  .connected-tile.paused{ background:var(--text-dimmer) !important; background-image:repeating-linear-gradient(45deg, rgba(31,27,22,0.20) 0 2px, transparent 2px 5px) !important; color:var(--surface); }
+  .trend-note{ font-size:11.5px; color:var(--text-dimmer); margin-top:8px; }
+
   .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
   .toast.show{ transform:translateX(-50%) translateY(0); }
   .toast .ico{ color:var(--status-active-deep); }
@@ -249,6 +257,11 @@
     <div class="dash-head">
       <h1>Welcome back<span id="welcome-email"></span>.</h1>
       <p>Here's everything you're tracking and what it's costing you.</p>
+    </div>
+
+    <div class="savings-banner" id="savings-banner" hidden>
+      <span class="savings-banner-icon">⚡</span>
+      <span id="savings-banner-text"></span>
     </div>
 
     <div class="stat-row">
@@ -349,6 +362,7 @@
       <h3>Your analytics</h3>
       <p class="empty-state" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
       <div id="analytics-body" hidden>
+        <p class="analytics-label" style="margin-bottom:6px;">This month's report</p>
         <p class="analytics-summary" id="analytics-summary"></p>
         <div class="analytics-grid">
           <div class="analytics-block">
@@ -360,6 +374,16 @@
             <p class="analytics-label">Active vs. paused</p>
             <div class="split-donut" id="analytics-donut"></div>
             <div class="split-legend" id="analytics-legend"></div>
+          </div>
+          <div class="analytics-block">
+            <p class="analytics-label">Connected services at a glance</p>
+            <div class="connected-grid" id="connected-grid"></div>
+          </div>
+          <div class="analytics-block">
+            <p class="analytics-label">Money saved over time</p>
+            <div class="analytics-bar-chart" id="savings-trend-chart"></div>
+            <div class="analytics-bar-labels" id="savings-trend-labels"></div>
+            <p class="trend-note" id="savings-trend-note"></p>
           </div>
         </div>
       </div>
@@ -590,7 +614,19 @@
     document.getElementById('stat-paused').textContent = pausedCount;
     document.getElementById('stat-savings').textContent = fmt(pausedMonthly * 12);
 
+    renderSavingsBanner(rows, pausedMonthly);
     renderAnalytics(rows);
+  }
+
+  // Real version of the marketing page's "$187/mo in potential savings
+  // found" callout — sourced from subscriptions this customer has actually
+  // paused, not a guess.
+  function renderSavingsBanner(rows, pausedMonthly){
+    const banner = document.getElementById('savings-banner');
+    const text = document.getElementById('savings-banner-text');
+    if (!rows.length || pausedMonthly <= 0) { banner.hidden = true; return; }
+    banner.hidden = false;
+    text.textContent = `${fmt(pausedMonthly)}/mo in potential savings — from subscriptions you've paused here. Finish cancelling or downgrading them on each service's site below to actually pocket it.`;
   }
 
   // ---- Analytics: built entirely from this signed-in user's own rows ----
@@ -614,6 +650,20 @@
     const summaryParts = [`You're tracking ${rows.length} subscription${rows.length === 1 ? '' : 's'} totaling ${fmt(totalMonthly)}/mo.`];
     if (activeRows.length) summaryParts.push(`${activeRows.length} active at ${fmt(activeMonthly)}/mo.`);
     if (pausedRows.length) summaryParts.push(`${pausedRows.length} paused, saving you ${fmt(pausedMonthly * 12)}/yr.`);
+
+    // Plain-English "what's coming up" line, built from real show air dates —
+    // no guessing, only shows with a TVmaze-confirmed date within 45 days.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const cutoff = addDays(today, 45);
+    const upcoming = rows
+      .filter(r => r.show_next_air_date)
+      .map(r => ({ ...r, airDateObj: new Date(r.show_next_air_date + 'T00:00:00') }))
+      .filter(r => r.airDateObj >= today && r.airDateObj <= cutoff)
+      .sort((a, b) => a.airDateObj - b.airDateObj);
+    if (upcoming.length) {
+      const next = upcoming[0];
+      summaryParts.push(`${next.show_query} airs ${next.show_next_air_date} — that's when ${next.service_name} will be worth turning back on.`);
+    }
     document.getElementById('analytics-summary').textContent = summaryParts.join(' ');
 
     // Spend by service, highest first
@@ -644,6 +694,73 @@
       <span><span class="dot" style="background:var(--accent-2)"></span>Active (${activeRows.length})</span>
       <span><span class="dot" style="background:var(--text-dimmer)"></span>Paused (${pausedRows.length})</span>
     `;
+
+    renderConnectedGrid(rows);
+    loadSavingsHistory();
+  }
+
+  // Real version of the marketing page's "Connected services at a glance"
+  // grid — one tile per subscription this customer actually tracks.
+  const TILE_GRADIENTS = [
+    'linear-gradient(135deg,#4FB6E8,#4ADE9E)',
+    'linear-gradient(135deg,#2EC4B6,#FFC93C)',
+    'linear-gradient(135deg,#4ADE9E,#FFC93C)',
+    'linear-gradient(135deg,#4FB6E8,#2EC4B6)',
+    'linear-gradient(135deg,#FFC93C,#4FB6E8)',
+  ];
+  function renderConnectedGrid(rows){
+    const grid = document.getElementById('connected-grid');
+    grid.innerHTML = '';
+    rows.forEach((r, i) => {
+      const tile = document.createElement('div');
+      tile.className = 'connected-tile' + (r.status !== 'active' ? ' paused' : '');
+      if (r.status === 'active') tile.style.background = TILE_GRADIENTS[i % TILE_GRADIENTS.length];
+      tile.title = `${r.service_name} — ${r.status === 'active' ? 'Active' : 'Paused'}`;
+      tile.textContent = (r.service_name || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
+      grid.appendChild(tile);
+    });
+  }
+
+  // Real version of the marketing page's "Money saved — last 7 months"
+  // chart. Sourced from savings_history, one real row per day, written by
+  // the daily cron job (api/refresh-shows.js) — nothing here is sample
+  // data, so this starts empty and fills in as real days pass.
+  async function loadSavingsHistory(){
+    const { data, error } = await client
+      .from('savings_history')
+      .select('*')
+      .order('snapshot_date', { ascending: true })
+      .limit(60);
+    renderSavingsTrend(error ? [] : (data || []));
+  }
+  function renderSavingsTrend(history){
+    const chart = document.getElementById('savings-trend-chart');
+    const labels = document.getElementById('savings-trend-labels');
+    const note = document.getElementById('savings-trend-note');
+    chart.innerHTML = '';
+    labels.innerHTML = '';
+
+    if (!history.length) {
+      note.textContent = 'History starts building from today — check back tomorrow for your first real data point.';
+      return;
+    }
+    const shown = history.slice(-14); // most recent 14 real days, no padding/fake points
+    const max = Math.max(...shown.map(h => Number(h.paused_monthly_savings)), 0.01);
+    shown.forEach(h => {
+      const pct = Math.max(4, Math.round((Number(h.paused_monthly_savings) / max) * 100));
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = pct + '%';
+      bar.title = `${h.snapshot_date}: ${fmt(h.paused_monthly_savings)}/mo in paused savings`;
+      chart.appendChild(bar);
+      const d = new Date(h.snapshot_date + 'T00:00:00');
+      const label = document.createElement('span');
+      label.textContent = (d.getMonth() + 1) + '/' + d.getDate();
+      labels.appendChild(label);
+    });
+    note.textContent = shown.length < 5
+      ? `Only ${shown.length} real day${shown.length === 1 ? '' : 's'} logged so far — one more real point gets added daily.`
+      : 'Real daily history — no sample data.';
   }
 
   function escapeHtml(s){
