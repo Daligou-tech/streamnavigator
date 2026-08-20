@@ -412,7 +412,6 @@
               <option value="Philo"></option>
               <option value="Acorn TV"></option>
               <option value="Shudder"></option>
-              <option value="Cable TV"></option>
             </datalist>
           </div>
           <div class="field">
@@ -482,7 +481,6 @@
               <option value="mls">MLS</option>
               <option value="other_soccer">Other Soccer</option>
               <option value="college">College Football</option>
-              <option value="cable">Cable TV</option>
             </select>
           </div>
           <div class="field">
@@ -648,8 +646,7 @@
     'sling tv':'#FB6B03',
     philo:'#7C3AED',
     'acorn tv':'#2F6F4E',
-    shudder:'#C81D25',
-    'cable tv':'#5B6B7A'
+    shudder:'#C81D25'
   };
   const FALLBACK_SVC_COLORS = ['#4FB6E8', '#2EC4B6', '#FFC93C', '#9C5B1E', '#7C3AED', '#E4A11B', '#146B4A', '#D00027'];
   function hashStr(s){
@@ -749,16 +746,11 @@
     bundesliga: {startMonth:8, endMonth:5, label:'Bundesliga season (Aug–May)'},
     mls: {startMonth:2, endMonth:12, label:'MLS season (Feb–Dec)'},
     other_soccer: {startMonth:8, endMonth:5, label:'European club season (Aug–May)'},
-    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'},
-    // Cable carries live sports across many leagues with no single season, so
-    // rather than guess at an off-season (and wrongly suggest pausing a cable
-    // package someone keeps specifically for sports), treat it as year-round.
-    cable: {startMonth:1, endMonth:12, label:'Cable sports — year-round'}
+    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'}
   };
   const FAV_SPORT_LABELS = {
     nfl:'NFL', nba:'NBA', mlb:'MLB', nhl:'NHL', epl:'Premier League',
-    laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer', college:'College Football',
-    cable:'Cable TV'
+    laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer', college:'College Football'
   };
   function isSportInSeason(sportKey){
     const season = FAV_SPORT_SEASONS[sportKey];
