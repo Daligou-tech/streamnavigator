@@ -143,9 +143,13 @@
 
   .panel{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; margin-bottom:28px; }
   .panel h3{ font-size:1.1rem; margin-bottom:16px; }
-  .add-grid{ display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr 1fr auto; gap:10px; align-items:end; }
-  @media (max-width:820px){ .add-grid{ grid-template-columns:1fr 1fr; } }
-  .add-grid .field{ margin-bottom:0; }
+  .add-grid-top{ display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr; gap:10px; align-items:end; margin-bottom:14px; }
+  @media (max-width:820px){ .add-grid-top{ grid-template-columns:1fr 1fr; } }
+  .add-grid-top .field{ margin-bottom:0; }
+  .show-preview{ font-size:12.5px; color:var(--text-dimmer); margin-top:6px; min-height:16px; }
+  .show-preview.found{ color:var(--status-active-deep); font-weight:600; }
+  .show-preview.none{ color:var(--text-dimmer); font-style:italic; }
+  .show-preview.checking{ color:var(--text-dimmer); font-style:italic; }
 
   .upgrade-section{ margin-bottom:36px; }
   .upgrade-section > h3{ font-size:1.1rem; margin-bottom:16px; }
@@ -168,8 +172,12 @@
   .badge{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; }
   .badge.active{ background:rgba(30,158,100,0.14); color:var(--status-active-deep); }
   .badge.paused{ background:rgba(156,146,130,0.18); color:var(--text-dim); }
+  .sub-meta{ display:flex; flex-direction:column; gap:3px; }
   .sub-reminder{ font-size:12px; color:var(--text-dimmer); }
+  .sub-show{ font-size:12px; color:var(--accent-3-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
+  .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
 
   .analytics-summary{ font-size:14px; color:var(--text-dim); line-height:1.55; margin-bottom:22px; }
@@ -279,34 +287,37 @@
 
     <div class="panel">
       <h3>Add a subscription to track</h3>
-      <p class="field-hint">Reminder date is optional: set one and we'll flag it as a pause reminder (if the service is Active) or a resume reminder (if it's Paused) — you'll see it right next to that subscription below.</p>
-      <form id="add-form" class="add-grid">
-        <div class="field">
-          <label for="add-name">Service</label>
-          <input type="text" id="add-name" list="service-suggestions" placeholder="Netflix" required />
-          <datalist id="service-suggestions">
-            <option value="Netflix"></option>
-            <option value="Hulu"></option>
-            <option value="Disney+"></option>
-            <option value="Max"></option>
-            <option value="Prime Video"></option>
-            <option value="YouTube Premium"></option>
-          </datalist>
+      <p class="field-hint">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. If you tell us what show you're waiting on, we check daily for its real next air date (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
+      <form id="add-form">
+        <div class="add-grid-top">
+          <div class="field">
+            <label for="add-name">Service</label>
+            <input type="text" id="add-name" list="service-suggestions" placeholder="Netflix" required />
+            <datalist id="service-suggestions">
+              <option value="Netflix"></option>
+              <option value="Hulu"></option>
+              <option value="Disney+"></option>
+              <option value="Max"></option>
+              <option value="Prime Video"></option>
+              <option value="YouTube Premium"></option>
+            </datalist>
+          </div>
+          <div class="field">
+            <label for="add-price">$/mo</label>
+            <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
+          </div>
+          <div class="field">
+            <label for="add-status">Status</label>
+            <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </select>
+          </div>
         </div>
         <div class="field">
-          <label for="add-price">$/mo</label>
-          <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
-        </div>
-        <div class="field">
-          <label for="add-status">Status</label>
-          <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="add-reminder">Reminder date</label>
-          <input type="date" id="add-reminder" />
+          <label for="add-show">Waiting for a show? (optional)</label>
+          <input type="text" id="add-show" placeholder="e.g. Stranger Things" />
+          <p class="show-preview" id="add-show-preview"></p>
         </div>
         <button type="submit" class="btn btn-primary">Add</button>
       </form>
@@ -364,6 +375,7 @@
 
   const { createClient } = supabase;
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  let rowsById = {}; // populated by renderSubscriptions(); lets action handlers look up a row's full data by id
 
   // ---- Stripe billing portal: pre-fill the logged-in customer's email so
   // they don't have to retype it on Stripe's side (still requires Stripe's
@@ -398,6 +410,54 @@
     window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
   }
   function fmt(n){ return '$' + Number(n || 0).toFixed(2); }
+
+  // ---- Automatic check-in scheduling (no manual date entry required) ----
+  // Paused subscriptions: check in every 30 days ("worth resuming yet?"),
+  // unless a tracked show has a confirmed next air date — then we use that
+  // real date instead. Active subscriptions: check in every 60 days
+  // ("still using this?"). See api/refresh-shows.js for the daily job that
+  // keeps show_next_air_date current via the TVmaze API.
+  function addDays(date, days){
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+  function toDateValue(date){
+    return date.toISOString().slice(0, 10);
+  }
+  function computeReminder(status, statusChangedAt, showNextAirDate){
+    if (status === 'paused' && showNextAirDate) {
+      const airDate = new Date(showNextAirDate + 'T00:00:00');
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (airDate.getTime() >= today.getTime()) {
+        return { next_reminder_date: showNextAirDate, reminder_type: 'resume', reminder_source: 'air_date' };
+      }
+    }
+    const days = status === 'active' ? 60 : 30;
+    const base = statusChangedAt ? new Date(statusChangedAt) : new Date();
+    return {
+      next_reminder_date: toDateValue(addDays(base, days)),
+      reminder_type: status === 'active' ? 'pause' : 'resume',
+      reminder_source: 'cadence'
+    };
+  }
+
+  // Looks up a show's next episode air date directly from TVmaze's free,
+  // no-key-required public API (https://api.tvmaze.com — data via CC BY-SA,
+  // attribution given in the footer). Runs entirely in the browser; nothing
+  // is sent anywhere else.
+  async function lookupShow(query){
+    if (!query || !query.trim()) return null;
+    try {
+      const res = await fetch('https://api.tvmaze.com/singlesearch/shows?q=' + encodeURIComponent(query.trim()) + '&embed=nextepisode');
+      if (!res.ok) return { id: null, name: query.trim(), next_air_date: null, found: false };
+      const data = await res.json();
+      const airdate = (data && data._embedded && data._embedded.nextepisode) ? data._embedded.nextepisode.airdate : null;
+      return { id: data.id, name: data.name, next_air_date: airdate, found: true };
+    } catch (err) {
+      return null;
+    }
+  }
 
   // ---- Auth tab switching ----
   let mode = 'login';
@@ -462,24 +522,41 @@
     const empty = document.getElementById('empty-state');
     list.innerHTML = '';
     empty.hidden = rows.length > 0;
+    rowsById = {};
 
     let monthly = 0, activeCount = 0, pausedCount = 0, pausedMonthly = 0;
     rows.forEach(r => {
+      rowsById[r.id] = r;
       if (r.status === 'active') { monthly += Number(r.monthly_price); activeCount++; }
       else { pausedCount++; pausedMonthly += Number(r.monthly_price); }
 
       const row = document.createElement('div');
       row.className = 'sub-row';
-      const reminderText = r.next_reminder_date
-        ? `${r.reminder_type === 'resume' ? 'Resume' : 'Pause'} reminder: ${r.next_reminder_date}`
-        : '';
+
+      let reminderText = '';
+      if (r.next_reminder_date) {
+        const label = r.reminder_type === 'resume' ? 'Resume check-in' : 'Pause check-in';
+        const why = r.reminder_source === 'air_date' ? 'new season confirmed' : 'routine check-in';
+        reminderText = `${label}: ${r.next_reminder_date} (${why})`;
+      }
+      let showText = '';
+      if (r.show_query) {
+        showText = r.show_next_air_date
+          ? `Waiting for ${escapeHtml(r.show_query)} — next air date ${r.show_next_air_date}`
+          : `Waiting for ${escapeHtml(r.show_query)} — no confirmed air date yet, checking daily`;
+      }
+
       row.innerHTML = `
         <span class="sub-name">${escapeHtml(r.service_name)}</span>
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
-        <span class="sub-reminder">${reminderText}</span>
+        <span class="sub-meta">
+          ${showText ? `<span class="sub-show">${showText}</span>` : ''}
+          ${reminderText ? `<span class="sub-reminder">${reminderText}</span>` : ''}
+        </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
+          <button class="btn btn-ghost btn-sm" data-action="edit-show" data-id="${r.id}">${r.show_query ? 'Edit show' : 'Set show'}</button>
           <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
@@ -558,16 +635,106 @@
     const btn = e.target.closest('button[data-action]');
     if (!btn) return;
     const id = btn.dataset.id;
+    const row = rowsById[id];
+
     if (btn.dataset.action === 'delete') {
       const { error } = await client.from('tracked_subscriptions').delete().eq('id', id);
       if (error) { showToast('Could not remove that.'); return; }
       showToast('Removed.');
       loadSubscriptions();
+
     } else if (btn.dataset.action === 'toggle') {
       const next = btn.dataset.status === 'active' ? 'paused' : 'active';
-      const { error } = await client.from('tracked_subscriptions').update({ status: next }).eq('id', id);
+      const nowIso = new Date().toISOString();
+      const reminder = computeReminder(next, nowIso, row ? row.show_next_air_date : null);
+      const { error } = await client.from('tracked_subscriptions').update({
+        status: next,
+        status_changed_at: nowIso,
+        ...reminder
+      }).eq('id', id);
       if (error) { showToast('Could not update that.'); return; }
       loadSubscriptions();
+
+    } else if (btn.dataset.action === 'edit-show') {
+      openShowEditor(btn.closest('.sub-row'), row);
+    }
+  });
+
+  // Inline "waiting for a show" editor for an existing row — this is the
+  // main way most people will attach a show, since it happens when they
+  // already have a subscription paused, not just when first adding it.
+  function openShowEditor(rowEl, row){
+    const existing = rowEl.parentElement.querySelector('.show-edit-row');
+    if (existing) existing.remove();
+
+    const editRow = document.createElement('div');
+    editRow.className = 'show-edit-row';
+    editRow.innerHTML = `
+      <input type="text" placeholder="e.g. Stranger Things" value="${escapeHtml(row.show_query || '')}" />
+      <button type="button" class="btn btn-primary btn-sm" data-role="save">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-role="cancel">Cancel</button>
+      <span class="show-preview" data-role="preview"></span>
+    `;
+    rowEl.insertAdjacentElement('afterend', editRow);
+    const input = editRow.querySelector('input');
+    input.focus();
+
+    editRow.querySelector('[data-role="cancel"]').addEventListener('click', () => editRow.remove());
+
+    editRow.querySelector('[data-role="save"]').addEventListener('click', async () => {
+      const preview = editRow.querySelector('[data-role="preview"]');
+      const query = input.value.trim();
+
+      if (!query) {
+        const { error } = await client.from('tracked_subscriptions').update({
+          show_query: null, tvmaze_show_id: null, show_next_air_date: null, show_checked_at: null,
+          ...computeReminder(row.status, row.status_changed_at, null)
+        }).eq('id', row.id);
+        if (error) { showToast('Could not update that.'); return; }
+        showToast('Show cleared.');
+        loadSubscriptions();
+        return;
+      }
+
+      preview.textContent = 'Checking TVmaze…';
+      preview.className = 'show-preview checking';
+      const match = await lookupShow(query);
+      const airDate = match && match.found ? match.next_air_date : null;
+      const nowIso = new Date().toISOString();
+
+      const { error } = await client.from('tracked_subscriptions').update({
+        show_query: query,
+        tvmaze_show_id: match && match.found ? match.id : null,
+        show_next_air_date: airDate,
+        show_checked_at: nowIso,
+        ...computeReminder(row.status, row.status_changed_at, airDate)
+      }).eq('id', row.id);
+      if (error) { showToast('Could not update that.'); return; }
+      showToast(query + ' saved.');
+      loadSubscriptions();
+    });
+  }
+
+  // Live preview while adding a new subscription
+  let addShowLookupToken = 0;
+  document.getElementById('add-show').addEventListener('blur', async (e) => {
+    const preview = document.getElementById('add-show-preview');
+    const query = e.target.value.trim();
+    if (!query) { preview.textContent = ''; preview.className = 'show-preview'; return; }
+    const token = ++addShowLookupToken;
+    preview.textContent = 'Checking TVmaze…';
+    preview.className = 'show-preview checking';
+    const match = await lookupShow(query);
+    if (token !== addShowLookupToken) return; // a newer lookup started; drop this one
+    if (match && match.found && match.next_air_date) {
+      preview.textContent = `Next episode of "${match.name}": ${match.next_air_date}`;
+      preview.className = 'show-preview found';
+    } else if (match && match.found) {
+      preview.textContent = `Found "${match.name}" — no upcoming episode date yet. We'll keep checking daily.`;
+      preview.className = 'show-preview none';
+    } else {
+      preview.textContent = `Couldn't find that show — we'll keep checking daily once it's spelled right.`;
+      preview.className = 'show-preview none';
     }
   });
 
@@ -578,7 +745,12 @@
     const name = document.getElementById('add-name').value.trim();
     const price = parseFloat(document.getElementById('add-price').value);
     const status = document.getElementById('add-status').value;
-    const reminderDate = document.getElementById('add-reminder').value || null;
+    const showQuery = document.getElementById('add-show').value.trim();
+
+    let showMatch = null;
+    if (showQuery) showMatch = await lookupShow(showQuery);
+    const airDate = showMatch && showMatch.found ? showMatch.next_air_date : null;
+    const nowIso = new Date().toISOString();
 
     const { error } = await client.from('tracked_subscriptions').insert({
       user_id: user.id,
@@ -586,12 +758,17 @@
       service_name: name,
       monthly_price: isNaN(price) ? 0 : price,
       status,
-      next_reminder_date: reminderDate,
-      reminder_type: reminderDate ? (status === 'active' ? 'pause' : 'resume') : null
+      status_changed_at: nowIso,
+      show_query: showQuery || null,
+      tvmaze_show_id: showMatch && showMatch.found ? showMatch.id : null,
+      show_next_air_date: airDate,
+      show_checked_at: showQuery ? nowIso : null,
+      ...computeReminder(status, nowIso, airDate)
     });
     if (error) { showToast('Could not add that subscription.'); return; }
     showToast(name + ' added.');
     e.target.reset();
+    document.getElementById('add-show-preview').textContent = '';
     loadSubscriptions();
   });
 
