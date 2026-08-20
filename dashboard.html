@@ -424,6 +424,7 @@
         <div class="field">
           <label for="fav-show-title">Show or movie title</label>
           <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
+          <p class="show-preview" id="fav-show-preview"></p>
         </div>
         <div class="field">
           <label for="fav-show-service">On which service?</label>
@@ -665,14 +666,30 @@
   // no-key-required public API (https://api.tvmaze.com — data via CC BY-SA,
   // attribution given in the footer). Runs entirely in the browser; nothing
   // is sent anywhere else.
+  //
+  // TVmaze's "next episode" field only ever points to a FUTURE, unaired
+  // episode — it goes blank once a show has released its most recent episode
+  // and TVmaze doesn't have a confirmed date for the next one yet, even if
+  // the show is actively airing weekly. So this also embeds "previous
+  // episode" and the show's own status, and derives a real, non-fabricated
+  // "currently airing" signal: an episode aired in roughly the last 10 days
+  // and the show's status is still "Running" (more episodes expected).
   async function lookupShow(query){
     if (!query || !query.trim()) return null;
     try {
-      const res = await fetch('https://api.tvmaze.com/singlesearch/shows?q=' + encodeURIComponent(query.trim()) + '&embed=nextepisode');
-      if (!res.ok) return { id: null, name: query.trim(), next_air_date: null, found: false };
+      const res = await fetch('https://api.tvmaze.com/singlesearch/shows?q=' + encodeURIComponent(query.trim()) + '&embed[]=nextepisode&embed[]=previousepisode');
+      if (!res.ok) return { id: null, name: query.trim(), next_air_date: null, currently_airing: false, found: false };
       const data = await res.json();
       const airdate = (data && data._embedded && data._embedded.nextepisode) ? data._embedded.nextepisode.airdate : null;
-      return { id: data.id, name: data.name, next_air_date: airdate, found: true };
+      const prevAirdate = (data && data._embedded && data._embedded.previousepisode) ? data._embedded.previousepisode.airdate : null;
+      let currentlyAiring = false;
+      if (prevAirdate && data.status === 'Running') {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const prevDate = new Date(prevAirdate + 'T00:00:00');
+        const daysSince = Math.round((today - prevDate) / 86400000);
+        if (daysSince >= 0 && daysSince <= 10) currentlyAiring = true;
+      }
+      return { id: data.id, name: data.name, next_air_date: airdate, currently_airing: currentlyAiring, found: true };
     } catch (err) {
       return null;
     }
@@ -751,7 +768,9 @@
       const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
       let meta;
       if (f.kind === 'show') {
-        meta = f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily';
+        meta = f.currently_airing
+          ? 'currently airing'
+          : (f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily');
       } else {
         const season = FAV_SPORT_SEASONS[f.title];
         meta = season ? `${season.label} — ${isSportInSeason(f.title) ? 'in season' : 'off-season'}` : (isSportInSeason(f.title) ? 'in season' : 'off-season');
@@ -767,6 +786,35 @@
     const { error } = await client.from('favorite_watches').delete().eq('id', btn.dataset.id);
     if (error) { showToast('Could not remove that.'); return; }
     loadFavorites();
+  });
+
+  // Live preview while tagging a favorite show, same pattern as the existing
+  // "add a subscription" show preview — so if TVmaze matches the wrong title
+  // (an ambiguous search like "Lucky" can match more than one show), that's
+  // visible immediately instead of silently producing a wrong suggestion.
+  let favShowLookupToken = 0;
+  document.getElementById('fav-show-title').addEventListener('blur', async (e) => {
+    const preview = document.getElementById('fav-show-preview');
+    const query = e.target.value.trim();
+    if (!query) { preview.textContent = ''; preview.className = 'show-preview'; return; }
+    const token = ++favShowLookupToken;
+    preview.textContent = 'Checking TVmaze…';
+    preview.className = 'show-preview checking';
+    const match = await lookupShow(query);
+    if (token !== favShowLookupToken) return; // a newer lookup started; drop this one
+    if (match && match.found && match.currently_airing) {
+      preview.textContent = `Matched "${match.name}" — currently airing.`;
+      preview.className = 'show-preview found';
+    } else if (match && match.found && match.next_air_date) {
+      preview.textContent = `Matched "${match.name}" — next episode ${match.next_air_date}.`;
+      preview.className = 'show-preview found';
+    } else if (match && match.found) {
+      preview.textContent = `Matched "${match.name}" — no upcoming episode date yet. We'll keep checking daily.`;
+      preview.className = 'show-preview none';
+    } else {
+      preview.textContent = `Couldn't find that show — we'll keep checking daily once it's spelled right.`;
+      preview.className = 'show-preview none';
+    }
   });
 
   document.getElementById('fav-show-add').addEventListener('click', async () => {
@@ -789,10 +837,12 @@
       service_name: serviceName,
       tvmaze_show_id: match && match.found ? match.id : null,
       next_air_date: match && match.found ? match.next_air_date : null,
+      currently_airing: match && match.found ? !!match.currently_airing : false,
       checked_at: new Date().toISOString()
     });
     if (error) { showToast('Could not add that show.'); return; }
     titleInput.value = '';
+    document.getElementById('fav-show-preview').textContent = '';
     showToast(title + ' added.');
     loadFavorites();
   });
@@ -835,7 +885,11 @@
     let reason = '';
 
     for (const f of svcFavorites) {
-      if (f.kind === 'show' && f.next_air_date) {
+      if (f.kind === 'show' && f.currently_airing) {
+        relevant = true;
+        reason = `${f.title} is airing new episodes right now`;
+        break;
+      } else if (f.kind === 'show' && f.next_air_date) {
         const airDate = new Date(f.next_air_date + 'T00:00:00');
         if (airDate >= today && airDate <= cutoff) {
           relevant = true;
