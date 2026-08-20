@@ -142,6 +142,20 @@
   @media (max-width:820px){ .add-grid{ grid-template-columns:1fr 1fr; } }
   .add-grid .field{ margin-bottom:0; }
 
+  .upgrade-section{ margin-bottom:36px; }
+  .upgrade-section > h3{ font-size:1.1rem; margin-bottom:16px; }
+  .upgrade-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  @media (max-width:680px){ .upgrade-grid{ grid-template-columns:1fr; } }
+  .upgrade-card{ position:relative; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; display:flex; flex-direction:column; }
+  .upgrade-card.featured{ background:linear-gradient(180deg, rgba(79,182,232,0.10), var(--surface) 40%); }
+  .upgrade-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); white-space:nowrap; }
+  .upgrade-card h4{ font-family:'Sora',sans-serif; font-size:1.2rem; margin-bottom:4px; }
+  .upgrade-price{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.9rem; margin-bottom:14px; }
+  .upgrade-price span{ font-family:inherit; font-weight:600; font-size:0.85rem; color:var(--text-dim); }
+  .upgrade-feats{ list-style:none; padding:0; margin:0 0 20px; display:flex; flex-direction:column; gap:9px; flex:1; }
+  .upgrade-feats li{ font-size:13.5px; color:var(--text-dim); padding-left:22px; position:relative; }
+  .upgrade-feats li::before{ content:"✓"; position:absolute; left:0; top:0; color:var(--accent-2-deep); font-weight:800; }
+
   .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
   .sub-row:first-child{ border-top:none; }
   .sub-name{ font-weight:700; min-width:140px; }
@@ -152,6 +166,19 @@
   .sub-reminder{ font-size:12px; color:var(--text-dimmer); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
+
+  .analytics-summary{ font-size:14px; color:var(--text-dim); line-height:1.55; margin-bottom:22px; }
+  .analytics-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:28px; }
+  @media (max-width:680px){ .analytics-grid{ grid-template-columns:1fr; } }
+  .analytics-label{ font-size:11.5px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px; }
+  .analytics-bar-chart{ display:flex; align-items:flex-end; gap:8px; height:120px; margin-bottom:8px; }
+  .analytics-bar-chart .bar{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; min-height:4px; }
+  .analytics-bar-chart .bar.paused{ background:var(--text-dimmer); opacity:0.4; }
+  .analytics-bar-labels{ display:flex; gap:8px; }
+  .analytics-bar-labels span{ flex:1; text-align:center; font-size:11px; color:var(--text-dimmer); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .split-donut{ width:130px; height:130px; border-radius:50%; border:2px solid var(--ink); margin:0 auto 16px; }
+  .split-legend{ display:flex; justify-content:center; gap:20px; font-size:13px; color:var(--text-dim); }
+  .split-legend .dot{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 
   .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
   .toast.show{ transform:translateX(-50%) translateY(0); }
@@ -218,6 +245,33 @@
       <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
     </div>
 
+    <div class="upgrade-section">
+      <h3>Upgrade your plan</h3>
+      <div class="upgrade-grid">
+        <div class="upgrade-card featured">
+          <span class="upgrade-badge">Most Popular</span>
+          <h4>Pro</h4>
+          <div class="upgrade-price">$4.99<span>/mo</span></div>
+          <ul class="upgrade-feats">
+            <li>Real-time pause &amp; resume reminders</li>
+            <li>Direct links to cancel &amp; downgrade</li>
+            <li>Real-time price-hike alerts</li>
+          </ul>
+          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-primary" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
+        </div>
+        <div class="upgrade-card">
+          <h4>Family</h4>
+          <div class="upgrade-price">$8.99<span>/mo</span></div>
+          <ul class="upgrade-feats">
+            <li>Everything in Pro</li>
+            <li>Up to 6 shared accounts</li>
+            <li>Household usage breakdown</li>
+          </ul>
+          <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" style="width:100%; justify-content:center;">Subscribe to Family →</a>
+        </div>
+      </div>
+    </div>
+
     <div class="panel">
       <h3>Add a subscription to track</h3>
       <form id="add-form" class="add-grid">
@@ -256,6 +310,26 @@
       <h3>Your tracked subscriptions</h3>
       <div id="sub-list"></div>
       <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription above.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Your analytics</h3>
+      <p class="empty-state" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
+      <div id="analytics-body" hidden>
+        <p class="analytics-summary" id="analytics-summary"></p>
+        <div class="analytics-grid">
+          <div class="analytics-block">
+            <p class="analytics-label">Spend by service</p>
+            <div class="analytics-bar-chart" id="analytics-bar-chart"></div>
+            <div class="analytics-bar-labels" id="analytics-bar-labels"></div>
+          </div>
+          <div class="analytics-block">
+            <p class="analytics-label">Active vs. paused</p>
+            <div class="split-donut" id="analytics-donut"></div>
+            <div class="split-legend" id="analytics-legend"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -411,6 +485,61 @@
     document.getElementById('stat-active').textContent = activeCount;
     document.getElementById('stat-paused').textContent = pausedCount;
     document.getElementById('stat-savings').textContent = fmt(pausedMonthly * 12);
+
+    renderAnalytics(rows);
+  }
+
+  // ---- Analytics: built entirely from this signed-in user's own rows ----
+  function renderAnalytics(rows){
+    const empty = document.getElementById('analytics-empty');
+    const body = document.getElementById('analytics-body');
+    if (!rows.length) {
+      empty.hidden = false;
+      body.hidden = true;
+      return;
+    }
+    empty.hidden = true;
+    body.hidden = false;
+
+    const activeRows = rows.filter(r => r.status === 'active');
+    const pausedRows = rows.filter(r => r.status !== 'active');
+    const activeMonthly = activeRows.reduce((sum, r) => sum + Number(r.monthly_price), 0);
+    const pausedMonthly = pausedRows.reduce((sum, r) => sum + Number(r.monthly_price), 0);
+    const totalMonthly = activeMonthly + pausedMonthly;
+
+    const summaryParts = [`You're tracking ${rows.length} subscription${rows.length === 1 ? '' : 's'} totaling ${fmt(totalMonthly)}/mo.`];
+    if (activeRows.length) summaryParts.push(`${activeRows.length} active at ${fmt(activeMonthly)}/mo.`);
+    if (pausedRows.length) summaryParts.push(`${pausedRows.length} paused, saving you ${fmt(pausedMonthly * 12)}/yr.`);
+    document.getElementById('analytics-summary').textContent = summaryParts.join(' ');
+
+    // Spend by service, highest first
+    const sorted = [...rows].sort((a, b) => Number(b.monthly_price) - Number(a.monthly_price)).slice(0, 6);
+    const maxPrice = Math.max(...sorted.map(r => Number(r.monthly_price)), 0.01);
+    const barChart = document.getElementById('analytics-bar-chart');
+    const barLabels = document.getElementById('analytics-bar-labels');
+    barChart.innerHTML = '';
+    barLabels.innerHTML = '';
+    sorted.forEach(r => {
+      const pct = Math.max(4, Math.round((Number(r.monthly_price) / maxPrice) * 100));
+      const bar = document.createElement('div');
+      bar.className = 'bar' + (r.status !== 'active' ? ' paused' : '');
+      bar.style.height = pct + '%';
+      bar.title = `${r.service_name} — ${fmt(r.monthly_price)}/mo`;
+      barChart.appendChild(bar);
+      const label = document.createElement('span');
+      label.textContent = r.service_name;
+      barLabels.appendChild(label);
+    });
+
+    // Active vs. paused split, by count
+    const donut = document.getElementById('analytics-donut');
+    const legend = document.getElementById('analytics-legend');
+    const activePct = Math.round((activeRows.length / rows.length) * 100);
+    donut.style.background = `conic-gradient(var(--accent-2) 0% ${activePct}%, var(--text-dimmer) ${activePct}% 100%)`;
+    legend.innerHTML = `
+      <span><span class="dot" style="background:var(--accent-2)"></span>Active (${activeRows.length})</span>
+      <span><span class="dot" style="background:var(--text-dimmer)"></span>Paused (${pausedRows.length})</span>
+    `;
   }
 
   function escapeHtml(s){
