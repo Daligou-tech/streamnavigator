@@ -176,10 +176,22 @@
   .sub-meta{ display:flex; flex-direction:column; gap:3px; }
   .sub-reminder{ font-size:12px; color:var(--text-dimmer); }
   .sub-show{ font-size:12px; color:var(--accent-3-deep); }
+  .sub-suggestion{ font-size:12px; font-weight:700; }
+  .sub-suggestion.activate{ color:var(--status-active-deep); }
+  .sub-suggestion.pause{ color:var(--text-dim); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
+
+  .fav-add-grid{ display:grid; grid-template-columns:1.4fr 0.9fr 0.7fr; gap:10px; align-items:end; margin-bottom:10px; }
+  .fav-add-grid .field{ margin-bottom:0; }
+  @media (max-width:680px){ .fav-add-grid{ grid-template-columns:1fr; } }
+  .fav-list{ display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 4px; }
+  .fav-pill{ display:inline-flex; align-items:center; gap:8px; background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:999px; padding:7px 8px 7px 14px; font-size:13px; color:var(--text-dim); }
+  .fav-pill-meta{ color:var(--text-dimmer); font-size:12px; }
+  .fav-pill button{ background:var(--surface); border:1.5px solid var(--border-strong); border-radius:50%; width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:var(--text-dim); line-height:1; padding:0; font-family:inherit; }
+  .fav-pill button:hover{ border-color:var(--ink); color:var(--text); }
 
   .analytics-summary{ font-size:14px; color:var(--text-dim); line-height:1.55; margin-bottom:22px; }
   .analytics-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:28px; }
@@ -397,6 +409,56 @@
     </div>
 
     <div class="panel">
+      <h3>Shows &amp; sports you like to watch</h3>
+      <p class="field-hint">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and typical U.S. season windows for sports.</p>
+
+      <div class="fav-add-grid">
+        <div class="field">
+          <label for="fav-show-title">Show or movie title</label>
+          <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
+        </div>
+        <div class="field">
+          <label for="fav-show-service">On which service?</label>
+          <select id="fav-show-service"></select>
+        </div>
+        <div class="field">
+          <button type="button" class="btn btn-primary" id="fav-show-add" style="width:100%;">Add show</button>
+        </div>
+      </div>
+
+      <div class="fav-add-grid">
+        <div class="field">
+          <label for="fav-sport-select">Sport / league</label>
+          <select id="fav-sport-select">
+            <option value="nfl">NFL</option>
+            <option value="nba">NBA</option>
+            <option value="mlb">MLB</option>
+            <option value="nhl">NHL</option>
+            <option value="epl">Premier League</option>
+            <option value="laliga">La Liga</option>
+            <option value="bundesliga">Bundesliga</option>
+            <option value="mls">MLS</option>
+            <option value="other_soccer">Other Soccer</option>
+            <option value="college">College Football</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fav-sport-service">On which service?</label>
+          <select id="fav-sport-service"></select>
+        </div>
+        <div class="field">
+          <button type="button" class="btn btn-primary" id="fav-sport-add" style="width:100%;">Add sport</button>
+        </div>
+      </div>
+
+      <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription above first, so you have a service to link these to.</p>
+
+      <div class="fav-list" id="fav-list"></div>
+      <p class="empty-state" id="fav-empty" hidden>Nothing added yet — tag a show or sport above and we'll watch it for you.</p>
+      <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
+    </div>
+
+    <div class="panel">
       <h3>Your analytics</h3>
       <p class="empty-state" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
       <div id="analytics-body" hidden>
@@ -563,6 +625,178 @@
     }
   }
 
+  // Typical U.S. season date ranges — honestly labeled as such, since there's
+  // no live game-by-game schedule connected. Same approach used by the
+  // recommendation engine below and on the marketing site's analyzer.
+  const FAV_SPORT_SEASONS = {
+    nfl: {startMonth:9, endMonth:2, label:'NFL season (Sep–Feb)'},
+    nba: {startMonth:10, endMonth:6, label:'NBA season (Oct–Jun)'},
+    mlb: {startMonth:4, endMonth:10, label:'MLB season (Apr–Oct)'},
+    nhl: {startMonth:10, endMonth:6, label:'NHL season (Oct–Jun)'},
+    epl: {startMonth:8, endMonth:5, label:'Premier League season (Aug–May)'},
+    laliga: {startMonth:8, endMonth:5, label:'La Liga season (Aug–May)'},
+    bundesliga: {startMonth:8, endMonth:5, label:'Bundesliga season (Aug–May)'},
+    mls: {startMonth:2, endMonth:12, label:'MLS season (Feb–Dec)'},
+    other_soccer: {startMonth:8, endMonth:5, label:'European club season (Aug–May)'},
+    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'}
+  };
+  const FAV_SPORT_LABELS = {
+    nfl:'NFL', nba:'NBA', mlb:'MLB', nhl:'NHL', epl:'Premier League',
+    laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer', college:'College Football'
+  };
+  function isSportInSeason(sportKey){
+    const season = FAV_SPORT_SEASONS[sportKey];
+    if (!season) return false;
+    const month = new Date().getMonth() + 1; // 1-12
+    const { startMonth, endMonth } = season;
+    return startMonth <= endMonth ? (month >= startMonth && month <= endMonth) : (month >= startMonth || month <= endMonth);
+  }
+
+  // ---- Favorites (shows & sports) CRUD ----
+  let favoriteRows = [];
+
+  async function loadFavorites(){
+    const { data, error } = await client
+      .from('favorite_watches')
+      .select('*')
+      .order('created_at', { ascending: true });
+    favoriteRows = error ? [] : (data || []);
+    renderFavorites();
+    // A subscription list may have already rendered before favorites finished
+    // loading (or vice versa) — re-render it now so suggestions stay in sync
+    // regardless of which request came back first.
+    if (window.__lastSubRows) renderSubscriptions(window.__lastSubRows);
+  }
+
+  function populateFavServiceSelects(rows){
+    const names = Array.from(new Set((rows || []).map(r => r.service_name).filter(Boolean)));
+    const showSel = document.getElementById('fav-show-service');
+    const sportSel = document.getElementById('fav-sport-service');
+    [showSel, sportSel].forEach(sel => {
+      const prev = sel.value;
+      sel.innerHTML = names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+      if (names.includes(prev)) sel.value = prev;
+    });
+    document.getElementById('fav-no-subs-hint').hidden = names.length > 0;
+    document.getElementById('fav-show-add').disabled = names.length === 0;
+    document.getElementById('fav-sport-add').disabled = names.length === 0;
+  }
+
+  function renderFavorites(){
+    const list = document.getElementById('fav-list');
+    const empty = document.getElementById('fav-empty');
+    list.innerHTML = '';
+    empty.hidden = favoriteRows.length > 0;
+    favoriteRows.forEach(f => {
+      const pill = document.createElement('span');
+      pill.className = 'fav-pill';
+      const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
+      let meta;
+      if (f.kind === 'show') {
+        meta = f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily';
+      } else {
+        const season = FAV_SPORT_SEASONS[f.title];
+        meta = season ? `${season.label} — ${isSportInSeason(f.title) ? 'in season' : 'off-season'}` : (isSportInSeason(f.title) ? 'in season' : 'off-season');
+      }
+      pill.innerHTML = `${escapeHtml(label)}${f.service_name ? ' → ' + escapeHtml(f.service_name) : ''} <span class="fav-pill-meta">(${escapeHtml(meta)})</span> <button type="button" data-id="${f.id}" aria-label="Remove">✕</button>`;
+      list.appendChild(pill);
+    });
+  }
+
+  document.getElementById('fav-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-id]');
+    if (!btn) return;
+    const { error } = await client.from('favorite_watches').delete().eq('id', btn.dataset.id);
+    if (error) { showToast('Could not remove that.'); return; }
+    loadFavorites();
+  });
+
+  document.getElementById('fav-show-add').addEventListener('click', async () => {
+    const titleInput = document.getElementById('fav-show-title');
+    const title = titleInput.value.trim();
+    const serviceName = document.getElementById('fav-show-service').value;
+    if (!title || !serviceName) return;
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const btn = document.getElementById('fav-show-add');
+    btn.disabled = true; btn.textContent = 'Checking…';
+    const match = await lookupShow(title);
+    btn.disabled = false; btn.textContent = 'Add show';
+
+    const { error } = await client.from('favorite_watches').insert({
+      user_id: user.id,
+      kind: 'show',
+      title,
+      service_name: serviceName,
+      tvmaze_show_id: match && match.found ? match.id : null,
+      next_air_date: match && match.found ? match.next_air_date : null,
+      checked_at: new Date().toISOString()
+    });
+    if (error) { showToast('Could not add that show.'); return; }
+    titleInput.value = '';
+    showToast(title + ' added.');
+    loadFavorites();
+  });
+
+  document.getElementById('fav-sport-add').addEventListener('click', async () => {
+    const sportKey = document.getElementById('fav-sport-select').value;
+    const serviceName = document.getElementById('fav-sport-service').value;
+    if (!sportKey || !serviceName) return;
+    const { data: { user } } = await client.auth.getUser();
+    if (!user) return;
+
+    const { error } = await client.from('favorite_watches').insert({
+      user_id: user.id,
+      kind: 'sport',
+      title: sportKey,
+      service_name: serviceName,
+      tvmaze_show_id: null,
+      next_air_date: null,
+      checked_at: null
+    });
+    if (error) { showToast('Could not add that.'); return; }
+    showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' added.');
+    loadFavorites();
+  });
+
+  // Whether a subscription is worth activating or pausing based on the
+  // shows/sports tagged to it above — real air dates for shows, seasonal
+  // windows for sports. Returns null (no suggestion shown) when nothing is
+  // tagged to that service, so this never adds noise to unrelated rows.
+  function computeSuggestion(row){
+    const svcFavorites = favoriteRows.filter(f => (f.service_name || '').trim().toLowerCase() === (row.service_name || '').trim().toLowerCase());
+    if (!svcFavorites.length) return null;
+
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const cutoff = addDays(today, 30);
+    let relevant = false;
+    let reason = '';
+
+    for (const f of svcFavorites) {
+      if (f.kind === 'show' && f.next_air_date) {
+        const airDate = new Date(f.next_air_date + 'T00:00:00');
+        if (airDate >= today && airDate <= cutoff) {
+          relevant = true;
+          reason = `${f.title} airs ${f.next_air_date}`;
+          break;
+        }
+      } else if (f.kind === 'sport' && isSportInSeason(f.title)) {
+        relevant = true;
+        reason = `${FAV_SPORT_LABELS[f.title] || f.title} is in season`;
+        break;
+      }
+    }
+
+    if (row.status === 'paused' && relevant) {
+      return { type: 'activate', text: `Suggested: Activate — ${reason}` };
+    }
+    if (row.status === 'active' && !relevant) {
+      return { type: 'pause', text: 'Suggested: Consider pausing — nothing you tagged is airing or in season right now' };
+    }
+    return null;
+  }
+
   // ---- Auth tab switching ----
   let mode = 'login';
   document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -649,6 +883,7 @@
           ? `Waiting for ${escapeHtml(r.show_query)} — next air date ${r.show_next_air_date}`
           : `Waiting for ${escapeHtml(r.show_query)} — no confirmed air date yet, checking daily`;
       }
+      const suggestion = computeSuggestion(r);
 
       row.innerHTML = `
         <span class="sub-name">${escapeHtml(r.service_name)}</span>
@@ -657,6 +892,7 @@
         <span class="sub-meta">
           ${showText ? `<span class="sub-show">${showText}</span>` : ''}
           ${reminderText ? `<span class="sub-reminder">${reminderText}</span>` : ''}
+          ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
@@ -675,6 +911,7 @@
 
     renderSavingsBanner(rows, pausedMonthly);
     renderAnalytics(rows);
+    populateFavServiceSelects(rows);
     // Cache the latest rows so the "Analyze My Subscriptions" panel below
     // (a separate <script> block) can run the analysis straight off them
     // when clicked, without needing its own re-fetch.
@@ -981,6 +1218,7 @@
     document.getElementById('welcome-email').textContent = ', ' + user.email;
     setBillingLink(user.email);
     loadSubscriptions();
+    loadFavorites();
   }
   function showLoggedOut(){
     authView.hidden = false;
