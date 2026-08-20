@@ -143,6 +143,9 @@
 
   .panel{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; margin-bottom:28px; }
   .panel h3{ font-size:1.1rem; margin-bottom:16px; }
+  .info-panel{ background:var(--surface-2); box-shadow:var(--shadow-hard-sm); }
+  .info-panel p{ font-size:13.5px; color:var(--text-dim); line-height:1.6; }
+  .info-panel p + p{ margin-top:10px; }
   .add-grid-top{ display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr; gap:10px; align-items:end; margin-bottom:14px; }
   @media (max-width:820px){ .add-grid-top{ grid-template-columns:1fr 1fr; } }
   .add-grid-top .field{ margin-bottom:0; }
@@ -321,6 +324,12 @@
         </div>
         <button type="submit" class="btn btn-primary">Add</button>
       </form>
+    </div>
+
+    <div class="panel info-panel">
+      <h3>How your streaming data is tracked</h3>
+      <p>We never log into your Netflix, Hulu, Disney+, or any other account — nothing here connects to them, and we can't see what you actually watch or what you're billed. Everything above comes from what you type in yourself.</p>
+      <p>The one exception: if you name a show you're waiting on, we check a free public TV schedule (<a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) once a day for its next air date and update your reminder automatically. No passwords, no bank link, nothing running in the background beyond that one daily check.</p>
     </div>
 
     <div class="panel">
