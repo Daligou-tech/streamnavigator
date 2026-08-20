@@ -80,6 +80,7 @@
     --shadow-hard-sm: 4px 4px 0 var(--ink);
     --shadow-hard-xs: 3px 3px 0 var(--ink);
     --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
+    --shadow-glow: 0 0 0 1px rgba(79,182,232,0.20), 0 20px 50px -20px rgba(79,182,232,0.32);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
@@ -200,6 +201,96 @@
   .connected-tile{ aspect-ratio:1; border-radius:10px; border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.25); }
   .connected-tile.paused{ background:var(--text-dimmer) !important; background-image:repeating-linear-gradient(45deg, rgba(31,27,22,0.20) 0 2px, transparent 2px 5px) !important; color:var(--surface); }
   .trend-note{ font-size:11.5px; color:var(--text-dimmer); margin-top:8px; }
+
+  /* ---------- Optimizer (ported from the landing page analyzer) ---------- */
+  .analyzer{ text-align:left; display:flex; flex-direction:column; gap:22px; }
+  .analyzer-head p{ font-size:13.5px; color:var(--text-dimmer); }
+  .analyzer-section{ display:flex; flex-direction:column; gap:10px; }
+  .analyzer-section.two-col{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+  .a-label{ font-size:12.5px; font-weight:700; letter-spacing:0.03em; color:var(--text-dim); text-transform:uppercase; }
+  .svc-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+  .svc-grid > div{ display:contents; }
+  .svc-chip{
+    display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px;
+    background:var(--surface-2); border:1.5px solid var(--border-strong); color:var(--text-dim);
+    font-size:13.5px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
+  }
+  .svc-chip:hover{ border-color:var(--ink); color:var(--text); }
+  .svc-chip.active{ background:var(--gradient); color:var(--ink); border-color:var(--ink); }
+  .svc-chip-add{ background:none; border-style:dashed; margin-top:2px; }
+  .svc-chip-add:hover{ color:var(--accent-3-deep); border-color:var(--accent-3-deep); }
+  .custom-add-form input::placeholder{ color:var(--text-dimmer); }
+  .svc-detail{
+    display:none; grid-template-columns:1fr 1fr; gap:10px; background:var(--surface); border:1.5px solid var(--border-strong);
+    border-radius:10px; padding:12px; margin-top:-2px; width:100%;
+  }
+  .svc-detail.show{ display:grid; }
+  .svc-detail-full{ grid-column:1 / -1; font-size:12.5px; color:var(--text-dimmer); margin-bottom:-2px; }
+  .a-select{
+    width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg);
+    color:var(--text); font-size:13px; font-family:inherit; outline:none;
+  }
+  .a-select:focus{ border-color:var(--accent-deep); }
+  .tag-field{ display:flex; }
+  .tag-field input{
+    width:100%; padding:10px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface);
+    color:var(--text); font-size:13.5px; font-family:inherit; outline:none;
+  }
+  .tag-field input:focus{ border-color:var(--accent-deep); }
+  .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
+  .tag-pill{
+    display:inline-flex; align-items:center; gap:6px; background:rgba(79,182,232,0.12); color:var(--accent-deep);
+    border:1px solid rgba(79,182,232,0.3); font-size:12.5px; padding:5px 8px 5px 12px; border-radius:999px;
+  }
+  .tag-pill button{ background:none; border:none; color:inherit; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
+  .chip-toggle{
+    padding:8px 14px; border-radius:999px; background:var(--surface-2); border:1.5px solid var(--border-strong);
+    color:var(--text-dim); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
+  }
+  .chip-toggle:hover{ border-color:var(--accent-3-deep); color:var(--text); }
+  .chip-toggle.active{ background:rgba(46,196,182,0.18); border-color:var(--accent-3-deep); color:var(--accent-3-deep); }
+  .check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--text-dim); margin-bottom:12px; cursor:pointer; }
+  .check-row input{ width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
+  .budget-field{ display:flex; align-items:center; gap:6px; background:var(--bg); border:1.5px solid var(--border-strong); border-radius:8px; padding:9px 12px; }
+  .budget-field span{ color:var(--text-dimmer); font-size:13px; }
+  .budget-field input{ flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13.5px; font-family:inherit; width:100%; }
+  .analyze-btn{ width:100%; padding:14px; font-size:15px; }
+  .analyzer-results{ display:flex; flex-direction:column; gap:18px; padding-top:6px; border-top:1px solid var(--border); }
+  .result-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .stat-box{ flex:1; min-width:130px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
+  .stat-box.featured-stat{ border-color:var(--accent); box-shadow:var(--shadow-glow); }
+  .stat-box.save-stat{ border-color:var(--status-active); }
+  .stat-label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:8px; }
+  .stat-value{ display:block; font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
+  .stat-box.save-stat .stat-value{ color:var(--status-active-deep); }
+  .stat-arrow{ color:var(--text-dimmer); font-size:20px; flex-shrink:0; }
+  .actions-list{ display:flex; flex-direction:column; gap:10px; }
+  .action-card{ display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .action-badge{
+    flex-shrink:0; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:800;
+  }
+  .action-badge.cancel{ background:rgba(29,95,168,0.13); color:#1D5FA8; }
+  .action-badge.downgrade{ background:rgba(11,111,132,0.14); color:#0B6F84; }
+  .action-badge.pause{ background:rgba(15,138,125,0.14); color:#0F7E73; }
+  .action-badge.add{ background:rgba(27,122,61,0.14); color:#1B7A3D; }
+  .action-badge.bundle{ background:rgba(106,63,196,0.14); color:#6A3FC4; }
+  .action-badge.keep{ background:rgba(31,27,22,0.06); color:var(--text-dim); }
+  .action-badge.info{ background:rgba(31,27,22,0.045); color:var(--text-dimmer); }
+  .action-copy .a-title{ font-size:13.5px; font-weight:700; margin-bottom:2px; }
+  .action-copy .a-desc{ font-size:13px; color:var(--text-dim); }
+  .a-link{ display:inline-flex; align-items:center; gap:4px; margin-top:8px; font-size:12.5px; font-weight:700; color:var(--accent-3-deep); text-decoration:none; }
+  .a-link:hover{ text-decoration:underline; }
+  .analyzer-disclaimer{ font-size:11.5px; color:var(--text-dimmer); text-align:center; }
+  .analyzer-empty{ font-size:13px; color:var(--text-dimmer); padding:8px 2px; }
+  .prefill-note{ font-size:12px; color:var(--accent-3-deep); background:rgba(46,196,182,0.10); border:1px solid rgba(46,196,182,0.25); border-radius:8px; padding:8px 12px; }
+  @media (max-width: 640px){
+    .analyzer-section.two-col{ grid-template-columns:1fr; }
+    .svc-detail{ grid-template-columns:1fr; }
+    .result-stats{ flex-direction:column; }
+    .stat-arrow{ transform:rotate(90deg); }
+  }
 
   .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
   .toast.show{ transform:translateX(-50%) translateY(0); }
@@ -385,6 +476,84 @@
             <div class="analytics-bar-labels" id="savings-trend-labels"></div>
             <p class="trend-note" id="savings-trend-note"></p>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Optimize your subscriptions</h3>
+      <div class="analyzer" id="analyzer">
+        <div class="analyzer-head">
+          <p>Pre-filled from what you're already tracking above. Add your household, budget, and preferences, then run it — this all runs in your browser using published list prices, nothing is sent anywhere.</p>
+        </div>
+        <p class="prefill-note" id="prefill-note" hidden></p>
+
+        <div class="analyzer-section">
+          <label class="a-label">Which services do you subscribe to?</label>
+          <div class="svc-grid" id="svc-grid"></div>
+
+          <div class="tag-list" id="custom-svc-list"></div>
+
+          <button type="button" class="svc-chip svc-chip-add" id="add-custom-btn">+ Add a service not listed</button>
+          <div class="svc-detail custom-add-form" id="custom-add-form">
+            <div class="svc-detail-full">Add a custom service</div>
+            <div><input type="text" id="custom-name" class="a-select" placeholder="Service name, e.g. Britbox" /></div>
+            <div><div class="budget-field"><span>$</span><input type="number" id="custom-price" placeholder="e.g. 15" min="0" step="0.01" /><span>/mo</span></div></div>
+            <div>
+              <select id="custom-freq" class="a-select">
+                <option value="daily">Watch daily</option>
+                <option value="weekly" selected>Watch weekly</option>
+                <option value="occasionally">Occasionally</option>
+                <option value="rarely">Rarely</option>
+                <option value="never">Never / forgot I had it</option>
+              </select>
+            </div>
+            <div><button type="button" class="btn btn-primary btn-sm" id="custom-add-confirm" style="width:100%;">Add it</button></div>
+          </div>
+        </div>
+
+        <div class="analyzer-section two-col">
+          <div>
+            <label class="a-label">Favorite shows or movies</label>
+            <div class="tag-field"><input type="text" id="fav-text" placeholder="Type a title, hit Enter" /></div>
+            <div class="tag-list" id="fav-tags"></div>
+          </div>
+          <div>
+            <label class="a-label">Sports you care about</label>
+            <div class="chip-row" id="sports-grid"></div>
+          </div>
+        </div>
+
+        <div class="analyzer-section two-col">
+          <div>
+            <label class="a-label">Household size</label>
+            <select id="household" class="a-select">
+              <option value="1">Just me</option>
+              <option value="2">2 people</option>
+              <option value="4">3&ndash;4 people</option>
+              <option value="5">5+ people</option>
+            </select>
+            <label class="a-label" style="display:block; margin:14px 0 8px;">Monthly budget</label>
+            <div class="budget-field"><span>$</span><input type="number" id="budget" placeholder="e.g. 80" min="0" step="1" /><span>/mo</span></div>
+          </div>
+          <div>
+            <label class="a-label" style="display:block; margin-bottom:8px;">Preferences</label>
+            <label class="check-row"><input type="checkbox" id="ads-ok" checked /> I don't mind ads to save money</label>
+            <label class="check-row"><input type="checkbox" id="kids-important" /> Kid-friendly content matters</label>
+          </div>
+        </div>
+
+        <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
+
+        <div class="analyzer-results" id="analyzer-results" hidden>
+          <div class="result-stats">
+            <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
+            <div class="stat-arrow">→</div>
+            <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
+            <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings-yr">$0/yr</span></div>
+          </div>
+          <div class="actions-list" id="actions-list"></div>
+          <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
         </div>
       </div>
     </div>
@@ -616,6 +785,12 @@
 
     renderSavingsBanner(rows, pausedMonthly);
     renderAnalytics(rows);
+    // Cache the latest rows and hand them to the optimizer panel below. The two
+    // are separate <script> blocks, and on a very fast (e.g. cached) load this
+    // one can finish before the optimizer script has even parsed, so we cache
+    // the rows either way and let whichever side runs second do the prefill.
+    window.__lastSubRows = rows;
+    if (window.__prefillOptimizer) window.__prefillOptimizer(rows);
   }
 
   // Real version of the marketing page's "$187/mo in potential savings
@@ -934,6 +1109,695 @@
   client.auth.getSession().then(({ data: { session } }) => {
     if (session && session.user) showLoggedIn(session.user);
     else showLoggedOut();
+  });
+})();
+</script>
+
+<script>
+/* =========================================================================
+   StreamNavigator subscription optimizer — same engine as the "Try the real
+   analyzer" tool on the marketing site, ported here and pre-filled with this
+   customer's own tracked subscriptions instead of starting blank.
+   Pricing grounded in published list prices as of August 2026. Sources:
+   Tom's Guide streaming price roundup, TechRadar (Paramount+ 2026 pricing),
+   DealNews (YouTube TV 2026 plans), and disneyplus.com (official bundle page).
+   Sports coverage based on 2026 rights reporting (Sports Video Group,
+   SportsMediaWatch, Yahoo Sports). Runs entirely client-side.
+   ========================================================================= */
+(function(){
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  const SERVICES = {
+    netflix: { id:'netflix', name:'Netflix',
+      tiers:[ {id:'ads', name:'Standard with Ads', price:7.99, adFree:false, streams:2},
+              {id:'standard', name:'Standard', price:17.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:4} ],
+      sports:[], kidFriendly:true,
+      flagship:['stranger things','wednesday','squid game','the crown','bridgerton','emily in paris','outer banks'] },
+
+    max: { id:'max', name:'HBO Max',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'adfree', name:'Ad-Free', price:16.99, adFree:true, streams:2},
+              {id:'ultimate', name:'Ultimate', price:20.99, adFree:true, streams:4} ],
+      sports:['nhl','mlb','college'], kidFriendly:false,
+      flagship:['house of the dragon','the last of us','euphoria','the white lotus','hacks','peacemaker'] },
+
+    hulu: { id:'hulu', name:'Hulu',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'noads', name:'No Ads', price:18.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['the bear','only murders in the building','shogun','american horror story',"handmaid's tale"] },
+
+    disney: { id:'disney', name:'Disney+',
+      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+              {id:'noads', name:'No Ads', price:16.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium 4K', price:18.99, adFree:true, streams:4} ],
+      sports:['college'], kidFriendly:true,
+      flagship:['the mandalorian','andor','loki','moana','marvel','star wars','percy jackson'] },
+
+    paramount: { id:'paramount', name:'Paramount+',
+      tiers:[ {id:'essential', name:'Essential', price:8.99, adFree:false, streams:2},
+              {id:'showtime', name:'with Showtime', price:13.99, adFree:true, streams:3} ],
+      sports:['nfl','college','other_soccer'], kidFriendly:false,
+      flagship:['yellowstone','landman','tulsa king','star trek','1923','mayor of kingstown'] },
+
+    peacock: { id:'peacock', name:'Peacock',
+      tiers:[ {id:'select', name:'Select', price:7.99, adFree:false, streams:2},
+              {id:'premium', name:'Premium', price:10.99, adFree:false, streams:3},
+              {id:'premiumplus', name:'Premium Plus', price:16.99, adFree:true, streams:3} ],
+      sports:['nfl','nba','mlb','epl','college'], kidFriendly:true,
+      flagship:['the office','days of our lives','poker face','love island usa','bel-air'] },
+
+    youtubetv: { id:'youtubetv', name:'YouTube TV',
+      tiers:[ {id:'entertainment', name:'Entertainment Plan', price:54.99, adFree:false, streams:3},
+              {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
+              {id:'sportsnews', name:'Sports + News Plan', price:71.99, adFree:false, streams:3},
+              {id:'base', name:'Base Plan (all channels)', price:82.99, adFree:false, streams:3} ],
+      sports:['nfl','nba','mlb','nhl','college'], kidFriendly:true,
+      flagship:[] },
+
+    appletv: { id:'appletv', name:'Apple TV',
+      tiers:[ {id:'standard', name:'Apple TV', price:12.99, adFree:true, streams:6} ],
+      sports:['mls'], kidFriendly:true,
+      flagship:['ted lasso','severance','slow horses','the morning show','foundation','silo'] },
+
+    primevideo: { id:'primevideo', name:'Amazon Prime Video',
+      tiers:[ {id:'ads', name:'With Ads', price:8.99, adFree:false, streams:3},
+              {id:'noads', name:'Ad-Free', price:11.99, adFree:true, streams:3},
+              {id:'withprime', name:'Bundled with Prime', price:14.99, adFree:false, streams:3} ],
+      sports:['nfl'], kidFriendly:true,
+      flagship:['the boys','fallout','reacher','the wheel of time','invincible','jack ryan'] },
+
+    espn: { id:'espn', name:'ESPN',
+      tiers:[ {id:'select', name:'ESPN Select', price:12.99, adFree:false, streams:2},
+              {id:'unlimited', name:'ESPN Unlimited', price:29.99, adFree:false, streams:2} ],
+      sports:['nfl','nba','mlb','nhl','college','laliga'], kidFriendly:false,
+      flagship:[] },
+
+    discoveryplus: { id:'discoveryplus', name:'Discovery+',
+      tiers:[ {id:'ads', name:'With Ads', price:5.99, adFree:false, streams:2},
+              {id:'noads', name:'Ad-Free', price:9.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['deadliest catch','the pioneer woman','moonshiners','my 600-lb life'] },
+
+    starz: { id:'starz', name:'Starz',
+      tiers:[ {id:'standard', name:'Starz', price:11.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['power','outlander','the girlfriend experience'] },
+
+    amcplus: { id:'amcplus', name:'AMC+',
+      tiers:[ {id:'standard', name:'AMC+', price:10.99, adFree:true, streams:2} ],
+      sports:[], kidFriendly:false,
+      flagship:['the walking dead','better call saul','interview with the vampire'] },
+
+    fubotv: { id:'fubotv', name:'Fubo',
+      tiers:[ {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
+              {id:'pro', name:'Pro Plan', price:88.99, adFree:false, streams:3} ],
+      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
+      flagship:[] },
+
+    slingtv: { id:'slingtv', name:'Sling TV',
+      tiers:[ {id:'onecolor', name:'Orange or Blue', price:45.99, adFree:false, streams:1},
+              {id:'both', name:'Orange + Blue', price:65.99, adFree:false, streams:4} ],
+      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
+      flagship:[] },
+
+    crunchyroll: { id:'crunchyroll', name:'Crunchyroll',
+      tiers:[ {id:'fan', name:'Fan', price:9.99, adFree:true, streams:1},
+              {id:'megafan', name:'Mega Fan', price:13.99, adFree:true, streams:4},
+              {id:'ultimatefan', name:'Ultimate Fan', price:17.99, adFree:true, streams:6} ],
+      sports:[], kidFriendly:false,
+      flagship:['one piece','jujutsu kaisen','attack on titan','demon slayer','my hero academia'] },
+
+    mlbtv: { id:'mlbtv', name:'MLB.TV',
+      tiers:[ {id:'allteams', name:'All Teams', price:29.99, adFree:true, streams:2} ],
+      sports:['mlb'], kidFriendly:false,
+      flagship:[] },
+
+    nbaleaguepass: { id:'nbaleaguepass', name:'NBA League Pass',
+      tiers:[ {id:'teampass', name:'Team Pass', price:13.99, adFree:true, streams:2},
+              {id:'standard', name:'Standard', price:16.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:2} ],
+      sports:['nba'], kidFriendly:false,
+      flagship:[] },
+
+    nflplus: { id:'nflplus', name:'NFL+',
+      tiers:[ {id:'regular', name:'Regular', price:6.99, adFree:false, streams:2},
+              {id:'premium', name:'Premium', price:14.99, adFree:true, streams:2} ],
+      sports:['nfl'], kidFriendly:false,
+      flagship:[] },
+  };
+
+  const BUNDLES = [
+    { id:'disneyhulumax', services:['disney','hulu','max'], price:{ads:19.99, noads:32.99}, name:'Disney+ / Hulu / HBO Max Trio Bundle' },
+    { id:'disneyhuluespn', services:['disney','hulu','espn'], price:{ads:35.99, noads:44.99}, name:'Disney+ / Hulu / ESPN Unlimited Bundle' },
+    { id:'disneyhulu', services:['disney','hulu'], price:{ads:12.99, noads:19.99}, name:'Disney+ / Hulu Duo Bundle' },
+  ];
+
+  // Direct links to each service's own account/plan page — this is the mechanism behind
+  // "we tell you, you make the change": every actionable card links straight here rather
+  // than StreamNavigator executing anything on the user's behalf.
+  const MANAGE_URLS = {
+    netflix:'https://www.netflix.com/account',
+    max:'https://www.max.com/settings/subscription',
+    hulu:'https://secure.hulu.com/account',
+    disney:'https://www.disneyplus.com/account/subscription',
+    paramount:'https://www.paramountplus.com/account/',
+    peacock:'https://www.peacocktv.com/account/subscription',
+    youtubetv:'https://tv.youtube.com/subscription/',
+    appletv:'https://tv.apple.com/settings',
+    primevideo:'https://www.amazon.com/mc/pipelines/subscription',
+    espn:'https://www.espn.com/subscription/manage',
+    discoveryplus:'https://www.discoveryplus.com/account',
+    starz:'https://www.starz.com/account',
+    amcplus:'https://www.amcplus.com/account',
+    fubotv:'https://www.fubo.tv/welcome/account',
+    slingtv:'https://www.sling.com/account',
+    crunchyroll:'https://www.crunchyroll.com/account/membership',
+    mlbtv:'https://www.mlb.com/account',
+    nbaleaguepass:'https://www.nba.com/leaguepass/account',
+    nflplus:'https://www.nfl.com/account/profile',
+    disneyhulumax:'https://www.disneyplus.com/account/subscription',
+    disneyhuluespn:'https://www.disneyplus.com/account/subscription',
+    disneyhulu:'https://www.disneyplus.com/account/subscription',
+  };
+  function manageLink(serviceId, name){
+    const url = MANAGE_URLS[serviceId] || `https://www.google.com/search?q=${encodeURIComponent((name || serviceId) + ' manage subscription')}`;
+    const label = MANAGE_URLS[serviceId] ? `Manage on ${name || serviceId}` : `Search: manage ${name || serviceId}`;
+    return { url, label };
+  }
+
+  const SPORT_SEASONS = {
+    nfl: {startMonth:9, endMonth:2, label:'NFL season (Sep–Feb)'},
+    nba: {startMonth:10, endMonth:6, label:'NBA season (Oct–Jun)'},
+    mlb: {startMonth:4, endMonth:10, label:'MLB season (Apr–Oct)'},
+    nhl: {startMonth:10, endMonth:6, label:'NHL season (Oct–Jun)'},
+    epl: {startMonth:8, endMonth:5, label:'Premier League season (Aug–May)'},
+    laliga: {startMonth:8, endMonth:5, label:'La Liga season (Aug–May)'},
+    bundesliga: {startMonth:8, endMonth:5, label:'Bundesliga season (Aug–May)'},
+    mls: {startMonth:2, endMonth:12, label:'MLS season (Feb–Dec)'},
+    other_soccer: {startMonth:8, endMonth:5, label:'European club season (Aug–May)'},
+    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'}
+  };
+  const SPORT_LABELS = {
+    nfl:'NFL', nba:'NBA', mlb:'MLB', nhl:'NHL',
+    epl:'EPL', laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer',
+    college:'College Football'
+  };
+
+  function activeMonths(season){
+    const {startMonth, endMonth} = season;
+    if (startMonth <= endMonth) return endMonth - startMonth + 1;
+    return (12 - startMonth + 1) + endMonth;
+  }
+
+  function fmt(n){ return '$' + n.toFixed(2).replace(/\.00$/,''); }
+  function cheapest(tiers){ return [...tiers].sort((a,b)=>a.price-b.price)[0]; }
+  function cheapestAdFree(tiers){ const f=[...tiers].filter(t=>t.adFree).sort((a,b)=>a.price-b.price); return f[0] || cheapest(tiers); }
+
+  function favoritesMatch(favorites, flagship){
+    return favorites.some(f => {
+      const fl = f.trim().toLowerCase();
+      if (!fl) return false;
+      return flagship.some(t => t.includes(fl) || fl.includes(t));
+    });
+  }
+
+  function analyze(input){
+    const { subscriptions, customSubscriptions = [], favorites = [], sports = [], household = 1, adsOk = true, kidsImportant = false, budget = Infinity } = input;
+
+    const currentTotal = subscriptions.reduce((sum, s) => {
+      const svc = SERVICES[s.serviceId];
+      const tier = svc.tiers.find(t => t.id === s.tierId) || svc.tiers[0];
+      return sum + tier.price;
+    }, 0) + customSubscriptions.reduce((sum, c) => sum + c.price, 0);
+
+    const actionsMap = {};
+    const kept = {};
+
+    // Custom services (typed in by the user, not in our catalog) — we can't match them
+    // against known tiers, sports, or flagship titles, so scoring is usage-frequency only.
+    customSubscriptions.forEach(c => {
+      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[c.frequency] ?? 1;
+      if (freqScore === 0) {
+        actionsMap[c.id] = { service: c.id, name: c.name, action:'cancel',
+          reason: `You said you never open ${c.name} — cancelling frees up ${fmt(c.price)}/mo.`,
+          amount: c.price };
+        return;
+      }
+      actionsMap[c.id] = { service: c.id, name: c.name, action:'keep',
+        reason: `${c.name} isn't in our catalog yet, so we can't fine-tune its plan — but based on how often you use it, it's worth keeping for now.`,
+        amount: 0 };
+      kept[c.id] = { tierId:'custom', monthly: c.price, score: freqScore, name: c.name };
+    });
+
+    subscriptions.forEach(sub => {
+      const svc = SERVICES[sub.serviceId];
+      const currentTier = svc.tiers.find(t => t.id === sub.tierId) || svc.tiers[0];
+      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[sub.frequency] ?? 1;
+
+      let score = freqScore;
+      const favMatch = favoritesMatch(favorites, svc.flagship);
+      if (favMatch) score += 3;
+      const sportMatches = sports.filter(sp => svc.sports.includes(sp));
+      score += sportMatches.length * 2;
+      if (kidsImportant && svc.kidFriendly) score += 1;
+
+      // "Never" is a strong, explicit signal — cancel outright even if a favorite title or
+      // sport nominally matches this service, since the user has told us they don't open it.
+      if (freqScore === 0) {
+        actionsMap[svc.id] = { service: svc.id, action:'cancel',
+          reason: `You said you never open ${svc.name} — cancelling frees up ${fmt(currentTier.price)}/mo.`,
+          amount: currentTier.price };
+        return;
+      }
+      if (score === 0) {
+        actionsMap[svc.id] = { service: svc.id, action:'cancel',
+          reason: `You rated usage as "${sub.frequency}" with no matching shows or sports — cancelling frees up ${fmt(currentTier.price)}/mo.`,
+          amount: currentTier.price };
+        return;
+      }
+
+      let idealTier;
+      if (svc.id === 'youtubetv') {
+        const wantsSports = sportMatches.length > 0;
+        const wantsGeneral = freqScore >= 3;
+        if (wantsSports && wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'sportsnews');
+        else if (wantsSports) idealTier = svc.tiers.find(t => t.id === 'sports');
+        else if (wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'base');
+        else idealTier = svc.tiers.find(t => t.id === 'entertainment');
+      } else {
+        idealTier = adsOk ? cheapest(svc.tiers) : cheapestAdFree(svc.tiers);
+        if (household >= 4) {
+          const need = svc.tiers.filter(t => t.streams >= 3 && (adsOk || t.adFree)).sort((a,b) => a.price - b.price);
+          if (need.length) idealTier = need[0];
+        }
+      }
+
+      const seasonalOnly = svc.id !== 'youtubetv' && sportMatches.length > 0 && freqScore <= 2 && !favMatch;
+      if (seasonalOnly) {
+        const sp = sportMatches[0];
+        const season = SPORT_SEASONS[sp];
+        const months = activeMonths(season);
+        const avgMonthly = idealTier.price * (months / 12);
+        actionsMap[svc.id] = { service: svc.id, action:'pause',
+          reason: `You mainly use ${svc.name} for ${SPORT_LABELS[sp]} — pause it outside the ${season.label} to save ${fmt(idealTier.price)}/mo in the off-season, then use the link below when it's time.`,
+          amount: idealTier.price };
+        kept[svc.id] = { tierId: idealTier.id, monthly: avgMonthly, score, seasonal:true, sport: sp };
+        return;
+      }
+
+      if (idealTier.price < currentTier.price - 0.01) {
+        actionsMap[svc.id] = { service: svc.id, action:'downgrade',
+          reason: `Switch ${svc.name} to "${idealTier.name}" — it covers how you actually use it and saves ${fmt(currentTier.price - idealTier.price)}/mo.`,
+          amount: currentTier.price - idealTier.price };
+        kept[svc.id] = { tierId: idealTier.id, monthly: idealTier.price, score };
+      } else {
+        actionsMap[svc.id] = { service: svc.id, action:'keep',
+          reason: `${svc.name} is already on the right plan for how you use it.`,
+          amount: 0 };
+        kept[svc.id] = { tierId: currentTier.id, monthly: currentTier.price, score };
+      }
+    });
+
+    const coveredSports = new Set();
+    Object.entries(kept).forEach(([sid, k]) => {
+      if (k.seasonal) coveredSports.add(k.sport);
+      else if (SERVICES[sid]) SERVICES[sid].sports.forEach(sp => coveredSports.add(sp));
+    });
+    const alreadySubscribed = new Set(subscriptions.map(s => s.serviceId));
+
+    sports.filter(sp => !coveredSports.has(sp)).forEach(sp => {
+      const candidates = Object.values(SERVICES)
+        .filter(s => s.sports.includes(sp) && !alreadySubscribed.has(s.id) && !kept[s.id]);
+
+      if (!candidates.length) {
+        if (sp === 'bundesliga') {
+          actionsMap['bundesliga-info'] = { service:'bundesliga', action:'info',
+            reason: `Bundesliga doesn't need a new subscription — most matches stream free via Fandango, with select games also on USA Network and Peacock.`,
+            amount: 0 };
+        }
+        return;
+      }
+
+      candidates.sort((a, b) => Math.min(...a.tiers.map(t => t.price)) - Math.min(...b.tiers.map(t => t.price)));
+      const pick = candidates[0];
+      const tier = cheapest(pick.tiers);
+      const season = SPORT_SEASONS[sp];
+      const months = activeMonths(season);
+      const startName = MONTH_NAMES[season.startMonth - 1];
+      const avgMonthly = tier.price * (months / 12);
+      actionsMap[pick.id] = { service: pick.id, action:'add',
+        reason: `Add ${pick.name} (${tier.name}) around ${startName} to catch ${SPORT_LABELS[sp]} for ${fmt(tier.price)}/mo — pause or cancel once the season wraps.`,
+        amount: -tier.price };
+      kept[pick.id] = { tierId: tier.id, monthly: avgMonthly, score: 99, seasonal:true, sport: sp, added:true };
+      alreadySubscribed.add(pick.id);
+    });
+
+    let bundleRec = null;
+    for (const bundle of BUNDLES) {
+      const members = bundle.services.filter(id => kept[id] && !kept[id].seasonal);
+      if (members.length !== bundle.services.length) continue;
+      const sumPrice = members.reduce((s, id) => s + kept[id].monthly, 0);
+      const bundlePrice = adsOk ? bundle.price.ads : bundle.price.noads;
+      if (bundlePrice < sumPrice - 0.01) { bundleRec = { bundle, members, sumPrice, bundlePrice }; break; }
+    }
+    if (bundleRec) {
+      bundleRec.members.forEach(id => { delete actionsMap[id]; kept[id].monthly = 0; kept[id].bundled = true; });
+      actionsMap[bundleRec.bundle.id] = { service: bundleRec.bundle.id, action:'bundle',
+        reason: `Switch ${bundleRec.members.map(id => SERVICES[id].name).join(' + ')} to the ${bundleRec.bundle.name} — saves ${fmt(bundleRec.sumPrice - bundleRec.bundlePrice)}/mo over paying separately.`,
+        amount: bundleRec.sumPrice - bundleRec.bundlePrice };
+      kept[bundleRec.bundle.id] = { tierId: adsOk ? 'ads' : 'noads', monthly: bundleRec.bundlePrice, score: 99, isBundle:true };
+    }
+
+    function recommendedTotal(){ return Object.values(kept).reduce((s, k) => s + (k.monthly || 0), 0); }
+    let guard = 0;
+    while (recommendedTotal() > budget && guard < 30) {
+      guard++;
+      const trimmable = Object.entries(kept)
+        .filter(([id, k]) => !k.isBundle && (k.monthly || 0) > 0 && !k.added)
+        .sort((a, b) => (a[1].score ?? 0) - (b[1].score ?? 0));
+      if (!trimmable.length) break;
+      const [id, k] = trimmable[0];
+      const name = SERVICES[id] ? SERVICES[id].name : (k.name || (BUNDLES.find(b=>b.id===id) || {}).name || id);
+      actionsMap[id] = { service: id, name: k.name, action:'cancel',
+        reason: k.seasonal
+          ? `To fit your ${fmt(budget)}/mo budget, cancel ${name} outright rather than just pausing it seasonally — it scored lowest on usage, shows, and sports fit.`
+          : `To fit your ${fmt(budget)}/mo budget, cancel ${name} — it scored lowest on usage, shows, and sports fit.`,
+        amount: k.monthly };
+      delete kept[id];
+    }
+
+    const recommendedMonthly = recommendedTotal();
+    const savingsYearly = Math.max(0, (currentTotal - recommendedMonthly) * 12);
+
+    return {
+      currentTotal: Math.round(currentTotal * 100) / 100,
+      recommendedMonthly: Math.round(recommendedMonthly * 100) / 100,
+      savingsYearly: Math.round(savingsYearly * 100) / 100,
+      actions: Object.values(actionsMap)
+    };
+  }
+
+  const svcGrid = document.getElementById('svc-grid');
+  const sportsGrid = document.getElementById('sports-grid');
+  const favText = document.getElementById('fav-text');
+  const favTags = document.getElementById('fav-tags');
+  const resultsEl = document.getElementById('analyzer-results');
+  const actionsListEl = document.getElementById('actions-list');
+  if (!svcGrid) return; // optimizer not on this page
+
+  const selectedServices = {}; // id -> true
+  const selectedSports = {};   // id -> true
+  const favorites = [];
+
+  function bestDefaultTier(svc){
+    const adFreeTiers = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
+    return (adFreeTiers[0] || svc.tiers[svc.tiers.length-1]).id;
+  }
+
+  const svcWraps = {}; // serviceId -> wrapper element, so the prefill step can find each row
+  Object.values(SERVICES).forEach(svc => {
+    const wrap = document.createElement('div');
+    wrap.style.width = '100%';
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'svc-chip';
+    chip.textContent = svc.name;
+    wrap.appendChild(chip);
+
+    const detail = document.createElement('div');
+    detail.className = 'svc-detail';
+    detail.innerHTML = `
+      <div class="svc-detail-full">${svc.name} — current plan &amp; usage</div>
+      <div>
+        <select class="a-select tier-select" data-service="${svc.id}">
+          ${svc.tiers.map(t => `<option value="${t.id}">${t.name} — ${fmt(t.price)}/mo</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <select class="a-select freq-select" data-service="${svc.id}">
+          <option value="daily">Watch daily</option>
+          <option value="weekly" selected>Watch weekly</option>
+          <option value="occasionally">Occasionally</option>
+          <option value="rarely">Rarely</option>
+          <option value="never">Never / forgot I had it</option>
+        </select>
+      </div>`;
+    wrap.appendChild(detail);
+    svcGrid.appendChild(wrap);
+    svcWraps[svc.id] = wrap;
+
+    const tierSelect = detail.querySelector('.tier-select');
+    tierSelect.value = bestDefaultTier(svc);
+
+    chip.addEventListener('click', () => {
+      const active = chip.classList.toggle('active');
+      detail.classList.toggle('show', active);
+      if (active) selectedServices[svc.id] = true; else delete selectedServices[svc.id];
+    });
+  });
+
+  Object.keys(SPORT_LABELS).forEach(sp => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-toggle';
+    chip.textContent = SPORT_LABELS[sp];
+    chip.addEventListener('click', () => {
+      const active = chip.classList.toggle('active');
+      if (active) selectedSports[sp] = true; else delete selectedSports[sp];
+    });
+    sportsGrid.appendChild(chip);
+  });
+
+  function renderTags(){
+    favTags.innerHTML = '';
+    favorites.forEach((f, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.innerHTML = `${f} <button type="button" aria-label="Remove">✕</button>`;
+      pill.querySelector('button').addEventListener('click', () => { favorites.splice(i, 1); renderTags(); });
+      favTags.appendChild(pill);
+    });
+  }
+  favText.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && favText.value.trim()) {
+      e.preventDefault();
+      favorites.push(favText.value.trim());
+      favText.value = '';
+      renderTags();
+    }
+  });
+
+  // Custom services — for anything not in our built-in catalog (a niche or regional
+  // streaming app, a work perk, etc). Scored on usage frequency only, since we have no
+  // pricing tiers or content catalog to match against.
+  const customServices = [];
+  let customCounter = 0;
+  const customList = document.getElementById('custom-svc-list');
+  const addCustomBtn = document.getElementById('add-custom-btn');
+  const customAddForm = document.getElementById('custom-add-form');
+  const customNameInput = document.getElementById('custom-name');
+  const customPriceInput = document.getElementById('custom-price');
+  const customFreqSelect = document.getElementById('custom-freq');
+
+  addCustomBtn.addEventListener('click', () => {
+    customAddForm.classList.toggle('show');
+    if (customAddForm.classList.contains('show')) customNameInput.focus();
+  });
+
+  function renderCustomList(){
+    customList.innerHTML = '';
+    customServices.forEach((c, i) => {
+      const pill = document.createElement('span');
+      pill.className = 'tag-pill';
+      pill.innerHTML = `${c.name} — ${fmt(c.price)}/mo <button type="button" aria-label="Remove">✕</button>`;
+      pill.querySelector('button').addEventListener('click', () => { customServices.splice(i, 1); renderCustomList(); });
+      customList.appendChild(pill);
+    });
+  }
+
+  function addCustomService(){
+    const name = customNameInput.value.trim();
+    const price = parseFloat(customPriceInput.value);
+    const nameOk = !!name;
+    const priceOk = !isNaN(price) && price > 0;
+    customNameInput.style.borderColor = nameOk ? '' : '#1D5FA8';
+    customPriceInput.parentElement.style.borderColor = priceOk ? '' : '#1D5FA8';
+    if (!nameOk || !priceOk) return;
+
+    customCounter++;
+    customServices.push({ id: 'custom-' + customCounter, name, price, frequency: customFreqSelect.value });
+    renderCustomList();
+
+    customNameInput.value = '';
+    customPriceInput.value = '';
+    customFreqSelect.value = 'weekly';
+    customNameInput.style.borderColor = '';
+    customPriceInput.parentElement.style.borderColor = '';
+    customAddForm.classList.remove('show');
+  }
+  document.getElementById('custom-add-confirm').addEventListener('click', addCustomService);
+  customPriceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
+  customNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
+
+  // ---- Pre-fill from this customer's real tracked subscriptions ----
+  // Matches each tracked row to our known catalog by name where possible
+  // (so the smart tier/bundle/sports logic applies); anything unrecognized
+  // becomes a custom service at its real price. Usage frequency defaults
+  // from the row's real status (active -> weekly, paused -> rarely) since
+  // that's the one usage signal we actually have — it's editable before
+  // running the analysis.
+  const SERVICE_ALIASES = {
+    hbomax:'max', max:'max', primevideo:'primevideo', amazonprimevideo:'primevideo', prime:'primevideo',
+    disney:'disney', disneyplus:'disney', appletv:'appletv', appletvplus:'appletv', youtubetv:'youtubetv',
+    discoveryplus:'discoveryplus', amcplus:'amcplus', crunchyroll:'crunchyroll', paramountplus:'paramount',
+    paramount:'paramount', peacock:'peacock', hulu:'hulu', netflix:'netflix', espn:'espn', espnplus:'espn',
+    starz:'starz', fubotv:'fubotv', fubo:'fubotv', slingtv:'slingtv', sling:'slingtv', mlbtv:'mlbtv',
+    nbaleaguepass:'nbaleaguepass', nflplus:'nflplus',
+  };
+  function matchServiceId(name){
+    const norm = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (SERVICE_ALIASES[norm]) return SERVICE_ALIASES[norm];
+    for (const id in SERVICES) {
+      if (SERVICES[id].name.toLowerCase().replace(/[^a-z0-9]/g, '') === norm) return id;
+    }
+    return null;
+  }
+  function nearestTier(svc, price){
+    let best = svc.tiers[0], bestDiff = Infinity;
+    svc.tiers.forEach(t => { const diff = Math.abs(t.price - price); if (diff < bestDiff) { bestDiff = diff; best = t; } });
+    return best;
+  }
+
+  function prefillFromReal(rows){
+    // Reset any prior prefill so re-loading subscriptions doesn't double up.
+    Object.keys(selectedServices).forEach(id => delete selectedServices[id]);
+    Object.values(svcWraps).forEach(wrap => {
+      wrap.querySelector('.svc-chip').classList.remove('active');
+      wrap.querySelector('.svc-detail').classList.remove('show');
+    });
+    customServices.length = 0;
+
+    const note = document.getElementById('prefill-note');
+    if (!rows || !rows.length) { note.hidden = true; renderCustomList(); return; }
+
+    let matched = 0, custom = 0;
+    rows.forEach(r => {
+      const freqDefault = r.status === 'active' ? 'weekly' : 'rarely';
+      const matchId = matchServiceId(r.service_name);
+      if (matchId && svcWraps[matchId]) {
+        matched++;
+        selectedServices[matchId] = true;
+        const wrap = svcWraps[matchId];
+        wrap.querySelector('.svc-chip').classList.add('active');
+        wrap.querySelector('.svc-detail').classList.add('show');
+        const svc = SERVICES[matchId];
+        const tier = nearestTier(svc, Number(r.monthly_price) || 0);
+        wrap.querySelector('.tier-select').value = tier.id;
+        wrap.querySelector('.freq-select').value = freqDefault;
+      } else {
+        custom++;
+        customCounter++;
+        customServices.push({ id: 'custom-' + customCounter, name: r.service_name, price: Number(r.monthly_price) || 0, frequency: freqDefault });
+      }
+    });
+    renderCustomList();
+
+    note.hidden = false;
+    note.textContent = `Pre-filled ${matched + custom} subscription${(matched + custom) === 1 ? '' : 's'} from your tracked list above` +
+      (custom ? ` (${custom} as custom — not in our catalog yet, so tier/bundle suggestions don't apply to ${custom === 1 ? 'it' : 'them'}).` : '.') +
+      ' Usage defaults to weekly for active, rarely for paused — adjust any of it below before running the analysis.';
+  }
+  window.__prefillOptimizer = prefillFromReal;
+  // Cover the reverse race: if the main dashboard script already loaded the
+  // customer's subscriptions before this script finished parsing, run the
+  // prefill now using the cached rows instead of waiting for a load that
+  // already happened.
+  if (window.__lastSubRows) prefillFromReal(window.__lastSubRows);
+
+  const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
+  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', add:'+', bundle:'◆', keep:'✓', info:'i' };
+  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
+
+  document.getElementById('analyze-btn').addEventListener('click', () => {
+    const subscriptions = Object.keys(selectedServices).map(id => {
+      const tierSel = svcGrid.querySelector(`.tier-select[data-service="${id}"]`);
+      const freqSel = svcGrid.querySelector(`.freq-select[data-service="${id}"]`);
+      return { serviceId:id, tierId: tierSel.value, frequency: freqSel.value };
+    });
+
+    const hasSports = Object.keys(selectedSports).length > 0;
+    const hasFavorites = favorites.length > 0;
+    const hasCustom = customServices.length > 0;
+    if (!subscriptions.length && !hasCustom && !hasSports && !hasFavorites) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Select at least one subscription, sport, or favorite above to run the analysis.</p>';
+      document.getElementById('stat-current').textContent = '$0/mo';
+      document.getElementById('stat-recommended').textContent = '$0/mo';
+      document.getElementById('stat-savings-yr').textContent = '$0/yr';
+      resultsEl.hidden = false;
+      resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      return;
+    }
+
+    const budgetInput = document.getElementById('budget').value;
+    const result = analyze({
+      subscriptions,
+      customSubscriptions: customServices,
+      favorites,
+      sports: Object.keys(selectedSports),
+      household: parseInt(document.getElementById('household').value, 10) || 1,
+      adsOk: document.getElementById('ads-ok').checked,
+      kidsImportant: document.getElementById('kids-important').checked,
+      budget: budgetInput ? parseFloat(budgetInput) : Infinity
+    });
+
+    document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
+    document.getElementById('stat-recommended').textContent = fmt(result.recommendedMonthly) + '/mo';
+    document.getElementById('stat-savings-yr').textContent = fmt(result.savingsYearly) + '/yr';
+
+    const sorted = result.actions.slice().sort((a,b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
+    actionsListEl.innerHTML = '';
+    if (!sorted.length) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Your setup already looks optimized.</p>';
+    }
+    const LINKABLE = { cancel:1, downgrade:1, pause:1, add:1, bundle:1 };
+    sorted.forEach(a => {
+      const svc = SERVICES[a.service] || BUNDLES.find(b => b.id === a.service) || { name: a.name || SPORT_LABELS[a.service] || a.service };
+      const card = document.createElement('div');
+      card.className = 'action-card';
+      const title = ACTION_TITLE[a.action] || a.action;
+      const titleEl = document.createElement('div');
+      titleEl.className = 'a-title';
+      titleEl.textContent = title + (svc.name ? ' — ' + svc.name : '');
+      const descEl = document.createElement('div');
+      descEl.className = 'a-desc';
+      descEl.textContent = a.reason;
+      const copyEl = document.createElement('div');
+      copyEl.className = 'action-copy';
+      copyEl.appendChild(titleEl);
+      copyEl.appendChild(descEl);
+      if (LINKABLE[a.action]) {
+        const { url, label } = manageLink(a.service, svc.name);
+        const linkEl = document.createElement('a');
+        linkEl.className = 'a-link';
+        linkEl.href = url;
+        linkEl.target = '_blank';
+        linkEl.rel = 'noopener noreferrer';
+        linkEl.textContent = label + ' →';
+        copyEl.appendChild(linkEl);
+      }
+      const badgeEl = document.createElement('div');
+      badgeEl.className = 'action-badge ' + a.action;
+      badgeEl.textContent = ACTION_ICON[a.action] || '•';
+      card.appendChild(badgeEl);
+      card.appendChild(copyEl);
+      actionsListEl.appendChild(card);
+    });
+
+    resultsEl.hidden = false;
+    resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
   });
 })();
 </script>
