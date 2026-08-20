@@ -186,9 +186,12 @@
   .sub-suggestion.activate{ color:var(--status-active-deep); }
   .sub-suggestion.pause{ color:var(--status-paused-deep); }
   .sub-suggestion.info{ color:var(--accent-3-deep); font-weight:600; }
+  .sub-price-alert{ font-size:12px; font-weight:700; color:var(--danger-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
+  .price-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
+  .price-edit-row input[type="number"]{ width:110px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
 
   .fav-add-grid{ display:grid; grid-template-columns:1.4fr 0.9fr 0.7fr; gap:10px; align-items:end; margin-bottom:10px; }
@@ -358,6 +361,25 @@
           <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
         </div>
       </div>
+    </div>
+
+    <div class="panel" id="household-panel" hidden>
+      <h3>Manage your household</h3>
+      <p class="field-hint">Invite up to 5 people to share your Family plan. Each person logs into their own account with their own tracked subscriptions and gets full Pro features — nobody's individual subscriptions are visible to you or to anyone else in the household.</p>
+
+      <div class="fav-add-grid">
+        <div class="field">
+          <label for="household-invite-email">Invite by email</label>
+          <input type="email" id="household-invite-email" placeholder="name@example.com" />
+        </div>
+        <div class="field">
+          <button type="button" class="btn btn-primary" id="household-invite-btn" style="width:100%;">Send invite</button>
+        </div>
+      </div>
+      <p class="field-hint" id="household-invite-msg" style="margin-top:-6px; min-height:16px;"></p>
+
+      <div class="fav-list" id="household-members-list"></div>
+      <p class="empty-state" id="household-empty" hidden>No one invited yet.</p>
     </div>
 
     <div class="panel">
@@ -755,6 +777,11 @@
   // real, server-verified plan check, not something a customer could spoof
   // from the browser.
   let userPlan = 'free';
+  // True only when THIS account is the one actually paying for Family — not
+  // just benefiting from it as an invited member. Only an owner manages
+  // the household (invites/removes people); a member's dashboard looks
+  // exactly like any other Pro account.
+  let isFamilyOwner = false;
   function isPro(){ return userPlan === 'pro' || userPlan === 'family'; }
 
   async function loadPlan(user){
@@ -763,8 +790,43 @@
       .select('plan')
       .eq('user_id', user.id)
       .maybeSingle();
-    userPlan = (!error && data && (data.plan === 'pro' || data.plan === 'family')) ? data.plan : 'free';
+    const ownPlan = (!error && data && (data.plan === 'pro' || data.plan === 'family')) ? data.plan : 'free';
+    isFamilyOwner = ownPlan === 'family';
+    userPlan = ownPlan;
+
+    // Not directly paying myself — check whether I'm an accepted member of
+    // someone else's Family household, and inherit their plan if so. This
+    // re-checks the OWNER's live plan every time (not a cached flag on the
+    // membership row), so if they ever cancel, members lose access on their
+    // very next load with no separate cleanup needed.
+    if (userPlan === 'free') {
+      try {
+        const { data: memberRow } = await client
+          .from('household_members')
+          .select('household_id')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (memberRow && memberRow.household_id) {
+          const { data: houseRow } = await client
+            .from('households')
+            .select('owner_user_id')
+            .eq('id', memberRow.household_id)
+            .maybeSingle();
+          if (houseRow && houseRow.owner_user_id) {
+            const { data: ownerPlanRow } = await client
+              .from('subscribers')
+              .select('plan')
+              .eq('user_id', houseRow.owner_user_id)
+              .maybeSingle();
+            if (ownerPlanRow && ownerPlanRow.plan === 'family') userPlan = 'family';
+          }
+        }
+      } catch (err) { /* stay on whatever plan was already resolved */ }
+    }
+
     applyPlanGating();
+    if (isFamilyOwner) loadHouseholdMembers();
   }
 
   function applyPlanGating(){
@@ -773,11 +835,13 @@
     const analyzerBody = document.getElementById('analyzer-body');
     const analyzerLocked = document.getElementById('analyzer-locked');
     const note = document.getElementById('current-plan-note');
+    const householdPanel = document.getElementById('household-panel');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
     if (analyzerBody) analyzerBody.hidden = !pro;
     if (analyzerLocked) analyzerLocked.hidden = pro;
+    if (householdPanel) householdPanel.hidden = !isFamilyOwner;
     if (note) {
       note.textContent = pro
         ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders and the plan optimizer are unlocked below.`
@@ -787,6 +851,99 @@
     // current plan now applied.
     if (window.__lastSubRows) renderSubscriptions(window.__lastSubRows);
   }
+
+  // If I just signed up (or logged in) with an email someone invited to
+  // their household, claim that pending invite as mine. Supabase's RLS only
+  // allows this exact move — attaching MY OWN uid to a still-unclaimed row
+  // whose invited email matches MY OWN login email — so there's no way to
+  // claim someone else's invite. Runs on every login; a no-op once claimed.
+  async function claimHouseholdInvite(user){
+    if (!user.email) return;
+    try {
+      const { data: pending } = await client
+        .from('household_members')
+        .select('id')
+        .eq('email', user.email.toLowerCase())
+        .is('user_id', null)
+        .maybeSingle();
+      if (pending && pending.id) {
+        await client.from('household_members').update({
+          user_id: user.id,
+          status: 'active',
+          joined_at: new Date().toISOString()
+        }).eq('id', pending.id);
+      }
+    } catch (err) { /* nothing pending for this email, or already claimed */ }
+  }
+
+  // ---- Household management (Family plan owners only) ----
+  async function loadHouseholdMembers(){
+    const { data, error } = await client
+      .from('household_members')
+      .select('id, email, status')
+      .order('invited_at', { ascending: true });
+    renderHouseholdMembers(error ? [] : (data || []));
+  }
+
+  function renderHouseholdMembers(members){
+    const list = document.getElementById('household-members-list');
+    const empty = document.getElementById('household-empty');
+    if (!list) return;
+    list.innerHTML = '';
+    empty.hidden = members.length > 0;
+    members.forEach(m => {
+      const pill = document.createElement('span');
+      pill.className = 'fav-pill';
+      const statusLabel = m.status === 'active' ? 'active' : "invited — hasn't accepted yet";
+      pill.innerHTML = `${escapeHtml(m.email)} <span class="fav-pill-meta">(${statusLabel})</span> <button type="button" data-id="${m.id}" aria-label="Remove">✕</button>`;
+      list.appendChild(pill);
+    });
+  }
+
+  document.getElementById('household-invite-btn').addEventListener('click', async () => {
+    const emailInput = document.getElementById('household-invite-email');
+    const msg = document.getElementById('household-invite-msg');
+    const email = emailInput.value.trim();
+    if (!email) return;
+    const btn = document.getElementById('household-invite-btn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    msg.textContent = '';
+    try {
+      const { data: { session } } = await client.auth.getSession();
+      const res = await fetch('/api/invite-household-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ email }),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.ok) {
+        msg.textContent = result.error || 'Could not send that invite.';
+      } else {
+        emailInput.value = '';
+        showToast('Invite sent to ' + email + '.');
+        loadHouseholdMembers();
+      }
+    } catch (err) {
+      msg.textContent = 'Something went wrong sending that invite.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send invite';
+    }
+  });
+
+  document.getElementById('household-members-list').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-id]');
+    if (!btn) return;
+    const { data: { session } } = await client.auth.getSession();
+    const res = await fetch('/api/remove-household-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ memberId: btn.dataset.id }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || !result.ok) { showToast(result.error || 'Could not remove that member.'); return; }
+    showToast('Member removed.');
+    loadHouseholdMembers();
+  });
 
   // Stripe Payment Links can carry who's checking out via client_reference_id
   // and prefilled_email — this is what lets the webhook match a completed
@@ -1115,17 +1272,30 @@
       // doesn't get the "worth activating/pausing" prompts.
       const suggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r)) : null;
 
+      // Real-time price-hike alerts (Pro/Family): flagged whenever the price
+      // you last saved is higher than what it was before you last edited it
+      // here — real, self-reported data, not a live feed we don't have
+      // access to. See "Edit price" below for how previous_monthly_price
+      // gets set.
+      let priceAlertText = '';
+      if (isPro() && r.previous_monthly_price != null && Number(r.monthly_price) > Number(r.previous_monthly_price)) {
+        const changedDate = r.price_changed_at ? r.price_changed_at.slice(0, 10) : '';
+        priceAlertText = `Price increased from ${fmt(r.previous_monthly_price)} to ${fmt(r.monthly_price)}${changedDate ? ' as of ' + changedDate : ''}`;
+      }
+
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
           ${showText ? `<span class="sub-show">${showText}</span>` : ''}
+          ${priceAlertText ? `<span class="sub-price-alert">⚠ ${escapeHtml(priceAlertText)}</span>` : ''}
           ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
           <button class="btn btn-ghost btn-sm" data-action="edit-show" data-id="${r.id}">${r.show_query ? 'Edit show' : 'Set show'}</button>
+          <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
@@ -1332,8 +1502,50 @@
 
     } else if (btn.dataset.action === 'edit-show') {
       openShowEditor(btn.closest('.sub-row'), row);
+
+    } else if (btn.dataset.action === 'edit-price') {
+      openPriceEditor(btn.closest('.sub-row'), row);
     }
   });
+
+  // Inline price editor for an existing row. Anyone can correct/update their
+  // price — that's basic account upkeep, not a paid feature. What IS Pro/
+  // Family-gated is the resulting price-hike alert shown above (see
+  // priceAlertText in renderSubscriptions), since there's no live pricing
+  // feed for these services — this only knows a price changed because the
+  // customer told us, by editing it here.
+  function openPriceEditor(rowEl, row){
+    const existing = rowEl.parentElement.querySelector('.price-edit-row');
+    if (existing) existing.remove();
+
+    const editRow = document.createElement('div');
+    editRow.className = 'price-edit-row';
+    editRow.innerHTML = `
+      <input type="number" step="0.01" min="0" value="${Number(row.monthly_price).toFixed(2)}" />
+      <button type="button" class="btn btn-primary btn-sm" data-role="save">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-role="cancel">Cancel</button>
+    `;
+    rowEl.insertAdjacentElement('afterend', editRow);
+    const input = editRow.querySelector('input');
+    input.focus();
+    input.select();
+
+    editRow.querySelector('[data-role="cancel"]').addEventListener('click', () => editRow.remove());
+
+    editRow.querySelector('[data-role="save"]').addEventListener('click', async () => {
+      const newPrice = parseFloat(input.value);
+      if (isNaN(newPrice) || newPrice < 0) { showToast('Enter a valid price.'); return; }
+      const oldPrice = Number(row.monthly_price);
+      const nowIso = new Date().toISOString();
+      const patch = newPrice > oldPrice
+        ? { monthly_price: newPrice, previous_monthly_price: oldPrice, price_changed_at: nowIso }
+        : { monthly_price: newPrice, previous_monthly_price: null, price_changed_at: null };
+      const { error } = await client.from('tracked_subscriptions').update(patch).eq('id', row.id);
+      if (error) { showToast('Could not update that.'); return; }
+      showToast('Price updated.');
+      loadSubscriptions();
+    });
+  }
 
   // Inline "waiting for a show" editor for an existing row — this is the
   // main way most people will attach a show, since it happens when they
@@ -1455,7 +1667,10 @@
     document.getElementById('welcome-email').textContent = ', ' + user.email;
     setBillingLink(user.email);
     wireUpgradeLinks(user);
-    loadPlan(user);
+    // Claim any pending household invite before checking plan status, so a
+    // member who just accepted their invite sees Family access unlock on
+    // this same login instead of needing to refresh.
+    claimHouseholdInvite(user).then(() => loadPlan(user));
     loadSubscriptions();
     loadFavorites();
   }
