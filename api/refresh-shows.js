@@ -18,6 +18,12 @@
 //      This has no back-filled/fake history — it only ever logs today, so
 //      the chart starts empty and fills in one real point per day from
 //      whenever the savings_history migration is run.
+//   4. For any favorite show a customer has tagged to a subscription (the
+//      "Shows & sports you like to watch" panel), re-check TVmaze the same
+//      way as step 1, so the dashboard's "worth activating" suggestion stays
+//      correct even if the customer hasn't visited in a while. Favorite
+//      sports don't need a network check — their in-season/off-season state
+//      is computed live from a fixed seasonal calendar, not stored here.
 //
 // Requires three Vercel project environment variables (Project Settings ->
 // Environment Variables -> Production), none of which are ever sent to the
@@ -170,6 +176,48 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // 4) Refresh next_air_date on favorite shows tagged in the "Shows & sports
+  //    you like to watch" panel — same TVmaze lookup as step 1, just against
+  //    a different table. Favorite sports (kind = 'sport') are skipped here;
+  //    they carry no air date to refresh.
+  let favoriteShowsChecked = 0;
+  let favoriteErrors = 0;
+  try {
+    const favRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/favorite_watches?select=id,title,tvmaze_show_id&kind=eq.show`,
+      { headers }
+    );
+    if (favRes.ok) {
+      const favRows = await favRes.json();
+      for (const fav of favRows) {
+        try {
+          const found = await fetchNextAirDate(fav.tvmaze_show_id, fav.title);
+          favoriteShowsChecked++;
+          const patch = { checked_at: new Date().toISOString() };
+          if (found) {
+            patch.next_air_date = found.date;
+            if (found.id) patch.tvmaze_show_id = found.id;
+          }
+          const upRes = await fetch(`${SUPABASE_URL}/rest/v1/favorite_watches?id=eq.${fav.id}`, {
+            method: 'PATCH',
+            headers: { ...headers, Prefer: 'return=minimal' },
+            body: JSON.stringify(patch),
+          });
+          if (!upRes.ok) favoriteErrors++;
+          await sleep(150);
+        } catch (err) {
+          favoriteErrors++;
+        }
+      }
+    } else {
+      // Table may not exist yet if this migration hasn't been run — that's
+      // fine, just skip this step rather than failing the whole cron run.
+    }
+  } catch (err) {
+    // Same as above: don't let a missing/unreachable favorite_watches table
+    // take down the rest of the daily job.
+  }
+
   res.status(200).json({
     ok: true,
     rowsProcessed: rows.length,
@@ -177,6 +225,8 @@ module.exports = async function handler(req, res) {
     remindersAdvanced,
     usersSnapshotted,
     snapshotErrors,
+    favoriteShowsChecked,
+    favoriteErrors,
     errors,
   });
 };
