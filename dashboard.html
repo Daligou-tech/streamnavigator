@@ -182,6 +182,7 @@
   .sub-suggestion{ font-size:12px; font-weight:700; }
   .sub-suggestion.activate{ color:var(--status-active-deep); }
   .sub-suggestion.pause{ color:var(--status-paused-deep); }
+  .sub-suggestion.info{ color:var(--accent-3-deep); font-weight:600; }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
@@ -821,8 +822,11 @@
   // shows/sports tagged to it above — real air dates for shows, seasonal
   // windows for sports. Returns null (no suggestion shown) when nothing is
   // tagged to that service, so this never adds noise to unrelated rows.
+  function favoritesForService(serviceName){
+    return favoriteRows.filter(f => (f.service_name || '').trim().toLowerCase() === (serviceName || '').trim().toLowerCase());
+  }
   function computeSuggestion(row){
-    const svcFavorites = favoriteRows.filter(f => (f.service_name || '').trim().toLowerCase() === (row.service_name || '').trim().toLowerCase());
+    const svcFavorites = favoritesForService(row.service_name);
     if (!svcFavorites.length) return null;
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -871,6 +875,22 @@
       return { type: 'activate', text: `Suggested: Activate — ${reason}` };
     }
     return { type: 'pause', text: "Suggested: Consider pausing — you haven't checked in on this in about 2 months" };
+  }
+
+  // Last-resort prompt: this service has nothing tagged in "Shows & sports
+  // you like to watch" AND its routine check-in isn't due yet, so the two
+  // functions above both come back empty. Rather than go quiet — which is
+  // what read as "not prompted to do anything" on freshly-added services —
+  // this nudges toward the one honest, real signal available: there's no
+  // stated reason on file for keeping it active. It only fires when
+  // computeSuggestion/computeCadencePrompt have nothing, so it never
+  // duplicates or overrides a more specific, real-data-backed suggestion.
+  function computeUntaggedPrompt(row){
+    if (favoritesForService(row.service_name).length) return null;
+    if (row.status === 'active') {
+      return { type: 'pause', text: `Tag a show or sport above so we can tell you when it's worth keeping — or pause it now to save ${fmt(row.monthly_price)}/mo` };
+    }
+    return { type: 'info', text: 'Tag a show or sport above and we’ll tell you when it’s worth activating again' };
   }
 
   // ---- Auth tab switching ----
@@ -958,7 +978,7 @@
       // suggestion (real air date / in-season sport) is more specific, so it
       // wins when both apply. The routine check-in cadence is the fallback,
       // and only speaks up once it's actually due — see computeCadencePrompt.
-      const suggestion = computeSuggestion(r) || computeCadencePrompt(r, todayStr);
+      const suggestion = computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r);
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
