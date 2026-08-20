@@ -292,11 +292,11 @@
         <div class="add-grid-top">
           <div class="field">
             <label for="add-name">Service</label>
-            <input type="text" id="add-name" list="service-suggestions" placeholder="Netflix" required />
+            <input type="text" id="add-name" list="service-suggestions" placeholder="Type any service — Netflix, PBS Masterpiece, anything" required />
             <datalist id="service-suggestions">
               <option value="Netflix"></option>
               <option value="Prime Video"></option>
-              <option value="Max"></option>
+              <option value="HBO Max"></option>
               <option value="Disney+"></option>
               <option value="YouTube Premium"></option>
               <option value="Paramount+"></option>
@@ -305,6 +305,16 @@
               <option value="Apple TV+"></option>
               <option value="ESPN+"></option>
               <option value="Crunchyroll"></option>
+              <option value="AMC+"></option>
+              <option value="Starz"></option>
+              <option value="MGM+"></option>
+              <option value="BritBox"></option>
+              <option value="PBS Masterpiece"></option>
+              <option value="Discovery+"></option>
+              <option value="Sling TV"></option>
+              <option value="Philo"></option>
+              <option value="Acorn TV"></option>
+              <option value="Shudder"></option>
             </datalist>
           </div>
           <div class="field">
@@ -319,6 +329,7 @@
             </select>
           </div>
         </div>
+        <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
         <div class="field">
           <label for="add-show">Waiting for a show? (optional)</label>
           <input type="text" id="add-show" placeholder="e.g. Stranger Things" />
@@ -398,9 +409,14 @@
     netflix:'https://www.netflix.com/account',
     hulu:'https://secure.hulu.com/account',
     'disney+':'https://www.disneyplus.com/account/subscription',
-    max:'https://www.max.com/settings/subscription',
+    max:'https://www.max.com/settings/subscription',            // legacy rows saved before the HBO Max rename
+    'hbo max':'https://www.max.com/settings/subscription',
     'prime video':'https://www.amazon.com/mc/pipelines/subscription',
-    'youtube premium':'https://myaccount.google.com/subscriptions'
+    'youtube premium':'https://myaccount.google.com/subscriptions',
+    'paramount+':'https://www.paramountplus.com/account/',
+    peacock:'https://www.peacocktv.com/account/subscription',
+    'apple tv+':'https://apps.apple.com/account/subscriptions',
+    crunchyroll:'https://www.crunchyroll.com/account/membership'
   };
   function manageUrlFor(name){
     const key = (name || '').trim().toLowerCase();
