@@ -172,6 +172,7 @@
   .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
   .sub-row:first-child{ border-top:none; }
   .sub-name{ font-weight:700; min-width:140px; }
+  .svc-dot{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:8px; vertical-align:middle; border:1.5px solid var(--ink); }
   .sub-price{ color:var(--text-dim); font-size:13.5px; min-width:70px; }
   .badge{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; }
   .badge.active{ background:rgba(30,158,100,0.14); color:var(--status-active-deep); }
@@ -576,6 +577,50 @@
     return MANAGE_URLS[key] || ('https://www.google.com/search?q=' + encodeURIComponent(name + ' manage subscription'));
   }
 
+  // A small colored dot next to each service's name, so rows are
+  // recognizable at a glance separately from the Pause/Activate button
+  // (which always means "action available," not "which service this is").
+  // Known services get their real brand color; anything else gets a stable
+  // color from a small fallback set, picked by hashing the name so the same
+  // custom service always lands on the same color across reloads.
+  const SERVICE_BRAND_COLORS = {
+    netflix:'#E50914',
+    hulu:'#1CE783',
+    'disney+':'#113CCF',
+    max:'#002BE7',            // legacy rows saved before the HBO Max rename
+    'hbo max':'#002BE7',
+    'prime video':'#00A8E1',
+    'youtube premium':'#FF0000',
+    'youtube tv':'#FF0000',
+    'paramount+':'#0064FF',
+    peacock:'#6C4CE0',
+    'apple tv+':'#3A3A3C',
+    'espn+':'#D00027',
+    crunchyroll:'#F47521',
+    'amc+':'#E4A11B',
+    starz:'#8E1537',
+    'mgm+':'#C9A227',
+    britbox:'#E4002B',
+    'pbs masterpiece':'#6E2142',
+    'discovery+':'#2AA9E0',
+    'sling tv':'#FB6B03',
+    philo:'#7C3AED',
+    'acorn tv':'#2F6F4E',
+    shudder:'#C81D25',
+    'cable tv':'#5B6B7A'
+  };
+  const FALLBACK_SVC_COLORS = ['#4FB6E8', '#2EC4B6', '#FFC93C', '#9C5B1E', '#7C3AED', '#E4A11B', '#146B4A', '#D00027'];
+  function hashStr(s){
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+  function svcColorFor(name){
+    const key = (name || '').trim().toLowerCase();
+    if (SERVICE_BRAND_COLORS[key]) return SERVICE_BRAND_COLORS[key];
+    return FALLBACK_SVC_COLORS[hashStr(key) % FALLBACK_SVC_COLORS.length];
+  }
+
   function showToast(msg){
     const toast = document.getElementById('toast');
     document.getElementById('toast-text').textContent = msg;
@@ -899,7 +944,7 @@
       const suggestion = computeSuggestion(r);
 
       row.innerHTML = `
-        <span class="sub-name">${escapeHtml(r.service_name)}</span>
+        <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
