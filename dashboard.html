@@ -178,11 +178,10 @@
   .badge.active{ background:rgba(30,158,100,0.14); color:var(--status-active-deep); }
   .badge.paused{ background:rgba(156,146,130,0.18); color:var(--text-dim); }
   .sub-meta{ display:flex; flex-direction:column; gap:3px; }
-  .sub-reminder{ font-size:12px; color:var(--text-dimmer); }
   .sub-show{ font-size:12px; color:var(--accent-3-deep); }
   .sub-suggestion{ font-size:12px; font-weight:700; }
   .sub-suggestion.activate{ color:var(--status-active-deep); }
-  .sub-suggestion.pause{ color:var(--text-dim); }
+  .sub-suggestion.pause{ color:var(--status-paused-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
@@ -855,6 +854,25 @@
     return null;
   }
 
+  // Fallback prompt for rows with no favorites tagged (computeSuggestion
+  // returned null), based on the routine check-in cadence set by
+  // computeReminder(). Only produces text once the check-in date has
+  // actually arrived — a future date isn't something to act on yet, so
+  // showing it early was just confusing, inert text. Once due, it's phrased
+  // as the same kind of "Suggested: ..." call to action as the favorite-
+  // based suggestions above, so every row prompts the customer to do
+  // something rather than silently displaying a status.
+  function computeCadencePrompt(row, todayStr){
+    if (!row.next_reminder_date || row.next_reminder_date > todayStr) return null;
+    if (row.reminder_type === 'resume') {
+      const reason = row.reminder_source === 'air_date'
+        ? 'a new season just started'
+        : "it's been about a month since you paused it";
+      return { type: 'activate', text: `Suggested: Activate — ${reason}` };
+    }
+    return { type: 'pause', text: "Suggested: Consider pausing — you haven't checked in on this in about 2 months" };
+  }
+
   // ---- Auth tab switching ----
   let mode = 'login';
   document.querySelectorAll('.auth-tab').forEach(tab => {
@@ -921,6 +939,7 @@
     rowsById = {};
 
     let monthly = 0, activeCount = 0, pausedCount = 0, pausedMonthly = 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
     rows.forEach(r => {
       rowsById[r.id] = r;
       if (r.status === 'active') { monthly += Number(r.monthly_price); activeCount++; }
@@ -929,19 +948,17 @@
       const row = document.createElement('div');
       row.className = 'sub-row';
 
-      let reminderText = '';
-      if (r.next_reminder_date) {
-        const label = r.reminder_type === 'resume' ? 'Resume check-in' : 'Pause check-in';
-        const why = r.reminder_source === 'air_date' ? 'new season confirmed' : 'routine check-in';
-        reminderText = `${label}: ${r.next_reminder_date} (${why})`;
-      }
       let showText = '';
       if (r.show_query) {
         showText = r.show_next_air_date
           ? `Waiting for ${escapeHtml(r.show_query)} — next air date ${r.show_next_air_date}`
           : `Waiting for ${escapeHtml(r.show_query)} — no confirmed air date yet, checking daily`;
       }
-      const suggestion = computeSuggestion(r);
+      // One prompt per row, not two competing ones: a favorite-based
+      // suggestion (real air date / in-season sport) is more specific, so it
+      // wins when both apply. The routine check-in cadence is the fallback,
+      // and only speaks up once it's actually due — see computeCadencePrompt.
+      const suggestion = computeSuggestion(r) || computeCadencePrompt(r, todayStr);
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
@@ -949,7 +966,6 @@
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
           ${showText ? `<span class="sub-show">${showText}</span>` : ''}
-          ${reminderText ? `<span class="sub-reminder">${reminderText}</span>` : ''}
           ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
