@@ -343,6 +343,7 @@
             <li>Real-time pause &amp; resume reminders</li>
             <li>Direct links to cancel &amp; downgrade</li>
             <li>Real-time price-hike alerts</li>
+            <li>Personalized plan optimizer — see what you'd save</li>
           </ul>
           <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-primary" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
         </div>
@@ -512,21 +513,28 @@
 
     <div class="panel">
       <div class="analyzer" id="analyzer">
-        <div class="analyzer-head">
-          <p>See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
+        <div class="upgrade-lock" id="analyzer-locked" hidden>
+          <p><strong>Analyzing your subscriptions against better plans is a Pro feature.</strong> Upgrade to see your current setup, our recommended setup, and exactly what you'd save.</p>
+          <a href="#upgrade-pro-link" class="btn btn-primary btn-sm">Upgrade to Pro →</a>
         </div>
 
-        <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
-
-        <div class="analyzer-results" id="analyzer-results" hidden>
-          <div class="result-stats">
-            <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
-            <div class="stat-arrow">→</div>
-            <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
-            <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings-yr">$0/yr</span></div>
+        <div id="analyzer-body">
+          <div class="analyzer-head">
+            <p>See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
           </div>
-          <div class="actions-list" id="actions-list"></div>
-          <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
+
+          <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
+
+          <div class="analyzer-results" id="analyzer-results" hidden>
+            <div class="result-stats">
+              <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
+              <div class="stat-arrow">→</div>
+              <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
+              <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings-yr">$0/yr</span></div>
+            </div>
+            <div class="actions-list" id="actions-list"></div>
+            <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
+          </div>
         </div>
       </div>
     </div>
@@ -762,14 +770,18 @@
   function applyPlanGating(){
     const body = document.getElementById('fav-panel-body');
     const locked = document.getElementById('fav-panel-locked');
+    const analyzerBody = document.getElementById('analyzer-body');
+    const analyzerLocked = document.getElementById('analyzer-locked');
     const note = document.getElementById('current-plan-note');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
+    if (analyzerBody) analyzerBody.hidden = !pro;
+    if (analyzerLocked) analyzerLocked.hidden = pro;
     if (note) {
       note.textContent = pro
-        ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders are unlocked below.`
-        : "You're on the Free plan. Upgrade to unlock real-time pause & resume reminders.";
+        ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders and the plan optimizer are unlocked below.`
+        : "You're on the Free plan. Upgrade to unlock real-time pause & resume reminders and the plan optimizer.";
     }
     // Row-level suggestion text is Pro-gated too, so re-render with the
     // current plan now applied.
