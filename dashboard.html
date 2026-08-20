@@ -205,56 +205,6 @@
   /* ---------- Optimizer (ported from the landing page analyzer) ---------- */
   .analyzer{ text-align:left; display:flex; flex-direction:column; gap:22px; }
   .analyzer-head p{ font-size:13.5px; color:var(--text-dimmer); }
-  .analyzer-section{ display:flex; flex-direction:column; gap:10px; }
-  .analyzer-section.two-col{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
-  .a-label{ font-size:12.5px; font-weight:700; letter-spacing:0.03em; color:var(--text-dim); text-transform:uppercase; }
-  .svc-grid{ display:flex; flex-wrap:wrap; gap:8px; }
-  .svc-grid > div{ display:contents; }
-  .svc-chip{
-    display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px;
-    background:var(--surface-2); border:1.5px solid var(--border-strong); color:var(--text-dim);
-    font-size:13.5px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
-  }
-  .svc-chip:hover{ border-color:var(--ink); color:var(--text); }
-  .svc-chip.active{ background:var(--gradient); color:var(--ink); border-color:var(--ink); }
-  .svc-chip-add{ background:none; border-style:dashed; margin-top:2px; }
-  .svc-chip-add:hover{ color:var(--accent-3-deep); border-color:var(--accent-3-deep); }
-  .custom-add-form input::placeholder{ color:var(--text-dimmer); }
-  .svc-detail{
-    display:none; grid-template-columns:1fr 1fr; gap:10px; background:var(--surface); border:1.5px solid var(--border-strong);
-    border-radius:10px; padding:12px; margin-top:-2px; width:100%;
-  }
-  .svc-detail.show{ display:grid; }
-  .svc-detail-full{ grid-column:1 / -1; font-size:12.5px; color:var(--text-dimmer); margin-bottom:-2px; }
-  .a-select{
-    width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg);
-    color:var(--text); font-size:13px; font-family:inherit; outline:none;
-  }
-  .a-select:focus{ border-color:var(--accent-deep); }
-  .tag-field{ display:flex; }
-  .tag-field input{
-    width:100%; padding:10px 14px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--surface);
-    color:var(--text); font-size:13.5px; font-family:inherit; outline:none;
-  }
-  .tag-field input:focus{ border-color:var(--accent-deep); }
-  .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
-  .tag-pill{
-    display:inline-flex; align-items:center; gap:6px; background:rgba(79,182,232,0.12); color:var(--accent-deep);
-    border:1px solid rgba(79,182,232,0.3); font-size:12.5px; padding:5px 8px 5px 12px; border-radius:999px;
-  }
-  .tag-pill button{ background:none; border:none; color:inherit; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
-  .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
-  .chip-toggle{
-    padding:8px 14px; border-radius:999px; background:var(--surface-2); border:1.5px solid var(--border-strong);
-    color:var(--text-dim); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
-  }
-  .chip-toggle:hover{ border-color:var(--accent-3-deep); color:var(--text); }
-  .chip-toggle.active{ background:rgba(46,196,182,0.18); border-color:var(--accent-3-deep); color:var(--accent-3-deep); }
-  .check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--text-dim); margin-bottom:12px; cursor:pointer; }
-  .check-row input{ width:16px; height:16px; accent-color:var(--accent); flex-shrink:0; }
-  .budget-field{ display:flex; align-items:center; gap:6px; background:var(--bg); border:1.5px solid var(--border-strong); border-radius:8px; padding:9px 12px; }
-  .budget-field span{ color:var(--text-dimmer); font-size:13px; }
-  .budget-field input{ flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13.5px; font-family:inherit; width:100%; }
   .analyze-btn{ width:100%; padding:14px; font-size:15px; }
   .analyzer-results{ display:flex; flex-direction:column; gap:18px; padding-top:6px; border-top:1px solid var(--border); }
   .result-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -284,10 +234,7 @@
   .a-link:hover{ text-decoration:underline; }
   .analyzer-disclaimer{ font-size:11.5px; color:var(--text-dimmer); text-align:center; }
   .analyzer-empty{ font-size:13px; color:var(--text-dimmer); padding:8px 2px; }
-  .prefill-note{ font-size:12px; color:var(--accent-3-deep); background:rgba(46,196,182,0.10); border:1px solid rgba(46,196,182,0.25); border-radius:8px; padding:8px 12px; }
   @media (max-width: 640px){
-    .analyzer-section.two-col{ grid-template-columns:1fr; }
-    .svc-detail{ grid-template-columns:1fr; }
     .result-stats{ flex-direction:column; }
     .stat-arrow{ transform:rotate(90deg); }
   }
@@ -481,66 +428,9 @@
     </div>
 
     <div class="panel">
-      <h3>Optimize your subscriptions</h3>
       <div class="analyzer" id="analyzer">
         <div class="analyzer-head">
-          <p>Pre-filled from what you're already tracking above. Add your household, budget, and preferences, then run it — this all runs in your browser using published list prices, nothing is sent anywhere.</p>
-        </div>
-        <p class="prefill-note" id="prefill-note" hidden></p>
-
-        <div class="analyzer-section">
-          <label class="a-label">Which services do you subscribe to?</label>
-          <div class="svc-grid" id="svc-grid"></div>
-
-          <div class="tag-list" id="custom-svc-list"></div>
-
-          <button type="button" class="svc-chip svc-chip-add" id="add-custom-btn">+ Add a service not listed</button>
-          <div class="svc-detail custom-add-form" id="custom-add-form">
-            <div class="svc-detail-full">Add a custom service</div>
-            <div><input type="text" id="custom-name" class="a-select" placeholder="Service name, e.g. Britbox" /></div>
-            <div><div class="budget-field"><span>$</span><input type="number" id="custom-price" placeholder="e.g. 15" min="0" step="0.01" /><span>/mo</span></div></div>
-            <div>
-              <select id="custom-freq" class="a-select">
-                <option value="daily">Watch daily</option>
-                <option value="weekly" selected>Watch weekly</option>
-                <option value="occasionally">Occasionally</option>
-                <option value="rarely">Rarely</option>
-                <option value="never">Never / forgot I had it</option>
-              </select>
-            </div>
-            <div><button type="button" class="btn btn-primary btn-sm" id="custom-add-confirm" style="width:100%;">Add it</button></div>
-          </div>
-        </div>
-
-        <div class="analyzer-section two-col">
-          <div>
-            <label class="a-label">Favorite shows or movies</label>
-            <div class="tag-field"><input type="text" id="fav-text" placeholder="Type a title, hit Enter" /></div>
-            <div class="tag-list" id="fav-tags"></div>
-          </div>
-          <div>
-            <label class="a-label">Sports you care about</label>
-            <div class="chip-row" id="sports-grid"></div>
-          </div>
-        </div>
-
-        <div class="analyzer-section two-col">
-          <div>
-            <label class="a-label">Household size</label>
-            <select id="household" class="a-select">
-              <option value="1">Just me</option>
-              <option value="2">2 people</option>
-              <option value="4">3&ndash;4 people</option>
-              <option value="5">5+ people</option>
-            </select>
-            <label class="a-label" style="display:block; margin:14px 0 8px;">Monthly budget</label>
-            <div class="budget-field"><span>$</span><input type="number" id="budget" placeholder="e.g. 80" min="0" step="1" /><span>/mo</span></div>
-          </div>
-          <div>
-            <label class="a-label" style="display:block; margin-bottom:8px;">Preferences</label>
-            <label class="check-row"><input type="checkbox" id="ads-ok" checked /> I don't mind ads to save money</label>
-            <label class="check-row"><input type="checkbox" id="kids-important" /> Kid-friendly content matters</label>
-          </div>
+          <p>See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
         </div>
 
         <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
@@ -785,12 +675,10 @@
 
     renderSavingsBanner(rows, pausedMonthly);
     renderAnalytics(rows);
-    // Cache the latest rows and hand them to the optimizer panel below. The two
-    // are separate <script> blocks, and on a very fast (e.g. cached) load this
-    // one can finish before the optimizer script has even parsed, so we cache
-    // the rows either way and let whichever side runs second do the prefill.
+    // Cache the latest rows so the "Analyze My Subscriptions" panel below
+    // (a separate <script> block) can run the analysis straight off them
+    // when clicked, without needing its own re-fetch.
     window.__lastSubRows = rows;
-    if (window.__prefillOptimizer) window.__prefillOptimizer(rows);
   }
 
   // Real version of the marketing page's "$187/mo in potential savings
@@ -1499,156 +1387,17 @@
     };
   }
 
-  const svcGrid = document.getElementById('svc-grid');
-  const sportsGrid = document.getElementById('sports-grid');
-  const favText = document.getElementById('fav-text');
-  const favTags = document.getElementById('fav-tags');
   const resultsEl = document.getElementById('analyzer-results');
   const actionsListEl = document.getElementById('actions-list');
-  if (!svcGrid) return; // optimizer not on this page
+  if (!resultsEl) return; // optimizer not on this page
 
-  const selectedServices = {}; // id -> true
-  const selectedSports = {};   // id -> true
-  const favorites = [];
-
-  function bestDefaultTier(svc){
-    const adFreeTiers = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
-    return (adFreeTiers[0] || svc.tiers[svc.tiers.length-1]).id;
-  }
-
-  const svcWraps = {}; // serviceId -> wrapper element, so the prefill step can find each row
-  Object.values(SERVICES).forEach(svc => {
-    const wrap = document.createElement('div');
-    wrap.style.width = '100%';
-
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'svc-chip';
-    chip.textContent = svc.name;
-    wrap.appendChild(chip);
-
-    const detail = document.createElement('div');
-    detail.className = 'svc-detail';
-    detail.innerHTML = `
-      <div class="svc-detail-full">${svc.name} — current plan &amp; usage</div>
-      <div>
-        <select class="a-select tier-select" data-service="${svc.id}">
-          ${svc.tiers.map(t => `<option value="${t.id}">${t.name} — ${fmt(t.price)}/mo</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <select class="a-select freq-select" data-service="${svc.id}">
-          <option value="daily">Watch daily</option>
-          <option value="weekly" selected>Watch weekly</option>
-          <option value="occasionally">Occasionally</option>
-          <option value="rarely">Rarely</option>
-          <option value="never">Never / forgot I had it</option>
-        </select>
-      </div>`;
-    wrap.appendChild(detail);
-    svcGrid.appendChild(wrap);
-    svcWraps[svc.id] = wrap;
-
-    const tierSelect = detail.querySelector('.tier-select');
-    tierSelect.value = bestDefaultTier(svc);
-
-    chip.addEventListener('click', () => {
-      const active = chip.classList.toggle('active');
-      detail.classList.toggle('show', active);
-      if (active) selectedServices[svc.id] = true; else delete selectedServices[svc.id];
-    });
-  });
-
-  Object.keys(SPORT_LABELS).forEach(sp => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip-toggle';
-    chip.textContent = SPORT_LABELS[sp];
-    chip.addEventListener('click', () => {
-      const active = chip.classList.toggle('active');
-      if (active) selectedSports[sp] = true; else delete selectedSports[sp];
-    });
-    sportsGrid.appendChild(chip);
-  });
-
-  function renderTags(){
-    favTags.innerHTML = '';
-    favorites.forEach((f, i) => {
-      const pill = document.createElement('span');
-      pill.className = 'tag-pill';
-      pill.innerHTML = `${f} <button type="button" aria-label="Remove">✕</button>`;
-      pill.querySelector('button').addEventListener('click', () => { favorites.splice(i, 1); renderTags(); });
-      favTags.appendChild(pill);
-    });
-  }
-  favText.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && favText.value.trim()) {
-      e.preventDefault();
-      favorites.push(favText.value.trim());
-      favText.value = '';
-      renderTags();
-    }
-  });
-
-  // Custom services — for anything not in our built-in catalog (a niche or regional
-  // streaming app, a work perk, etc). Scored on usage frequency only, since we have no
-  // pricing tiers or content catalog to match against.
-  const customServices = [];
-  let customCounter = 0;
-  const customList = document.getElementById('custom-svc-list');
-  const addCustomBtn = document.getElementById('add-custom-btn');
-  const customAddForm = document.getElementById('custom-add-form');
-  const customNameInput = document.getElementById('custom-name');
-  const customPriceInput = document.getElementById('custom-price');
-  const customFreqSelect = document.getElementById('custom-freq');
-
-  addCustomBtn.addEventListener('click', () => {
-    customAddForm.classList.toggle('show');
-    if (customAddForm.classList.contains('show')) customNameInput.focus();
-  });
-
-  function renderCustomList(){
-    customList.innerHTML = '';
-    customServices.forEach((c, i) => {
-      const pill = document.createElement('span');
-      pill.className = 'tag-pill';
-      pill.innerHTML = `${c.name} — ${fmt(c.price)}/mo <button type="button" aria-label="Remove">✕</button>`;
-      pill.querySelector('button').addEventListener('click', () => { customServices.splice(i, 1); renderCustomList(); });
-      customList.appendChild(pill);
-    });
-  }
-
-  function addCustomService(){
-    const name = customNameInput.value.trim();
-    const price = parseFloat(customPriceInput.value);
-    const nameOk = !!name;
-    const priceOk = !isNaN(price) && price > 0;
-    customNameInput.style.borderColor = nameOk ? '' : '#1D5FA8';
-    customPriceInput.parentElement.style.borderColor = priceOk ? '' : '#1D5FA8';
-    if (!nameOk || !priceOk) return;
-
-    customCounter++;
-    customServices.push({ id: 'custom-' + customCounter, name, price, frequency: customFreqSelect.value });
-    renderCustomList();
-
-    customNameInput.value = '';
-    customPriceInput.value = '';
-    customFreqSelect.value = 'weekly';
-    customNameInput.style.borderColor = '';
-    customPriceInput.parentElement.style.borderColor = '';
-    customAddForm.classList.remove('show');
-  }
-  document.getElementById('custom-add-confirm').addEventListener('click', addCustomService);
-  customPriceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
-  customNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
-
-  // ---- Pre-fill from this customer's real tracked subscriptions ----
-  // Matches each tracked row to our known catalog by name where possible
-  // (so the smart tier/bundle/sports logic applies); anything unrecognized
-  // becomes a custom service at its real price. Usage frequency defaults
-  // from the row's real status (active -> weekly, paused -> rarely) since
-  // that's the one usage signal we actually have — it's editable before
-  // running the analysis.
+  // ---- Build analyzer input straight from this customer's real tracked
+  // subscriptions — no manual re-entry. Matches each tracked row to our
+  // known catalog by name where possible (so the smart tier/bundle logic
+  // applies); anything unrecognized becomes a custom service at its real
+  // price. Usage frequency defaults from the row's real status (active ->
+  // weekly, paused -> rarely), since that's the one usage signal we
+  // actually have.
   const SERVICE_ALIASES = {
     hbomax:'max', max:'max', primevideo:'primevideo', amazonprimevideo:'primevideo', prime:'primevideo',
     disney:'disney', disneyplus:'disney', appletv:'appletv', appletvplus:'appletv', youtubetv:'youtubetv',
@@ -1671,68 +1420,35 @@
     return best;
   }
 
-  function prefillFromReal(rows){
-    // Reset any prior prefill so re-loading subscriptions doesn't double up.
-    Object.keys(selectedServices).forEach(id => delete selectedServices[id]);
-    Object.values(svcWraps).forEach(wrap => {
-      wrap.querySelector('.svc-chip').classList.remove('active');
-      wrap.querySelector('.svc-detail').classList.remove('show');
-    });
-    customServices.length = 0;
-
-    const note = document.getElementById('prefill-note');
-    if (!rows || !rows.length) { note.hidden = true; renderCustomList(); return; }
-
-    let matched = 0, custom = 0;
-    rows.forEach(r => {
+  function buildInputFromReal(rows){
+    const subscriptions = [];
+    const customSubscriptions = [];
+    let customCounter = 0;
+    (rows || []).forEach(r => {
       const freqDefault = r.status === 'active' ? 'weekly' : 'rarely';
       const matchId = matchServiceId(r.service_name);
-      if (matchId && svcWraps[matchId]) {
-        matched++;
-        selectedServices[matchId] = true;
-        const wrap = svcWraps[matchId];
-        wrap.querySelector('.svc-chip').classList.add('active');
-        wrap.querySelector('.svc-detail').classList.add('show');
+      if (matchId) {
         const svc = SERVICES[matchId];
         const tier = nearestTier(svc, Number(r.monthly_price) || 0);
-        wrap.querySelector('.tier-select').value = tier.id;
-        wrap.querySelector('.freq-select').value = freqDefault;
+        subscriptions.push({ serviceId: matchId, tierId: tier.id, frequency: freqDefault });
       } else {
-        custom++;
         customCounter++;
-        customServices.push({ id: 'custom-' + customCounter, name: r.service_name, price: Number(r.monthly_price) || 0, frequency: freqDefault });
+        customSubscriptions.push({ id: 'custom-' + customCounter, name: r.service_name, price: Number(r.monthly_price) || 0, frequency: freqDefault });
       }
     });
-    renderCustomList();
-
-    note.hidden = false;
-    note.textContent = `Pre-filled ${matched + custom} subscription${(matched + custom) === 1 ? '' : 's'} from your tracked list above` +
-      (custom ? ` (${custom} as custom — not in our catalog yet, so tier/bundle suggestions don't apply to ${custom === 1 ? 'it' : 'them'}).` : '.') +
-      ' Usage defaults to weekly for active, rarely for paused — adjust any of it below before running the analysis.';
+    return { subscriptions, customSubscriptions };
   }
-  window.__prefillOptimizer = prefillFromReal;
-  // Cover the reverse race: if the main dashboard script already loaded the
-  // customer's subscriptions before this script finished parsing, run the
-  // prefill now using the cached rows instead of waiting for a load that
-  // already happened.
-  if (window.__lastSubRows) prefillFromReal(window.__lastSubRows);
 
   const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
   const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', add:'+', bundle:'◆', keep:'✓', info:'i' };
   const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
 
   document.getElementById('analyze-btn').addEventListener('click', () => {
-    const subscriptions = Object.keys(selectedServices).map(id => {
-      const tierSel = svcGrid.querySelector(`.tier-select[data-service="${id}"]`);
-      const freqSel = svcGrid.querySelector(`.freq-select[data-service="${id}"]`);
-      return { serviceId:id, tierId: tierSel.value, frequency: freqSel.value };
-    });
+    const rows = window.__lastSubRows || [];
+    const { subscriptions, customSubscriptions } = buildInputFromReal(rows);
 
-    const hasSports = Object.keys(selectedSports).length > 0;
-    const hasFavorites = favorites.length > 0;
-    const hasCustom = customServices.length > 0;
-    if (!subscriptions.length && !hasCustom && !hasSports && !hasFavorites) {
-      actionsListEl.innerHTML = '<p class="analyzer-empty">Select at least one subscription, sport, or favorite above to run the analysis.</p>';
+    if (!subscriptions.length && !customSubscriptions.length) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Add a subscription above to run the analysis.</p>';
       document.getElementById('stat-current').textContent = '$0/mo';
       document.getElementById('stat-recommended').textContent = '$0/mo';
       document.getElementById('stat-savings-yr').textContent = '$0/yr';
@@ -1741,16 +1457,15 @@
       return;
     }
 
-    const budgetInput = document.getElementById('budget').value;
     const result = analyze({
       subscriptions,
-      customSubscriptions: customServices,
-      favorites,
-      sports: Object.keys(selectedSports),
-      household: parseInt(document.getElementById('household').value, 10) || 1,
-      adsOk: document.getElementById('ads-ok').checked,
-      kidsImportant: document.getElementById('kids-important').checked,
-      budget: budgetInput ? parseFloat(budgetInput) : Infinity
+      customSubscriptions,
+      favorites: [],
+      sports: [],
+      household: 1,
+      adsOk: true,
+      kidsImportant: false,
+      budget: Infinity
     });
 
     document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
