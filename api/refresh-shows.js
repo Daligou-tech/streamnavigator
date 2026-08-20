@@ -1,8 +1,8 @@
-// Daily scheduled job (see vercel.json) that keeps two things fresh across
-// EVERY customer's tracked subscriptions — this is the only part of the
-// "show air-date monitoring" feature that has to run on a server instead of
-// in the customer's browser, because it touches every customer's rows, not
-// just the one currently logged in.
+// Daily scheduled job (see vercel.json) that keeps things fresh across EVERY
+// customer's tracked subscriptions — this is the only part of the "real
+// data instead of marketing mockups" work that has to run on a server
+// instead of in the customer's browser, because it touches every
+// customer's rows, not just the one currently logged in.
 //
 //   1. For any row where the customer told us what show they're waiting on,
 //      re-check TVmaze (https://api.tvmaze.com — free, no key required, data
@@ -12,6 +12,12 @@
 //   2. For any row whose routine (non-air-date) check-in date has already
 //      passed, roll it forward so it never goes stale just because the
 //      customer hasn't happened to visit the dashboard.
+//   3. Write one savings_history row per customer per day (their current
+//      monthly spend, paused savings, and active/paused counts), which is
+//      what powers the real "money saved over time" chart on the dashboard.
+//      This has no back-filled/fake history — it only ever logs today, so
+//      the chart starts empty and fills in one real point per day from
+//      whenever the savings_history migration is run.
 //
 // Requires three Vercel project environment variables (Project Settings ->
 // Environment Variables -> Production), none of which are ever sent to the
@@ -51,7 +57,7 @@ module.exports = async function handler(req, res) {
   };
 
   const listRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,status,status_changed_at,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source`,
+    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,user_id,status,status_changed_at,monthly_price,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source`,
     { headers }
   );
   if (!listRes.ok) {
@@ -115,8 +121,69 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  res.status(200).json({ ok: true, rowsProcessed: rows.length, showsChecked, remindersAdvanced, errors });
+  // 3) Log today's savings snapshot, one row per customer.
+  let usersSnapshotted = 0;
+  let snapshotErrors = 0;
+  const byUser = {};
+  for (const row of rows) {
+    if (!row.user_id) continue;
+    if (!byUser[row.user_id]) {
+      byUser[row.user_id] = { monthly_spend: 0, paused_monthly_savings: 0, active_count: 0, paused_count: 0 };
+    }
+    const bucket = byUser[row.user_id];
+    const price = Number(row.monthly_price) || 0;
+    if (row.status === 'active') {
+      bucket.monthly_spend += price;
+      bucket.active_count++;
+    } else {
+      bucket.paused_monthly_savings += price;
+      bucket.paused_count++;
+    }
+  }
+
+  const snapshotRows = Object.keys(byUser).map((user_id) => ({
+    user_id,
+    snapshot_date: todayStr,
+    monthly_spend: round2(byUser[user_id].monthly_spend),
+    paused_monthly_savings: round2(byUser[user_id].paused_monthly_savings),
+    active_count: byUser[user_id].active_count,
+    paused_count: byUser[user_id].paused_count,
+  }));
+
+  if (snapshotRows.length) {
+    try {
+      const snapRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/savings_history?on_conflict=user_id,snapshot_date`,
+        {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(snapshotRows),
+        }
+      );
+      if (snapRes.ok) {
+        usersSnapshotted = snapshotRows.length;
+      } else {
+        snapshotErrors = snapshotRows.length;
+      }
+    } catch (err) {
+      snapshotErrors = snapshotRows.length;
+    }
+  }
+
+  res.status(200).json({
+    ok: true,
+    rowsProcessed: rows.length,
+    showsChecked,
+    remindersAdvanced,
+    usersSnapshotted,
+    snapshotErrors,
+    errors,
+  });
 };
+
+function round2(n) {
+  return Math.round((Number(n) || 0) * 100) / 100;
+}
 
 async function fetchNextAirDate(tvmazeId, showQuery) {
   try {
