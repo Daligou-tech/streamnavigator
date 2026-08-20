@@ -104,6 +104,10 @@
   .btn-primary:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px); }
   .btn-ghost{ background:var(--surface); color:var(--text); box-shadow:var(--shadow-hard-xs); }
   .btn-ghost:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  .btn-pause{ background:var(--yellow); color:var(--ink); font-weight:800; box-shadow:var(--shadow-hard-xs); }
+  .btn-pause:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  .btn-activate{ background:var(--status-active); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
+  .btn-activate:hover{ background:var(--status-active-deep); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
   .btn-sm{ padding:7px 14px; font-size:13px; }
   .btn:disabled{ opacity:0.55; cursor:not-allowed; }
   .btn:disabled:hover{ transform:none; box-shadow:var(--shadow-hard-sm); }
@@ -120,6 +124,7 @@
   .field label{ display:block; font-size:12.5px; font-weight:700; color:var(--text-dim); margin-bottom:6px; }
   .field input{ width:100%; padding:12px 14px; border-radius:var(--radius-sm); border:2px solid var(--ink); background:var(--surface); color:var(--text); font-size:14.5px; outline:none; font-family:inherit; }
   .field input:focus{ border-color:var(--accent-deep); box-shadow:var(--shadow-hard-xs); }
+  .field-hint{ font-size:12.5px; color:var(--text-dimmer); line-height:1.5; margin-bottom:18px; max-width:640px; }
   .auth-submit{ width:100%; margin-top:6px; }
   .auth-msg{ font-size:13px; margin-top:12px; text-align:center; }
   .auth-msg.error{ color:var(--danger-deep); font-weight:600; }
@@ -274,6 +279,7 @@
 
     <div class="panel">
       <h3>Add a subscription to track</h3>
+      <p class="field-hint">Reminder date is optional: set one and we'll flag it as a pause reminder (if the service is Active) or a resume reminder (if it's Paused) — you'll see it right next to that subscription below.</p>
       <form id="add-form" class="add-grid">
         <div class="field">
           <label for="add-name">Service</label>
@@ -474,7 +480,7 @@
         <span class="sub-reminder">${reminderText}</span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
-          <button class="btn btn-ghost btn-sm" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause' : 'Resume'}</button>
+          <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
