@@ -110,6 +110,8 @@
   .btn-pause:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
   .btn-activate{ background:var(--status-active); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
   .btn-activate:hover{ background:var(--status-active-deep); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  .btn-danger-ghost{ background:var(--surface); color:var(--danger-deep); border-color:var(--danger-deep); box-shadow:var(--shadow-hard-xs); }
+  .btn-danger-ghost:hover{ background:rgba(178,58,58,0.08); box-shadow:2px 2px 0 var(--danger-deep); transform:translate(1px,1px); }
   .btn-sm{ padding:7px 14px; font-size:13px; }
   .btn:disabled{ opacity:0.55; cursor:not-allowed; }
   .btn:disabled:hover{ transform:none; box-shadow:var(--shadow-hard-sm); }
@@ -909,7 +911,7 @@
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
           <button class="btn btn-ghost btn-sm" data-action="edit-show" data-id="${r.id}">${r.show_query ? 'Edit show' : 'Set show'}</button>
           <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
-          <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
+          <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
       list.appendChild(row);
