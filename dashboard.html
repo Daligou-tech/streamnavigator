@@ -167,7 +167,7 @@
       StreamNavigator
     </a>
     <div class="nav-right">
-      <a href="https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00" id="manage-billing-link" class="btn btn-ghost btn-sm">Manage Billing</a>
+      <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" class="btn btn-ghost btn-sm">Manage Billing</a>
       <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
     </div>
   </nav>
@@ -288,7 +288,7 @@
   // ---- Stripe billing portal: pre-fill the logged-in customer's email so
   // they don't have to retype it on Stripe's side (still requires Stripe's
   // own email verification — there's no way to skip that step entirely). ----
-  const STRIPE_PORTAL_BASE_URL = 'https://billing.stripe.com/p/login/test_cNi7sLeNK0WS8Mccho3gk00';
+  const STRIPE_PORTAL_BASE_URL = 'https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00';
   function setBillingLink(email){
     const link = document.getElementById('manage-billing-link');
     link.href = email
