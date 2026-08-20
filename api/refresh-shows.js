@@ -196,6 +196,7 @@ module.exports = async function handler(req, res) {
           const patch = { checked_at: new Date().toISOString() };
           if (found) {
             patch.next_air_date = found.date;
+            patch.currently_airing = !!found.currentlyAiring;
             if (found.id) patch.tvmaze_show_id = found.id;
           }
           const upRes = await fetch(`${SUPABASE_URL}/rest/v1/favorite_watches?id=eq.${fav.id}`, {
@@ -235,16 +236,33 @@ function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
+// TVmaze's "next episode" field only ever points to a FUTURE, unaired
+// episode — it goes blank once a show has released its most recent episode
+// and TVmaze doesn't have a confirmed date for the next one posted yet, even
+// if the show is actively airing weekly. So this also embeds "previous
+// episode" and the show's own status, and derives a real, non-fabricated
+// "currently airing" signal from them: an episode aired in roughly the last
+// 10 days and the show's status is still "Running" (more episodes expected).
+// Mirrors the same logic in dashboard.html's client-side lookupShow().
 async function fetchNextAirDate(tvmazeId, showQuery) {
   try {
     const url = tvmazeId
-      ? `https://api.tvmaze.com/shows/${tvmazeId}?embed=nextepisode`
-      : `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(showQuery)}&embed=nextepisode`;
+      ? `https://api.tvmaze.com/shows/${tvmazeId}?embed[]=nextepisode&embed[]=previousepisode`
+      : `https://api.tvmaze.com/singlesearch/shows?q=${encodeURIComponent(showQuery)}&embed[]=nextepisode&embed[]=previousepisode`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
     const airdate = data && data._embedded && data._embedded.nextepisode ? data._embedded.nextepisode.airdate : null;
-    return { date: airdate || null, id: data.id || null };
+    const prevAirdate = data && data._embedded && data._embedded.previousepisode ? data._embedded.previousepisode.airdate : null;
+    let currentlyAiring = false;
+    if (prevAirdate && data.status === 'Running') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const prevDate = new Date(prevAirdate + 'T00:00:00');
+      const daysSince = Math.round((today - prevDate) / 86400000);
+      if (daysSince >= 0 && daysSince <= 10) currentlyAiring = true;
+    }
+    return { date: airdate || null, id: data.id || null, currentlyAiring };
   } catch (err) {
     return null;
   }
