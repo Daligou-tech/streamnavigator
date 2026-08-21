@@ -337,19 +337,31 @@
   .check-list .tick{ width:20px; height:20px; border-radius:6px; background:var(--status-active); color:var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; font-size:12px; font-weight:800; }
 
   /* ---------- Features ---------- */
-  .features-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; max-width:1180px; margin:0 auto; }
-  .feature-card{
-    background:var(--surface); border:2px solid var(--border-strong); border-radius:var(--radius); padding:28px;
-    transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  /* Compact circular layout: a center hub with six feature nodes orbiting
+     it, connected by dashed spokes. Positions are set with percentages (and
+     a matching 0-100 SVG viewBox for the spokes) so the whole thing scales
+     with its container instead of needing per-breakpoint coordinates. */
+  .features-radial{ position:relative; width:min(600px, 100%); aspect-ratio:1/1; margin:0 auto; }
+  .features-radial svg.radial-lines{ position:absolute; inset:0; width:100%; height:100%; }
+  .features-radial svg.radial-lines line{ stroke:var(--border-strong); stroke-width:0.5; stroke-dasharray:2.2 2.6; }
+  .radial-hub{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:19%; height:19%; min-width:88px; min-height:88px; border-radius:999px; background:var(--gradient);
+    border:2.5px solid var(--ink); box-shadow:var(--shadow-hard);
+    display:flex; align-items:center; justify-content:center;
+    text-align:center; z-index:2; padding:10px;
   }
-  .feature-card:hover{ transform:translateY(-4px); border-color:var(--ink); box-shadow:var(--shadow-hard-sm); }
+  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:15px; line-height:1.14; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
+  .radial-node{
+    position:absolute; transform:translate(-50%,-50%); width:29%; min-width:120px; max-width:170px; text-align:center; z-index:2;
+  }
   .feature-icon{
     width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-    background:var(--gradient); margin-bottom:20px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
+    background:var(--surface); margin:0 auto 10px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
   }
-  .feature-icon svg{ width:22px; height:22px; color:var(--ink); }
-  .feature-card h4{ font-size:17px; margin-bottom:10px; }
-  .feature-card p{ font-size:14.5px; color:var(--text-dim); }
+  .feature-icon svg{ width:22px; height:22px; color:var(--accent-deep); }
+  .radial-node h4{ font-size:13.5px; margin-bottom:4px; line-height:1.25; }
+  .radial-node p{ font-size:11.5px; color:var(--text-dim); line-height:1.3; }
 
   /* ---------- Screenshots ---------- */
   .screens{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
@@ -454,7 +466,6 @@
   @media (max-width: 900px){
     .nav-links{ display:none; }
     .product-grid{ grid-template-columns:1fr; gap:40px; }
-    .features-grid{ grid-template-columns:repeat(2,1fr); }
     .screens-grid{ grid-template-columns:1fr; }
     .screen-card.tall{ grid-row:auto; }
     .pricing-grid{ grid-template-columns:1fr; max-width:420px; }
@@ -467,11 +478,18 @@
   @media (max-width: 640px){
     .app-shell{ grid-template-columns:1fr; }
     .app-side{ display:none; }
-    .features-grid{ grid-template-columns:1fr; }
     .footer-grid{ grid-template-columns:1fr; }
     .hero{ padding:64px 20px 40px; }
     section{ padding:72px 20px; }
     .browser-body{ padding:16px; }
+  }
+  /* Below this width the circle gets too tight for six labeled nodes —
+     drop the spokes and stack hub + nodes as a simple vertical list. */
+  @media (max-width: 700px){
+    .features-radial{ width:100%; aspect-ratio:auto; display:flex; flex-direction:column; align-items:center; gap:22px; }
+    .features-radial svg.radial-lines{ display:none; }
+    .radial-hub{ position:static; transform:none; width:88px; height:88px; min-width:0; min-height:0; }
+    .radial-node{ position:static; transform:none; width:100%; max-width:320px; }
   }
 </style>
 </head>
@@ -494,32 +512,12 @@
       <a href="#faq">FAQ</a>
     </div>
     <div class="nav-cta">
-      <a href="dashboard.html" class="btn btn-ghost btn-sm">Log In / Sign Up</a>
-      <a href="#waitlist" class="btn btn-primary btn-sm">Join Waitlist</a>
+      <a href="dashboard.html" class="btn btn-primary btn-sm">Log In / Sign Up</a>
     </div>
   </nav>
 </header>
 
 <main id="top">
-
-  <!--
-    ============================================================================
-    WAITLIST EMAIL CAPTURE — setup required
-    Both "Join Waitlist" forms below post to Formspree (formspree.io), a
-    hosted form backend — no server or database needed on your end.
-      1. Go to formspree.io and sign up (free tier covers 50 submissions/mo).
-      2. Create a new form (e.g. "StreamNavigator Waitlist"). Formspree gives
-         you an endpoint like https://formspree.io/f/abcdwxyz.
-      3. Paste that endpoint over BOTH REPLACE_WITH_FORMSPREE_ID placeholders
-         below (in the hero form and the final-CTA form near the footer) —
-         same endpoint for both is fine, each submission includes a hidden
-         "source" field ("hero" or "final-cta") so you can tell them apart.
-      4. In Formspree's dashboard, you can turn on an email notification for
-         every new submission, or export the whole list as CSV anytime.
-    Until a real endpoint is pasted in, clicking "Join Waitlist" shows a
-    friendly notice instead of losing the visitor's email.
-    ============================================================================
-  -->
 
   <!-- HERO -->
   <section class="hero" style="padding-top:96px; padding-bottom:0;">
@@ -560,55 +558,63 @@
       <h2>Everything you need to stop overpaying.</h2>
       <p>Built for people juggling too many streaming subscriptions &mdash; and tired of playing detective on their own bank statement.</p>
     </div>
-    <div class="features-grid">
+    <div class="features-radial reveal">
+      <svg class="radial-lines" viewBox="0 0 100 100" aria-hidden="true">
+        <line x1="50" y1="50" x2="50" y2="17"/>
+        <line x1="50" y1="50" x2="78.6" y2="33.5"/>
+        <line x1="50" y1="50" x2="78.6" y2="66.5"/>
+        <line x1="50" y1="50" x2="50" y2="83"/>
+        <line x1="50" y1="50" x2="21.4" y2="66.5"/>
+        <line x1="50" y1="50" x2="21.4" y2="33.5"/>
+      </svg>
 
-      <div class="feature-card reveal">
+      <div class="radial-hub">
+        <span>Why<br>Stream<br>Navigator</span>
+      </div>
+
+      <div class="radial-node" style="left:50%; top:17%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
         <h4>Auto-detect subscriptions</h4>
-        <p>Securely scans your accounts and card statements to find every streaming subscription you're paying for &mdash; even the ones you forgot about.</p>
+        <p title="Securely scans your accounts and card statements to find every streaming subscription you're paying for — even the ones you forgot about.">Finds every subscription automatically</p>
       </div>
 
-      <div class="feature-card reveal">
+      <div class="radial-node" style="left:78.6%; top:33.5%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
         <h4>Real usage tracking</h4>
-        <p>See exactly how many hours you spend on each service, so recommendations are based on your real habits, not guesses.</p>
+        <p title="See exactly how many hours you spend on each service, so recommendations are based on your real habits, not guesses.">Based on real habits, not guesses</p>
       </div>
 
-      <div class="feature-card reveal">
+      <div class="radial-node" style="left:78.6%; top:66.5%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
         <h4>Pause &amp; resume reminders</h4>
-        <p>We tell you exactly when to pause the subscriptions you're not using right now &mdash; and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.</p>
+        <p title="We tell you exactly when to pause the subscriptions you're not using right now — and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.">Know exactly when to pause or resume</p>
       </div>
 
-      <div class="feature-card reveal">
+      <div class="radial-node" style="left:50%; top:83%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
         <h4>Price hike alerts</h4>
-        <p>Get notified the moment a service raises its price &mdash; before it silently hits your card.</p>
+        <p title="Get notified the moment a service raises its price — before it silently hits your card.">Notified the moment prices go up</p>
       </div>
 
-      <div class="feature-card reveal">
+      <div class="radial-node" style="left:21.4%; top:66.5%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
         <h4>Direct-link cancel</h4>
-        <p>No hunting through menus or retention-agent phone calls &mdash; every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.</p>
+        <p title="No hunting through menus or retention-agent phone calls — every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.">One-tap cancel, no phone calls</p>
       </div>
 
-      <div class="feature-card reveal">
+      <div class="radial-node" style="left:21.4%; top:33.5%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
         <h4>Bank-level security</h4>
-        <p>Read-only, encrypted connections. StreamNavigator can see your subscriptions &mdash; it can never move your money.</p>
+        <p title="Read-only, encrypted connections. StreamNavigator can see your subscriptions — it can never move your money.">Read-only. We can't touch your money</p>
       </div>
-
     </div>
   </section>
 
   <section class="hero" style="padding-top:40px;">
-    <form class="hero-form" id="waitlist-form" data-waitlist-form action="https://formspree.io/f/xeajpnzq" method="POST">
-      <input type="hidden" name="_subject" value="New StreamNavigator waitlist signup" />
-      <input type="hidden" name="source" value="hero" />
-      <input type="email" name="email" id="waitlist-email" placeholder="you@email.com" required aria-label="Email address" />
-      <button type="submit" class="btn btn-primary">Join Waitlist</button>
-    </form>
-    <p class="hero-note"><strong>Free to join.</strong> Early users save an average of $600 a year.</p>
+    <div class="hero-form">
+      <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
+    </div>
+    <p class="hero-note"><strong>Free to start.</strong> Early users save an average of $600 a year.</p>
 
     <div class="program-guide reveal" id="program-guide">
       <div class="pg-head">
@@ -840,7 +846,7 @@
           <li><span class="tick">✓</span> Pause &amp; cancel guidance, checked monthly</li>
           <li><span class="tick">✓</span> Email price-hike alerts</li>
         </ul>
-        <a href="#waitlist" class="btn btn-ghost">Get Started Free</a>
+        <a href="dashboard.html" class="btn btn-ghost">Get Started Free</a>
       </div>
 
       <div class="price-card featured reveal">
@@ -942,17 +948,14 @@
   </section>
 
   <!-- FINAL CTA -->
-  <section id="waitlist" style="padding-top:20px;">
+  <section id="get-started" style="padding-top:20px;">
     <div class="cta-final reveal">
       <h2>Stop paying for what you don't watch.</h2>
-      <p>Join thousands of early users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
-      <form class="hero-form" id="waitlist-form-2" data-waitlist-form action="https://formspree.io/f/xeajpnzq" method="POST">
-        <input type="hidden" name="_subject" value="New StreamNavigator waitlist signup" />
-        <input type="hidden" name="source" value="final-cta" />
-        <input type="email" name="email" id="waitlist-email-2" placeholder="you@email.com" required aria-label="Email address" />
-        <button type="submit" class="btn btn-primary">Join Waitlist</button>
-      </form>
-      <p class="hero-note" style="margin-bottom:0;">Free to join. Early users save an average of $600 a year.</p>
+      <p>Join the users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
+      <div class="hero-form">
+        <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
+      </div>
+      <p class="hero-note" style="margin-bottom:0;">Free to start. Early users save an average of $600 a year.</p>
     </div>
   </section>
 
@@ -1016,8 +1019,6 @@
     });
   });
 
-  // Waitlist forms -> toast confirmation
-  function isValidEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
   function showToast(msg){
     const toast = document.getElementById('toast');
     document.getElementById('toast-text').textContent = msg;
@@ -1037,46 +1038,6 @@
     });
   });
 
-  // Waitlist signups — posted to Formspree (a hosted form endpoint) so every
-  // email is actually captured and delivered to your inbox / dashboard.
-  // Until you paste in a real endpoint below, submissions are blocked with a
-  // friendly notice instead of silently disappearing.
-  document.querySelectorAll('[data-waitlist-form]').forEach(form => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const input = form.querySelector('input[type="email"]');
-      if (!isValidEmail(input.value)) {
-        showToast('Please enter a valid email address.');
-        return;
-      }
-      if (form.getAttribute('action').includes('REPLACE_WITH_')) {
-        showToast('Waitlist isn\'t connected yet — add your Formspree endpoint to start collecting emails.');
-        return;
-      }
-      const submitBtn = form.querySelector('button[type="submit"]');
-      const originalLabel = submitBtn.textContent;
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Joining…';
-      try {
-        const res = await fetch(form.getAttribute('action'), {
-          method: 'POST',
-          headers: { 'Accept': 'application/json' },
-          body: new FormData(form)
-        });
-        if (res.ok) {
-          showToast("You're on the list! We'll be in touch at " + input.value);
-          input.value = '';
-        } else {
-          showToast("Something went wrong — please try again.");
-        }
-      } catch (err) {
-        showToast("Something went wrong — please try again.");
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalLabel;
-      }
-    });
-  });
 </script>
 
 <script>
