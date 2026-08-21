@@ -320,16 +320,42 @@
   /* ---------- Product explanation ---------- */
   .product{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
   .product-grid{ display:grid; grid-template-columns:1fr 1fr; gap:64px; align-items:center; max-width:1180px; margin:0 auto; }
-  .product-visual{
-    background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); padding:24px;
-    box-shadow:var(--shadow-hard);
+  .product-visual{ padding:6px 0; }
+  .chat-thread{ display:flex; flex-direction:column; gap:18px; }
+  .chat-row{ display:flex; gap:10px; align-items:flex-end; }
+  .chat-row.you{ flex-direction:row-reverse; }
+  .chat-avatar{
+    width:34px; height:34px; border-radius:999px; flex-shrink:0; position:relative;
+    display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
   }
-  .timeline-track{ background:var(--bg); border-radius:10px; height:64px; position:relative; overflow:hidden; margin-bottom:16px; border:1.5px solid var(--border-strong); }
-  .timeline-fill{ position:absolute; inset:0; background:linear-gradient(90deg, rgba(79,182,232,0.30), rgba(74,222,158,0.14)); width:38%; }
-  .timeline-marker{ position:absolute; top:0; bottom:0; width:2px; background:var(--accent-2-deep); left:38%; }
-  .timeline-marker::after{ content:'⟶ "used 2 hrs this month"'; position:absolute; top:-26px; left:8px; font-size:11px; color:var(--accent-2-deep); white-space:nowrap; font-weight:600; }
-  .chat-bubble{ background:var(--surface-2); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; font-size:13.5px; color:var(--text-dim); margin-bottom:10px; }
-  .chat-bubble.you{ background:rgba(79,182,232,0.10); color:var(--accent-deep); border-color:rgba(79,182,232,0.28); font-weight:600; }
+  .chat-avatar.bot{ background:var(--gradient); }
+  .chat-avatar.you{ background:var(--surface-2); }
+  .chat-avatar svg{ width:16px; height:16px; }
+  .chat-live-dot{
+    position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-radius:999px;
+    background:var(--accent-2); border:2px solid var(--surface);
+    animation:chatPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes chatPulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.3); opacity:0.65; } }
+  .chat-col{ display:flex; flex-direction:column; max-width:80%; }
+  .chat-row.you .chat-col{ align-items:flex-end; }
+  .chat-name{ font-size:11px; font-weight:800; color:var(--text-dimmer); margin-bottom:5px; padding:0 4px; text-transform:uppercase; letter-spacing:0.04em; }
+  .chat-name .chat-time{ text-transform:none; font-weight:600; opacity:0.8; }
+  .chat-bubble{
+    background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:16px 16px 16px 4px;
+    padding:13px 16px; font-size:13.5px; color:var(--text-dim); line-height:1.5;
+    box-shadow:var(--shadow-hard-xs);
+  }
+  .chat-bubble.you{
+    background:var(--accent); color:#0E2233; border-color:var(--ink); font-weight:600;
+    border-radius:16px 16px 4px 16px;
+  }
+  .chat-action{
+    display:flex; width:fit-content; align-items:center; gap:6px; margin-top:10px; padding:6px 12px;
+    background:var(--surface); border:1.5px solid var(--ink); border-radius:999px;
+    font-size:11.5px; font-weight:800; color:var(--accent-2-deep); box-shadow:var(--shadow-hard-xs);
+  }
   .product-copy h3{ font-size:1.6rem; margin-bottom:16px; }
   .product-copy p{ color:var(--text-dim); font-size:16px; margin-bottom:16px; }
   .check-list{ list-style:none; margin-top:24px; display:flex; flex-direction:column; gap:12px; }
@@ -341,6 +367,8 @@
      it, connected by dashed spokes. Positions are set with percentages (and
      a matching 0-100 SVG viewBox for the spokes) so the whole thing scales
      with its container instead of needing per-breakpoint coordinates. */
+  #features{ padding-bottom:28px; }
+  #features .section-head{ margin-bottom:24px; }
   .features-radial{ position:relative; width:min(600px, 100%); aspect-ratio:1/1; margin:0 auto; }
   .features-radial svg.radial-lines{ position:absolute; inset:0; width:100%; height:100%; }
   .features-radial svg.radial-lines line{ stroke:var(--border-strong); stroke-width:0.5; stroke-dasharray:2.2 2.6; }
@@ -530,12 +558,30 @@
   <section class="product" id="product">
     <div class="product-grid">
       <div class="product-visual reveal">
-        <div class="timeline-track">
-          <div class="timeline-fill" style="width:22%"></div>
-          <div class="timeline-marker" style="left:22%"></div>
+        <div class="chat-thread">
+          <div class="chat-row you">
+            <div class="chat-avatar you">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.5-6.2 7.5-6.2s7.5 2.2 7.5 6.2"/></svg>
+            </div>
+            <div class="chat-col">
+              <div class="chat-name">You <span class="chat-time">&middot; 8:14 PM</span></div>
+              <div class="chat-bubble you">"I haven't opened HBO Max in weeks."</div>
+            </div>
+          </div>
+          <div class="chat-row bot">
+            <div class="chat-avatar bot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg>
+              <span class="chat-live-dot"></span>
+            </div>
+            <div class="chat-col">
+              <div class="chat-name">StreamNavigator <span class="chat-time">&middot; now</span></div>
+              <div class="chat-bubble">
+                Time to pause HBO Max &mdash; you'll save $16.99/mo. Here's your direct link to do it in one tap. I'll remind you to bring it back when the next big season premieres.
+                <span class="chat-action">⏸ Pause HBO Max &rarr;</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="chat-bubble you">"I haven't opened HBO Max in weeks."</div>
-        <div class="chat-bubble">Time to pause HBO Max &mdash; you'll save $16.99/mo. Here's your direct link to do it in one tap. I'll remind you to bring it back when the next big season premieres.</div>
       </div>
       <div class="product-copy reveal">
         <div class="eyebrow">What is StreamNavigator</div>
@@ -561,11 +607,10 @@
     <div class="features-radial reveal">
       <svg class="radial-lines" viewBox="0 0 100 100" aria-hidden="true">
         <line x1="50" y1="50" x2="50" y2="17"/>
-        <line x1="50" y1="50" x2="78.6" y2="33.5"/>
-        <line x1="50" y1="50" x2="78.6" y2="66.5"/>
-        <line x1="50" y1="50" x2="50" y2="83"/>
-        <line x1="50" y1="50" x2="21.4" y2="66.5"/>
-        <line x1="50" y1="50" x2="21.4" y2="33.5"/>
+        <line x1="50" y1="50" x2="81.4" y2="39.8"/>
+        <line x1="50" y1="50" x2="69.4" y2="76.7"/>
+        <line x1="50" y1="50" x2="30.6" y2="76.7"/>
+        <line x1="50" y1="50" x2="18.6" y2="39.8"/>
       </svg>
 
       <div class="radial-hub">
@@ -578,31 +623,25 @@
         <p title="Securely scans your accounts and card statements to find every streaming subscription you're paying for — even the ones you forgot about.">Finds every subscription automatically</p>
       </div>
 
-      <div class="radial-node" style="left:78.6%; top:33.5%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
-        <h4>Real usage tracking</h4>
-        <p title="See exactly how many hours you spend on each service, so recommendations are based on your real habits, not guesses.">Based on real habits, not guesses</p>
-      </div>
-
-      <div class="radial-node" style="left:78.6%; top:66.5%;">
+      <div class="radial-node" style="left:81.4%; top:39.8%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
         <h4>Pause &amp; resume reminders</h4>
         <p title="We tell you exactly when to pause the subscriptions you're not using right now — and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.">Know exactly when to pause or resume</p>
       </div>
 
-      <div class="radial-node" style="left:50%; top:83%;">
+      <div class="radial-node" style="left:69.4%; top:76.7%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
         <h4>Price hike alerts</h4>
         <p title="Get notified the moment a service raises its price — before it silently hits your card.">Notified the moment prices go up</p>
       </div>
 
-      <div class="radial-node" style="left:21.4%; top:66.5%;">
+      <div class="radial-node" style="left:30.6%; top:76.7%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
         <h4>Direct-link cancel</h4>
         <p title="No hunting through menus or retention-agent phone calls — every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.">One-tap cancel, no phone calls</p>
       </div>
 
-      <div class="radial-node" style="left:21.4%; top:33.5%;">
+      <div class="radial-node" style="left:18.6%; top:39.8%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
         <h4>Bank-level security</h4>
         <p title="Read-only, encrypted connections. StreamNavigator can see your subscriptions — it can never move your money.">Read-only. We can't touch your money</p>
@@ -610,7 +649,7 @@
     </div>
   </section>
 
-  <section class="hero" style="padding-top:40px;">
+  <section class="hero" style="padding-top:8px;">
     <div class="hero-form">
       <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
     </div>
@@ -744,15 +783,15 @@
           </div>
           <div class="result-card" style="margin-bottom:10px;">
             <div class="thumb"></div>
-            <div class="result-meta"><h4>Disney+ — Premium Bundle</h4><p>$19.99/mo &middot; Not opened in 45 days</p><span class="timestamp-chip chip-danger">✕ Cancel to save $19.99/mo</span></div>
+            <div class="result-meta"><h4>Disney+ — Premium Bundle</h4><p>$19.99/mo &middot; Paused</p><span class="timestamp-chip chip-danger">✕ Cancel to save $19.99/mo</span></div>
           </div>
           <div class="result-card" style="margin-bottom:10px;">
             <div class="thumb" style="background:var(--gradient-warm)"></div>
-            <div class="result-meta"><h4>HBO Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Used 3 hrs this month</p><span class="timestamp-chip chip-alert">⚠ Downgrade to save $7/mo</span></div>
+            <div class="result-meta"><h4>HBO Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Active</p><span class="timestamp-chip chip-alert">⚠ Downgrade to save $7/mo</span></div>
           </div>
           <div class="result-card">
             <div class="thumb" style="background:linear-gradient(135deg,#2EC4B6,#FFC93C)"></div>
-            <div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Used 22 hrs this month</p><span class="timestamp-chip chip-save">✓ Optimized</span></div>
+            <div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Active</p><span class="timestamp-chip chip-save">✓ Optimized</span></div>
           </div>
         </div>
         <figcaption>Every subscription, its real cost, and what to do about it — in one view.</figcaption>
