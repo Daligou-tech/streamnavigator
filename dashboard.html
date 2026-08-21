@@ -380,6 +380,24 @@
 
       <div class="fav-list" id="household-members-list"></div>
       <p class="empty-state" id="household-empty" hidden>No one invited yet.</p>
+
+      <p class="analytics-label" style="margin:18px 0 6px;">Household usage breakdown</p>
+      <p class="field-hint" id="household-summary-hint">Combined totals only — individual members' subscriptions stay private, including from you.</p>
+      <div class="result-stats" id="household-summary-stats" hidden>
+        <div class="stat-box"><span class="stat-label">People sharing this plan</span><span class="stat-value" id="household-stat-people">0</span></div>
+        <div class="stat-box"><span class="stat-label">Combined active spend</span><span class="stat-value" id="household-stat-active">$0/mo</span></div>
+        <div class="stat-box save-stat"><span class="stat-label">Combined paused (saved)</span><span class="stat-value" id="household-stat-paused">$0/mo</span></div>
+      </div>
+    </div>
+
+    <div class="panel" id="household-member-summary-panel" hidden>
+      <h3>Your household</h3>
+      <p class="field-hint">You're sharing a Family plan. Here's the combined household spend — your own tracked subscriptions above still aren't visible to anyone else in the household, including the account owner.</p>
+      <div class="result-stats" id="household-member-summary-stats" hidden>
+        <div class="stat-box"><span class="stat-label">People sharing this plan</span><span class="stat-value" id="household-member-stat-people">0</span></div>
+        <div class="stat-box"><span class="stat-label">Combined active spend</span><span class="stat-value" id="household-member-stat-active">$0/mo</span></div>
+        <div class="stat-box save-stat"><span class="stat-label">Combined paused (saved)</span><span class="stat-value" id="household-member-stat-paused">$0/mo</span></div>
+      </div>
     </div>
 
     <div class="panel">
@@ -819,6 +837,7 @@
 
     applyPlanGating();
     if (isFamilyOwner) loadHouseholdMembers();
+    if (userPlan === 'family') loadHouseholdSummary();
   }
 
   function applyPlanGating(){
@@ -828,12 +847,14 @@
     const analyzerLocked = document.getElementById('analyzer-locked');
     const note = document.getElementById('current-plan-note');
     const householdPanel = document.getElementById('household-panel');
+    const memberSummaryPanel = document.getElementById('household-member-summary-panel');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
     if (analyzerBody) analyzerBody.hidden = !pro;
     if (analyzerLocked) analyzerLocked.hidden = pro;
     if (householdPanel) householdPanel.hidden = !isFamilyOwner;
+    if (memberSummaryPanel) memberSummaryPanel.hidden = !(userPlan === 'family' && !isFamilyOwner);
     if (note) {
       note.textContent = pro
         ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders and the plan optimizer are unlocked below.`
@@ -842,6 +863,38 @@
     // Row-level suggestion text is Pro-gated too, so re-render with the
     // current plan now applied.
     if (window.__lastSubRows) renderSubscriptions(window.__lastSubRows);
+  }
+
+  // Combined household spend — a single aggregate figure, computed
+  // server-side (api/household-summary.js) since no one's individual
+  // subscriptions are visible client-side to anyone but themselves. Both
+  // the owner and any active member can see this; it's the same number
+  // either way, just rendered into whichever panel is on screen for them.
+  async function loadHouseholdSummary(){
+    try {
+      const { data: { session } } = await client.auth.getSession();
+      if (!session) return;
+      const res = await fetch('/api/household-summary', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.ok) return;
+
+      [
+        { people: 'household-stat-people', active: 'household-stat-active', paused: 'household-stat-paused', stats: 'household-summary-stats' },
+        { people: 'household-member-stat-people', active: 'household-member-stat-active', paused: 'household-member-stat-paused', stats: 'household-member-summary-stats' },
+      ].forEach(ids => {
+        const statsEl = document.getElementById(ids.stats);
+        const peopleEl = document.getElementById(ids.people);
+        const activeEl = document.getElementById(ids.active);
+        const pausedEl = document.getElementById(ids.paused);
+        if (!statsEl) return;
+        statsEl.hidden = false;
+        if (peopleEl) peopleEl.textContent = result.peopleInHousehold;
+        if (activeEl) activeEl.textContent = fmt(result.activeMonthly) + '/mo';
+        if (pausedEl) pausedEl.textContent = fmt(result.pausedMonthly) + '/mo';
+      });
+    } catch (err) { /* leave the summary blank rather than show a stale/wrong number */ }
   }
 
   // If I just signed up (or logged in) with an email someone invited to
