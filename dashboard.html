@@ -150,10 +150,14 @@
   /* ---- Dashboard view ---- */
   .dash-head{ margin-bottom:28px; }
   .dash-head p{ color:var(--text-dim); font-size:14.5px; }
-  .stat-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:36px; }
+  .stat-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:36px; }
   .stat-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow-hard-xs); }
   .stat-card .label{ font-size:11.5px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
   .stat-card .value{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
+  .stat-card.save-stat{ border-color:var(--status-active); }
+  .stat-card.save-stat .value{ color:var(--status-active-deep); }
+  .stat-card .lifetime-note{ font-size:11px; color:var(--text-dimmer); margin-top:4px; }
+  @media (max-width:900px){ .stat-row{ grid-template-columns:1fr 1fr 1fr; } }
   @media (max-width:680px){ .stat-row{ grid-template-columns:1fr 1fr; } }
 
   .panel{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; margin-bottom:28px; }
@@ -343,6 +347,7 @@
       <div class="stat-card"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
       <div class="stat-card"><div class="label">Paused</div><div class="value" id="stat-paused">0</div></div>
       <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
+      <div class="stat-card save-stat" id="stat-lifetime-card"><div class="label">Total saved to date</div><div class="value" id="stat-lifetime-savings">$0.00</div><div class="lifetime-note" id="stat-lifetime-note">Since your history started</div></div>
     </div>
 
     <div class="upgrade-section" id="upgrade-section">
@@ -1533,8 +1538,35 @@
       .from('savings_history')
       .select('*')
       .order('snapshot_date', { ascending: true })
-      .limit(60);
-    renderSavingsTrend(error ? [] : (data || []), pausedMonthlyNow);
+      .limit(3660); // ~10 years of real daily rows — enough to cover a genuine lifetime total, not just the recent trend chart
+    const history = error ? [] : (data || []);
+    renderSavingsTrend(history, pausedMonthlyNow);
+    renderLifetimeSavings(history);
+  }
+
+  // "Total saved to date" — a real cumulative total, not just a monthly rate.
+  // Each savings_history row is a real day's paused-subscriptions rate (written
+  // once per real day by api/refresh-shows.js, never backfilled). We convert
+  // that monthly rate into that one day's actual dollar contribution by
+  // dividing by the real number of days in that row's month, then sum every
+  // real day on file. So this only ever grows from real logged days — a new
+  // account, or one with no history yet, correctly shows $0.00.
+  function daysInMonth(year, month){ return new Date(year, month, 0).getDate(); }
+  function computeLifetimeSaved(history){
+    return history.reduce((sum, h) => {
+      const parts = String(h.snapshot_date).split('-').map(Number);
+      const dim = daysInMonth(parts[0], parts[1]) || 30;
+      return sum + (Number(h.paused_monthly_savings) || 0) / dim;
+    }, 0);
+  }
+  function renderLifetimeSavings(history){
+    const valueEl = document.getElementById('stat-lifetime-savings');
+    const noteEl = document.getElementById('stat-lifetime-note');
+    const total = computeLifetimeSaved(history);
+    valueEl.textContent = fmt(total);
+    noteEl.textContent = history.length
+      ? `Since ${history[0].snapshot_date}`
+      : 'History starts building from today';
   }
   function renderSavingsTrend(history, pausedMonthlyNow){
     const chart = document.getElementById('savings-trend-chart');
