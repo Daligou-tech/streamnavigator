@@ -605,16 +605,45 @@
   const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   let rowsById = {}; // populated by renderSubscriptions(); lets action handlers look up a row's full data by id
 
-  // ---- Stripe billing portal: pre-fill the logged-in customer's email so
-  // they don't have to retype it on Stripe's side (still requires Stripe's
-  // own email verification — there's no way to skip that step entirely). ----
-  const STRIPE_PORTAL_BASE_URL = 'https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00';
-  function setBillingLink(email){
-    const link = document.getElementById('manage-billing-link');
-    link.href = email
-      ? STRIPE_PORTAL_BASE_URL + '?prefilled_email=' + encodeURIComponent(email)
-      : STRIPE_PORTAL_BASE_URL;
+  // ---- Stripe billing portal: open a real, authenticated portal session
+  // for this signed-in customer, rather than sending them to Stripe's
+  // static "type your email and wait for a link" portal login page. That
+  // static page only emails a sign-in link if the typed email matches a
+  // real Stripe Customer, and fails silently (no error shown) otherwise —
+  // so a Free-plan customer, or anyone who mistypes their email, just waits
+  // forever for a link that was never coming. Creating the session
+  // server-side (api/create-portal-session.js) looks the customer up by
+  // their actual logged-in Supabase account instead, and redirects them
+  // straight into the portal already signed in. ----
+  const manageBillingLink = document.getElementById('manage-billing-link');
+  let billingPortalBusy = false;
+  async function openBillingPortal(){
+    if (billingPortalBusy) return;
+    const { data: { session } } = await client.auth.getSession();
+    if (!session) { showToast('Log in first, then try Manage Billing again.'); return; }
+    billingPortalBusy = true;
+    const originalLabel = manageBillingLink.textContent;
+    manageBillingLink.textContent = 'Opening…';
+    try {
+      const res = await fetch('/api/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ returnUrl: window.location.origin + window.location.pathname }),
+      });
+      const result = await res.json();
+      if (!res.ok || !result.ok) {
+        showToast(result.error || 'Could not open the billing portal — try again in a moment.');
+        return;
+      }
+      window.location.href = result.url;
+    } catch (err) {
+      showToast('Could not reach the billing portal — check your connection and try again.');
+    } finally {
+      billingPortalBusy = false;
+      manageBillingLink.textContent = originalLabel;
+    }
   }
+  manageBillingLink.addEventListener('click', (e) => { e.preventDefault(); openBillingPortal(); });
 
   // ---- Direct "manage on service" links, reused from the main site ----
   const MANAGE_URLS = {
@@ -1710,7 +1739,6 @@
     dashView.hidden = false;
     logoutBtn.hidden = false;
     document.getElementById('welcome-email').textContent = ', ' + user.email;
-    setBillingLink(user.email);
     wireUpgradeLinks(user);
     // Claim any pending household invite before checking plan status, so a
     // member who just accepted their invite sees Family access unlock on
@@ -1718,12 +1746,19 @@
     claimHouseholdInvite(user).then(() => loadPlan(user));
     loadSubscriptions();
     loadFavorites();
+    // Landing-page "Manage billing" / "Cancel subscription" links send
+    // logged-out visitors to dashboard.html#billing — once they're signed
+    // in, jump straight into the billing portal instead of making them
+    // find and click Manage Billing a second time.
+    if (window.location.hash === '#billing') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      openBillingPortal();
+    }
   }
   function showLoggedOut(){
     authView.hidden = false;
     dashView.hidden = true;
     logoutBtn.hidden = true;
-    setBillingLink(null);
   }
 
   client.auth.onAuthStateChange((_event, session) => {
