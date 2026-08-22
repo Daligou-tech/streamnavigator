@@ -278,7 +278,7 @@
       StreamNavigator
     </a>
     <div class="nav-right">
-      <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" class="btn btn-ghost btn-sm">Manage Billing</a>
+      <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" class="btn btn-ghost btn-sm" hidden>Manage Billing</a>
       <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
     </div>
   </nav>
@@ -620,7 +620,10 @@
   async function openBillingPortal(){
     if (billingPortalBusy) return;
     const { data: { session } } = await client.auth.getSession();
-    if (!session) { showToast('Log in first, then try Manage Billing again.'); return; }
+    if (!session) {
+      showToast('Log in first, then try Manage Billing again.', 5000);
+      return;
+    }
     billingPortalBusy = true;
     const originalLabel = manageBillingLink.textContent;
     manageBillingLink.textContent = 'Opening…';
@@ -630,14 +633,29 @@
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
         body: JSON.stringify({ returnUrl: window.location.origin + window.location.pathname }),
       });
+
+      // A 404 with an HTML body (Vercel's default "no such route" page)
+      // means api/create-portal-session.js hasn't been deployed yet, rather
+      // than anything the customer did wrong — res.json() would throw on
+      // that HTML, so check the content type first and give a diagnosable
+      // message instead of a generic "something went wrong."
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.error('Manage Billing: /api/create-portal-session did not return JSON (status ' + res.status + '). It may not be deployed yet — check that api/create-portal-session.js was uploaded to GitHub/Vercel.');
+        showToast("Billing portal isn't set up on the server yet — the site owner needs to deploy api/create-portal-session.js.", 6000);
+        return;
+      }
+
       const result = await res.json();
       if (!res.ok || !result.ok) {
-        showToast(result.error || 'Could not open the billing portal — try again in a moment.');
+        console.error('Manage Billing failed:', res.status, result);
+        showToast(result.error || 'Could not open the billing portal — try again in a moment.', 6000);
         return;
       }
       window.location.href = result.url;
     } catch (err) {
-      showToast('Could not reach the billing portal — check your connection and try again.');
+      console.error('Manage Billing request failed:', err);
+      showToast('Could not reach the billing portal — check your connection and try again.', 6000);
     } finally {
       billingPortalBusy = false;
       manageBillingLink.textContent = originalLabel;
@@ -707,12 +725,12 @@
     return FALLBACK_SVC_COLORS[hashStr(key) % FALLBACK_SVC_COLORS.length];
   }
 
-  function showToast(msg){
+  function showToast(msg, durationMs){
     const toast = document.getElementById('toast');
     document.getElementById('toast-text').textContent = msg;
     toast.classList.add('show');
     clearTimeout(window.__toastTimer);
-    window.__toastTimer = setTimeout(() => toast.classList.remove('show'), 3200);
+    window.__toastTimer = setTimeout(() => toast.classList.remove('show'), durationMs || 3200);
   }
   function fmt(n){ return '$' + Number(n || 0).toFixed(2); }
 
@@ -1738,6 +1756,7 @@
     authView.hidden = true;
     dashView.hidden = false;
     logoutBtn.hidden = false;
+    manageBillingLink.hidden = false;
     document.getElementById('welcome-email').textContent = ', ' + user.email;
     wireUpgradeLinks(user);
     // Claim any pending household invite before checking plan status, so a
@@ -1759,6 +1778,7 @@
     authView.hidden = false;
     dashView.hidden = true;
     logoutBtn.hidden = true;
+    manageBillingLink.hidden = true;
   }
 
   client.auth.onAuthStateChange((_event, session) => {
