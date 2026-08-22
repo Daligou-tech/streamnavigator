@@ -463,8 +463,7 @@
 
   /* ---------- Footer ---------- */
   footer{ padding:36px 24px 32px; position:relative; z-index:1; }
-  .footer-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:40px; max-width:1180px; margin:0 auto 50px; }
-  .footer-brand p{ color:var(--text-dimmer); font-size:14px; margin-top:14px; max-width:280px; }
+  .footer-grid{ display:grid; grid-template-columns:1fr; gap:40px; max-width:1180px; margin:0 auto 50px; }
   .footer-col h5{ font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:16px; font-weight:700; }
   .footer-col ul{ list-style:none; display:flex; flex-direction:column; gap:10px; }
   .footer-col a{ font-size:14px; color:var(--text-dim); transition:color .2s; }
@@ -497,7 +496,6 @@
     .screens-grid{ grid-template-columns:1fr; }
     .screen-card.tall{ grid-row:auto; }
     .pricing-grid{ grid-template-columns:1fr; max-width:420px; }
-    .footer-grid{ grid-template-columns:1fr 1fr; }
   }
   @media (max-width: 480px){
     nav{ flex-wrap:wrap; row-gap:10px; }
@@ -506,7 +504,6 @@
   @media (max-width: 640px){
     .app-shell{ grid-template-columns:1fr; }
     .app-side{ display:none; }
-    .footer-grid{ grid-template-columns:1fr; }
     .hero{ padding:64px 20px 40px; }
     section{ padding:72px 20px; }
     .browser-body{ padding:16px; }
@@ -1005,14 +1002,6 @@
 
 <footer id="contact">
   <div class="footer-grid">
-    <div class="footer-brand">
-      <a href="#top" class="logo">
-        <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-        StreamNavigator
-      </a>
-      <p>The AI subscription manager for streaming. We tell you exactly when to pause what you're not watching and when to bring it back — with a direct link so you can make the change yourself in one tap.</p>
-    </div>
-
     <div class="footer-col">
       <h5>Product</h5>
       <ul>
@@ -1023,6 +1012,7 @@
         <li><a href="dashboard.html#billing" id="contact-billing">Manage billing</a></li>
         <li><a href="dashboard.html#billing">Cancel subscription</a></li>
         <li><a href="#faq">FAQ</a></li>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
       </ul>
     </div>
   </div>
