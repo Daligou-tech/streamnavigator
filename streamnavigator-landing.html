@@ -369,17 +369,17 @@
      with its container instead of needing per-breakpoint coordinates. */
   #features{ padding-bottom:28px; }
   #features .section-head{ margin-bottom:24px; }
-  .features-radial{ position:relative; width:min(600px, 100%); aspect-ratio:1/1; margin:0 auto; }
+  .features-radial{ position:relative; width:min(480px, 100%); aspect-ratio:1/1; margin:0 auto; }
   .features-radial svg.radial-lines{ position:absolute; inset:0; width:100%; height:100%; }
   .features-radial svg.radial-lines line{ stroke:var(--border-strong); stroke-width:0.5; stroke-dasharray:2.2 2.6; }
   .radial-hub{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:19%; height:19%; min-width:88px; min-height:88px; border-radius:999px; background:var(--gradient);
+    width:22%; height:22%; min-width:100px; min-height:100px; border-radius:999px; background:var(--gradient);
     border:2.5px solid var(--ink); box-shadow:var(--shadow-hard);
     display:flex; align-items:center; justify-content:center;
-    text-align:center; z-index:2; padding:10px;
+    text-align:center; z-index:2; padding:8px;
   }
-  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:15px; line-height:1.14; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
+  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:14px; line-height:1.2; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
   .radial-node{
     position:absolute; transform:translate(-50%,-50%); width:29%; min-width:120px; max-width:170px; text-align:center; z-index:2;
   }
@@ -462,7 +462,7 @@
   .cta-final p{ color:var(--text-dim); font-size:16px; max-width:480px; margin:0 auto 32px; }
 
   /* ---------- Footer ---------- */
-  footer{ padding:70px 24px 32px; position:relative; z-index:1; }
+  footer{ padding:36px 24px 32px; position:relative; z-index:1; }
   .footer-grid{ display:grid; grid-template-columns:1.4fr 1fr; gap:40px; max-width:1180px; margin:0 auto 50px; }
   .footer-brand p{ color:var(--text-dimmer); font-size:14px; margin-top:14px; max-width:280px; }
   .footer-col h5{ font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:16px; font-weight:700; }
@@ -516,7 +516,7 @@
   @media (max-width: 700px){
     .features-radial{ width:100%; aspect-ratio:auto; display:flex; flex-direction:column; align-items:center; gap:22px; }
     .features-radial svg.radial-lines{ display:none; }
-    .radial-hub{ position:static; transform:none; width:88px; height:88px; min-width:0; min-height:0; }
+    .radial-hub{ position:static; transform:none; width:100px; height:100px; min-width:0; min-height:0; }
     .radial-node{ position:static; transform:none; width:100%; max-width:320px; }
   }
 </style>
@@ -866,7 +866,7 @@
     ============================================================================
   -->
   <!-- PRICING -->
-  <section id="pricing">
+  <section id="pricing" style="padding-bottom:32px;">
     <div class="section-head reveal">
       <div class="eyebrow">Pricing</div>
       <h2>Simple pricing that pays for itself.</h2>
@@ -925,7 +925,7 @@
   </section>
 
   <!-- FAQ -->
-  <section id="faq">
+  <section id="faq" style="padding-top:32px;">
     <div class="section-head reveal">
       <div class="eyebrow">FAQ</div>
       <h2>Questions, answered.</h2>
@@ -987,7 +987,7 @@
   </section>
 
   <!-- FINAL CTA -->
-  <section id="get-started" style="padding-top:20px;">
+  <section id="get-started" style="padding-top:20px; padding-bottom:24px;">
     <div class="cta-final reveal">
       <h2>Stop paying for what you don't watch.</h2>
       <p>Join the users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
