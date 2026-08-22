@@ -856,10 +856,13 @@
          with #welcome appended) instead of Stripe's default receipt screen.
       5. Paste the two URLs over the data-stripe-link placeholders on the
          "Subscribe to Pro" and "Subscribe to Family" buttons just below.
-      6. For existing subscribers to cancel or update a card themselves:
-         Settings → Billing → Customer portal → activate the no-code portal
-         link, then paste that URL over the data-stripe-link placeholder on
-         the "Manage billing" link in the footer.
+      6. For existing subscribers to cancel or update a card themselves: no
+         setup needed here — the "Manage billing" / "Cancel subscription"
+         links in the footer send them to dashboard.html#billing, which
+         opens a real, authenticated Stripe Billing Portal session for
+         whoever's logged in (see api/create-portal-session.js). You still
+         need "Customer portal" turned on once in Settings → Billing →
+         Customer portal, but no URL needs pasting anywhere on this page.
     Payment Links handle PCI compliance, 3D Secure, receipts, taxes, and
     subscription renewals entirely on Stripe's side — nothing card-related
     ever touches this page or its JavaScript.
@@ -921,7 +924,7 @@
       </div>
 
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" data-stripe-link="portal" class="footnote-link">Cancel anytime</a>, no phone calls or emails required.</p>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. <a href="dashboard.html#billing" class="footnote-link">Cancel anytime</a>, no phone calls or emails required.</p>
   </section>
 
   <!-- FAQ -->
@@ -960,7 +963,7 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">How do I cancel my StreamNavigator subscription? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Click "Manage billing" or "Cancel subscription" in the footer, verify your email, and select Cancel Plan in the billing portal — no phone calls, emails, or retention pitches. You'll keep Pro or Family access through the end of your current billing period and won't be charged again. (This cancels your StreamNavigator plan itself — see the next question if you're asking about cancelling a streaming service like Netflix or Hulu.)</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Click "Manage billing" or "Cancel subscription" in the footer, log in if you aren't already, and select Cancel Plan in the billing portal — no phone calls, emails, or retention pitches. You'll keep Pro or Family access through the end of your current billing period and won't be charged again. (This cancels your StreamNavigator plan itself — see the next question if you're asking about cancelling a streaming service like Netflix or Hulu.)</div></div>
       </div>
 
       <div class="faq-item reveal">
@@ -1017,8 +1020,8 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#screenshots">Screenshots</a></li>
         <li><a href="#pricing">Pricing</a></li>
-        <li><a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" data-stripe-link="portal" id="contact-billing">Manage billing</a></li>
-        <li><a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" data-stripe-link="portal">Cancel subscription</a></li>
+        <li><a href="dashboard.html#billing" id="contact-billing">Manage billing</a></li>
+        <li><a href="dashboard.html#billing">Cancel subscription</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
     </div>
