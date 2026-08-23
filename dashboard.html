@@ -742,6 +742,13 @@
     return FALLBACK_SVC_COLORS[hashStr(key) % FALLBACK_SVC_COLORS.length];
   }
 
+  // Turns a Supabase/PostgREST error object into readable text so a failed
+  // save shows WHY, not just that it failed — otherwise a real problem
+  // (a missing column, a blocked policy, a bad constraint) is invisible.
+  function errText(error){
+    if (!error) return 'unknown error';
+    return error.message || error.details || error.hint || JSON.stringify(error);
+  }
   function showToast(msg, durationMs){
     const toast = document.getElementById('toast');
     document.getElementById('toast-text').textContent = msg;
@@ -1120,7 +1127,7 @@
     const btn = e.target.closest('button[data-id]');
     if (!btn) return;
     const { error } = await client.from('favorite_watches').delete().eq('id', btn.dataset.id);
-    if (error) { showToast('Could not remove that.'); return; }
+    if (error) { console.error('favorite_watches delete failed:', error); showToast('Could not remove that — ' + errText(error), 8000); return; }
     loadFavorites();
   });
 
@@ -1184,7 +1191,7 @@
       currently_airing: match && match.found ? !!match.currently_airing : false,
       checked_at: new Date().toISOString()
     });
-    if (error) { showToast('Could not add that show.'); return; }
+    if (error) { console.error('favorite_watches insert (show) failed:', error); showToast('Could not add that show — ' + errText(error), 8000); return; }
     titleInput.value = '';
     document.getElementById('fav-show-preview').textContent = '';
     showToast(title + ' added.');
@@ -1207,7 +1214,7 @@
       next_air_date: null,
       checked_at: null
     });
-    if (error) { showToast('Could not add that.'); return; }
+    if (error) { console.error('favorite_watches insert (sport) failed:', error); showToast('Could not add that — ' + errText(error), 8000); return; }
     showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' added.');
     loadFavorites();
   });
@@ -1795,7 +1802,7 @@
       removeShowBtn.disabled = true; removeShowBtn.textContent = 'Removing…';
       const { error } = await client.from('favorite_watches').delete().eq('id', match.id);
       removeShowBtn.disabled = false; removeShowBtn.textContent = 'Remove show';
-      if (error) { showToast('Could not remove that show.'); return; }
+      if (error) { console.error('favorite_watches delete (show) failed:', error); showToast('Could not remove that show — ' + errText(error), 8000); return; }
       showToast(title + ' removed from ' + row.service_name + '.');
       await loadFavorites();
     });
@@ -1832,7 +1839,7 @@
       removeSportBtn.disabled = true; removeSportBtn.textContent = 'Removing…';
       const { error } = await client.from('favorite_watches').delete().eq('id', match.id);
       removeSportBtn.disabled = false; removeSportBtn.textContent = 'Remove sport';
-      if (error) { showToast('Could not remove that.'); return; }
+      if (error) { console.error('favorite_watches delete (sport) failed:', error); showToast('Could not remove that — ' + errText(error), 8000); return; }
       showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' removed from ' + row.service_name + '.');
       await loadFavorites();
     });
@@ -1902,7 +1909,7 @@
         currently_airing: match && match.found ? !!match.currently_airing : false,
         checked_at: new Date().toISOString()
       });
-      if (error) { showToast('Could not add that show.'); return; }
+      if (error) { console.error('favorite_watches insert (show) failed:', error); showToast('Could not add that show — ' + errText(error), 8000); return; }
       showToast(title + ' added.');
       await loadFavorites();
     });
@@ -1929,7 +1936,7 @@
         next_air_date: null,
         checked_at: null
       });
-      if (error) { showToast('Could not add that.'); return; }
+      if (error) { console.error('favorite_watches insert (sport) failed:', error); showToast('Could not add that — ' + errText(error), 8000); return; }
       showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' added.');
       await loadFavorites();
     });
