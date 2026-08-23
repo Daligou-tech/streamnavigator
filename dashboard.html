@@ -1166,6 +1166,14 @@
     const title = titleInput.value.trim();
     const serviceName = document.getElementById('fav-show-service').value;
     if (!title || !serviceName) return;
+    // This field is one show at a time — a comma almost always means someone
+    // typed two titles into it at once (e.g. "Show A, Show B"), which saves
+    // as a single garbled title that can never match anything on TVmaze.
+    // Catch that here instead of silently saving something broken.
+    if (title.includes(',')) {
+      showToast('Add one show at a time — enter "' + title.split(',')[0].trim() + '", click Add, then add the next one.');
+      return;
+    }
     const { data: { user } } = await client.auth.getUser();
     if (!user) return;
 
@@ -1708,8 +1716,12 @@
       <div class="fav-list" data-role="panel-fav-list" style="width:100%; margin:0 0 6px;"></div>
       <p class="panel-empty-hint" data-role="panel-empty">Nothing tagged to ${escapeHtml(row.service_name)} yet.</p>
       <div class="show-panel-add-row">
-        <input type="text" placeholder="Add a show, e.g. Stranger Things" data-role="show-title" />
+        <select data-role="show-select"></select>
         <button type="button" class="btn btn-primary btn-sm" data-role="add-show">Add show</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-role="remove-show" title="Stop tracking this show everywhere">Remove show</button>
+      </div>
+      <div class="show-panel-add-row" data-role="show-new-row" hidden>
+        <input type="text" placeholder="e.g. Stranger Things" data-role="show-title" />
       </div>
       <span class="show-preview" data-role="show-preview"></span>
       <div class="show-panel-add-row">
@@ -1756,6 +1768,66 @@
     }
     renderPanelList();
 
+    // "Add a show" is a dropdown of every show title already entered
+    // anywhere on this account (across all services), same idea as the
+    // sport dropdown below it — so a title typed once doesn't need
+    // retyping. "+ Add a new show…" switches to a plain text box for a
+    // title that isn't in the list yet. This list is intentionally NOT
+    // filtered by air date or match status — a show that hasn't premiered
+    // yet, or one TVmaze couldn't match, was still typed in by the customer
+    // and belongs here just as much as one that's already aired.
+    const showSelect = panel.querySelector('[data-role="show-select"]');
+    const showNewRow = panel.querySelector('[data-role="show-new-row"]');
+    const removeShowBtn = panel.querySelector('[data-role="remove-show"]');
+    const NEW_SHOW_VALUE = '__new__';
+    function populateShowSelect(){
+      const seen = new Set();
+      const titles = [];
+      favoriteRows.forEach(f => {
+        if (f.kind !== 'show') return;
+        const key = f.title.trim().toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        titles.push(f.title);
+      });
+      titles.sort((a, b) => a.localeCompare(b));
+      const prev = showSelect.value;
+      showSelect.innerHTML = `<option value="${NEW_SHOW_VALUE}">+ Add a new show…</option>` +
+        titles.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+      showSelect.value = titles.includes(prev) ? prev : NEW_SHOW_VALUE;
+    }
+    populateShowSelect();
+
+    function syncShowRowVisibility(){
+      const isNew = showSelect.value === NEW_SHOW_VALUE;
+      showNewRow.hidden = !isNew;
+      removeShowBtn.disabled = isNew;
+      if (isNew) panel.querySelector('[data-role="show-title"]').focus();
+    }
+    syncShowRowVisibility();
+    showSelect.addEventListener('change', () => {
+      panel.querySelector('[data-role="show-preview"]').textContent = '';
+      syncShowRowVisibility();
+    });
+
+    // Removes the selected show everywhere it's tagged on this account (it
+    // may be tagged to more than one service), not just from this row's
+    // service — the dropdown lists titles account-wide, so "remove" here
+    // means "stop tracking this show," matching what the customer is
+    // looking at when they pick it from this list.
+    removeShowBtn.addEventListener('click', async () => {
+      const title = showSelect.value;
+      if (!title || title === NEW_SHOW_VALUE) return;
+      const matches = favoriteRows.filter(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase());
+      if (!matches.length) return;
+      removeShowBtn.disabled = true; removeShowBtn.textContent = 'Removing…';
+      const { error } = await client.from('favorite_watches').delete().in('id', matches.map(f => f.id));
+      removeShowBtn.disabled = false; removeShowBtn.textContent = 'Remove show';
+      if (error) { showToast('Could not remove that show.'); return; }
+      showToast(title + ' removed' + (matches.length > 1 ? ` (was tagged to ${matches.length} services)` : '') + '.');
+      await loadFavorites();
+    });
+
     panel.querySelector('[data-role="panel-fav-list"]').addEventListener('click', async (e) => {
       const delBtn = e.target.closest('button[data-id]');
       if (!delBtn) return;
@@ -1794,14 +1866,45 @@
     });
 
     panel.querySelector('[data-role="add-show"]').addEventListener('click', async () => {
-      const title = titleInput.value.trim();
+      const isNew = showSelect.value === NEW_SHOW_VALUE;
+      const title = isNew ? titleInput.value.trim() : showSelect.value;
       if (!title) return;
+
+      // One show at a time — a comma almost always means two titles were
+      // typed into this box together, which would save as one garbled title
+      // that never matches anything on TVmaze.
+      if (isNew && title.includes(',')) {
+        showToast('Add one show at a time — enter "' + title.split(',')[0].trim() + '", click Add show, then add the next one.');
+        return;
+      }
+
+      // Selecting a title already tagged to THIS service would just create a
+      // silent duplicate row — block it instead, same title can still be
+      // added to a different service.
+      if (favoritesForService(row.service_name).some(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase())) {
+        showToast(title + ' is already tagged to ' + row.service_name + '.');
+        return;
+      }
+
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
       const addBtn = panel.querySelector('[data-role="add-show"]');
-      addBtn.disabled = true; addBtn.textContent = 'Checking…';
-      const match = await lookupShow(title);
-      addBtn.disabled = false; addBtn.textContent = 'Add show';
+
+      let match;
+      if (isNew) {
+        // Brand-new title: look it up on TVmaze fresh.
+        addBtn.disabled = true; addBtn.textContent = 'Checking…';
+        match = await lookupShow(title);
+        addBtn.disabled = false; addBtn.textContent = 'Add show';
+      } else {
+        // Reusing a title already entered elsewhere on this account — reuse
+        // its already-known TVmaze match instead of a redundant lookup; the
+        // daily cron job keeps it fresh either way.
+        const existing = favoriteRows.find(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase());
+        match = existing
+          ? { found: !!existing.tvmaze_show_id, id: existing.tvmaze_show_id, next_air_date: existing.next_air_date, currently_airing: existing.currently_airing }
+          : null;
+      }
 
       const { error } = await client.from('favorite_watches').insert({
         user_id: user.id,
