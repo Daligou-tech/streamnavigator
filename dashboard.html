@@ -1110,15 +1110,7 @@
       const pill = document.createElement('span');
       pill.className = 'fav-pill';
       const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
-      let meta;
-      if (f.kind === 'show') {
-        meta = f.currently_airing
-          ? 'currently airing'
-          : (f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily');
-      } else {
-        const season = FAV_SPORT_SEASONS[f.title];
-        meta = season ? `${season.label} — ${isSportInSeason(f.title) ? 'in season' : 'off-season'}` : (isSportInSeason(f.title) ? 'in season' : 'off-season');
-      }
+      const meta = f.kind === 'show' ? showMetaText(f) : sportMetaText(f.title);
       pill.innerHTML = `${escapeHtml(label)}${f.service_name ? ' → ' + escapeHtml(f.service_name) : ''} <span class="fav-pill-meta">(${escapeHtml(meta)})</span> <button type="button" data-id="${f.id}" aria-label="Remove">✕</button>`;
       list.appendChild(pill);
     });
@@ -1226,6 +1218,28 @@
   // tagged to that service, so this never adds noise to unrelated rows.
   function favoritesForService(serviceName){
     return favoriteRows.filter(f => (f.service_name || '').trim().toLowerCase() === (serviceName || '').trim().toLowerCase());
+  }
+  // Real, verifiable status text for one tracked show — shared by every
+  // place a show's status is displayed (the favorites list, the See-shows
+  // panel, and its dropdown), so the wording never drifts out of sync.
+  function showMetaText(f){
+    return f.currently_airing
+      ? 'currently airing'
+      : (f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily');
+  }
+  // Same idea for a sport: its real, computed season window, not a guess.
+  function sportMetaText(sportKey){
+    const season = FAV_SPORT_SEASONS[sportKey];
+    const status = isSportInSeason(sportKey) ? 'in season' : 'off-season';
+    return season ? `${season.label} — ${status}` : status;
+  }
+  // Distinct show titles across the whole account, case-insensitive —
+  // matches exactly what the "See shows" dropdown lists, so its button
+  // count and its contents never disagree. Sports aren't included.
+  function accountWideShowCount(){
+    const seen = new Set();
+    favoriteRows.forEach(f => { if (f.kind === 'show') seen.add(f.title.trim().toLowerCase()); });
+    return seen.size;
   }
   function computeSuggestion(row){
     const svcFavorites = favoritesForService(row.service_name);
@@ -1375,14 +1389,18 @@
       const row = document.createElement('div');
       row.className = 'sub-row';
 
-      const svcFavCount = favoritesForService(r.service_name).length;
+      // "See shows (N)" counts every distinct show title on the whole
+      // account (not just this service) — the dropdown it opens lists every
+      // show you've ever entered, so the number matches what's actually in
+      // that list. Sports aren't counted here; the button is specifically
+      // about shows.
+      const showCount = accountWideShowCount();
 
-      let showText = '';
-      if (r.show_query) {
-        showText = r.show_next_air_date
-          ? `Waiting for ${escapeHtml(r.show_query)} — next air date ${r.show_next_air_date}`
-          : `Waiting for ${escapeHtml(r.show_query)} — no confirmed air date yet, checking daily`;
-      }
+      // The old per-subscription "waiting for a show" line (r.show_query)
+      // is retired — shows are tracked entirely through the favorites
+      // system now (the "See shows" panel below), so this line is never
+      // rendered even if an old row still has a leftover show_query value
+      // saved from before that change.
       // One prompt per row, not two competing ones: a favorite-based
       // suggestion (real air date / in-season sport) is more specific, so it
       // wins when both apply. The routine check-in cadence is the fallback,
@@ -1408,13 +1426,12 @@
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
-          ${showText ? `<span class="sub-show">${showText}</span>` : ''}
           ${priceAlertText ? `<span class="sub-price-alert">⚠ ${escapeHtml(priceAlertText)}</span>` : ''}
           ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
-          <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${svcFavCount ? ' (' + svcFavCount + ')' : ''}</button>
+          <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}${suggestion && (suggestion.type === 'activate' || suggestion.type === 'pause') ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
@@ -1713,8 +1730,7 @@
     const panel = document.createElement('div');
     panel.className = 'show-edit-row shows-panel';
     panel.innerHTML = `
-      <div class="fav-list" data-role="panel-fav-list" style="width:100%; margin:0 0 6px;"></div>
-      <p class="panel-empty-hint" data-role="panel-empty">Nothing tagged to ${escapeHtml(row.service_name)} yet.</p>
+      <p class="panel-empty-hint">Shows and sports are listed in the dropdowns below with their real status — pick one already tagged to ${escapeHtml(row.service_name)} to remove it, or add a new one.</p>
       <div class="show-panel-add-row">
         <select data-role="show-select"></select>
         <button type="button" class="btn btn-primary btn-sm" data-role="add-show">Add show</button>
@@ -1725,76 +1741,43 @@
       </div>
       <span class="show-preview" data-role="show-preview"></span>
       <div class="show-panel-add-row">
-        <select data-role="sport-select">
-          <option value="nfl">NFL</option>
-          <option value="nba">NBA</option>
-          <option value="mlb">MLB</option>
-          <option value="nhl">NHL</option>
-          <option value="epl">Premier League</option>
-          <option value="laliga">La Liga</option>
-          <option value="bundesliga">Bundesliga</option>
-          <option value="mls">MLS</option>
-          <option value="other_soccer">Other Soccer</option>
-          <option value="college">College Football</option>
-        </select>
+        <select data-role="sport-select"></select>
         <button type="button" class="btn btn-primary btn-sm" data-role="add-sport">Add sport</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-role="remove-sport" title="Remove this sport from ${escapeHtml(row.service_name)}">Remove sport</button>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" data-role="close" style="margin-top:10px;">Close</button>
     `;
     rowEl.insertAdjacentElement('afterend', panel);
 
-    function renderPanelList(){
-      const listEl = panel.querySelector('[data-role="panel-fav-list"]');
-      const emptyEl = panel.querySelector('[data-role="panel-empty"]');
-      const svcFavorites = favoritesForService(row.service_name);
-      listEl.innerHTML = '';
-      emptyEl.style.display = svcFavorites.length ? 'none' : '';
-      svcFavorites.forEach(f => {
-        const pill = document.createElement('span');
-        pill.className = 'fav-pill';
-        const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
-        let meta;
-        if (f.kind === 'show') {
-          meta = f.currently_airing
-            ? 'currently airing'
-            : (f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily');
-        } else {
-          const season = FAV_SPORT_SEASONS[f.title];
-          meta = season ? `${season.label} — ${isSportInSeason(f.title) ? 'in season' : 'off-season'}` : (isSportInSeason(f.title) ? 'in season' : 'off-season');
-        }
-        pill.innerHTML = `${escapeHtml(label)} <span class="fav-pill-meta">(${escapeHtml(meta)})</span> <button type="button" data-id="${f.id}" aria-label="Remove">✕</button>`;
-        listEl.appendChild(pill);
-      });
-    }
-    renderPanelList();
-
     // "Add a show" is a dropdown of every show title already entered
-    // anywhere on this account (across all services), same idea as the
-    // sport dropdown below it — so a title typed once doesn't need
-    // retyping. "+ Add a new show…" switches to a plain text box for a
-    // title that isn't in the list yet. This list is intentionally NOT
-    // filtered by air date or match status — a show that hasn't premiered
-    // yet, or one TVmaze couldn't match, was still typed in by the customer
-    // and belongs here just as much as one that's already aired.
+    // anywhere on this account (across all services), each annotated with
+    // its real, TVmaze-sourced status — so a title typed once doesn't need
+    // retyping, and you can see at a glance whether it's aired yet without
+    // hunting through every service. "+ Add a new show…" switches to a
+    // plain text box for a title that isn't in the list yet. This list is
+    // intentionally NOT filtered by air date or match status — a show that
+    // hasn't premiered yet, or one TVmaze couldn't match, was still typed
+    // in by the customer and belongs here just as much as one that's
+    // already aired.
     const showSelect = panel.querySelector('[data-role="show-select"]');
     const showNewRow = panel.querySelector('[data-role="show-new-row"]');
     const removeShowBtn = panel.querySelector('[data-role="remove-show"]');
     const NEW_SHOW_VALUE = '__new__';
     function populateShowSelect(){
       const seen = new Set();
-      const titles = [];
+      const entries = [];
       favoriteRows.forEach(f => {
         if (f.kind !== 'show') return;
         const key = f.title.trim().toLowerCase();
         if (seen.has(key)) return;
         seen.add(key);
-        titles.push(f.title);
+        entries.push({ title: f.title, meta: showMetaText(f) });
       });
-      titles.sort((a, b) => a.localeCompare(b));
+      entries.sort((a, b) => a.title.localeCompare(b.title));
       const prev = showSelect.value;
       showSelect.innerHTML = `<option value="${NEW_SHOW_VALUE}">+ Add a new show…</option>` +
-        titles.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
-      showSelect.value = titles.includes(prev) ? prev : NEW_SHOW_VALUE;
+        entries.map(e => `<option value="${escapeHtml(e.title)}">${escapeHtml(e.title)} — ${escapeHtml(e.meta)}</option>`).join('');
+      showSelect.value = entries.some(e => e.title === prev) ? prev : NEW_SHOW_VALUE;
     }
     populateShowSelect();
 
@@ -1828,14 +1811,40 @@
       await loadFavorites();
     });
 
-    panel.querySelector('[data-role="panel-fav-list"]').addEventListener('click', async (e) => {
-      const delBtn = e.target.closest('button[data-id]');
-      if (!delBtn) return;
-      const { error } = await client.from('favorite_watches').delete().eq('id', delBtn.dataset.id);
+    // Sports come from a fixed list rather than free text, so the dropdown
+    // is always the same 10 options — but each is annotated with its real
+    // season status, and the one already tagged to this service (if any)
+    // is selected by default so "Remove sport" is immediately usable.
+    const sportSelect = panel.querySelector('[data-role="sport-select"]');
+    const removeSportBtn = panel.querySelector('[data-role="remove-sport"]');
+    const SPORT_OPTIONS = [
+      ['nfl', 'NFL'], ['nba', 'NBA'], ['mlb', 'MLB'], ['nhl', 'NHL'], ['epl', 'Premier League'],
+      ['laliga', 'La Liga'], ['bundesliga', 'Bundesliga'], ['mls', 'MLS'], ['other_soccer', 'Other Soccer'], ['college', 'College Football']
+    ];
+    function populateSportSelect(){
+      const prev = sportSelect.value;
+      sportSelect.innerHTML = SPORT_OPTIONS.map(([key, label]) =>
+        `<option value="${key}">${escapeHtml(label)} — ${escapeHtml(sportMetaText(key))}</option>`
+      ).join('');
+      const taggedHere = favoritesForService(row.service_name).find(f => f.kind === 'sport');
+      sportSelect.value = SPORT_OPTIONS.some(([k]) => k === prev) ? prev : (taggedHere ? taggedHere.title : SPORT_OPTIONS[0][0]);
+    }
+    function syncRemoveSportState(){
+      removeSportBtn.disabled = !favoritesForService(row.service_name).some(f => f.kind === 'sport' && f.title === sportSelect.value);
+    }
+    populateSportSelect();
+    syncRemoveSportState();
+    sportSelect.addEventListener('change', syncRemoveSportState);
+
+    removeSportBtn.addEventListener('click', async () => {
+      const sportKey = sportSelect.value;
+      const match = favoritesForService(row.service_name).find(f => f.kind === 'sport' && f.title === sportKey);
+      if (!match) return;
+      removeSportBtn.disabled = true; removeSportBtn.textContent = 'Removing…';
+      const { error } = await client.from('favorite_watches').delete().eq('id', match.id);
+      removeSportBtn.disabled = false; removeSportBtn.textContent = 'Remove sport';
       if (error) { showToast('Could not remove that.'); return; }
-      // Refreshes favoriteRows, the panel above, and every row's Suggested
-      // badge — this closes this panel as a side effect (same as Save
-      // closing the old price/show editors); reopen "See shows" to continue.
+      showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' removed from ' + row.service_name + '.');
       await loadFavorites();
     });
 
@@ -1923,6 +1932,14 @@
 
     panel.querySelector('[data-role="add-sport"]').addEventListener('click', async () => {
       const sportKey = panel.querySelector('[data-role="sport-select"]').value;
+
+      // Already tagged here — adding it again would just be a silent
+      // duplicate row with no visible effect, so block it like shows does.
+      if (favoritesForService(row.service_name).some(f => f.kind === 'sport' && f.title === sportKey)) {
+        showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' is already tagged to ' + row.service_name + '.');
+        return;
+      }
+
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
 
