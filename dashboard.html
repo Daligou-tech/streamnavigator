@@ -207,6 +207,12 @@
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .price-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .price-edit-row input[type="number"]{ width:110px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
+  .shows-panel{ align-items:flex-start; }
+  .shows-panel .fav-list{ margin:0 0 6px; }
+  .panel-empty-hint{ width:100%; margin:0 0 10px; color:var(--text-dimmer); font-size:13px; }
+  .show-panel-add-row{ display:flex; align-items:center; gap:8px; width:100%; margin-bottom:6px; flex-wrap:wrap; }
+  .show-panel-add-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
+  .show-panel-add-row select{ flex:1; min-width:160px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .empty-state{ text-align:center; padding:30px 10px; color:var(--text-dimmer); font-size:14px; }
 
   .fav-add-grid{ display:grid; grid-template-columns:1.4fr 0.9fr 0.7fr; gap:10px; align-items:end; margin-bottom:10px; }
@@ -418,7 +424,7 @@
 
     <div class="panel">
       <h3>Add a subscription to track</h3>
-      <p class="field-hint">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. If you tell us what show you're waiting on, we check daily for its real next air date (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
+      <p class="field-hint">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it below to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
       <form id="add-form">
         <div class="add-grid-top">
           <div class="field">
@@ -461,11 +467,6 @@
           </div>
         </div>
         <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
-        <div class="field">
-          <label for="add-show">Waiting for a show? (optional)</label>
-          <input type="text" id="add-show" placeholder="e.g. Stranger Things" />
-          <p class="show-preview" id="add-show-preview"></p>
-        </div>
         <button type="submit" class="btn btn-primary">Add</button>
       </form>
     </div>
@@ -1366,6 +1367,8 @@
       const row = document.createElement('div');
       row.className = 'sub-row';
 
+      const svcFavCount = favoritesForService(r.service_name).length;
+
       let showText = '';
       if (r.show_query) {
         showText = r.show_next_air_date
@@ -1403,7 +1406,7 @@
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
-          <button class="btn btn-ghost btn-sm" data-action="edit-show" data-id="${r.id}">${r.show_query ? 'Edit show' : 'Set show'}</button>
+          <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${svcFavCount ? ' (' + svcFavCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}${suggestion && (suggestion.type === 'activate' || suggestion.type === 'pause') ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
@@ -1636,8 +1639,8 @@
       if (error) { showToast('Could not update that.'); return; }
       loadSubscriptions();
 
-    } else if (btn.dataset.action === 'edit-show') {
-      openShowEditor(btn.closest('.sub-row'), row);
+    } else if (btn.dataset.action === 'see-shows') {
+      openShowsPanel(btn.closest('.sub-row'), row);
 
     } else if (btn.dataset.action === 'edit-price') {
       openPriceEditor(btn.closest('.sub-row'), row);
@@ -1686,80 +1689,156 @@
   // Inline "waiting for a show" editor for an existing row — this is the
   // main way most people will attach a show, since it happens when they
   // already have a subscription paused, not just when first adding it.
-  function openShowEditor(rowEl, row){
-    const existing = rowEl.parentElement.querySelector('.show-edit-row');
-    if (existing) existing.remove();
+  // Replaces the old single-show "Edit show" editor. This is now the one
+  // place (besides the "Shows & sports you like to watch" panel above) to
+  // see and manage every show/sport tagged to THIS ONE subscription's
+  // service — no need to re-pick the service from a dropdown, since it's
+  // already known from the row you clicked. Reads and writes favorite_watches
+  // directly, the same table and suggestion engine as the panel above, so
+  // the two stay in sync automatically.
+  function openShowsPanel(rowEl, row){
+    ['.show-edit-row', '.price-edit-row'].forEach(sel => {
+      const existing = rowEl.parentElement.querySelector(sel);
+      if (existing) existing.remove();
+    });
 
-    const editRow = document.createElement('div');
-    editRow.className = 'show-edit-row';
-    editRow.innerHTML = `
-      <input type="text" placeholder="e.g. Stranger Things" value="${escapeHtml(row.show_query || '')}" />
-      <button type="button" class="btn btn-primary btn-sm" data-role="save">Save</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-role="cancel">Cancel</button>
-      <span class="show-preview" data-role="preview"></span>
+    const panel = document.createElement('div');
+    panel.className = 'show-edit-row shows-panel';
+    panel.innerHTML = `
+      <div class="fav-list" data-role="panel-fav-list" style="width:100%; margin:0 0 6px;"></div>
+      <p class="panel-empty-hint" data-role="panel-empty">Nothing tagged to ${escapeHtml(row.service_name)} yet.</p>
+      <div class="show-panel-add-row">
+        <input type="text" placeholder="Add a show, e.g. Stranger Things" data-role="show-title" />
+        <button type="button" class="btn btn-primary btn-sm" data-role="add-show">Add show</button>
+      </div>
+      <span class="show-preview" data-role="show-preview"></span>
+      <div class="show-panel-add-row">
+        <select data-role="sport-select">
+          <option value="nfl">NFL</option>
+          <option value="nba">NBA</option>
+          <option value="mlb">MLB</option>
+          <option value="nhl">NHL</option>
+          <option value="epl">Premier League</option>
+          <option value="laliga">La Liga</option>
+          <option value="bundesliga">Bundesliga</option>
+          <option value="mls">MLS</option>
+          <option value="other_soccer">Other Soccer</option>
+          <option value="college">College Football</option>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" data-role="add-sport">Add sport</button>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" data-role="close" style="margin-top:10px;">Close</button>
     `;
-    rowEl.insertAdjacentElement('afterend', editRow);
-    const input = editRow.querySelector('input');
-    input.focus();
+    rowEl.insertAdjacentElement('afterend', panel);
 
-    editRow.querySelector('[data-role="cancel"]').addEventListener('click', () => editRow.remove());
+    function renderPanelList(){
+      const listEl = panel.querySelector('[data-role="panel-fav-list"]');
+      const emptyEl = panel.querySelector('[data-role="panel-empty"]');
+      const svcFavorites = favoritesForService(row.service_name);
+      listEl.innerHTML = '';
+      emptyEl.style.display = svcFavorites.length ? 'none' : '';
+      svcFavorites.forEach(f => {
+        const pill = document.createElement('span');
+        pill.className = 'fav-pill';
+        const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
+        let meta;
+        if (f.kind === 'show') {
+          meta = f.currently_airing
+            ? 'currently airing'
+            : (f.next_air_date ? `next episode ${f.next_air_date}` : 'no confirmed air date yet, checking daily');
+        } else {
+          const season = FAV_SPORT_SEASONS[f.title];
+          meta = season ? `${season.label} — ${isSportInSeason(f.title) ? 'in season' : 'off-season'}` : (isSportInSeason(f.title) ? 'in season' : 'off-season');
+        }
+        pill.innerHTML = `${escapeHtml(label)} <span class="fav-pill-meta">(${escapeHtml(meta)})</span> <button type="button" data-id="${f.id}" aria-label="Remove">✕</button>`;
+        listEl.appendChild(pill);
+      });
+    }
+    renderPanelList();
 
-    editRow.querySelector('[data-role="save"]').addEventListener('click', async () => {
-      const preview = editRow.querySelector('[data-role="preview"]');
-      const query = input.value.trim();
+    panel.querySelector('[data-role="panel-fav-list"]').addEventListener('click', async (e) => {
+      const delBtn = e.target.closest('button[data-id]');
+      if (!delBtn) return;
+      const { error } = await client.from('favorite_watches').delete().eq('id', delBtn.dataset.id);
+      if (error) { showToast('Could not remove that.'); return; }
+      // Refreshes favoriteRows, the panel above, and every row's Suggested
+      // badge — this closes this panel as a side effect (same as Save
+      // closing the old price/show editors); reopen "See shows" to continue.
+      await loadFavorites();
+    });
 
-      if (!query) {
-        const { error } = await client.from('tracked_subscriptions').update({
-          show_query: null, tvmaze_show_id: null, show_next_air_date: null, show_checked_at: null,
-          ...computeReminder(row.status, row.status_changed_at, null)
-        }).eq('id', row.id);
-        if (error) { showToast('Could not update that.'); return; }
-        showToast('Show cleared.');
-        loadSubscriptions();
-        return;
-      }
-
+    const titleInput = panel.querySelector('[data-role="show-title"]');
+    const preview = panel.querySelector('[data-role="show-preview"]');
+    let panelShowLookupToken = 0;
+    titleInput.addEventListener('blur', async () => {
+      const query = titleInput.value.trim();
+      if (!query) { preview.textContent = ''; preview.className = 'show-preview'; return; }
+      const token = ++panelShowLookupToken;
       preview.textContent = 'Checking TVmaze…';
       preview.className = 'show-preview checking';
       const match = await lookupShow(query);
-      const airDate = match && match.found ? match.next_air_date : null;
-      const nowIso = new Date().toISOString();
-
-      const { error } = await client.from('tracked_subscriptions').update({
-        show_query: query,
-        tvmaze_show_id: match && match.found ? match.id : null,
-        show_next_air_date: airDate,
-        show_checked_at: nowIso,
-        ...computeReminder(row.status, row.status_changed_at, airDate)
-      }).eq('id', row.id);
-      if (error) { showToast('Could not update that.'); return; }
-      showToast(query + ' saved.');
-      loadSubscriptions();
+      if (token !== panelShowLookupToken) return;
+      if (match && match.found && match.currently_airing) {
+        preview.textContent = `Matched "${match.name}" — currently airing.`;
+        preview.className = 'show-preview found';
+      } else if (match && match.found && match.next_air_date) {
+        preview.textContent = `Matched "${match.name}" — next episode ${match.next_air_date}.`;
+        preview.className = 'show-preview found';
+      } else if (match && match.found) {
+        preview.textContent = `Matched "${match.name}" — no upcoming episode date yet. We'll keep checking daily.`;
+        preview.className = 'show-preview none';
+      } else {
+        preview.textContent = `Couldn't find that show — we'll keep checking daily once it's spelled right.`;
+        preview.className = 'show-preview none';
+      }
     });
-  }
 
-  // Live preview while adding a new subscription
-  let addShowLookupToken = 0;
-  document.getElementById('add-show').addEventListener('blur', async (e) => {
-    const preview = document.getElementById('add-show-preview');
-    const query = e.target.value.trim();
-    if (!query) { preview.textContent = ''; preview.className = 'show-preview'; return; }
-    const token = ++addShowLookupToken;
-    preview.textContent = 'Checking TVmaze…';
-    preview.className = 'show-preview checking';
-    const match = await lookupShow(query);
-    if (token !== addShowLookupToken) return; // a newer lookup started; drop this one
-    if (match && match.found && match.next_air_date) {
-      preview.textContent = `Next episode of "${match.name}": ${match.next_air_date}`;
-      preview.className = 'show-preview found';
-    } else if (match && match.found) {
-      preview.textContent = `Found "${match.name}" — no upcoming episode date yet. We'll keep checking daily.`;
-      preview.className = 'show-preview none';
-    } else {
-      preview.textContent = `Couldn't find that show — we'll keep checking daily once it's spelled right.`;
-      preview.className = 'show-preview none';
-    }
-  });
+    panel.querySelector('[data-role="add-show"]').addEventListener('click', async () => {
+      const title = titleInput.value.trim();
+      if (!title) return;
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+      const addBtn = panel.querySelector('[data-role="add-show"]');
+      addBtn.disabled = true; addBtn.textContent = 'Checking…';
+      const match = await lookupShow(title);
+      addBtn.disabled = false; addBtn.textContent = 'Add show';
+
+      const { error } = await client.from('favorite_watches').insert({
+        user_id: user.id,
+        kind: 'show',
+        title,
+        service_name: row.service_name,
+        tvmaze_show_id: match && match.found ? match.id : null,
+        next_air_date: match && match.found ? match.next_air_date : null,
+        currently_airing: match && match.found ? !!match.currently_airing : false,
+        checked_at: new Date().toISOString()
+      });
+      if (error) { showToast('Could not add that show.'); return; }
+      showToast(title + ' added.');
+      await loadFavorites();
+    });
+
+    panel.querySelector('[data-role="add-sport"]').addEventListener('click', async () => {
+      const sportKey = panel.querySelector('[data-role="sport-select"]').value;
+      const { data: { user } } = await client.auth.getUser();
+      if (!user) return;
+
+      const { error } = await client.from('favorite_watches').insert({
+        user_id: user.id,
+        kind: 'sport',
+        title: sportKey,
+        service_name: row.service_name,
+        tvmaze_show_id: null,
+        next_air_date: null,
+        checked_at: null
+      });
+      if (error) { showToast('Could not add that.'); return; }
+      showToast((FAV_SPORT_LABELS[sportKey] || sportKey) + ' added.');
+      await loadFavorites();
+    });
+
+    panel.querySelector('[data-role="close"]').addEventListener('click', () => panel.remove());
+  }
 
   document.getElementById('add-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1768,13 +1847,11 @@
     const name = document.getElementById('add-name').value.trim();
     const price = parseFloat(document.getElementById('add-price').value);
     const status = document.getElementById('add-status').value;
-    const showQuery = document.getElementById('add-show').value.trim();
-
-    let showMatch = null;
-    if (showQuery) showMatch = await lookupShow(showQuery);
-    const airDate = showMatch && showMatch.found ? showMatch.next_air_date : null;
     const nowIso = new Date().toISOString();
 
+    // No show is attached at creation time anymore — once the subscription
+    // exists, "See shows" on the row below is the one place to tag shows and
+    // sports to it (writes to favorite_watches, supports more than one).
     const { error } = await client.from('tracked_subscriptions').insert({
       user_id: user.id,
       service_id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
@@ -1782,16 +1859,11 @@
       monthly_price: isNaN(price) ? 0 : price,
       status,
       status_changed_at: nowIso,
-      show_query: showQuery || null,
-      tvmaze_show_id: showMatch && showMatch.found ? showMatch.id : null,
-      show_next_air_date: airDate,
-      show_checked_at: showQuery ? nowIso : null,
-      ...computeReminder(status, nowIso, airDate)
+      ...computeReminder(status, nowIso, null)
     });
     if (error) { showToast('Could not add that subscription.'); return; }
     showToast(name + ' added.');
     e.target.reset();
-    document.getElementById('add-show-preview').textContent = '';
     loadSubscriptions();
   });
 
