@@ -1233,13 +1233,12 @@
     const status = isSportInSeason(sportKey) ? 'in season' : 'off-season';
     return season ? `${season.label} — ${status}` : status;
   }
-  // Distinct show titles across the whole account, case-insensitive —
-  // matches exactly what the "See shows" dropdown lists, so its button
-  // count and its contents never disagree. Sports aren't included.
-  function accountWideShowCount(){
-    const seen = new Set();
-    favoriteRows.forEach(f => { if (f.kind === 'show') seen.add(f.title.trim().toLowerCase()); });
-    return seen.size;
+  // Shows tagged to one specific service — matches exactly what that
+  // service's "See shows" dropdown lists, so its button count and its
+  // contents never disagree. Sports aren't included; the button says
+  // "shows".
+  function showCountForService(serviceName){
+    return favoritesForService(serviceName).filter(f => f.kind === 'show').length;
   }
   function computeSuggestion(row){
     const svcFavorites = favoritesForService(row.service_name);
@@ -1389,12 +1388,11 @@
       const row = document.createElement('div');
       row.className = 'sub-row';
 
-      // "See shows (N)" counts every distinct show title on the whole
-      // account (not just this service) — the dropdown it opens lists every
-      // show you've ever entered, so the number matches what's actually in
-      // that list. Sports aren't counted here; the button is specifically
-      // about shows.
-      const showCount = accountWideShowCount();
+      // "See shows (N)" counts only the shows tagged to THIS service — the
+      // dropdown it opens lists the same set, so the number always matches
+      // what's actually in that list. Sports aren't counted here; the
+      // button is specifically about shows.
+      const showCount = showCountForService(r.service_name);
 
       // The old per-subscription "waiting for a show" line (r.show_query)
       // is retired — shows are tracked entirely through the favorites
@@ -1749,31 +1747,21 @@
     `;
     rowEl.insertAdjacentElement('afterend', panel);
 
-    // "Add a show" is a dropdown of every show title already entered
-    // anywhere on this account (across all services), each annotated with
-    // its real, TVmaze-sourced status — so a title typed once doesn't need
-    // retyping, and you can see at a glance whether it's aired yet without
-    // hunting through every service. "+ Add a new show…" switches to a
-    // plain text box for a title that isn't in the list yet. This list is
-    // intentionally NOT filtered by air date or match status — a show that
-    // hasn't premiered yet, or one TVmaze couldn't match, was still typed
-    // in by the customer and belongs here just as much as one that's
-    // already aired.
+    // "Add a show" lists only the shows already tagged to THIS service
+    // (e.g. Peacock's dropdown never shows a title tagged to Hulu) — each
+    // annotated with its real, TVmaze-sourced status, so you can see what's
+    // tagged here and its status at a glance. "+ Add a new show…" switches
+    // to a plain text box for typing a title, new or not, to tag here.
     const showSelect = panel.querySelector('[data-role="show-select"]');
     const showNewRow = panel.querySelector('[data-role="show-new-row"]');
     const removeShowBtn = panel.querySelector('[data-role="remove-show"]');
+    const addShowBtn = panel.querySelector('[data-role="add-show"]');
     const NEW_SHOW_VALUE = '__new__';
     function populateShowSelect(){
-      const seen = new Set();
-      const entries = [];
-      favoriteRows.forEach(f => {
-        if (f.kind !== 'show') return;
-        const key = f.title.trim().toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        entries.push({ title: f.title, meta: showMetaText(f) });
-      });
-      entries.sort((a, b) => a.title.localeCompare(b.title));
+      const entries = favoritesForService(row.service_name)
+        .filter(f => f.kind === 'show')
+        .map(f => ({ title: f.title, meta: showMetaText(f) }))
+        .sort((a, b) => a.title.localeCompare(b.title));
       const prev = showSelect.value;
       showSelect.innerHTML = `<option value="${NEW_SHOW_VALUE}">+ Add a new show…</option>` +
         entries.map(e => `<option value="${escapeHtml(e.title)}">${escapeHtml(e.title)} — ${escapeHtml(e.meta)}</option>`).join('');
@@ -1784,6 +1772,10 @@
     function syncShowRowVisibility(){
       const isNew = showSelect.value === NEW_SHOW_VALUE;
       showNewRow.hidden = !isNew;
+      // Selecting an already-tagged show has nothing left to "add" — it's
+      // there to be removed, not re-added (the duplicate guard below would
+      // block re-adding it anyway).
+      addShowBtn.disabled = !isNew;
       removeShowBtn.disabled = isNew;
       if (isNew) panel.querySelector('[data-role="show-title"]').focus();
     }
@@ -1793,21 +1785,18 @@
       syncShowRowVisibility();
     });
 
-    // Removes the selected show everywhere it's tagged on this account (it
-    // may be tagged to more than one service), not just from this row's
-    // service — the dropdown lists titles account-wide, so "remove" here
-    // means "stop tracking this show," matching what the customer is
-    // looking at when they pick it from this list.
+    // Un-tags the selected show from THIS service only — it stays tagged to
+    // any other service it might separately be tracked under.
     removeShowBtn.addEventListener('click', async () => {
       const title = showSelect.value;
       if (!title || title === NEW_SHOW_VALUE) return;
-      const matches = favoriteRows.filter(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase());
-      if (!matches.length) return;
+      const match = favoritesForService(row.service_name).find(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase());
+      if (!match) return;
       removeShowBtn.disabled = true; removeShowBtn.textContent = 'Removing…';
-      const { error } = await client.from('favorite_watches').delete().in('id', matches.map(f => f.id));
+      const { error } = await client.from('favorite_watches').delete().eq('id', match.id);
       removeShowBtn.disabled = false; removeShowBtn.textContent = 'Remove show';
       if (error) { showToast('Could not remove that show.'); return; }
-      showToast(title + ' removed' + (matches.length > 1 ? ` (was tagged to ${matches.length} services)` : '') + '.');
+      showToast(title + ' removed from ' + row.service_name + '.');
       await loadFavorites();
     });
 
@@ -1887,9 +1876,10 @@
         return;
       }
 
-      // Selecting a title already tagged to THIS service would just create a
-      // silent duplicate row — block it instead, same title can still be
-      // added to a different service.
+      // Already tagged to THIS service — block re-adding it as a silent
+      // duplicate. (This is really only reachable if "+ Add a new show…"
+      // is used to retype a title that's already tagged here — every other
+      // dropdown option is disabled from re-adding via addShowBtn above.)
       if (favoritesForService(row.service_name).some(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase())) {
         showToast(title + ' is already tagged to ' + row.service_name + '.');
         return;
@@ -1897,23 +1887,10 @@
 
       const { data: { user } } = await client.auth.getUser();
       if (!user) return;
-      const addBtn = panel.querySelector('[data-role="add-show"]');
 
-      let match;
-      if (isNew) {
-        // Brand-new title: look it up on TVmaze fresh.
-        addBtn.disabled = true; addBtn.textContent = 'Checking…';
-        match = await lookupShow(title);
-        addBtn.disabled = false; addBtn.textContent = 'Add show';
-      } else {
-        // Reusing a title already entered elsewhere on this account — reuse
-        // its already-known TVmaze match instead of a redundant lookup; the
-        // daily cron job keeps it fresh either way.
-        const existing = favoriteRows.find(f => f.kind === 'show' && f.title.trim().toLowerCase() === title.toLowerCase());
-        match = existing
-          ? { found: !!existing.tvmaze_show_id, id: existing.tvmaze_show_id, next_air_date: existing.next_air_date, currently_airing: existing.currently_airing }
-          : null;
-      }
+      addShowBtn.disabled = true; addShowBtn.textContent = 'Checking…';
+      const match = await lookupShow(title);
+      addShowBtn.disabled = false; addShowBtn.textContent = 'Add show';
 
       const { error } = await client.from('favorite_watches').insert({
         user_id: user.id,
