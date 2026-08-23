@@ -1240,6 +1240,35 @@
     const status = isSportInSeason(sportKey) ? 'in season' : 'off-season';
     return season ? `${season.label} — ${status}` : status;
   }
+  // Which of our recognized streaming services actually carry each league,
+  // as of the 2025-26/2026 season — real US media-rights deals, not a
+  // guess, so "See shows" never offers a pairing that doesn't exist (e.g.
+  // La Liga isn't on Peacock — it's ESPN-exclusive). Rights deals shift
+  // most offseasons, so this list is worth rechecking yearly. A service not
+  // in this map (a custom-typed name, or one of ours we have no sports deal
+  // on record for) is left unrestricted, since we have no data to block on.
+  const SPORT_SERVICE_MAP = {
+    netflix: ['nfl', 'mlb'],                          // NFL Christmas Day games; select MLB games
+    hulu: ['nhl'],                                    // part of ESPN's NHL package
+    'disney+': ['nhl'],                               // part of ESPN's NHL package
+    max: ['nhl'],                                     // TNT Sports NHL package
+    'hbo max': ['nhl'],                                // legacy rows saved before the HBO Max rename
+    'prime video': ['nfl', 'nba'],                     // Thursday Night Football; national NBA games
+    'youtube tv': ['nfl'],                             // NFL Sunday Ticket
+    'youtube premium': [],                             // ad-free YouTube — not the same product as YouTube TV
+    'paramount+': ['college'],                         // Big Ten on CBS/Paramount+
+    peacock: ['nfl', 'nba', 'mlb', 'epl', 'college'],  // Premier League exclusive; NFL/NBA/MLB/Big Ten packages
+    'apple tv+': ['mlb', 'mls'],                       // Friday Night Baseball; MLS included with Apple TV+ since 2026
+    crunchyroll: []                                    // anime only, no sports
+  };
+  function isSportValidForService(sportKey, serviceName){
+    // "Other Soccer" is a deliberate catch-all for leagues outside our
+    // fixed list, so there's nothing specific to verify — never block it.
+    if (sportKey === 'other_soccer') return true;
+    const key = (serviceName || '').trim().toLowerCase();
+    if (!(key in SPORT_SERVICE_MAP)) return true;
+    return SPORT_SERVICE_MAP[key].includes(sportKey);
+  }
   // Shows tagged to one specific service — matches exactly what that
   // service's "See shows" dropdown lists, so its button count and its
   // contents never disagree. Sports aren't included; the button says
@@ -1807,23 +1836,36 @@
       await loadFavorites();
     });
 
-    // Sports come from a fixed list rather than free text, so the dropdown
-    // is always the same 10 options — but each is annotated with its real
-    // season status, and the one already tagged to this service (if any)
-    // is selected by default so "Remove sport" is immediately usable.
+    // Sports come from a fixed list, filtered to what this service actually
+    // carries (real media-rights data, not a guess) — e.g. Peacock's list
+    // won't offer La Liga, since Peacock doesn't stream it. A sport already
+    // (wrongly) tagged here stays visible regardless, labeled as such, so
+    // it can still be selected and removed.
     const sportSelect = panel.querySelector('[data-role="sport-select"]');
     const removeSportBtn = panel.querySelector('[data-role="remove-sport"]');
+    const addSportBtn = panel.querySelector('[data-role="add-sport"]');
     const SPORT_OPTIONS = [
       ['nfl', 'NFL'], ['nba', 'NBA'], ['mlb', 'MLB'], ['nhl', 'NHL'], ['epl', 'Premier League'],
       ['laliga', 'La Liga'], ['bundesliga', 'Bundesliga'], ['mls', 'MLS'], ['other_soccer', 'Other Soccer'], ['college', 'College Football']
     ];
     function populateSportSelect(){
       const prev = sportSelect.value;
-      sportSelect.innerHTML = SPORT_OPTIONS.map(([key, label]) =>
-        `<option value="${key}">${escapeHtml(label)} — ${escapeHtml(sportMetaText(key))}</option>`
-      ).join('');
+      const taggedKeys = favoritesForService(row.service_name).filter(f => f.kind === 'sport').map(f => f.title);
+      const visible = SPORT_OPTIONS.filter(([key]) => isSportValidForService(key, row.service_name) || taggedKeys.includes(key));
+
+      if (!visible.length) {
+        sportSelect.innerHTML = `<option value="">No sports we know of stream on ${escapeHtml(row.service_name)}</option>`;
+        addSportBtn.disabled = true;
+        return;
+      }
+      addSportBtn.disabled = false;
+      sportSelect.innerHTML = visible.map(([key, label]) => {
+        const valid = isSportValidForService(key, row.service_name);
+        const meta = valid ? sportMetaText(key) : `not usually available on ${row.service_name} — consider removing`;
+        return `<option value="${key}">${escapeHtml(label)} — ${escapeHtml(meta)}</option>`;
+      }).join('');
       const taggedHere = favoritesForService(row.service_name).find(f => f.kind === 'sport');
-      sportSelect.value = SPORT_OPTIONS.some(([k]) => k === prev) ? prev : (taggedHere ? taggedHere.title : SPORT_OPTIONS[0][0]);
+      sportSelect.value = visible.some(([k]) => k === prev) ? prev : (taggedHere ? taggedHere.title : visible[0][0]);
     }
     function syncRemoveSportState(){
       removeSportBtn.disabled = !favoritesForService(row.service_name).some(f => f.kind === 'sport' && f.title === sportSelect.value);
@@ -1916,6 +1958,7 @@
 
     panel.querySelector('[data-role="add-sport"]').addEventListener('click', async () => {
       const sportKey = panel.querySelector('[data-role="sport-select"]').value;
+      if (!sportKey) return; // nothing valid to add (see populateSportSelect)
 
       // Already tagged here — adding it again would just be a silent
       // duplicate row with no visible effect, so block it like shows does.
