@@ -106,15 +106,15 @@
   .btn-primary:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px); }
   .btn-ghost{ background:var(--surface); color:var(--text); box-shadow:var(--shadow-hard-xs); }
   .btn-ghost:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
-  /* The Pause now / Activate now button's color now answers one question
-     only — "does this row need your attention right now?" — independent of
-     whether the action itself is to pause or activate. Green = nothing
-     flagged, you're fine as-is. Red + blinking = there's a real, computed
-     "Suggested: ..." reason attached to this row (see needs-attention usage
-     in renderSubscriptions()); it never blinks red without matching text
-     explaining why, right next to it. */
-  .btn-toggle{ background:var(--status-active); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
-  .btn-toggle:hover{ background:var(--status-active-deep); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+  /* White is the resting color for every button on the page, with exactly
+     one exception: the Pause now / Activate now toggle, which is the only
+     button that ever carries a color signal, and only when there's a real,
+     computed "Suggested: ..." reason attached to that row (see
+     needs-attention usage in renderSubscriptions()) — it never blinks red
+     without matching text right next to it explaining why. No suggestion,
+     no color: same white as everything else. */
+  .btn-toggle{ background:var(--surface); color:var(--text); font-weight:800; box-shadow:var(--shadow-hard-xs); }
+  .btn-toggle:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
   @keyframes needsAttentionBlink{
     0%, 49%{ background:#E4293D; border-color:#7A0F1C; color:#fff; box-shadow:0 0 0 4px rgba(228,41,61,0.38), var(--shadow-hard-xs); }
     50%, 100%{ background:#FFB3BA; border-color:#7A0F1C; color:var(--ink); box-shadow:var(--shadow-hard-xs); }
@@ -339,7 +339,7 @@
           <label for="auth-password">Password</label>
           <input type="password" id="auth-password" required autocomplete="current-password" minlength="6" />
         </div>
-        <button type="submit" class="btn btn-primary auth-submit" id="auth-submit-btn">Log In</button>
+        <button type="submit" class="btn btn-ghost auth-submit" id="auth-submit-btn">Log In</button>
       </form>
       <p class="auth-msg" id="auth-msg"></p>
       <p class="auth-note">Passwords are hashed and stored securely by Supabase — StreamNavigator never sees or stores them in plain text.</p>
@@ -380,7 +380,7 @@
             <li>Real-time price-hike alerts</li>
             <li>Personalized plan optimizer — see what you'd save</li>
           </ul>
-          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-primary" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
+          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-ghost" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
         </div>
         <div class="upgrade-card">
           <h4>Family</h4>
@@ -406,7 +406,7 @@
           <input type="email" id="household-invite-email" placeholder="name@example.com" />
         </div>
         <div class="field">
-          <button type="button" class="btn btn-primary" id="household-invite-btn" style="width:100%;">Send invite</button>
+          <button type="button" class="btn btn-ghost" id="household-invite-btn" style="width:100%;">Send invite</button>
         </div>
       </div>
       <p class="field-hint" id="household-invite-msg" style="margin-top:-6px; min-height:16px;"></p>
@@ -478,7 +478,7 @@
           </div>
         </div>
         <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
-        <button type="submit" class="btn btn-primary">Add</button>
+        <button type="submit" class="btn btn-ghost">Add</button>
       </form>
     </div>
 
@@ -494,7 +494,7 @@
 
       <div class="upgrade-lock" id="fav-panel-locked" hidden>
         <p><strong>Real-time pause &amp; resume reminders are a Pro and Family feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
-        <a href="#upgrade-pro-link" class="btn btn-primary btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
+        <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
       </div>
 
       <div id="fav-panel-body">
@@ -509,7 +509,7 @@
             <select id="fav-show-service"></select>
           </div>
           <div class="field">
-            <button type="button" class="btn btn-primary" id="fav-show-add" style="width:100%;">Add show</button>
+            <button type="button" class="btn btn-ghost" id="fav-show-add" style="width:100%;">Add show</button>
           </div>
         </div>
 
@@ -534,7 +534,7 @@
             <select id="fav-sport-service"></select>
           </div>
           <div class="field">
-            <button type="button" class="btn btn-primary" id="fav-sport-add" style="width:100%;">Add sport</button>
+            <button type="button" class="btn btn-ghost" id="fav-sport-add" style="width:100%;">Add sport</button>
           </div>
         </div>
 
@@ -581,7 +581,7 @@
       <div class="analyzer" id="analyzer">
         <div class="upgrade-lock" id="analyzer-locked" hidden>
           <p><strong>Analyzing your subscriptions against better plans is a Pro and Family feature.</strong> Upgrade to see your current setup, our recommended setup, and exactly what you'd save.</p>
-          <a href="#upgrade-pro-link" class="btn btn-primary btn-sm">Upgrade to Pro →</a>
+          <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm">Upgrade to Pro →</a>
         </div>
 
         <div id="analyzer-body">
@@ -589,7 +589,7 @@
             <p>See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
           </div>
 
-          <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
+          <button class="btn btn-ghost analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
 
           <div class="analyzer-results" id="analyzer-results" hidden>
             <div class="result-stats">
@@ -1512,7 +1512,7 @@
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           <button class="btn btn-sm btn-toggle${suggestion ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
-          <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
       list.appendChild(row);
@@ -1764,7 +1764,7 @@
     editRow.className = 'price-edit-row';
     editRow.innerHTML = `
       <input type="number" step="0.01" min="0" value="${Number(row.monthly_price).toFixed(2)}" />
-      <button type="button" class="btn btn-primary btn-sm" data-role="save">Save</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-role="save">Save</button>
       <button type="button" class="btn btn-ghost btn-sm" data-role="cancel">Cancel</button>
     `;
     rowEl.insertAdjacentElement('afterend', editRow);
@@ -1811,7 +1811,7 @@
       <p class="panel-empty-hint">Shows and sports are listed in the dropdowns below with their real status — pick one already tagged to ${escapeHtml(row.service_name)} to remove it, or add a new one.</p>
       <div class="show-panel-add-row">
         <select data-role="show-select"></select>
-        <button type="button" class="btn btn-primary btn-sm" data-role="add-show">Add show</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-role="add-show">Add show</button>
         <button type="button" class="btn btn-ghost btn-sm" data-role="remove-show" title="Stop tracking this show everywhere">Remove show</button>
       </div>
       <div class="show-panel-add-row" data-role="show-new-row" hidden>
@@ -1820,7 +1820,7 @@
       <span class="show-preview" data-role="show-preview"></span>
       <div class="show-panel-add-row">
         <select data-role="sport-select"></select>
-        <button type="button" class="btn btn-primary btn-sm" data-role="add-sport">Add sport</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-role="add-sport">Add sport</button>
         <button type="button" class="btn btn-ghost btn-sm" data-role="remove-sport" title="Remove this sport from ${escapeHtml(row.service_name)}">Remove sport</button>
       </div>
       <button type="button" class="btn btn-ghost btn-sm" data-role="close" style="margin-top:10px;">Close</button>
