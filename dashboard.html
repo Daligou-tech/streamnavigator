@@ -109,9 +109,10 @@
   /* White is the resting color for every button on the page, with exactly
      one exception: the Pause now / Activate now toggle, which is the only
      button that ever carries a color signal, and only when there's a real,
-     computed "Suggested: ..." reason attached to that row (see
-     needs-attention usage in renderSubscriptions()) — it never blinks red
-     without matching text right next to it explaining why. No suggestion,
+     reason attached to that row — either a computed "Suggested: ..."
+     prompt, or a self-reported price increase (see needs-attention usage
+     in renderSubscriptions()) — it never blinks red without matching text
+     right next to it explaining why. No suggestion and no price alert,
      no color: same white as everything else. */
   .btn-toggle{ background:var(--surface); color:var(--text); font-weight:800; box-shadow:var(--shadow-hard-xs); }
   .btn-toggle:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
@@ -152,6 +153,10 @@
   /* ---- Dashboard view ---- */
   .dash-head{ margin-bottom:28px; }
   .dash-head p{ color:var(--text-dim); font-size:14.5px; }
+  .name-edit-row{ margin-top:8px; }
+  .name-edit-link{ background:none; border:none; padding:0; font:inherit; font-size:13px; font-weight:700; color:var(--accent-deep); text-decoration:underline; cursor:pointer; }
+  .name-edit-form{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .name-edit-form input{ padding:8px 12px; border-radius:var(--radius-sm); border:2px solid var(--ink); font-family:inherit; font-size:13.5px; width:200px; }
   .stat-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:36px; }
   .stat-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow-hard-xs); }
   .stat-card .label{ font-size:11.5px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
@@ -257,6 +262,7 @@
   .sub-suggestion.pause{ color:var(--status-paused-deep); }
   .sub-suggestion.info{ color:var(--accent-3-deep); }
   .sub-price-alert{ font-size:14px; font-weight:800; color:var(--danger-deep); }
+  .sub-price-alert.decrease{ color:var(--status-active-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
@@ -387,6 +393,10 @@
         <div class="auth-tab" data-mode="signup">Sign Up</div>
       </div>
       <form id="auth-form">
+        <div class="field" id="auth-first-name-field" hidden>
+          <label for="auth-first-name">First name</label>
+          <input type="text" id="auth-first-name" autocomplete="given-name" placeholder="e.g. Sam" />
+        </div>
         <div class="field">
           <label for="auth-email">Email</label>
           <input type="email" id="auth-email" required autocomplete="email" />
@@ -405,8 +415,16 @@
   <!-- Dashboard: shown when logged in -->
   <div id="dashboard-view" hidden>
     <div class="dash-head">
-      <h1>Welcome back<span id="welcome-email"></span>.</h1>
+      <h1>Welcome back<span id="welcome-name"></span>.</h1>
       <p>Here's everything you're tracking and what it's costing you.</p>
+      <div class="name-edit-row">
+        <button type="button" class="name-edit-link" id="name-edit-toggle">Add your name</button>
+        <div class="name-edit-form" id="name-edit-form" hidden>
+          <input type="text" id="name-edit-input" placeholder="First name" maxlength="60" />
+          <button type="button" class="btn btn-ghost btn-sm" id="name-edit-save">Save</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="name-edit-cancel">Cancel</button>
+        </div>
+      </div>
     </div>
 
     <div class="savings-banner" id="savings-banner" hidden>
@@ -505,7 +523,7 @@
 
     <div class="panel">
       <h3>Add a subscription to track</h3>
-      <p class="field-hint">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it below to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
+      <p class="plan-status-text">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it below to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
       <form id="add-form">
         <div class="add-grid-top">
           <div class="field">
@@ -1503,6 +1521,10 @@
       mode = tab.dataset.mode;
       document.getElementById('auth-submit-btn').textContent = mode === 'signup' ? 'Sign Up' : 'Log In';
       document.getElementById('auth-msg').textContent = '';
+      // First name is only asked for at signup — a returning user logging
+      // in already has one on file (or doesn't, and can add it from the
+      // dashboard), so there's nothing useful to collect here.
+      document.getElementById('auth-first-name-field').hidden = mode !== 'signup';
     });
   });
 
@@ -1510,6 +1532,7 @@
     e.preventDefault();
     const email = document.getElementById('auth-email').value.trim();
     const password = document.getElementById('auth-password').value;
+    const firstName = document.getElementById('auth-first-name').value.trim();
     const msgEl = document.getElementById('auth-msg');
     const btn = document.getElementById('auth-submit-btn');
     msgEl.textContent = '';
@@ -1518,7 +1541,12 @@
 
     try {
       if (mode === 'signup') {
-        const { data, error } = await client.auth.signUp({ email, password });
+        // Stored in Supabase Auth's own user_metadata rather than a new
+        // table — it's private to this user by construction (nobody can
+        // read another account's session/user object), so there's no RLS
+        // policy to get right, and one fewer migration for a single field.
+        const signUpOptions = firstName ? { data: { first_name: firstName } } : undefined;
+        const { data, error } = await client.auth.signUp({ email, password, options: signUpOptions });
         if (error) throw error;
         if (data.session) {
           msgEl.textContent = "Account created! You're logged in.";
@@ -1589,38 +1617,48 @@
       // their subscriptions and can still pause/activate manually, but
       // doesn't get the "worth activating/pausing" prompts.
       const suggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r)) : null;
-      // Any suggestion at all — pause, activate, or the softer "nothing
-      // tagged yet" info nudge — means this row has something worth the
-      // customer's attention, so it gets the same red accent/blink
-      // treatment. One consistent rule ("is there text here explaining
-      // something?") is easier to read at a glance than three different
-      // shades of urgency.
-      if (suggestion) row.classList.add('flagged');
 
-      // Real-time price-hike alerts (Pro/Family): flagged whenever the price
-      // you last saved is higher than what it was before you last edited it
-      // here — real, self-reported data, not a live feed we don't have
-      // access to. See "Edit price" below for how previous_monthly_price
-      // gets set.
+      // Real-time price-change alerts (Pro/Family): flagged whenever the
+      // price you last saved differs from what it was before you last
+      // edited it here — real, self-reported data, not a live feed we
+      // don't have access to. See "Edit price" below for how
+      // previous_monthly_price gets set (and cleared — re-saving the same
+      // number is how a customer dismisses an alert once they've seen it).
+      // Increases and decreases both get a line, but only an increase gets
+      // the red accent/blink treatment below — a price drop is good news,
+      // not something that needs the same "needs attention" urgency as a
+      // suggestion or a hike.
       let priceAlertText = '';
-      if (isPro() && r.previous_monthly_price != null && Number(r.monthly_price) > Number(r.previous_monthly_price)) {
+      let priceIncreased = false;
+      if (isPro() && r.previous_monthly_price != null && Number(r.monthly_price) !== Number(r.previous_monthly_price)) {
         const changedDate = r.price_changed_at ? r.price_changed_at.slice(0, 10) : '';
-        priceAlertText = `Price increased from ${fmt(r.previous_monthly_price)} to ${fmt(r.monthly_price)}${changedDate ? ' as of ' + changedDate : ''}`;
+        priceIncreased = Number(r.monthly_price) > Number(r.previous_monthly_price);
+        const direction = priceIncreased ? 'increased' : 'decreased';
+        priceAlertText = `Price ${direction} from ${fmt(r.previous_monthly_price)} to ${fmt(r.monthly_price)}${changedDate ? ' as of ' + changedDate : ''}`;
       }
+
+      // Any suggestion at all — pause, activate, or the softer "nothing
+      // tagged yet" info nudge — OR a real price increase means this row has
+      // something worth the customer's attention, so it gets the same red
+      // accent/blink treatment. One consistent rule ("is there text here
+      // explaining something?") is easier to read at a glance than several
+      // different shades of urgency.
+      const flagged = !!(suggestion || priceIncreased);
+      if (flagged) row.classList.add('flagged');
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
-          ${priceAlertText ? `<span class="sub-price-alert">⚠ ${escapeHtml(priceAlertText)}</span>` : ''}
+          ${priceAlertText ? `<span class="sub-price-alert${priceIncreased ? '' : ' decrease'}">${priceIncreased ? '⚠' : '✓'} ${escapeHtml(priceAlertText)}</span>` : ''}
           ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">🔔 ${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
-          <button class="btn btn-sm btn-toggle${suggestion ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
+          <button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
@@ -1841,11 +1879,12 @@
 
     } else if (btn.dataset.action === 'toggle') {
       const next = btn.dataset.status === 'active' ? 'paused' : 'active';
-      // A blinking-red toggle means we're actively suggesting this action —
-      // confirm the customer really did it on the streaming service itself
-      // (this dashboard doesn't control Netflix/Hulu/etc. billing directly)
+      // A blinking-red toggle means something real is flagged on this row —
+      // a computed suggestion, a price hike, or both — so confirm the
+      // customer really did it on the streaming service itself (this
+      // dashboard doesn't control Netflix/Hulu/etc. billing directly)
       // before the button quietly goes back to white. An unflagged toggle
-      // has no suggestion attached, so it still applies immediately.
+      // has nothing attached, so it still applies immediately.
       if (btn.classList.contains('needs-attention')) {
         const question = next === 'paused' ? 'Did you pause the service?' : 'Did you activate the service?';
         const confirmed = await askConfirm(question);
@@ -1871,7 +1910,7 @@
 
   // Inline price editor for an existing row. Anyone can correct/update their
   // price — that's basic account upkeep, not a paid feature. What IS Pro/
-  // Family-gated is the resulting price-hike alert shown above (see
+  // Family-gated is the resulting price-change alert shown above (see
   // priceAlertText in renderSubscriptions), since there's no live pricing
   // feed for these services — this only knows a price changed because the
   // customer told us, by editing it here.
@@ -1898,7 +1937,11 @@
       if (isNaN(newPrice) || newPrice < 0) { showToast('Enter a valid price.'); return; }
       const oldPrice = Number(row.monthly_price);
       const nowIso = new Date().toISOString();
-      const patch = newPrice > oldPrice
+      // Any actual change (up or down) records a fresh alert. Saving the
+      // same number back (no real change) is how a customer dismisses an
+      // alert they've already seen — same self-reported, no-live-feed
+      // model as before, just no longer one-directional.
+      const patch = newPrice !== oldPrice
         ? { monthly_price: newPrice, previous_monthly_price: oldPrice, price_changed_at: nowIso }
         : { monthly_price: newPrice, previous_monthly_price: null, price_changed_at: null };
       const { error } = await client.from('tracked_subscriptions').update(patch).eq('id', row.id);
@@ -2183,7 +2226,7 @@
     dashView.hidden = false;
     logoutBtn.hidden = false;
     manageBillingLink.hidden = false;
-    document.getElementById('welcome-email').textContent = ', ' + user.email;
+    applyWelcomeName(user);
     wireUpgradeLinks(user);
     // Claim any pending household invite before checking plan status, so a
     // member who just accepted their invite sees Family access unlock on
@@ -2207,6 +2250,44 @@
     manageBillingLink.hidden = true;
   }
 
+  // "Welcome back, {first name}." when one's on file (set at signup, or
+  // added/edited any time via the link below); falls back to the email
+  // address for accounts that don't have a name saved yet, rather than
+  // showing a blank. Stored in Supabase Auth's own user_metadata — see the
+  // signup handler above for why that needs no new table/RLS policy.
+  function applyWelcomeName(user){
+    const firstName = (user.user_metadata && user.user_metadata.first_name) ? String(user.user_metadata.first_name).trim() : '';
+    document.getElementById('welcome-name').textContent = ', ' + (firstName || user.email);
+    document.getElementById('name-edit-toggle').textContent = firstName ? 'Edit name' : 'Add your name';
+    document.getElementById('name-edit-input').value = firstName;
+  }
+
+  document.getElementById('name-edit-toggle').addEventListener('click', () => {
+    document.getElementById('name-edit-toggle').hidden = true;
+    document.getElementById('name-edit-form').hidden = false;
+    document.getElementById('name-edit-input').focus();
+  });
+  document.getElementById('name-edit-cancel').addEventListener('click', () => {
+    document.getElementById('name-edit-form').hidden = true;
+    document.getElementById('name-edit-toggle').hidden = false;
+  });
+  document.getElementById('name-edit-save').addEventListener('click', async () => {
+    const input = document.getElementById('name-edit-input');
+    const value = input.value.trim();
+    const saveBtn = document.getElementById('name-edit-save');
+    saveBtn.disabled = true;
+    try {
+      const { data, error } = await client.auth.updateUser({ data: { first_name: value } });
+      if (error) { console.error('updateUser (first_name) failed:', error); showToast('Could not save your name — ' + errText(error), 6000); return; }
+      applyWelcomeName(data.user);
+      document.getElementById('name-edit-form').hidden = true;
+      document.getElementById('name-edit-toggle').hidden = false;
+      showToast(value ? 'Name saved.' : 'Name cleared.');
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
   client.auth.onAuthStateChange((_event, session) => {
     if (session && session.user) showLoggedIn(session.user);
     else showLoggedOut();
@@ -2229,15 +2310,22 @@
    DealNews (YouTube TV 2026 plans), and disneyplus.com (official bundle page).
    Sports coverage based on 2026 rights reporting (Sports Video Group,
    SportsMediaWatch, Yahoo Sports). Runs entirely client-side.
+   Netflix/Hulu/Peacock/Apple TV tiers re-checked 2026-08-25 against DealNews'
+   August 2026 breakdown, CNBC's March 2026 Netflix price-hike coverage, and
+   Peacock's own official price-increase notice (peacocktv.com/help) — these
+   are the customer's own tracked services, so they're the ones re-verified
+   here. This is still a manual, point-in-time check, not a live feed: there's
+   no stable pricing API for any of these services, so re-pricing this list
+   means re-running this same research by hand.
    ========================================================================= */
 (function(){
   const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   const SERVICES = {
     netflix: { id:'netflix', name:'Netflix',
-      tiers:[ {id:'ads', name:'Standard with Ads', price:7.99, adFree:false, streams:2},
-              {id:'standard', name:'Standard', price:17.99, adFree:true, streams:2},
-              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:4} ],
+      tiers:[ {id:'ads', name:'Standard with Ads', price:8.99, adFree:false, streams:2},
+              {id:'standard', name:'Standard', price:19.99, adFree:true, streams:2},
+              {id:'premium', name:'Premium', price:26.99, adFree:true, streams:4} ],
       sports:[], kidFriendly:true,
       flagship:['stranger things','wednesday','squid game','the crown','bridgerton','emily in paris','outer banks'] },
 
@@ -2249,7 +2337,7 @@
       flagship:['house of the dragon','the last of us','euphoria','the white lotus','hacks','peacemaker'] },
 
     hulu: { id:'hulu', name:'Hulu',
-      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
+      tiers:[ {id:'ads', name:'With Ads', price:11.99, adFree:false, streams:2},
               {id:'noads', name:'No Ads', price:18.99, adFree:true, streams:2} ],
       sports:[], kidFriendly:false,
       flagship:['the bear','only murders in the building','shogun','american horror story',"handmaid's tale"] },
@@ -2268,9 +2356,9 @@
       flagship:['yellowstone','landman','tulsa king','star trek','1923','mayor of kingstown'] },
 
     peacock: { id:'peacock', name:'Peacock',
-      tiers:[ {id:'select', name:'Select', price:7.99, adFree:false, streams:2},
-              {id:'premium', name:'Premium', price:10.99, adFree:false, streams:3},
-              {id:'premiumplus', name:'Premium Plus', price:16.99, adFree:true, streams:3} ],
+      tiers:[ {id:'select', name:'Select', price:8.99, adFree:false, streams:2},
+              {id:'premium', name:'Premium', price:12.99, adFree:false, streams:3},
+              {id:'premiumplus', name:'Premium Plus', price:19.99, adFree:true, streams:3} ],
       sports:['nfl','nba','mlb','epl','college'], kidFriendly:true,
       flagship:['the office','days of our lives','poker face','love island usa','bel-air'] },
 
