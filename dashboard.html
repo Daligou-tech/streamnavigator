@@ -298,6 +298,17 @@
   .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
   .toast.show{ transform:translateX(-50%) translateY(0); }
   .toast .ico{ color:var(--status-active-deep); }
+
+  /* Confirmation gate for the Pause now / Activate now toggle, but only
+     when it's actively blinking red (see needs-attention) — a flagged
+     suggestion means the customer likely still needs to go do the real
+     thing on the streaming service's own site/app first, so we ask before
+     the button quietly loses its color. A plain, unflagged toggle click
+     still applies instantly — no suggestion, nothing to double-check. */
+  .confirm-overlay{ position:fixed; inset:0; background:rgba(31,27,22,0.45); display:flex; align-items:center; justify-content:center; z-index:1100; padding:20px; }
+  .confirm-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; max-width:380px; width:100%; text-align:center; }
+  .confirm-card p{ font-size:15px; font-weight:700; margin-bottom:20px; line-height:1.5; }
+  .confirm-actions{ display:flex; gap:10px; justify-content:center; }
 </style>
 </head>
 <body>
@@ -610,6 +621,16 @@
 
 <div class="toast" id="toast"><span class="ico">✓</span> <span id="toast-text"></span></div>
 
+<div class="confirm-overlay" id="confirm-overlay" hidden>
+  <div class="confirm-card">
+    <p id="confirm-message"></p>
+    <div class="confirm-actions">
+      <button type="button" class="btn btn-ghost" id="confirm-yes">Yes, I did</button>
+      <button type="button" class="btn btn-ghost" id="confirm-no">Not yet</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (function(){
@@ -768,6 +789,37 @@
     window.__toastTimer = setTimeout(() => toast.classList.remove('show'), durationMs || 3200);
   }
   function fmt(n){ return '$' + Number(n || 0).toFixed(2); }
+
+  // Yes/No confirmation card, used specifically to gate the Pause now /
+  // Activate now toggle when it's actively flagged (see needs-attention) —
+  // resolves true/false rather than blocking the thread like window.confirm,
+  // so the rest of the click handler can just `await` it. Dismissing via the
+  // backdrop or Escape counts as "Not yet" (false), same as clicking it.
+  function askConfirm(message){
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('confirm-overlay');
+      const yesBtn = document.getElementById('confirm-yes');
+      const noBtn = document.getElementById('confirm-no');
+      document.getElementById('confirm-message').textContent = message;
+      overlay.hidden = false;
+      function cleanup(result){
+        overlay.hidden = true;
+        yesBtn.removeEventListener('click', onYes);
+        noBtn.removeEventListener('click', onNo);
+        overlay.removeEventListener('click', onOverlayClick);
+        document.removeEventListener('keydown', onKeydown);
+        resolve(result);
+      }
+      function onYes(){ cleanup(true); }
+      function onNo(){ cleanup(false); }
+      function onOverlayClick(e){ if (e.target === overlay) cleanup(false); }
+      function onKeydown(e){ if (e.key === 'Escape') cleanup(false); }
+      yesBtn.addEventListener('click', onYes);
+      noBtn.addEventListener('click', onNo);
+      overlay.addEventListener('click', onOverlayClick);
+      document.addEventListener('keydown', onKeydown);
+    });
+  }
 
   // ---- Automatic check-in scheduling (no manual date entry required) ----
   // Paused subscriptions: check in every 30 days ("worth resuming yet?"),
@@ -1732,6 +1784,16 @@
 
     } else if (btn.dataset.action === 'toggle') {
       const next = btn.dataset.status === 'active' ? 'paused' : 'active';
+      // A blinking-red toggle means we're actively suggesting this action —
+      // confirm the customer really did it on the streaming service itself
+      // (this dashboard doesn't control Netflix/Hulu/etc. billing directly)
+      // before the button quietly goes back to white. An unflagged toggle
+      // has no suggestion attached, so it still applies immediately.
+      if (btn.classList.contains('needs-attention')) {
+        const question = next === 'paused' ? 'Did you pause the service?' : 'Did you activate the service?';
+        const confirmed = await askConfirm(question);
+        if (!confirmed) return;
+      }
       const nowIso = new Date().toISOString();
       const reminder = computeReminder(next, nowIso, row ? row.show_next_air_date : null);
       const { error } = await client.from('tracked_subscriptions').update({
