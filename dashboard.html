@@ -106,21 +106,23 @@
   .btn-primary:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px); }
   .btn-ghost{ background:var(--surface); color:var(--text); box-shadow:var(--shadow-hard-xs); }
   .btn-ghost:hover{ background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
-  .btn-pause{ background:var(--yellow); color:var(--ink); font-weight:800; box-shadow:var(--shadow-hard-xs); }
-  .btn-pause:hover{ box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
-  .btn-activate{ background:var(--status-active); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
-  .btn-activate:hover{ background:var(--status-active-deep); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
-  /* Blinks the Pause now / Activate now button red when there's an active
-     "Suggested: ..." reason attached to that row — a real, computed
-     suggestion, not decoration on every button. See needs-attention usage
-     in renderSubscriptions(). */
+  /* The Pause now / Activate now button's color now answers one question
+     only — "does this row need your attention right now?" — independent of
+     whether the action itself is to pause or activate. Green = nothing
+     flagged, you're fine as-is. Red + blinking = there's a real, computed
+     "Suggested: ..." reason attached to this row (see needs-attention usage
+     in renderSubscriptions()); it never blinks red without matching text
+     explaining why, right next to it. */
+  .btn-toggle{ background:var(--status-active); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
+  .btn-toggle:hover{ background:var(--status-active-deep); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
   @keyframes needsAttentionBlink{
     0%, 49%{ background:#E4293D; border-color:#7A0F1C; color:#fff; box-shadow:0 0 0 4px rgba(228,41,61,0.38), var(--shadow-hard-xs); }
-    50%, 100%{ }
+    50%, 100%{ background:#FFB3BA; border-color:#7A0F1C; color:var(--ink); box-shadow:var(--shadow-hard-xs); }
   }
-  .btn-pause.needs-attention, .btn-activate.needs-attention{
+  .btn-toggle.needs-attention{
     animation:needsAttentionBlink 1s steps(1, end) infinite;
   }
+  .btn-toggle.needs-attention:hover{ background:#E4293D; }
   .btn-danger-ghost{ background:var(--surface); color:var(--danger-deep); border-color:var(--danger-deep); box-shadow:var(--shadow-hard-xs); }
   .btn-danger-ghost:hover{ background:rgba(178,58,58,0.08); box-shadow:2px 2px 0 var(--danger-deep); transform:translate(1px,1px); }
   .btn-sm{ padding:7px 14px; font-size:13px; }
@@ -187,21 +189,29 @@
   .upgrade-lock p{ margin:0; font-size:13.5px; color:var(--text-dim); flex:1; min-width:220px; }
   .upgrade-lock strong{ color:var(--text); }
 
-  .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0; border-top:1px solid var(--border); flex-wrap:wrap; }
+  .sub-row{ display:flex; align-items:center; gap:14px; padding:14px 0 14px 12px; border-top:1px solid var(--border); border-left:4px solid transparent; flex-wrap:wrap; transition:background .2s ease, border-color .2s ease; }
   .sub-row:first-child{ border-top:none; }
+  /* Same red the toggle button blinks — the row itself picks up a faint
+     tint and a solid left-edge accent so a flagged subscription is obvious
+     at a glance while scanning the list, not just when you land on its
+     button. */
+  .sub-row.flagged{ border-left-color:#E4293D; background:rgba(228,41,61,0.05); }
   .sub-name{ font-weight:700; min-width:140px; }
   .svc-dot{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:8px; vertical-align:middle; border:1.5px solid var(--ink); }
   .sub-price{ color:var(--text-dim); font-size:13.5px; min-width:70px; }
   .badge{ display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:700; }
   .badge.active{ background:rgba(30,158,100,0.14); color:var(--status-active-deep); }
   .badge.paused{ background:rgba(156,146,130,0.18); color:var(--text-dim); }
-  .sub-meta{ display:flex; flex-direction:column; gap:3px; }
+  .sub-meta{ display:flex; flex-direction:column; gap:4px; }
   .sub-show{ font-size:12px; color:var(--accent-3-deep); }
-  .sub-suggestion{ font-size:12px; font-weight:700; }
+  /* Matches the toggle button's own font size/weight (see .btn) — the
+     message that explains a suggestion should read as prominently as the
+     button it's justifying. */
+  .sub-suggestion{ font-size:14px; font-weight:800; }
   .sub-suggestion.activate{ color:var(--status-active-deep); }
   .sub-suggestion.pause{ color:var(--status-paused-deep); }
-  .sub-suggestion.info{ color:var(--accent-3-deep); font-weight:600; }
-  .sub-price-alert{ font-size:12px; font-weight:700; color:var(--danger-deep); }
+  .sub-suggestion.info{ color:var(--accent-3-deep); }
+  .sub-price-alert{ font-size:14px; font-weight:800; color:var(--danger-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
@@ -1470,6 +1480,13 @@
       // their subscriptions and can still pause/activate manually, but
       // doesn't get the "worth activating/pausing" prompts.
       const suggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r)) : null;
+      // Any suggestion at all — pause, activate, or the softer "nothing
+      // tagged yet" info nudge — means this row has something worth the
+      // customer's attention, so it gets the same red accent/blink
+      // treatment. One consistent rule ("is there text here explaining
+      // something?") is easier to read at a glance than three different
+      // shades of urgency.
+      if (suggestion) row.classList.add('flagged');
 
       // Real-time price-hike alerts (Pro/Family): flagged whenever the price
       // you last saved is higher than what it was before you last edited it
@@ -1488,13 +1505,13 @@
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
           ${priceAlertText ? `<span class="sub-price-alert">⚠ ${escapeHtml(priceAlertText)}</span>` : ''}
-          ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">${escapeHtml(suggestion.text)}</span>` : ''}
+          ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">🔔 ${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
-          <button class="btn btn-sm ${r.status === 'active' ? 'btn-pause' : 'btn-activate'}${suggestion && (suggestion.type === 'activate' || suggestion.type === 'pause') ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
+          <button class="btn btn-sm btn-toggle${suggestion ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-danger-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
