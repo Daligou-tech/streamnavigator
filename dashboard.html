@@ -357,9 +357,9 @@
     </div>
 
     <div class="upgrade-section" id="upgrade-section">
-      <h3>Upgrade your plan</h3>
+      <h3 id="upgrade-section-heading">Upgrade your plan</h3>
       <p class="field-hint" id="current-plan-note" style="margin-top:-10px;">Checking your plan…</p>
-      <div class="upgrade-grid">
+      <div class="upgrade-grid" id="upgrade-grid">
         <div class="upgrade-card featured">
           <span class="upgrade-badge">Most Popular</span>
           <h4>Pro</h4>
@@ -383,6 +383,7 @@
           <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
         </div>
       </div>
+      <p class="field-hint" id="upgrade-grid-hidden-note" hidden>Manage or cancel your plan any time from "Manage Billing" above.</p>
     </div>
 
     <div class="panel" id="household-panel" hidden>
@@ -911,6 +912,23 @@
     if (userPlan === 'family') loadHouseholdSummary();
   }
 
+  // Stripe's webhook (server-to-server) is what actually writes the new
+  // plan into Supabase after checkout — that's normally a couple of
+  // seconds, not instant, and there's no guarantee it beats the browser
+  // redirect back to this page. Rather than making someone who just paid
+  // manually refresh to see it take effect, quietly recheck a few times
+  // before settling on "still Free."
+  async function loadPlanWithRetry(user){
+    await loadPlan(user);
+    if (userPlan !== 'free') return;
+    const delaysMs = [3000, 6000, 10000];
+    for (const delay of delaysMs) {
+      await new Promise(resolve => setTimeout(resolve, delay));
+      await loadPlan(user);
+      if (userPlan !== 'free') return;
+    }
+  }
+
   function applyPlanGating(){
     const body = document.getElementById('fav-panel-body');
     const locked = document.getElementById('fav-panel-locked');
@@ -919,6 +937,9 @@
     const note = document.getElementById('current-plan-note');
     const householdPanel = document.getElementById('household-panel');
     const memberSummaryPanel = document.getElementById('household-member-summary-panel');
+    const upgradeGrid = document.getElementById('upgrade-grid');
+    const upgradeGridHiddenNote = document.getElementById('upgrade-grid-hidden-note');
+    const upgradeHeading = document.getElementById('upgrade-section-heading');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
@@ -926,6 +947,12 @@
     if (analyzerLocked) analyzerLocked.hidden = pro;
     if (householdPanel) householdPanel.hidden = !isFamilyOwner;
     if (memberSummaryPanel) memberSummaryPanel.hidden = !(userPlan === 'family' && !isFamilyOwner);
+    // Once already on a paid plan, "Subscribe to Pro/Family" no longer makes
+    // sense to show — a customer who just paid should never land back on a
+    // page still offering to sell them the thing they just bought.
+    if (upgradeGrid) upgradeGrid.hidden = pro;
+    if (upgradeGridHiddenNote) upgradeGridHiddenNote.hidden = !pro;
+    if (upgradeHeading) upgradeHeading.textContent = pro ? 'Your plan' : 'Upgrade your plan';
     if (note) {
       note.textContent = pro
         ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders and the plan optimizer are unlocked below.`
@@ -2025,7 +2052,7 @@
     // Claim any pending household invite before checking plan status, so a
     // member who just accepted their invite sees Family access unlock on
     // this same login instead of needing to refresh.
-    claimHouseholdInvite(user).then(() => loadPlan(user));
+    claimHouseholdInvite(user).then(() => loadPlanWithRetry(user));
     loadSubscriptions();
     loadFavorites();
     // Landing-page "Manage billing" / "Cancel subscription" links send
