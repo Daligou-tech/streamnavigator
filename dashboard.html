@@ -124,6 +124,19 @@
     animation:needsAttentionBlink 1s steps(1, end) infinite;
   }
   .btn-toggle.needs-attention:hover{ background:#E4293D; }
+  /* Activate now gets its own blue blink instead of red — same "something
+     needs your attention" urgency, but blue reads as "go do this" (and
+     matches the marketing site's Log In / Sign Up button color) while red
+     stays reserved for Pause now, so the two actions are told apart by
+     color, not just by label text. */
+  @keyframes needsAttentionBlinkActivate{
+    0%, 49%{ background:var(--accent); border-color:var(--accent-deep); color:var(--ink); box-shadow:0 0 0 4px rgba(79,182,232,0.38), var(--shadow-hard-xs); }
+    50%, 100%{ background:#BEE6F7; border-color:var(--accent-deep); color:var(--ink); box-shadow:var(--shadow-hard-xs); }
+  }
+  .btn-toggle.needs-attention.toggle-activate{
+    animation:needsAttentionBlinkActivate 1s steps(1, end) infinite;
+  }
+  .btn-toggle.needs-attention.toggle-activate:hover{ background:var(--accent); }
   .btn-danger-ghost{ background:var(--surface); color:var(--danger-deep); border-color:var(--danger-deep); box-shadow:var(--shadow-hard-xs); }
   .btn-danger-ghost:hover{ background:rgba(178,58,58,0.08); box-shadow:2px 2px 0 var(--danger-deep); transform:translate(1px,1px); }
   .btn-sm{ padding:7px 14px; font-size:13px; }
@@ -522,58 +535,9 @@
     </div>
 
     <div class="panel">
-      <h3>Add a subscription to track</h3>
-      <p class="plan-status-text">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it below to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
-      <form id="add-form">
-        <div class="add-grid-top">
-          <div class="field">
-            <label for="add-name">Service</label>
-            <input type="text" id="add-name" list="service-suggestions" placeholder="Type any service — Netflix, PBS Masterpiece, anything" required />
-            <datalist id="service-suggestions">
-              <option value="Netflix"></option>
-              <option value="Prime Video"></option>
-              <option value="HBO Max"></option>
-              <option value="Disney+"></option>
-              <option value="YouTube Premium"></option>
-              <option value="Paramount+"></option>
-              <option value="Hulu"></option>
-              <option value="Peacock"></option>
-              <option value="Apple TV+"></option>
-              <option value="ESPN+"></option>
-              <option value="Crunchyroll"></option>
-              <option value="AMC+"></option>
-              <option value="Starz"></option>
-              <option value="MGM+"></option>
-              <option value="BritBox"></option>
-              <option value="PBS Masterpiece"></option>
-              <option value="Discovery+"></option>
-              <option value="Sling TV"></option>
-              <option value="Philo"></option>
-              <option value="Acorn TV"></option>
-              <option value="Shudder"></option>
-            </datalist>
-          </div>
-          <div class="field">
-            <label for="add-price">$/mo</label>
-            <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
-          </div>
-          <div class="field">
-            <label for="add-status">Status</label>
-            <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-            </select>
-          </div>
-        </div>
-        <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
-        <button type="submit" class="btn btn-ghost">Add</button>
-      </form>
-    </div>
-
-    <div class="panel">
       <h3>Your tracked subscriptions</h3>
       <div id="sub-list"></div>
-      <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription above.</p>
+      <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription below.</p>
     </div>
 
     <div class="panel">
@@ -626,10 +590,59 @@
           </div>
         </div>
 
-        <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription above first, so you have a service to link these to.</p>
+        <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription below first, so you have a service to link these to.</p>
 
         <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
       </div>
+    </div>
+
+    <div class="panel">
+      <h3>Add a subscription to track</h3>
+      <p class="plan-status-text">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it above to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
+      <form id="add-form">
+        <div class="add-grid-top">
+          <div class="field">
+            <label for="add-name">Service</label>
+            <input type="text" id="add-name" list="service-suggestions" placeholder="Type any service — Netflix, PBS Masterpiece, anything" required />
+            <datalist id="service-suggestions">
+              <option value="Netflix"></option>
+              <option value="Prime Video"></option>
+              <option value="HBO Max"></option>
+              <option value="Disney+"></option>
+              <option value="YouTube Premium"></option>
+              <option value="Paramount+"></option>
+              <option value="Hulu"></option>
+              <option value="Peacock"></option>
+              <option value="Apple TV+"></option>
+              <option value="ESPN+"></option>
+              <option value="Crunchyroll"></option>
+              <option value="AMC+"></option>
+              <option value="Starz"></option>
+              <option value="MGM+"></option>
+              <option value="BritBox"></option>
+              <option value="PBS Masterpiece"></option>
+              <option value="Discovery+"></option>
+              <option value="Sling TV"></option>
+              <option value="Philo"></option>
+              <option value="Acorn TV"></option>
+              <option value="Shudder"></option>
+            </datalist>
+          </div>
+          <div class="field">
+            <label for="add-price">$/mo</label>
+            <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
+          </div>
+          <div class="field">
+            <label for="add-status">Status</label>
+            <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+            </select>
+          </div>
+        </div>
+        <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
+        <button type="submit" class="btn btn-ghost">Add</button>
+      </form>
     </div>
 
     <div class="panel">
@@ -1646,19 +1659,32 @@
       const flagged = !!(suggestion || priceIncreased);
       if (flagged) row.classList.add('flagged');
 
+      // Flagged Activate now buttons blink blue instead of red (see
+      // .toggle-activate below) — only applies when the button is actually
+      // showing "Activate now" (a paused row).
+      const toggleIsActivate = r.status !== 'active';
+
+      // The two "Suggested: Consider pausing — <reason>" messages (from
+      // computeSuggestion/computeCadencePrompt) just restate, in words, what
+      // a blinking-red Pause now button already says — genuinely redundant
+      // once the button itself is the signal. Suppress that one specific
+      // phrasing here; the untagged-prompt's "Tag a show or sport..." pause
+      // text stays, since it carries a real call to action the button can't.
+      const suppressSuggestionText = !!(suggestion && suggestion.type === 'pause' && suggestion.text.indexOf('Suggested: Consider pausing') === 0);
+
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
         <span class="sub-price">${fmt(r.monthly_price)}/mo</span>
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
           ${priceAlertText ? `<span class="sub-price-alert${priceIncreased ? '' : ' decrease'}">${priceIncreased ? '⚠' : '✓'} ${escapeHtml(priceAlertText)}</span>` : ''}
-          ${suggestion ? `<span class="sub-suggestion ${suggestion.type}">🔔 ${escapeHtml(suggestion.text)}</span>` : ''}
+          ${suggestion && !suppressSuggestionText ? `<span class="sub-suggestion ${suggestion.type}">🔔 ${escapeHtml(suggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
-          <button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
+          <button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
@@ -2203,7 +2229,7 @@
     const nowIso = new Date().toISOString();
 
     // No show is attached at creation time anymore — once the subscription
-    // exists, "See shows" on the row below is the one place to tag shows and
+    // exists, "See shows" on the row above is the one place to tag shows and
     // sports to it (writes to favorite_watches, supports more than one).
     const { error } = await client.from('tracked_subscriptions').insert({
       user_id: user.id,
