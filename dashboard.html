@@ -91,10 +91,10 @@
   }
   h1,h2,h3,h4{ font-family:'Sora','Inter',sans-serif; letter-spacing:-0.02em; font-weight:700; color:var(--text); }
   a{ color:inherit; text-decoration:none; }
-  .wrap{ max-width:900px; margin:0 auto; padding:0 24px; }
+  .wrap{ max-width:1200px; margin:0 auto; padding:0 24px; }
 
   header{ position:sticky; top:0; z-index:100; background:rgba(251,244,233,0.9); backdrop-filter:blur(14px); border-bottom:2px solid var(--ink); }
-  nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:900px; margin:0 auto; }
+  nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:1200px; margin:0 auto; }
   .logo{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; font-family:'Sora',sans-serif; }
   .logo-mark{ width:30px; height:30px; border-radius:9px; background:var(--gradient); display:flex; align-items:center; justify-content:center; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs); }
   .logo-mark svg{ width:16px; height:16px; }
@@ -174,6 +174,51 @@
 
   .upgrade-section{ margin-bottom:36px; }
   .upgrade-section > h3{ font-size:1.1rem; margin-bottom:16px; }
+  /* Bigger and darker than the usual .field-hint — this is the one line
+     that answers "what plan am I actually on," so it should read at a
+     glance rather than blend in like a small print caveat. */
+  .plan-status-text{ font-size:17px; font-weight:600; color:var(--text); line-height:1.5; margin-bottom:16px; max-width:640px; }
+
+  /* "Your plan" lives in a vertical sidebar next to the main column instead
+     of stacked inline with everything else — it's account-level status, not
+     one more thing in the task list. Stacks back above the main column
+     below ~860px, where there isn't room for two columns side by side. */
+  .dash-layout{ display:flex; gap:24px; align-items:flex-start; }
+  .dash-sidebar{ width:280px; flex-shrink:0; }
+  .dash-main{ flex:1; min-width:0; }
+  @media (max-width:860px){
+    .dash-layout{ flex-direction:column; }
+    .dash-sidebar{ width:100%; }
+  }
+  .dash-sidebar .upgrade-section{ margin-bottom:0; }
+  .dash-sidebar .upgrade-section > h3,
+  .dash-sidebar .plan-status-text{ text-align:center; max-width:none; }
+  /* Two pricing cards side by side don't fit a 280px sidebar — stack them
+     regardless of viewport width (this isn't the same as the general
+     mobile breakpoint below, which is about the whole browser window). */
+  .dash-sidebar .upgrade-grid{ grid-template-columns:1fr; }
+
+  /* Celebration badge shown once a subscription is actually active — a
+     circular gradient badge (same motif as the logo mark in the header)
+     with a star and a few confetti dots, rather than a generic checkmark.
+     Sits above the "Your plan" heading only in the paid state; see
+     plan-celebrate-icon usage in applyPlanGating(). */
+  .plan-celebrate{ position:relative; width:72px; height:72px; margin:0 auto 18px; }
+  .plan-celebrate-badge{ width:100%; height:100%; border-radius:50%; background:var(--gradient); border:2px solid var(--ink); box-shadow:var(--shadow-hard-sm); display:flex; align-items:center; justify-content:center; font-size:32px; }
+  .plan-celebrate-dot{ position:absolute; width:9px; height:9px; border-radius:50%; border:1.5px solid var(--ink); }
+  .plan-celebrate-dot.dot-a{ top:-6px; left:-8px; background:var(--yellow); }
+  .plan-celebrate-dot.dot-b{ top:0; right:-12px; background:var(--accent-2); }
+  .plan-celebrate-dot.dot-c{ bottom:-6px; left:12px; background:var(--accent-3); }
+
+  /* Solid, high-contrast CTA reserved for the one "you're already paying,
+     go manage it" action inside the celebration card — everything else in
+     the subscription list stays deliberately white/neutral (see .btn-toggle
+     above), but a plan-status card benefits from one clear button the way
+     a confirmation screen would. */
+  .btn-dark{ background:var(--ink); color:#fff; font-weight:800; box-shadow:var(--shadow-hard-xs); }
+  .btn-dark:hover{ background:#000; box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px); }
+
+  .plan-status-subtext{ font-size:13px; font-weight:500; color:var(--text-dimmer); margin-bottom:0; }
   .upgrade-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   @media (max-width:680px){ .upgrade-grid{ grid-template-columns:1fr; } }
   .upgrade-card{ position:relative; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; display:flex; flex-direction:column; }
@@ -320,7 +365,7 @@
       StreamNavigator
     </a>
     <div class="nav-right">
-      <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" class="btn btn-ghost btn-sm" hidden>Manage Billing</a>
+      <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" data-role="manage-billing" class="btn btn-ghost btn-sm" hidden>Manage Billing</a>
       <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
     </div>
   </nav>
@@ -369,42 +414,56 @@
       <span id="savings-banner-text"></span>
     </div>
 
+    <div class="dash-layout">
+      <aside class="dash-sidebar">
+        <div class="panel upgrade-section" id="upgrade-section">
+          <!-- Only shown once actually on a paid plan (see applyPlanGating)
+               — a "you did it" moment, not decoration on the still-shopping
+               Free-plan state below. -->
+          <div class="plan-celebrate" id="plan-celebrate-icon" hidden>
+            <span class="plan-celebrate-badge">⭐</span>
+            <span class="plan-celebrate-dot dot-a"></span>
+            <span class="plan-celebrate-dot dot-b"></span>
+            <span class="plan-celebrate-dot dot-c"></span>
+          </div>
+          <h3 id="upgrade-section-heading">Upgrade your plan</h3>
+          <p class="plan-status-text" id="current-plan-note">Checking your plan…</p>
+          <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" class="btn btn-dark" data-role="manage-billing" id="manage-billing-link-sidebar" hidden style="width:100%; justify-content:center; margin-bottom:8px;">Manage Billing</a>
+          <div class="upgrade-grid" id="upgrade-grid">
+            <div class="upgrade-card featured">
+              <span class="upgrade-badge">Most Popular</span>
+              <h4>Pro</h4>
+              <div class="upgrade-price">$4.99<span>/mo</span></div>
+              <ul class="upgrade-feats">
+                <li>Real-time pause &amp; resume reminders</li>
+                <li>Direct links to cancel &amp; downgrade</li>
+                <li>Real-time price-hike alerts</li>
+                <li>Personalized plan optimizer — see what you'd save</li>
+              </ul>
+              <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-ghost" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
+            </div>
+            <div class="upgrade-card">
+              <h4>Family</h4>
+              <div class="upgrade-price">$8.99<span>/mo</span></div>
+              <ul class="upgrade-feats">
+                <li>Everything in Pro</li>
+                <li>Up to 6 shared accounts</li>
+                <li>Household usage breakdown</li>
+              </ul>
+              <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
+            </div>
+          </div>
+          <p class="plan-status-text plan-status-subtext" id="upgrade-grid-hidden-note" hidden>You can manage or cancel your plan any time.</p>
+        </div>
+      </aside>
+
+      <div class="dash-main">
     <div class="stat-row">
       <div class="stat-card"><div class="label">Monthly spend</div><div class="value" id="stat-monthly">$0</div></div>
       <div class="stat-card"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
       <div class="stat-card"><div class="label">Paused</div><div class="value" id="stat-paused">0</div></div>
       <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
       <div class="stat-card save-stat" id="stat-lifetime-card"><div class="label">Total saved to date</div><div class="value" id="stat-lifetime-savings">$0.00</div><div class="lifetime-note" id="stat-lifetime-note">Since your history started</div></div>
-    </div>
-
-    <div class="upgrade-section" id="upgrade-section">
-      <h3 id="upgrade-section-heading">Upgrade your plan</h3>
-      <p class="field-hint" id="current-plan-note" style="margin-top:-10px;">Checking your plan…</p>
-      <div class="upgrade-grid" id="upgrade-grid">
-        <div class="upgrade-card featured">
-          <span class="upgrade-badge">Most Popular</span>
-          <h4>Pro</h4>
-          <div class="upgrade-price">$4.99<span>/mo</span></div>
-          <ul class="upgrade-feats">
-            <li>Real-time pause &amp; resume reminders</li>
-            <li>Direct links to cancel &amp; downgrade</li>
-            <li>Real-time price-hike alerts</li>
-            <li>Personalized plan optimizer — see what you'd save</li>
-          </ul>
-          <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-ghost" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
-        </div>
-        <div class="upgrade-card">
-          <h4>Family</h4>
-          <div class="upgrade-price">$8.99<span>/mo</span></div>
-          <ul class="upgrade-feats">
-            <li>Everything in Pro</li>
-            <li>Up to 6 shared accounts</li>
-            <li>Household usage breakdown</li>
-          </ul>
-          <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
-        </div>
-      </div>
-      <p class="field-hint" id="upgrade-grid-hidden-note" hidden>Manage or cancel your plan any time from "Manage Billing" above.</p>
     </div>
 
     <div class="panel" id="household-panel" hidden>
@@ -613,6 +672,8 @@
         </div>
       </div>
     </div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -662,7 +723,14 @@
   // server-side (api/create-portal-session.js) looks the customer up by
   // their actual logged-in Supabase account instead, and redirects them
   // straight into the portal already signed in. ----
+  // Two buttons now trigger this — the one in the header and the one inside
+  // the "Your plan" sidebar card — kept in sync as a NodeList rather than a
+  // single element so clicking either one shows the same "Opening…" state
+  // on both, and neither is left stuck mid-request-looking if the other
+  // triggered it.
   const manageBillingLink = document.getElementById('manage-billing-link');
+  const manageBillingLinks = document.querySelectorAll('[data-role="manage-billing"]');
+  const MANAGE_BILLING_LABEL = 'Manage Billing';
   let billingPortalBusy = false;
   async function openBillingPortal(){
     if (billingPortalBusy) return;
@@ -672,8 +740,7 @@
       return;
     }
     billingPortalBusy = true;
-    const originalLabel = manageBillingLink.textContent;
-    manageBillingLink.textContent = 'Opening…';
+    manageBillingLinks.forEach(el => { el.textContent = 'Opening…'; });
     try {
       const res = await fetch('/api/create-portal-session', {
         method: 'POST',
@@ -705,10 +772,10 @@
       showToast('Could not reach the billing portal — check your connection and try again.', 6000);
     } finally {
       billingPortalBusy = false;
-      manageBillingLink.textContent = originalLabel;
+      manageBillingLinks.forEach(el => { el.textContent = MANAGE_BILLING_LABEL; });
     }
   }
-  manageBillingLink.addEventListener('click', (e) => { e.preventDefault(); openBillingPortal(); });
+  manageBillingLinks.forEach(el => el.addEventListener('click', (e) => { e.preventDefault(); openBillingPortal(); }));
 
   // ---- Direct "manage on service" links, reused from the main site ----
   const MANAGE_URLS = {
@@ -1000,6 +1067,8 @@
     const upgradeGrid = document.getElementById('upgrade-grid');
     const upgradeGridHiddenNote = document.getElementById('upgrade-grid-hidden-note');
     const upgradeHeading = document.getElementById('upgrade-section-heading');
+    const planCelebrateIcon = document.getElementById('plan-celebrate-icon');
+    const manageBillingSidebar = document.getElementById('manage-billing-link-sidebar');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
@@ -1013,9 +1082,15 @@
     if (upgradeGrid) upgradeGrid.hidden = pro;
     if (upgradeGridHiddenNote) upgradeGridHiddenNote.hidden = !pro;
     if (upgradeHeading) upgradeHeading.textContent = pro ? 'Your plan' : 'Upgrade your plan';
+    if (planCelebrateIcon) planCelebrateIcon.hidden = !pro;
+    // Only shown once we're sure this is a paid account — the button itself
+    // needs no busy-state reset here since openBillingPortal() already
+    // restores every [data-role="manage-billing"] element's label in its
+    // own finally block.
+    if (manageBillingSidebar) manageBillingSidebar.hidden = !pro;
     if (note) {
       note.textContent = pro
-        ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan — real-time reminders and the plan optimizer are unlocked below.`
+        ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan! Real-time reminders and the plan optimizer are unlocked below.`
         : "You're on the Free plan. Upgrade to unlock real-time pause & resume reminders and the plan optimizer.";
     }
     // Row-level suggestion text is Pro-gated too, so re-render with the
