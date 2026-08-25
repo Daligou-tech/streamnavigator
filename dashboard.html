@@ -551,8 +551,6 @@
 
         <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription above first, so you have a service to link these to.</p>
 
-        <div class="fav-list" id="fav-list"></div>
-        <p class="empty-state" id="fav-empty" hidden>Nothing added yet — tag a show or sport above and we'll watch it for you.</p>
         <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
       </div>
     </div>
@@ -1176,7 +1174,6 @@
       .select('*')
       .order('created_at', { ascending: true });
     favoriteRows = error ? [] : (data || []);
-    renderFavorites();
     // A subscription list may have already rendered before favorites finished
     // loading (or vice versa) — re-render it now so suggestions stay in sync
     // regardless of which request came back first.
@@ -1197,28 +1194,13 @@
     document.getElementById('fav-sport-add').disabled = names.length === 0;
   }
 
-  function renderFavorites(){
-    const list = document.getElementById('fav-list');
-    const empty = document.getElementById('fav-empty');
-    list.innerHTML = '';
-    empty.hidden = favoriteRows.length > 0;
-    favoriteRows.forEach(f => {
-      const pill = document.createElement('span');
-      pill.className = 'fav-pill';
-      const label = f.kind === 'show' ? f.title : (FAV_SPORT_LABELS[f.title] || f.title);
-      const meta = f.kind === 'show' ? showMetaText(f) : sportMetaText(f.title);
-      pill.innerHTML = `${escapeHtml(label)}${f.service_name ? ' → ' + escapeHtml(f.service_name) : ''} <span class="fav-pill-meta">(${escapeHtml(meta)})</span> <button type="button" data-id="${f.id}" aria-label="Remove">✕</button>`;
-      list.appendChild(pill);
-    });
-  }
-
-  document.getElementById('fav-list').addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-id]');
-    if (!btn) return;
-    const { error } = await client.from('favorite_watches').delete().eq('id', btn.dataset.id);
-    if (error) { console.error('favorite_watches delete failed:', error); showToast('Could not remove that — ' + errText(error), 8000); return; }
-    loadFavorites();
-  });
+  // The standalone pink pill list that used to render every tagged
+  // show/sport here was removed — it just duplicated what already shows up
+  // on each subscription row above (that's the whole point of "we'll flag
+  // right on that subscription above" in the hint text), so it was a second,
+  // redundant place to read the same status. To remove a tag now, open that
+  // subscription's "See shows" panel and use Remove show / Remove sport
+  // there, where it's scoped to the one service it's actually tagged to.
 
   // Live preview while tagging a favorite show, same pattern as the existing
   // "add a subscription" show preview — so if TVmaze matches the wrong title
