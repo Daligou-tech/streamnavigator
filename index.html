@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>StreamNavigator — The AI subscription manager for streaming</title>
-<meta name="description" content="StreamNavigator is a monthly subscription that monitors your streaming subscriptions based on what you actually watch, and tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
+<meta name="description" content="StreamNavigator is a monthly subscription — you tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -189,6 +189,7 @@
   }
   .pg-savings{ margin-top:16px; padding-top:14px; border-top:1px solid var(--border); font-size:13px; color:var(--text-dim); text-align:center; }
   .pg-savings strong{ color:var(--status-active-deep); }
+  .pg-savings-caption{ display:block; margin-top:6px; font-size:11.5px; color:var(--text-dimmer); }
   .pg-tooltip{
     position:fixed; pointer-events:none; z-index:1000; background:var(--surface); border:2px solid var(--ink);
     border-radius:8px; padding:8px 12px; font-size:12px; color:var(--text); box-shadow:var(--shadow-hard-xs);
@@ -409,7 +410,7 @@
   .bar-chart{ display:flex; align-items:flex-end; gap:6px; height:110px; }
   .bar-chart div{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; }
   .grid-thumbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); }
+  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
   .summary-lines{ display:flex; flex-direction:column; gap:8px; }
   .summary-lines .ln{ height:9px; border-radius:5px; background:rgba(31,27,22,0.08); }
 
@@ -477,12 +478,12 @@
 
   /* toast */
   .toast{
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%);
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); opacity:0; pointer-events:none;
     background:var(--surface); border:2px solid var(--ink); color:var(--text);
     padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px;
-    box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2);
+    box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2), opacity .35s ease;
   }
-  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
   .toast .ico{ color:var(--status-active-deep); }
 
   /* reveal animation */
@@ -549,7 +550,7 @@
   <section class="hero" style="padding-top:96px; padding-bottom:0;">
     <div class="pill"><span class="dot">✦</span> Now live &mdash; start saving on streaming today</div>
     <h1>Stop paying for streaming<br/>you <span class="grad">don't even watch</span>.</h1>
-    <p class="sub">StreamNavigator is your AI subscription manager. It tracks every streaming service you're paying for, learns what you actually watch, and tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
+    <p class="sub">StreamNavigator is your AI subscription manager. You tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
   </section>
 
   <!-- PRODUCT EXPLANATION -->
@@ -584,7 +585,7 @@
       <div class="product-copy reveal">
         <div class="eyebrow">What is StreamNavigator</div>
         <h3>We tell you exactly what to do. You make the change.</h3>
-        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. StreamNavigator connects to your accounts, tracks what you actually watch, and shows you exactly where you're overpaying.</p>
+        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. You tell StreamNavigator what you're subscribed to and what you're watching, and it shows you exactly where you're overpaying.</p>
         <p>Then it tells you what to do about it &mdash; when to pause a subscription you're not using right now, and when to bring it back based on what that service actually has to offer, like a new season, a marquee release, or your team's season opener. Every recommendation comes with a direct link straight to that service's account page, so you make the change yourself in one tap.</p>
         <ul class="check-list">
           <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
@@ -824,12 +825,12 @@
       <figure class="screen-card reveal">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
-          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Connected services</p>
+          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Tracked services</p>
           <div class="grid-thumbs">
-            <div class="g"></div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)"></div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)"></div>
+            <div class="g">Netflix</div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)">HBO Max</div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)">Hulu</div>
           </div>
         </div>
-        <figcaption>See every connected subscription at a glance.</figcaption>
+        <figcaption>See every subscription you're tracking at a glance.</figcaption>
       </figure>
 
     </div>
@@ -883,7 +884,7 @@
         <ul class="price-feats">
           <li><span class="tick">✓</span> Track up to 5 subscriptions</li>
           <li><span class="tick">✓</span> Monthly usage insights</li>
-          <li><span class="tick">✓</span> Pause &amp; cancel guidance, checked monthly</li>
+          <li><span class="tick">✓</span> See your total monthly spend across tracked subscriptions</li>
           <li><span class="tick">✓</span> Email price-hike alerts</li>
         </ul>
         <a href="dashboard.html" class="btn btn-ghost">Get Started Free</a>
@@ -1554,7 +1555,7 @@
 
     const savingsEl = document.getElementById('pg-savings');
     if (savingsEl) {
-      savingsEl.innerHTML = `This household could save <strong>${fmt(totalPauseSavings)}/yr</strong> by acting on pause reminders instead of paying for every service, year-round.`;
+      savingsEl.innerHTML = `This household could save <strong>${fmt(totalPauseSavings)}/yr</strong> by acting on pause reminders instead of paying for every service, year-round.<span class="pg-savings-caption">Based on this sample household's subscriptions — your number will differ.</span>`;
     }
   })();
 
