@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>StreamNavigator — The AI subscription manager for streaming</title>
-<meta name="description" content="StreamNavigator is a monthly subscription that monitors your streaming subscriptions based on what you actually watch, and tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
+<meta name="description" content="StreamNavigator is a monthly subscription — you tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -189,6 +189,7 @@
   }
   .pg-savings{ margin-top:16px; padding-top:14px; border-top:1px solid var(--border); font-size:13px; color:var(--text-dim); text-align:center; }
   .pg-savings strong{ color:var(--status-active-deep); }
+  .pg-savings-caption{ display:block; margin-top:6px; font-size:11.5px; color:var(--text-dimmer); }
   .pg-tooltip{
     position:fixed; pointer-events:none; z-index:1000; background:var(--surface); border:2px solid var(--ink);
     border-radius:8px; padding:8px 12px; font-size:12px; color:var(--text); box-shadow:var(--shadow-hard-xs);
@@ -409,7 +410,7 @@
   .bar-chart{ display:flex; align-items:flex-end; gap:6px; height:110px; }
   .bar-chart div{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; }
   .grid-thumbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); }
+  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
   .summary-lines{ display:flex; flex-direction:column; gap:8px; }
   .summary-lines .ln{ height:9px; border-radius:5px; background:rgba(31,27,22,0.08); }
 
@@ -477,12 +478,12 @@
 
   /* toast */
   .toast{
-    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%);
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); opacity:0; pointer-events:none;
     background:var(--surface); border:2px solid var(--ink); color:var(--text);
     padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px;
-    box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2);
+    box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2), opacity .35s ease;
   }
-  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
   .toast .ico{ color:var(--status-active-deep); }
 
   /* reveal animation */
@@ -549,7 +550,7 @@
   <section class="hero" style="padding-top:96px; padding-bottom:0;">
     <div class="pill"><span class="dot">✦</span> Now live &mdash; start saving on streaming today</div>
     <h1>Stop paying for streaming<br/>you <span class="grad">don't even watch</span>.</h1>
-    <p class="sub">StreamNavigator is your AI subscription manager. It tracks every streaming service you're paying for, learns what you actually watch, and tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
+    <p class="sub">StreamNavigator is your AI subscription manager. You tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
   </section>
 
   <!-- PRODUCT EXPLANATION -->
@@ -584,7 +585,7 @@
       <div class="product-copy reveal">
         <div class="eyebrow">What is StreamNavigator</div>
         <h3>We tell you exactly what to do. You make the change.</h3>
-        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. StreamNavigator connects to your accounts, tracks what you actually watch, and shows you exactly where you're overpaying.</p>
+        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. You tell StreamNavigator what you're subscribed to and what you're watching, and it shows you exactly where you're overpaying.</p>
         <p>Then it tells you what to do about it &mdash; when to pause a subscription you're not using right now, and when to bring it back based on what that service actually has to offer, like a new season, a marquee release, or your team's season opener. Every recommendation comes with a direct link straight to that service's account page, so you make the change yourself in one tap.</p>
         <ul class="check-list">
           <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
@@ -617,8 +618,8 @@
 
       <div class="radial-node" style="left:50%; top:17%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-        <h4>Auto-detect subscriptions</h4>
-        <p title="Securely scans your accounts and card statements to find every streaming subscription you're paying for — even the ones you forgot about.">Finds every subscription automatically</p>
+        <h4>Add it once, we track it</h4>
+        <p title="Add each subscription manually — the service, the price, how you watch it — and StreamNavigator takes it from there: automatic check-ins every 60 days while active (30 when paused), plus real air-date tracking for shows you tag.">You add it, we keep watch</p>
       </div>
 
       <div class="radial-node" style="left:81.4%; top:39.8%;">
@@ -641,8 +642,8 @@
 
       <div class="radial-node" style="left:18.6%; top:39.8%;">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
-        <h4>Bank-level security</h4>
-        <p title="Read-only, encrypted connections. StreamNavigator can see your subscriptions — it can never move your money.">Read-only. We can't touch your money</p>
+        <h4>Nothing to connect</h4>
+        <p title="StreamNavigator never links to your bank or card statements — every subscription in your list is one you typed in yourself. Your account password is hashed by Supabase and never seen or stored in plain text.">No bank link, nothing to hack</p>
       </div>
     </div>
   </section>
@@ -651,7 +652,7 @@
     <div class="hero-form">
       <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
     </div>
-    <p class="hero-note"><strong>Free to start.</strong> Early users save an average of $600 a year.</p>
+    <p class="hero-note"><strong>Free to start.</strong> Early users save up to $300 or more per year.</p>
 
     <div class="program-guide reveal" id="program-guide">
       <div class="pg-head">
@@ -824,12 +825,12 @@
       <figure class="screen-card reveal">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
-          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Connected services</p>
+          <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Tracked services</p>
           <div class="grid-thumbs">
-            <div class="g"></div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)"></div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)"></div>
+            <div class="g">Netflix</div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)">HBO Max</div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)">Hulu</div>
           </div>
         </div>
-        <figcaption>See every connected subscription at a glance.</figcaption>
+        <figcaption>See every subscription you're tracking at a glance.</figcaption>
       </figure>
 
     </div>
@@ -883,7 +884,7 @@
         <ul class="price-feats">
           <li><span class="tick">✓</span> Track up to 5 subscriptions</li>
           <li><span class="tick">✓</span> Monthly usage insights</li>
-          <li><span class="tick">✓</span> Pause &amp; cancel guidance, checked monthly</li>
+          <li><span class="tick">✓</span> See your total monthly spend across tracked subscriptions</li>
           <li><span class="tick">✓</span> Email price-hike alerts</li>
         </ul>
         <a href="dashboard.html" class="btn btn-ghost">Get Started Free</a>
@@ -936,12 +937,12 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">How does StreamNavigator find my subscriptions? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Securely connect your bank or card statements (read-only), or add subscriptions manually. StreamNavigator automatically detects recurring streaming charges and keeps the list up to date from there.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">You add each subscription manually — the service, the price, and how often you watch it. From there, StreamNavigator keeps an eye on things for you: if you tell us a show you're waiting on, we check a free public TV schedule daily for its next air date, so your pause and resume timing stays current without you having to check back.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">Is my financial data safe? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes. Connections are read-only and bank-level encrypted. StreamNavigator can see your subscription charges — it never has the ability to move money or make purchases on your behalf.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Yes — because there isn't any to connect. StreamNavigator never links to your bank or card statements; every subscription in your list is one you typed in yourself. Your account password is hashed by Supabase and never seen or stored in plain text, and if you upgrade to Pro or Family, your card details go straight to Stripe — they never touch StreamNavigator's servers.</div></div>
       </div>
 
       <div class="faq-item reveal">
@@ -951,7 +952,7 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">How do you access and monitor my streaming data? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">We never log into your Netflix, Hulu, Disney+, or any other streaming account — nothing connects to them, and we can't see what you actually watch or what you're billed there. Every subscription you track is entered by you. The one automated piece: if you tell us a show you're waiting on, we check a free public TV schedule (TVmaze) once a day for its next air date and update your resume reminder automatically. No passwords, no bank link, nothing running in the background beyond that one daily check.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">We never log into your Netflix, Hulu, Disney+, or any other streaming account — nothing connects to them, and we can't see what you actually watch or what you're billed there. Every subscription you track is entered by you. The one automated piece: if you tell us a show you're waiting on, we check a free public TV schedule once a day for its next air date and update your resume reminder automatically. No passwords, no bank link, nothing running in the background beyond that one daily check.</div></div>
       </div>
 
       <div class="faq-item reveal">
@@ -976,7 +977,7 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">How much can I expect to save? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Early users save an average of $600 per year by pausing subscriptions between seasons, cancelling ones they never open, downgrading plans they've outgrown, and catching price hikes before they hit.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Early users save up to $300 or more per year by pausing subscriptions between seasons, cancelling ones they never open, downgrading plans they've outgrown, and catching price hikes before they hit.</div></div>
       </div>
 
       <div class="faq-item reveal">
@@ -995,7 +996,7 @@
       <div class="hero-form">
         <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
       </div>
-      <p class="hero-note" style="margin-bottom:0;">Free to start. Early users save an average of $600 a year.</p>
+      <p class="hero-note" style="margin-bottom:0;">Free to start. Early users save up to $300 or more per year.</p>
     </div>
   </section>
 
@@ -1554,7 +1555,7 @@
 
     const savingsEl = document.getElementById('pg-savings');
     if (savingsEl) {
-      savingsEl.innerHTML = `This household could save <strong>${fmt(totalPauseSavings)}/yr</strong> by acting on pause reminders instead of paying for every service, year-round.`;
+      savingsEl.innerHTML = `This household could save <strong>${fmt(totalPauseSavings)}/yr</strong> by acting on pause reminders instead of paying for every service, year-round.<span class="pg-savings-caption">Based on this sample household's subscriptions — your number will differ.</span>`;
     }
   })();
 
