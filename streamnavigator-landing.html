@@ -316,7 +316,7 @@
   .section-head{ max-width:640px; margin:0 auto 64px; text-align:center; }
   .eyebrow{ font-size:12.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent-3-deep); margin-bottom:14px; }
   .section-head h2{ font-size:clamp(1.9rem, 3.4vw, 2.7rem); margin-bottom:16px; }
-  .section-head p{ color:var(--text-dim); font-size:17px; }
+  .section-head p{ color:var(--text-dim); font-size:19px; line-height:1.55; }
 
   /* ---------- Product explanation ---------- */
   .product{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
@@ -326,26 +326,26 @@
   .chat-row{ display:flex; gap:10px; align-items:flex-end; }
   .chat-row.you{ flex-direction:row-reverse; }
   .chat-avatar{
-    width:34px; height:34px; border-radius:999px; flex-shrink:0; position:relative;
+    width:42px; height:42px; border-radius:999px; flex-shrink:0; position:relative;
     display:flex; align-items:center; justify-content:center;
     border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
   }
   .chat-avatar.bot{ background:var(--gradient); }
   .chat-avatar.you{ background:var(--surface-2); }
-  .chat-avatar svg{ width:16px; height:16px; }
+  .chat-avatar svg{ width:20px; height:20px; }
   .chat-live-dot{
-    position:absolute; bottom:-2px; right:-2px; width:11px; height:11px; border-radius:999px;
+    position:absolute; bottom:-2px; right:-2px; width:13px; height:13px; border-radius:999px;
     background:var(--accent-2); border:2px solid var(--surface);
     animation:chatPulse 1.8s ease-in-out infinite;
   }
   @keyframes chatPulse{ 0%,100%{ transform:scale(1); opacity:1; } 50%{ transform:scale(1.3); opacity:0.65; } }
-  .chat-col{ display:flex; flex-direction:column; max-width:80%; }
+  .chat-col{ display:flex; flex-direction:column; max-width:84%; }
   .chat-row.you .chat-col{ align-items:flex-end; }
-  .chat-name{ font-size:11px; font-weight:800; color:var(--text-dimmer); margin-bottom:5px; padding:0 4px; text-transform:uppercase; letter-spacing:0.04em; }
+  .chat-name{ font-size:13.5px; font-weight:800; color:var(--text-dimmer); margin-bottom:7px; padding:0 4px; text-transform:uppercase; letter-spacing:0.04em; }
   .chat-name .chat-time{ text-transform:none; font-weight:600; opacity:0.8; }
   .chat-bubble{
     background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:16px 16px 16px 4px;
-    padding:13px 16px; font-size:13.5px; color:var(--text-dim); line-height:1.5;
+    padding:16px 20px; font-size:17px; color:var(--text-dim); line-height:1.55;
     box-shadow:var(--shadow-hard-xs);
   }
   .chat-bubble.you{
@@ -353,15 +353,18 @@
     border-radius:16px 16px 4px 16px;
   }
   .chat-action{
-    display:flex; width:fit-content; align-items:center; gap:6px; margin-top:10px; padding:6px 12px;
+    display:flex; width:fit-content; align-items:center; gap:8px; margin-top:12px; padding:9px 16px;
     background:var(--surface); border:1.5px solid var(--ink); border-radius:999px;
-    font-size:11.5px; font-weight:800; color:var(--accent-2-deep); box-shadow:var(--shadow-hard-xs);
+    font-size:14.5px; font-weight:800; color:var(--accent-2-deep); box-shadow:var(--shadow-hard-xs);
   }
   .product-copy h3{ font-size:1.6rem; margin-bottom:16px; }
   .product-copy p{ color:var(--text-dim); font-size:16px; margin-bottom:16px; }
-  .check-list{ list-style:none; margin-top:24px; display:flex; flex-direction:column; gap:12px; }
-  .check-list li{ display:flex; gap:12px; align-items:flex-start; font-size:15px; color:var(--text-dim); }
-  .check-list .tick{ width:20px; height:20px; border-radius:6px; background:var(--status-active); color:var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; font-size:12px; font-weight:800; }
+  .product-lead{ color:var(--text-dim); font-size:23px; line-height:1.6; text-align:center; margin:0 auto 20px; max-width:600px; font-weight:500; }
+  .check-card{ background:var(--surface); border:2px solid var(--ink); border-radius:18px; padding:26px 30px; box-shadow:var(--shadow-hard-sm); max-width:540px; margin:32px auto 0; }
+  .check-list{ list-style:none; display:flex; flex-direction:column; gap:18px; }
+  .check-list li{ display:flex; gap:14px; align-items:flex-start; font-size:23px; line-height:1.45; color:var(--ink); font-weight:600; }
+  .check-list li:not(:last-child){ padding-bottom:16px; border-bottom:1px solid var(--border); }
+  .check-list .tick{ width:30px; height:30px; border-radius:9px; background:var(--status-active); color:var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; font-size:16px; font-weight:800; }
 
   /* ---------- Features ---------- */
   /* Compact circular layout: a center hub with six feature nodes orbiting
@@ -370,27 +373,35 @@
      with its container instead of needing per-breakpoint coordinates. */
   #features{ padding-bottom:28px; }
   #features .section-head{ margin-bottom:24px; }
-  .features-radial{ position:relative; width:min(480px, 100%); aspect-ratio:1/1; margin:0 auto; }
+  .features-radial{ position:relative; width:min(660px, 100%); aspect-ratio:1/1; margin:0 auto; }
   .features-radial svg.radial-lines{ position:absolute; inset:0; width:100%; height:100%; }
   .features-radial svg.radial-lines line{ stroke:var(--border-strong); stroke-width:0.5; stroke-dasharray:2.2 2.6; }
   .radial-hub{
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-    width:22%; height:22%; min-width:100px; min-height:100px; border-radius:999px; background:var(--gradient);
+    width:22%; height:22%; min-width:128px; min-height:128px; border-radius:999px; background:var(--gradient);
     border:2.5px solid var(--ink); box-shadow:var(--shadow-hard);
     display:flex; align-items:center; justify-content:center;
     text-align:center; z-index:2; padding:8px;
   }
-  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:14px; line-height:1.2; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
+  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:17px; line-height:1.25; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
   .radial-node{
-    position:absolute; transform:translate(-50%,-50%); width:29%; min-width:120px; max-width:170px; text-align:center; z-index:2;
+    position:absolute; transform:translate(-50%,-50%); width:29%; min-width:150px; max-width:205px; text-align:center; z-index:2;
   }
   .feature-icon{
-    width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-    background:var(--surface); margin:0 auto 10px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
+    width:58px; height:58px; border-radius:14px; display:flex; align-items:center; justify-content:center;
+    background:var(--surface); margin:0 auto 12px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
   }
-  .feature-icon svg{ width:22px; height:22px; color:var(--accent-deep); }
-  .radial-node h4{ font-size:13.5px; margin-bottom:4px; line-height:1.25; }
-  .radial-node p{ font-size:11.5px; color:var(--text-dim); line-height:1.3; }
+  .feature-icon svg{ width:28px; height:28px; color:var(--accent-deep); }
+  .feature-icon.c-blue{ background:rgba(79,182,232,0.18); }
+  .feature-icon.c-blue svg{ color:var(--accent-deep); }
+  .feature-icon.c-green{ background:rgba(74,222,158,0.20); }
+  .feature-icon.c-green svg{ color:var(--accent-2-deep); }
+  .feature-icon.c-teal{ background:rgba(46,196,182,0.18); }
+  .feature-icon.c-teal svg{ color:var(--accent-3-deep); }
+  .feature-icon.c-yellow{ background:rgba(255,201,60,0.28); }
+  .feature-icon.c-yellow svg{ color:#8A5A0A; }
+  .radial-node h4{ font-size:17px; margin-bottom:6px; line-height:1.3; }
+  .radial-node p{ font-size:14.5px; color:var(--text-dim); line-height:1.4; }
 
   /* ---------- Screenshots ---------- */
   .screens{ background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); }
@@ -585,13 +596,16 @@
       <div class="product-copy reveal">
         <div class="eyebrow">What is StreamNavigator</div>
         <h3>We tell you exactly what to do. You make the change.</h3>
-        <p>Streaming was supposed to save you money. Instead, most people are quietly paying for three or four services they forgot about or only need part of the year. You tell StreamNavigator what you're subscribed to and what you're watching, and it shows you exactly where you're overpaying.</p>
-        <p>Then it tells you what to do about it &mdash; when to pause a subscription you're not using right now, and when to bring it back based on what that service actually has to offer, like a new season, a marquee release, or your team's season opener. Every recommendation comes with a direct link straight to that service's account page, so you make the change yourself in one tap.</p>
-        <ul class="check-list">
-          <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
-          <li><span class="tick">✓</span> A reminder to bring it back, timed to what's worth watching</li>
-          <li><span class="tick">✓</span> Instant alerts before a price hike hits your card</li>
-        </ul>
+        <p class="product-lead">Most people are quietly paying for three or four streaming services they forgot about or only need part of the year.</p>
+        <p class="product-lead">You tell StreamNavigator what you're subscribed to and what you're watching, and it shows you exactly where you're overpaying.</p>
+        <p class="product-lead">It tells you exactly when to pause, downgrade, or bring a service back &mdash; with a direct link to make the change in one tap.</p>
+        <div class="check-card">
+          <ul class="check-list">
+            <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
+            <li><span class="tick">✓</span> A reminder to bring it back, timed to what's worth watching</li>
+            <li><span class="tick">✓</span> Instant alerts before a price hike hits your card</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -617,31 +631,31 @@
       </div>
 
       <div class="radial-node" style="left:50%; top:17%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <div class="feature-icon c-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
         <h4>Add it once, we track it</h4>
         <p title="Add each subscription manually — the service, the price, how you watch it — and StreamNavigator takes it from there: automatic check-ins every 60 days while active (30 when paused), plus real air-date tracking for shows you tag.">You add it, we keep watch</p>
       </div>
 
       <div class="radial-node" style="left:81.4%; top:39.8%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
+        <div class="feature-icon c-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
         <h4>Pause &amp; resume reminders</h4>
         <p title="We tell you exactly when to pause the subscriptions you're not using right now — and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.">Know exactly when to pause or resume</p>
       </div>
 
       <div class="radial-node" style="left:69.4%; top:76.7%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+        <div class="feature-icon c-yellow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
         <h4>Price hike alerts</h4>
         <p title="Get notified the moment a service raises its price — before it silently hits your card.">Notified the moment prices go up</p>
       </div>
 
       <div class="radial-node" style="left:30.6%; top:76.7%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
+        <div class="feature-icon c-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
         <h4>Direct-link cancel</h4>
         <p title="No hunting through menus or retention-agent phone calls — every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.">One-tap cancel, no phone calls</p>
       </div>
 
       <div class="radial-node" style="left:18.6%; top:39.8%;">
-        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
+        <div class="feature-icon c-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 22s8-4.5 8-11V5l-8-3-8 3v6c0 6.5 8 11 8 11z"/></svg></div>
         <h4>Nothing to connect</h4>
         <p title="StreamNavigator never links to your bank or card statements — every subscription in your list is one you typed in yourself. Your account password is hashed by Supabase and never seen or stored in plain text.">No bank link, nothing to hack</p>
       </div>
