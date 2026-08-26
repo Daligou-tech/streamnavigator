@@ -51,8 +51,13 @@
 -->
 <style>
   :root{
-    --bg:#FBF4E9;
-    --bg-alt:#F5EAD9;
+    /* Palette swapped to a Canva-inspired violet/mint/pink scheme — kept
+       the site's existing bold black-outline, hard-shadow card style
+       intact, only the color values changed. Status colors (active/paused/
+       danger) are left untouched since they carry meaning, not branding. */
+    --bg:#F3F0FC;
+    --bg-alt:#EAE3F8;
+    --bg-gradient: linear-gradient(135deg, #E3F8F4 0%, #ECE5FB 55%, #F1E9FB 100%);
     --surface:#FFFFFF;
     --surface-2:#FFF1DD;
     --ink:#1F1B16;
@@ -61,31 +66,31 @@
     --text:#201A14;
     --text-dim:#5B5347;
     --text-dimmer:#7A7163;
-    --accent:#4FB6E8;
-    --accent-deep:#1668A5;
+    --accent:#A78BFA;
+    --accent-deep:#6D28D9;
     --accent-2:#4ADE9E;
     --accent-2-deep:#146B4A;
     --accent-3:#2EC4B6;
     --accent-3-deep:#0F8A7D;
-    --yellow:#FFC93C;
+    --yellow:#FF8FB3;
     --status-active:#1E9E64;
     --status-active-deep:#157A4E;
     --status-paused:#9C5B1E;
     --status-paused-deep:#7A461A;
     --danger-deep:#B23A3A;
-    --gradient: linear-gradient(135deg, #4FB6E8 0%, #4ADE9E 100%);
-    --gradient-text: linear-gradient(135deg, #1668A5 0%, #146B4A 100%);
+    --gradient: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    --gradient-text: linear-gradient(135deg, #6D28D9 0%, #BE185D 100%);
     --radius: 20px;
     --radius-sm: 12px;
     --shadow-hard: 6px 6px 0 var(--ink);
     --shadow-hard-sm: 4px 4px 0 var(--ink);
     --shadow-hard-xs: 3px 3px 0 var(--ink);
     --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
-    --shadow-glow: 0 0 0 1px rgba(79,182,232,0.20), 0 20px 50px -20px rgba(79,182,232,0.32);
+    --shadow-glow: 0 0 0 1px rgba(167,139,250,0.20), 0 20px 50px -20px rgba(167,139,250,0.32);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{
-    background:var(--bg); color:var(--text);
+    background:var(--bg-gradient); color:var(--text);
     font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height:1.55; -webkit-font-smoothing:antialiased;
   }
@@ -124,14 +129,14 @@
     animation:needsAttentionBlink 1s steps(1, end) infinite;
   }
   .btn-toggle.needs-attention:hover{ background:#E4293D; }
-  /* Activate now gets its own blue blink instead of red — same "something
-     needs your attention" urgency, but blue reads as "go do this" (and
+  /* Activate now gets its own violet blink instead of red — same "something
+     needs your attention" urgency, but violet reads as "go do this" (and
      matches the marketing site's Log In / Sign Up button color) while red
      stays reserved for Pause now, so the two actions are told apart by
      color, not just by label text. */
   @keyframes needsAttentionBlinkActivate{
-    0%, 49%{ background:var(--accent); border-color:var(--accent-deep); color:var(--ink); box-shadow:0 0 0 4px rgba(79,182,232,0.38), var(--shadow-hard-xs); }
-    50%, 100%{ background:#BEE6F7; border-color:var(--accent-deep); color:var(--ink); box-shadow:var(--shadow-hard-xs); }
+    0%, 49%{ background:var(--accent); border-color:var(--accent-deep); color:var(--ink); box-shadow:0 0 0 4px rgba(167,139,250,0.42), var(--shadow-hard-xs); }
+    50%, 100%{ background:#E4D6FB; border-color:var(--accent-deep); color:var(--ink); box-shadow:var(--shadow-hard-xs); }
   }
   .btn-toggle.needs-attention.toggle-activate{
     animation:needsAttentionBlinkActivate 1s steps(1, end) infinite;
@@ -250,7 +255,7 @@
   .upgrade-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   @media (max-width:680px){ .upgrade-grid{ grid-template-columns:1fr; } }
   .upgrade-card{ position:relative; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; display:flex; flex-direction:column; }
-  .upgrade-card.featured{ background:linear-gradient(180deg, rgba(79,182,232,0.10), var(--surface) 40%); }
+  .upgrade-card.featured{ background:linear-gradient(180deg, rgba(167,139,250,0.14), var(--surface) 40%); }
   .upgrade-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); white-space:nowrap; }
   .upgrade-card h4{ font-family:'Sora',sans-serif; font-size:1.2rem; margin-bottom:4px; }
   .upgrade-price{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.9rem; margin-bottom:14px; }
