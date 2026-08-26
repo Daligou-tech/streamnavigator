@@ -10,8 +10,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#FBF4E9;
-    --bg-alt:#F5EAD9;
+    /* Palette swapped to a Canva-inspired violet/mint/pink scheme — kept
+       the site's existing bold black-outline, hard-shadow card style
+       intact, only the color values changed. Status colors (active/paused/
+       danger) are left untouched since they carry meaning, not branding. */
+    --bg:#F3F0FC;
+    --bg-alt:#EAE3F8;
+    --bg-gradient: linear-gradient(135deg, #E3F8F4 0%, #ECE5FB 55%, #F1E9FB 100%);
     --surface:#FFFFFF;
     --surface-2:#FFF1DD;
     --ink:#1F1B16;
@@ -20,31 +25,31 @@
     --text:#201A14;
     --text-dim:#5B5347;
     --text-dimmer:#7A7163;
-    --accent:#4FB6E8;
-    --accent-deep:#1668A5;
+    --accent:#A78BFA;
+    --accent-deep:#6D28D9;
     --accent-2:#4ADE9E;
     --accent-2-deep:#146B4A;
     --accent-3:#2EC4B6;
     --accent-3-deep:#0F8A7D;
-    --yellow:#FFC93C;
+    --yellow:#FF8FB3;
     --status-active:#1E9E64;
     --status-active-deep:#157A4E;
     --status-paused:#9C9282;
-    --gradient: linear-gradient(135deg, #4FB6E8 0%, #4ADE9E 100%);
-    --gradient-text: linear-gradient(135deg, #1668A5 0%, #146B4A 100%);
-    --gradient-warm: linear-gradient(135deg, #4ADE9E 0%, #FFC93C 100%);
+    --gradient: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+    --gradient-text: linear-gradient(135deg, #6D28D9 0%, #BE185D 100%);
+    --gradient-warm: linear-gradient(135deg, #4ADE9E 0%, #FF8FB3 100%);
     --radius: 20px;
     --radius-sm: 12px;
     --shadow-hard: 6px 6px 0 var(--ink);
     --shadow-hard-sm: 4px 4px 0 var(--ink);
     --shadow-hard-xs: 3px 3px 0 var(--ink);
     --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
-    --shadow-glow: 0 0 0 1px rgba(79,182,232,0.20), 0 20px 50px -20px rgba(79,182,232,0.32);
+    --shadow-glow: 0 0 0 1px rgba(167,139,250,0.20), 0 20px 50px -20px rgba(167,139,250,0.32);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html{scroll-behavior:smooth;}
   body{
-    background:var(--bg);
+    background:var(--bg-gradient);
     color:var(--text);
     font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     line-height:1.55;
@@ -57,10 +62,10 @@
   .wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
   .bg-noise{
     position:fixed; inset:0; pointer-events:none; z-index:0;
-    background-image:radial-gradient(circle at 15% 8%, rgba(79,182,232,0.12), transparent 42%),
+    background-image:radial-gradient(circle at 15% 8%, rgba(167,139,250,0.14), transparent 42%),
                       radial-gradient(circle at 88% 14%, rgba(46,196,182,0.12), transparent 42%),
                       radial-gradient(circle at 50% 95%, rgba(74,222,158,0.10), transparent 46%),
-                      radial-gradient(circle at 10% 70%, rgba(255,201,60,0.10), transparent 40%);
+                      radial-gradient(circle at 10% 70%, rgba(255,143,179,0.12), transparent 40%);
   }
 
   /* ---------- Nav ---------- */
@@ -139,19 +144,19 @@
   .browser-bar{ display:flex; align-items:center; gap:8px; padding:12px 16px; background:var(--surface-2); border-bottom:2px solid var(--ink); }
   .browser-bar .dots{ display:flex; gap:6px; }
   .browser-bar .dots span{ width:10px; height:10px; border-radius:50%; background:var(--border-strong); }
-  .browser-bar .dots span:nth-child(1){ background:#4FB6E8; }
-  .browser-bar .dots span:nth-child(2){ background:#FFC93C; }
+  .browser-bar .dots span:nth-child(1){ background:#A78BFA; }
+  .browser-bar .dots span:nth-child(2){ background:#FF8FB3; }
   .browser-bar .dots span:nth-child(3){ background:#2EC4B6; }
   .browser-bar .url{
     margin:0 auto; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:8px; padding:5px 14px;
     font-size:12px; color:var(--text-dimmer); display:flex; align-items:center; gap:6px;
   }
   .browser-body{ padding:28px; background:
-    linear-gradient(180deg, rgba(79,182,232,0.05), transparent 40%), var(--bg-alt); }
+    linear-gradient(180deg, rgba(167,139,250,0.06), transparent 40%), var(--bg-alt); }
   .app-shell{ display:grid; grid-template-columns:220px 1fr; gap:20px; text-align:left; }
   .app-side{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
   .app-side .side-item{ display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:13px; color:var(--text-dim); margin-bottom:4px; }
-  .app-side .side-item.active{ background:rgba(79,182,232,0.12); color:var(--accent-deep); }
+  .app-side .side-item.active{ background:rgba(167,139,250,0.14); color:var(--accent-deep); }
   .app-side .side-item .ico{ width:16px; height:16px; border-radius:4px; background:rgba(31,27,22,0.08); flex-shrink:0; }
   .app-main{ display:flex; flex-direction:column; gap:14px; }
 
@@ -240,8 +245,8 @@
   .tag-field input:focus{ border-color:var(--accent-deep); }
   .tag-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; min-height:0; }
   .tag-pill{
-    display:inline-flex; align-items:center; gap:6px; background:rgba(79,182,232,0.12); color:var(--accent-deep);
-    border:1px solid rgba(79,182,232,0.3); font-size:12.5px; padding:5px 8px 5px 12px; border-radius:999px;
+    display:inline-flex; align-items:center; gap:6px; background:rgba(167,139,250,0.14); color:var(--accent-deep);
+    border:1px solid rgba(167,139,250,0.35); font-size:12.5px; padding:5px 8px 5px 12px; border-radius:999px;
   }
   .tag-pill button{ background:none; border:none; color:inherit; cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
   .chip-row{ display:flex; flex-wrap:wrap; gap:8px; }
@@ -392,14 +397,14 @@
     background:var(--surface); margin:0 auto 12px; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs);
   }
   .feature-icon svg{ width:28px; height:28px; color:var(--accent-deep); }
-  .feature-icon.c-blue{ background:rgba(79,182,232,0.18); }
+  .feature-icon.c-blue{ background:rgba(167,139,250,0.20); }
   .feature-icon.c-blue svg{ color:var(--accent-deep); }
   .feature-icon.c-green{ background:rgba(74,222,158,0.20); }
   .feature-icon.c-green svg{ color:var(--accent-2-deep); }
   .feature-icon.c-teal{ background:rgba(46,196,182,0.18); }
   .feature-icon.c-teal svg{ color:var(--accent-3-deep); }
-  .feature-icon.c-yellow{ background:rgba(255,201,60,0.28); }
-  .feature-icon.c-yellow svg{ color:#8A5A0A; }
+  .feature-icon.c-yellow{ background:rgba(255,143,179,0.28); }
+  .feature-icon.c-yellow svg{ color:#B01560; }
   .radial-node h4{ font-size:17px; margin-bottom:6px; line-height:1.3; }
   .radial-node p{ font-size:14.5px; color:var(--text-dim); line-height:1.4; }
 
@@ -413,15 +418,15 @@
   .screen-card.tall{ grid-row:span 2; }
   .screen-card .shot-bar{ display:flex; gap:6px; padding:10px 14px; border-bottom:2px solid var(--ink); background:var(--surface-2); }
   .screen-card .shot-bar span{ width:8px;height:8px;border-radius:50%; background:var(--border-strong); }
-  .screen-card .shot-bar span:nth-child(1){ background:#4FB6E8; }
-  .screen-card .shot-bar span:nth-child(2){ background:#FFC93C; }
+  .screen-card .shot-bar span:nth-child(1){ background:#A78BFA; }
+  .screen-card .shot-bar span:nth-child(2){ background:#FF8FB3; }
   .screen-card .shot-bar span:nth-child(3){ background:#2EC4B6; }
   .screen-card .shot-body{ padding:20px; }
   .screen-card figcaption{ padding:14px 18px 18px; font-size:13px; color:var(--text-dim); border-top:1px solid var(--border); }
   .bar-chart{ display:flex; align-items:flex-end; gap:6px; height:110px; }
   .bar-chart div{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; }
   .grid-thumbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(79,182,232,0.55), rgba(46,196,182,0.30)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
+  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(167,139,250,0.55), rgba(46,196,182,0.30)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
   .summary-lines{ display:flex; flex-direction:column; gap:8px; }
   .summary-lines .ln{ height:9px; border-radius:5px; background:rgba(31,27,22,0.08); }
 
@@ -432,7 +437,7 @@
     display:flex; flex-direction:column;
   }
   .price-card.featured{
-    border-color:var(--ink); background:linear-gradient(180deg, rgba(79,182,232,0.06), var(--surface) 40%);
+    border-color:var(--ink); background:linear-gradient(180deg, rgba(167,139,250,0.10), var(--surface) 40%);
     position:relative; box-shadow:var(--shadow-hard);
   }
   .price-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); }
@@ -467,7 +472,7 @@
   /* ---------- Final CTA ---------- */
   .cta-final{
     text-align:center; margin:0 24px; border-radius:28px; padding:80px 32px;
-    background:radial-gradient(120% 140% at 50% 0%, rgba(79,182,232,0.14), transparent 60%), var(--surface);
+    background:radial-gradient(120% 140% at 50% 0%, rgba(167,139,250,0.16), transparent 60%), var(--surface);
     border:2px solid var(--ink); box-shadow:var(--shadow-hard); max-width:1180px; margin-left:auto; margin-right:auto;
   }
   .cta-final h2{ font-size:clamp(1.8rem, 3.6vw, 2.6rem); margin-bottom:16px; }
@@ -803,7 +808,7 @@
             <div class="result-meta"><h4>HBO Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Active</p><span class="timestamp-chip chip-alert">⚠ Downgrade to save $7/mo</span></div>
           </div>
           <div class="result-card">
-            <div class="thumb" style="background:linear-gradient(135deg,#2EC4B6,#FFC93C)"></div>
+            <div class="thumb" style="background:linear-gradient(135deg,#2EC4B6,#FF8FB3)"></div>
             <div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Active</p><span class="timestamp-chip chip-save">✓ Optimized</span></div>
           </div>
         </div>
@@ -841,7 +846,7 @@
         <div class="shot-body">
           <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Tracked services</p>
           <div class="grid-thumbs">
-            <div class="g">Netflix</div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FFC93C)">HBO Max</div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#4FB6E8)">Hulu</div>
+            <div class="g">Netflix</div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FF8FB3)">HBO Max</div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#A78BFA)">Hulu</div>
           </div>
         </div>
         <figcaption>See every subscription you're tracking at a glance.</figcaption>
