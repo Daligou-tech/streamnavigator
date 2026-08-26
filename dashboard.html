@@ -414,6 +414,7 @@
     </a>
     <div class="nav-right">
       <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" data-role="manage-billing" class="btn btn-ghost btn-sm" hidden>Manage Billing</a>
+      <a href="#upgrade-pro-link" id="header-upgrade-link" class="btn btn-primary btn-sm" hidden>Upgrade to Pro</a>
       <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
     </div>
   </nav>
@@ -1139,6 +1140,7 @@
     const upgradeHeading = document.getElementById('upgrade-section-heading');
     const planCelebrateIcon = document.getElementById('plan-celebrate-icon');
     const manageBillingSidebar = document.getElementById('manage-billing-link-sidebar');
+    const headerUpgradeLink = document.getElementById('header-upgrade-link');
     const pro = isPro();
     if (body) body.hidden = !pro;
     if (locked) locked.hidden = pro;
@@ -1156,8 +1158,13 @@
     // Only shown once we're sure this is a paid account — the button itself
     // needs no busy-state reset here since openBillingPortal() already
     // restores every [data-role="manage-billing"] element's label in its
-    // own finally block.
+    // own finally block. A Free account has no Stripe subscription behind
+    // it, so "Manage Billing" would just send it to a portal with nothing
+    // to manage — the header swaps that slot for an upgrade link instead,
+    // same idea as the sidebar's own upgrade-grid below.
+    if (manageBillingLink) manageBillingLink.hidden = !pro;
     if (manageBillingSidebar) manageBillingSidebar.hidden = !pro;
+    if (headerUpgradeLink) headerUpgradeLink.hidden = pro;
     if (note) {
       note.textContent = pro
         ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan! Real-time reminders and the plan optimizer are unlocked below.`
@@ -2308,7 +2315,10 @@
     authView.hidden = true;
     dashView.hidden = false;
     logoutBtn.hidden = false;
-    manageBillingLink.hidden = false;
+    // manage-billing-link's visibility is plan-dependent (Pro/Family only —
+    // a Free account has no Stripe subscription to manage), so it's left
+    // alone here and set by applyPlanGating() once the plan is known. Same
+    // for header-upgrade-link, its Free-plan counterpart.
     applyWelcomeName(user);
     wireUpgradeLinks(user);
     // Claim any pending household invite before checking plan status, so a
@@ -2331,6 +2341,8 @@
     dashView.hidden = true;
     logoutBtn.hidden = true;
     manageBillingLink.hidden = true;
+    const headerUpgradeLink = document.getElementById('header-upgrade-link');
+    if (headerUpgradeLink) headerUpgradeLink.hidden = true;
   }
 
   // "Welcome back, {first name}." when one's on file (set at signup, or
