@@ -269,6 +269,10 @@
      at a glance while scanning the list, not just when you land on its
      button. */
   .sub-row.flagged{ border-left-color:#E4293D; background:rgba(228,41,61,0.05); }
+  /* Untagged is informational, not an alert — same left-edge accent idea as
+     .flagged, but in neutral gray instead of red, so it reads as "nothing
+     to worry about yet" rather than "something needs attention." */
+  .sub-row.untagged-flag{ border-left-color:var(--text-dimmer); background:rgba(122,113,99,0.06); }
   .sub-name{ font-weight:700; min-width:140px; }
   .svc-dot{ display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:8px; vertical-align:middle; border:1.5px solid var(--ink); }
   .sub-price{ color:var(--text-dim); font-size:13.5px; min-width:70px; }
@@ -284,6 +288,7 @@
   .sub-suggestion.activate{ color:var(--status-active-deep); }
   .sub-suggestion.pause{ color:var(--status-paused-deep); }
   .sub-suggestion.info{ color:var(--accent-3-deep); }
+  .sub-suggestion.untagged{ color:var(--text-dimmer); font-weight:700; }
   .sub-price-alert{ font-size:14px; font-weight:800; color:var(--danger-deep); }
   .sub-price-alert.decrease{ color:var(--status-active-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
@@ -324,9 +329,6 @@
   .savings-banner{ display:flex; align-items:center; gap:12px; background:rgba(74,222,158,0.16); border:2px solid var(--status-active-deep); border-radius:var(--radius-sm); padding:14px 20px; margin-bottom:24px; font-weight:700; color:var(--status-active-deep); font-size:14.5px; }
   .savings-banner-icon{ font-size:18px; }
 
-  .connected-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(52px, 1fr)); gap:8px; }
-  .connected-tile{ aspect-ratio:1; border-radius:10px; border:2px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,0.25); }
-  .connected-tile.paused{ background:var(--status-paused) !important; background-image:repeating-linear-gradient(45deg, rgba(255,255,255,0.22) 0 2px, transparent 2px 5px) !important; color:var(--surface); }
   .trend-note{ font-size:11.5px; color:var(--text-dimmer); margin-top:8px; }
   .trend-current{ display:flex; flex-direction:column; align-items:center; justify-content:center; height:120px; gap:4px; }
   .trend-current .amt{ font-family:'Sora',sans-serif; font-weight:800; font-size:1.6rem; color:var(--status-active-deep); }
@@ -372,8 +374,8 @@
     .stat-arrow{ transform:rotate(90deg); }
   }
 
-  .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2); max-width:88vw; }
-  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .toast{ position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(120%); opacity:0; pointer-events:none; background:var(--surface); border:2px solid var(--ink); color:var(--text); padding:14px 22px; border-radius:12px; font-size:14px; font-weight:600; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-hard-sm); z-index:1000; transition:transform .35s cubic-bezier(.2,.9,.3,1.2), opacity .35s ease; max-width:88vw; }
+  .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
   .toast .ico{ color:var(--status-active-deep); }
 
   /* Confirmation gate for the Pause now / Activate now toggle, but only
@@ -506,8 +508,8 @@
       <div class="stat-card"><div class="label">Monthly spend</div><div class="value" id="stat-monthly">$0</div></div>
       <div class="stat-card"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
       <div class="stat-card"><div class="label">Paused</div><div class="value" id="stat-paused">0</div></div>
-      <div class="stat-card"><div class="label">Saved / yr by pausing</div><div class="value" id="stat-savings">$0</div></div>
-      <div class="stat-card save-stat" id="stat-lifetime-card"><div class="label">Total saved to date</div><div class="value" id="stat-lifetime-savings">$0.00</div><div class="lifetime-note" id="stat-lifetime-note">Since your history started</div></div>
+      <div class="stat-card"><div class="label">Projected Annual Savings</div><div class="value" id="stat-savings">$0</div><div class="lifetime-note">Based on subscriptions currently paused here — not yet confirmed.</div></div>
+      <div class="stat-card save-stat" id="stat-lifetime-card"><div class="label">Actually Saved So Far</div><div class="value" id="stat-lifetime-savings">$0.00</div><div class="lifetime-note" id="stat-lifetime-note">Since your history started</div></div>
     </div>
 
     <div class="panel" id="household-panel" hidden>
@@ -551,141 +553,125 @@
       <h3 class="panel-title-lg">Your Tracked Subscriptions</h3>
       <div id="sub-list"></div>
       <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription below.</p>
-    </div>
-
-    <div class="panel">
-      <h3 class="panel-title-lg">Shows &amp; Sports You Like to Watch</h3>
-      <p class="plan-status-text panel-text-centered">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows and typical U.S. season windows for sports.</p>
-
-      <div class="upgrade-lock" id="fav-panel-locked" hidden>
-        <p><strong>Real-time pause &amp; resume reminders are a Pro and Family feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
-        <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
-      </div>
-
-      <div id="fav-panel-body">
-        <div class="fav-add-grid">
-          <div class="field">
-            <label for="fav-show-title">Show or movie title</label>
-            <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
-            <p class="show-preview" id="fav-show-preview"></p>
-          </div>
-          <div class="field">
-            <label for="fav-show-service">On which service?</label>
-            <select id="fav-show-service"></select>
-          </div>
-          <div class="field">
-            <button type="button" class="btn btn-ghost" id="fav-show-add" style="width:100%;">Add show</button>
-          </div>
-        </div>
-
-        <div class="fav-add-grid">
-          <div class="field">
-            <label for="fav-sport-select">Sport / league</label>
-            <select id="fav-sport-select">
-              <option value="nfl">NFL</option>
-              <option value="nba">NBA</option>
-              <option value="mlb">MLB</option>
-              <option value="nhl">NHL</option>
-              <option value="epl">Premier League</option>
-              <option value="laliga">La Liga</option>
-              <option value="bundesliga">Bundesliga</option>
-              <option value="mls">MLS</option>
-              <option value="other_soccer">Other Soccer</option>
-              <option value="college">College Football</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="fav-sport-service">On which service?</label>
-            <select id="fav-sport-service"></select>
-          </div>
-          <div class="field">
-            <button type="button" class="btn btn-ghost" id="fav-sport-add" style="width:100%;">Add sport</button>
-          </div>
-        </div>
-
-        <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription below first, so you have a service to link these to.</p>
-
-        <p class="plan-status-text" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
+      <!-- Add/remove a service lives right under the list it edits — the
+           control that changes this list should sit next to it, not several
+           panels away. The forms it opens stay hidden until clicked, so this
+           doesn't reintroduce setup forms into the default Overview view. -->
+      <div style="text-align:center; margin-top:18px;">
+        <button type="button" class="btn btn-ghost" id="manage-section-toggle" aria-expanded="false" aria-controls="manage-section">+ Manage Subscriptions &amp; Shows</button>
       </div>
     </div>
 
-    <div class="panel">
-      <h3 class="panel-title-lg">Add a Subscription to Track</h3>
-      <p class="plan-status-text panel-text-centered">Once a subscription is added, use "See shows" on it above to tag the shows and sports you're watching — we check daily for real air dates and move your check-in to that date automatically.</p>
-      <form id="add-form">
-        <div class="add-grid-top">
-          <div class="field">
-            <label for="add-name">Service</label>
-            <input type="text" id="add-name" list="service-suggestions" placeholder="Type any service — Netflix, PBS Masterpiece, anything" required />
-            <datalist id="service-suggestions">
-              <option value="Netflix"></option>
-              <option value="Prime Video"></option>
-              <option value="HBO Max"></option>
-              <option value="Disney+"></option>
-              <option value="YouTube Premium"></option>
-              <option value="Paramount+"></option>
-              <option value="Hulu"></option>
-              <option value="Peacock"></option>
-              <option value="Apple TV+"></option>
-              <option value="ESPN+"></option>
-              <option value="Crunchyroll"></option>
-              <option value="AMC+"></option>
-              <option value="Starz"></option>
-              <option value="MGM+"></option>
-              <option value="BritBox"></option>
-              <option value="PBS Masterpiece"></option>
-              <option value="Discovery+"></option>
-              <option value="Sling TV"></option>
-              <option value="Philo"></option>
-              <option value="Acorn TV"></option>
-              <option value="Shudder"></option>
-            </datalist>
-          </div>
-          <div class="field">
-            <label for="add-price">$/mo</label>
-            <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
-          </div>
-          <div class="field">
-            <label for="add-status">Status</label>
-            <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-            </select>
-          </div>
-        </div>
-        <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
-        <button type="submit" class="btn btn-ghost">Add</button>
-      </form>
-    </div>
+    <!-- Setup forms (add a subscription, tag shows/sports) live behind a
+         collapsed toggle by default — the Overview above is the reason
+         someone opens this page most days, and these two forms are
+         comparatively rare, one-off actions that don't need to be in the
+         way every time. The toggle itself lives up in the Tracked
+         Subscriptions panel, next to the list it edits. -->
+    <div id="manage-section" hidden>
+      <div class="panel">
+        <h3 class="panel-title-lg">Shows &amp; Sports You Like to Watch</h3>
+        <p class="plan-status-text panel-text-centered">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows and typical U.S. season windows for sports.</p>
 
-    <div class="panel">
-      <h3 class="panel-title-lg">Your Analytics</h3>
-      <p class="plan-status-text panel-text-centered" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
-      <div id="analytics-body" hidden>
-        <p class="analytics-label" style="margin-bottom:6px;">This month's report</p>
-        <p class="analytics-summary" id="analytics-summary"></p>
-        <div class="analytics-grid">
-          <div class="analytics-block">
-            <p class="analytics-label">Spend by service</p>
-            <div class="analytics-bar-chart" id="analytics-bar-chart"></div>
-            <div class="analytics-bar-labels" id="analytics-bar-labels"></div>
-          </div>
-          <div class="analytics-block">
-            <p class="analytics-label">Active vs. paused</p>
-            <div class="split-donut" id="analytics-donut"></div>
-            <div class="split-legend" id="analytics-legend"></div>
-          </div>
-          <div class="analytics-block">
-            <p class="analytics-label">Connected services at a glance</p>
-            <div class="connected-grid" id="connected-grid"></div>
-          </div>
-          <div class="analytics-block">
-            <p class="analytics-label">Money saved over time</p>
-            <div class="analytics-bar-chart" id="savings-trend-chart"></div>
-            <div class="analytics-bar-labels" id="savings-trend-labels"></div>
-            <p class="trend-note" id="savings-trend-note"></p>
-          </div>
+        <div class="upgrade-lock" id="fav-panel-locked" hidden>
+          <p><strong>Real-time pause &amp; resume reminders are a Pro and Family feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
+          <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
         </div>
+
+        <div id="fav-panel-body">
+          <div class="fav-add-grid">
+            <div class="field">
+              <label for="fav-show-title">Show or movie title</label>
+              <input type="text" id="fav-show-title" placeholder="e.g. Stranger Things" />
+              <p class="show-preview" id="fav-show-preview"></p>
+            </div>
+            <div class="field">
+              <label for="fav-show-service">On which service?</label>
+              <select id="fav-show-service"></select>
+            </div>
+            <div class="field">
+              <button type="button" class="btn btn-ghost" id="fav-show-add" style="width:100%;">Add show</button>
+            </div>
+          </div>
+
+          <div class="fav-add-grid">
+            <div class="field">
+              <label for="fav-sport-select">Sport / league</label>
+              <select id="fav-sport-select">
+                <option value="nfl">NFL</option>
+                <option value="nba">NBA</option>
+                <option value="mlb">MLB</option>
+                <option value="nhl">NHL</option>
+                <option value="epl">Premier League</option>
+                <option value="laliga">La Liga</option>
+                <option value="bundesliga">Bundesliga</option>
+                <option value="mls">MLS</option>
+                <option value="other_soccer">Other Soccer</option>
+                <option value="college">College Football</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fav-sport-service">On which service?</label>
+              <select id="fav-sport-service"></select>
+            </div>
+            <div class="field">
+              <button type="button" class="btn btn-ghost" id="fav-sport-add" style="width:100%;">Add sport</button>
+            </div>
+          </div>
+
+          <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription below first, so you have a service to link these to.</p>
+
+          <p class="plan-status-text" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title-lg">Add a Subscription to Track</h3>
+        <p class="plan-status-text panel-text-centered">Once a subscription is added, use "See shows" on it above to tag the shows and sports you're watching — we check daily for real air dates and move your check-in to that date automatically.</p>
+        <form id="add-form">
+          <div class="add-grid-top">
+            <div class="field">
+              <label for="add-name">Service</label>
+              <input type="text" id="add-name" list="service-suggestions" placeholder="Type any service — Netflix, PBS Masterpiece, anything" required />
+              <datalist id="service-suggestions">
+                <option value="Netflix"></option>
+                <option value="Prime Video"></option>
+                <option value="HBO Max"></option>
+                <option value="Disney+"></option>
+                <option value="YouTube Premium"></option>
+                <option value="Paramount+"></option>
+                <option value="Hulu"></option>
+                <option value="Peacock"></option>
+                <option value="Apple TV+"></option>
+                <option value="ESPN+"></option>
+                <option value="Crunchyroll"></option>
+                <option value="AMC+"></option>
+                <option value="Starz"></option>
+                <option value="MGM+"></option>
+                <option value="BritBox"></option>
+                <option value="PBS Masterpiece"></option>
+                <option value="Discovery+"></option>
+                <option value="Sling TV"></option>
+                <option value="Philo"></option>
+                <option value="Acorn TV"></option>
+                <option value="Shudder"></option>
+              </datalist>
+            </div>
+            <div class="field">
+              <label for="add-price">$/mo</label>
+              <input type="number" id="add-price" min="0" step="0.01" placeholder="15.49" required />
+            </div>
+            <div class="field">
+              <label for="add-status">Status</label>
+              <select id="add-status" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+              </select>
+            </div>
+          </div>
+          <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
+          <button type="submit" class="btn btn-ghost">Add</button>
+        </form>
       </div>
     </div>
 
@@ -712,6 +698,33 @@
             </div>
             <div class="actions-list" id="actions-list"></div>
             <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3 class="panel-title-lg">Your Analytics</h3>
+      <p class="plan-status-text panel-text-centered" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
+      <div id="analytics-body" hidden>
+        <p class="analytics-label" style="margin-bottom:6px;">This month's report</p>
+        <p class="analytics-summary" id="analytics-summary"></p>
+        <div class="analytics-grid">
+          <div class="analytics-block">
+            <p class="analytics-label">Spend by service</p>
+            <div class="analytics-bar-chart" id="analytics-bar-chart"></div>
+            <div class="analytics-bar-labels" id="analytics-bar-labels"></div>
+          </div>
+          <div class="analytics-block">
+            <p class="analytics-label">Active vs. paused</p>
+            <div class="split-donut" id="analytics-donut"></div>
+            <div class="split-legend" id="analytics-legend"></div>
+          </div>
+          <div class="analytics-block">
+            <p class="analytics-label">Money saved over time</p>
+            <div class="analytics-bar-chart" id="savings-trend-chart"></div>
+            <div class="analytics-bar-labels" id="savings-trend-labels"></div>
+            <p class="trend-note" id="savings-trend-note"></p>
           </div>
         </div>
       </div>
@@ -1614,6 +1627,23 @@
     empty.hidden = rows.length > 0;
     rowsById = {};
 
+    // The "Manage subscriptions & shows" section is collapsed by default
+    // (see the toggle wiring below), but a brand-new account with nothing
+    // tracked yet has no other way to add its first subscription — force
+    // it open in that one case rather than leaving the empty-state message
+    // pointing at a form nobody can see. Once there's at least one row,
+    // this stops touching it, so a customer's own collapse/expand choice
+    // is respected from then on.
+    if (rows.length === 0) {
+      const manageSection = document.getElementById('manage-section');
+      const manageToggle = document.getElementById('manage-section-toggle');
+      if (manageSection && manageSection.hidden) {
+        manageSection.hidden = false;
+        manageToggle.textContent = '− Hide Manage Subscriptions & Shows';
+        manageToggle.setAttribute('aria-expanded', 'true');
+      }
+    }
+
     let monthly = 0, activeCount = 0, pausedCount = 0, pausedMonthly = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
     rows.forEach(r => {
@@ -1642,7 +1672,18 @@
       // Real-time reminders are a Pro feature — a Free-plan customer sees
       // their subscriptions and can still pause/activate manually, but
       // doesn't get the "worth activating/pausing" prompts.
-      const suggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr) || computeUntaggedPrompt(r)) : null;
+      // These two are kept separate from the untagged nudge below on
+      // purpose: both are backed by a real signal (tagged content with a
+      // real air-date/season mismatch, or genuine elapsed time past the
+      // check-in threshold), so they earn the red "needs attention"
+      // treatment. Nothing tagged + nothing overdue yet is a different,
+      // much softer situation — see untaggedSuggestion.
+      const realSuggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr)) : null;
+      // Fires only when there's no real signal at all — informational, not
+      // an alert, so it gets its own neutral gray treatment instead of
+      // riding along on the same pink/red styling as a genuine suggestion.
+      const untaggedSuggestion = (isPro() && !realSuggestion) ? computeUntaggedPrompt(r) : null;
+      const suggestion = realSuggestion || untaggedSuggestion;
 
       // Real-time price-change alerts (Pro/Family): flagged whenever the
       // price you last saved differs from what it was before you last
@@ -1663,14 +1704,18 @@
         priceAlertText = `Price ${direction} from ${fmt(r.previous_monthly_price)} to ${fmt(r.monthly_price)}${changedDate ? ' as of ' + changedDate : ''}`;
       }
 
-      // Any suggestion at all — pause, activate, or the softer "nothing
-      // tagged yet" info nudge — OR a real price increase means this row has
-      // something worth the customer's attention, so it gets the same red
-      // accent/blink treatment. One consistent rule ("is there text here
-      // explaining something?") is easier to read at a glance than several
-      // different shades of urgency.
-      const flagged = !!(suggestion || priceIncreased);
+      // Red/blue "needs attention" treatment is reserved for a real signal
+      // only — a computed pause/activate suggestion or a price increase —
+      // never the untagged nudge, which is informational rather than an
+      // alert (see .untagged-flag below for its own neutral treatment).
+      const flagged = !!(realSuggestion || priceIncreased);
       if (flagged) row.classList.add('flagged');
+      // A price increase can co-occur with "nothing tagged yet" (e.g. you
+      // never tagged a show for this service, but its price still went up)
+      // — a real signal always wins the row's color over the neutral
+      // untagged treatment, so this only applies when nothing already
+      // flagged the row red.
+      if (untaggedSuggestion && !flagged) row.classList.add('untagged-flag');
 
       // Flagged Activate now buttons blink blue instead of red (see
       // .toggle-activate below) — only applies when the button is actually
@@ -1681,9 +1726,8 @@
       // computeSuggestion/computeCadencePrompt) just restate, in words, what
       // a blinking-red Pause now button already says — genuinely redundant
       // once the button itself is the signal. Suppress that one specific
-      // phrasing here; the untagged-prompt's "Tag a show or sport..." pause
-      // text stays, since it carries a real call to action the button can't.
-      const suppressSuggestionText = !!(suggestion && suggestion.type === 'pause' && suggestion.text.indexOf('Suggested: Consider pausing') === 0);
+      // phrasing here.
+      const suppressSuggestionText = !!(realSuggestion && realSuggestion.type === 'pause' && realSuggestion.text.indexOf('Suggested: Consider pausing') === 0);
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
@@ -1691,11 +1735,12 @@
         <span class="badge ${r.status}">${r.status === 'active' ? 'Active' : 'Paused'}</span>
         <span class="sub-meta">
           ${priceAlertText ? `<span class="sub-price-alert${priceIncreased ? '' : ' decrease'}">${priceIncreased ? '⚠' : '✓'} ${escapeHtml(priceAlertText)}</span>` : ''}
-          ${suggestion && !suppressSuggestionText ? `<span class="sub-suggestion ${suggestion.type}">🔔 ${escapeHtml(suggestion.text)}</span>` : ''}
+          ${untaggedSuggestion ? `<span class="sub-suggestion untagged">Add shows or sports to get suggestions</span>` : ''}
+          ${realSuggestion && !suppressSuggestionText ? `<span class="sub-suggestion ${realSuggestion.type}">🔔 ${escapeHtml(realSuggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
           <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
-          <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">See shows${showCount ? ' (' + showCount + ')' : ''}</button>
+          <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">${untaggedSuggestion ? 'Tag now' : ('See shows' + (showCount ? ' (' + showCount + ')' : ''))}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           <button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
@@ -1795,30 +1840,7 @@
       <span><span class="dot" style="background:var(--status-paused)"></span>Paused (${pausedRows.length})</span>
     `;
 
-    renderConnectedGrid(rows);
     loadSavingsHistory(pausedMonthly);
-  }
-
-  // Real version of the marketing page's "Connected services at a glance"
-  // grid — one tile per subscription this customer actually tracks.
-  const TILE_GRADIENTS = [
-    'linear-gradient(135deg,#4FB6E8,#4ADE9E)',
-    'linear-gradient(135deg,#2EC4B6,#FFC93C)',
-    'linear-gradient(135deg,#4ADE9E,#FFC93C)',
-    'linear-gradient(135deg,#4FB6E8,#2EC4B6)',
-    'linear-gradient(135deg,#FFC93C,#4FB6E8)',
-  ];
-  function renderConnectedGrid(rows){
-    const grid = document.getElementById('connected-grid');
-    grid.innerHTML = '';
-    rows.forEach((r, i) => {
-      const tile = document.createElement('div');
-      tile.className = 'connected-tile' + (r.status !== 'active' ? ' paused' : '');
-      if (r.status === 'active') tile.style.background = TILE_GRADIENTS[i % TILE_GRADIENTS.length];
-      tile.title = `${r.service_name} — ${r.status === 'active' ? 'Active' : 'Paused'}`;
-      tile.textContent = (r.service_name || '?').replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() || '?';
-      grid.appendChild(tile);
-    });
   }
 
   // Real version of the marketing page's "Money saved — last 7 months"
@@ -2300,6 +2322,22 @@
     document.getElementById('name-edit-toggle').textContent = firstName ? 'Edit name' : 'Add your name';
     document.getElementById('name-edit-input').value = firstName;
   }
+
+  // ---- Manage subscriptions & shows: collapsed by default ----
+  // The Overview above (tracked subscriptions, the plan analyzer, your
+  // analytics) is what someone actually opens this page for on a given day.
+  // Adding a new subscription or tagging a show is comparatively rare, so
+  // those two forms live behind this toggle instead of always being in the
+  // way of the main list.
+  document.getElementById('manage-section-toggle').addEventListener('click', () => {
+    const section = document.getElementById('manage-section');
+    const btn = document.getElementById('manage-section-toggle');
+    const willExpand = section.hidden;
+    section.hidden = !willExpand;
+    btn.textContent = willExpand ? '− Hide Manage Subscriptions & Shows' : '+ Manage Subscriptions & Shows';
+    btn.setAttribute('aria-expanded', String(willExpand));
+    if (willExpand) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   document.getElementById('name-edit-toggle').addEventListener('click', () => {
     document.getElementById('name-edit-toggle').hidden = true;
