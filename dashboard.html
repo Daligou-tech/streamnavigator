@@ -182,6 +182,12 @@
 
   .panel{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; margin-bottom:28px; }
   .panel h3{ font-size:1.1rem; margin-bottom:16px; }
+  /* Doubled, centered title treatment for the three main workflow panels
+     (tracked subscriptions, shows & sports, add a subscription) — a
+     deliberate one-off, not a change to .panel h3 generally, so panels
+     like "Your analytics" and "Manage your household" keep their normal
+     title size. */
+  .panel h3.panel-title-lg{ font-size:2.2rem; text-align:center; }
   .add-grid-top{ display:grid; grid-template-columns:1.4fr 0.8fr 0.9fr; gap:10px; align-items:end; margin-bottom:14px; }
   @media (max-width:820px){ .add-grid-top{ grid-template-columns:1fr 1fr; } }
   .add-grid-top .field{ margin-bottom:0; }
@@ -196,6 +202,10 @@
      that answers "what plan am I actually on," so it should read at a
      glance rather than blend in like a small print caveat. */
   .plan-status-text{ font-size:17px; font-weight:600; color:var(--text); line-height:1.5; margin-bottom:16px; max-width:640px; }
+  /* Centers an intro paragraph within its panel — used on the "Add a
+     subscription" and "Shows & sports" intro text specifically, not a
+     global text-align default. */
+  .panel-text-centered{ text-align:center; margin-left:auto; margin-right:auto; }
 
   /* "Your plan" lives in a vertical sidebar next to the main column instead
      of stacked inline with everything else — it's account-level status, not
@@ -298,7 +308,7 @@
   .fav-pill button{ background:var(--surface); border:1.5px solid var(--border-strong); border-radius:50%; width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; color:var(--text-dim); line-height:1; padding:0; font-family:inherit; }
   .fav-pill button:hover{ border-color:var(--ink); color:var(--text); }
 
-  .analytics-summary{ font-size:14px; color:var(--text-dim); line-height:1.55; margin-bottom:22px; }
+  .analytics-summary{ font-size:17px; font-weight:600; color:var(--text); line-height:1.5; margin-bottom:22px; text-align:center; }
   .analytics-grid{ display:grid; grid-template-columns:1.3fr 1fr; gap:28px; }
   @media (max-width:680px){ .analytics-grid{ grid-template-columns:1fr; } }
   .analytics-label{ font-size:11.5px; font-weight:700; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:.04em; margin-bottom:14px; }
@@ -325,6 +335,9 @@
   /* ---------- Optimizer (ported from the landing page analyzer) ---------- */
   .analyzer{ text-align:left; display:flex; flex-direction:column; gap:22px; }
   .analyzer-head p{ font-size:13.5px; color:var(--text-dimmer); }
+  /* Overrides the rule above for the intro paragraph specifically, so it
+     matches the "underlying text" size used on the other panels. */
+  .analyzer-head p.plan-status-text{ font-size:17px; color:var(--text); }
   .analyze-btn{ width:100%; padding:14px; font-size:15px; }
   .analyzer-results{ display:flex; flex-direction:column; gap:18px; padding-top:6px; border-top:1px solid var(--border); }
   .result-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -535,14 +548,14 @@
     </div>
 
     <div class="panel">
-      <h3>Your tracked subscriptions</h3>
+      <h3 class="panel-title-lg">Your Tracked Subscriptions</h3>
       <div id="sub-list"></div>
       <p class="empty-state" id="empty-state" hidden>Nothing tracked yet — add your first subscription below.</p>
     </div>
 
     <div class="panel">
-      <h3>Shows &amp; sports you like to watch</h3>
-      <p class="field-hint">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and typical U.S. season windows for sports.</p>
+      <h3 class="panel-title-lg">Shows &amp; Sports You Like to Watch</h3>
+      <p class="plan-status-text panel-text-centered">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows and typical U.S. season windows for sports.</p>
 
       <div class="upgrade-lock" id="fav-panel-locked" hidden>
         <p><strong>Real-time pause &amp; resume reminders are a Pro and Family feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
@@ -592,13 +605,13 @@
 
         <p class="field-hint" id="fav-no-subs-hint" hidden style="margin-top:-2px;">Add a subscription below first, so you have a service to link these to.</p>
 
-        <p class="field-hint" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
+        <p class="plan-status-text" style="margin:14px 0 0;">Sport season windows are typical U.S. schedules and may shift year to year — not a live game-by-game feed. We only ever suggest an action; you still click Pause now / Activate now yourself.</p>
       </div>
     </div>
 
     <div class="panel">
-      <h3>Add a subscription to track</h3>
-      <p class="plan-status-text">No need to set a reminder date yourself. We automatically check in — every 60 days on active subscriptions ("still using this?") and every 30 days on paused ones. Once it's added, use "See shows" on it above to tag the shows and sports you're watching — we check daily for real air dates (via <a href="https://www.tvmaze.com" target="_blank" rel="noopener" style="color:inherit;">TVmaze</a>) and move your check-in to that date automatically.</p>
+      <h3 class="panel-title-lg">Add a Subscription to Track</h3>
+      <p class="plan-status-text panel-text-centered">Once a subscription is added, use "See shows" on it above to tag the shows and sports you're watching — we check daily for real air dates and move your check-in to that date automatically.</p>
       <form id="add-form">
         <div class="add-grid-top">
           <div class="field">
@@ -640,14 +653,14 @@
             </select>
           </div>
         </div>
-        <p class="field-hint" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
+        <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
         <button type="submit" class="btn btn-ghost">Add</button>
       </form>
     </div>
 
     <div class="panel">
-      <h3>Your analytics</h3>
-      <p class="empty-state" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
+      <h3 class="panel-title-lg">Your Analytics</h3>
+      <p class="plan-status-text panel-text-centered" id="analytics-empty">Add a subscription above and your personal analytics will show up here.</p>
       <div id="analytics-body" hidden>
         <p class="analytics-label" style="margin-bottom:6px;">This month's report</p>
         <p class="analytics-summary" id="analytics-summary"></p>
@@ -685,7 +698,7 @@
 
         <div id="analyzer-body">
           <div class="analyzer-head">
-            <p>See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
+            <p class="plan-status-text panel-text-centered">See how your tracked subscriptions above compare to the best available plans — this runs against what you're already tracking, using published list prices, right in your browser.</p>
           </div>
 
           <button class="btn btn-ghost analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
@@ -1862,7 +1875,7 @@
       // a genuine day-by-day trend instead of a single snapshot.
       chart.innerHTML = `<div class="trend-current"><span class="amt">${fmt(pausedMonthlyNow || 0)}/mo</span><span class="lbl">saved right now</span></div>`;
       note.textContent = history.length === 0
-        ? 'History starts building from today — check back tomorrow for your first real data point.'
+        ? ''
         : 'Only 1 real day logged so far — one more real point gets added daily.';
       return;
     }
