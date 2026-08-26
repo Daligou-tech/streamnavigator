@@ -366,6 +366,7 @@
   .product-copy p{ color:var(--text-dim); font-size:16px; margin-bottom:16px; }
   .product-lead{ color:var(--text-dim); font-size:23px; line-height:1.6; text-align:center; margin:0 auto 20px; max-width:600px; font-weight:500; }
   .check-card{ background:var(--surface); border:2px solid var(--ink); border-radius:18px; padding:26px 30px; box-shadow:var(--shadow-hard-sm); max-width:540px; margin:32px auto 0; }
+  .check-card-kicker{ display:flex; align-items:center; font-size:12.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.03em; margin-bottom:16px; }
   .check-list{ list-style:none; display:flex; flex-direction:column; gap:18px; }
   .check-list li{ display:flex; gap:14px; align-items:flex-start; font-size:23px; line-height:1.45; color:var(--ink); font-weight:600; }
   .check-list li:not(:last-child){ padding-bottom:16px; border-bottom:1px solid var(--border); }
@@ -406,6 +407,11 @@
   .feature-icon.c-yellow{ background:rgba(255,143,179,0.28); }
   .feature-icon.c-yellow svg{ color:#B01560; }
   .radial-node h4{ font-size:17px; margin-bottom:6px; line-height:1.3; }
+  .pro-flag{
+    display:inline-block; margin-left:6px; font-size:9.5px; font-weight:800; letter-spacing:0.04em;
+    color:var(--ink); background:var(--yellow); border:1.5px solid var(--ink); border-radius:999px;
+    padding:2px 7px; vertical-align:middle; position:relative; top:-1px;
+  }
   .radial-node p{ font-size:14.5px; color:var(--text-dim); line-height:1.4; }
 
   /* ---------- Screenshots ---------- */
@@ -589,7 +595,7 @@
               <span class="chat-live-dot"></span>
             </div>
             <div class="chat-col">
-              <div class="chat-name">StreamNavigator <span class="chat-time">&middot; now</span></div>
+              <div class="chat-name">StreamNavigator <span class="chat-time">&middot; now</span><span class="pro-flag">PRO</span></div>
               <div class="chat-bubble">
                 Time to pause HBO Max &mdash; you'll save $16.99/mo. Here's your direct link to do it in one tap. I'll remind you to bring it back when the next big season premieres.
                 <span class="chat-action">⏸ Pause HBO Max &rarr;</span>
@@ -605,6 +611,7 @@
         <p class="product-lead">You tell StreamNavigator what you're subscribed to and what you're watching, and it shows you exactly where you're overpaying.</p>
         <p class="product-lead">It tells you exactly when to pause, downgrade, or bring a service back &mdash; with a direct link to make the change in one tap.</p>
         <div class="check-card">
+          <p class="check-card-kicker">Once you tag what you're watching, this happens automatically<span class="pro-flag">PRO</span></p>
           <ul class="check-list">
             <li><span class="tick">✓</span> A direct link to pause, downgrade, or cancel what you're not using</li>
             <li><span class="tick">✓</span> A reminder to bring it back, timed to what's worth watching</li>
@@ -643,7 +650,7 @@
 
       <div class="radial-node" style="left:81.4%; top:39.8%;">
         <div class="feature-icon c-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></div>
-        <h4>Pause &amp; resume reminders</h4>
+        <h4>Pause &amp; resume reminders<span class="pro-flag">PRO</span></h4>
         <p title="We tell you exactly when to pause the subscriptions you're not using right now — and when to bring them back once that service actually has something worth watching, like a new season or your team's opener. A direct link does the rest.">Know exactly when to pause or resume</p>
       </div>
 
@@ -655,7 +662,7 @@
 
       <div class="radial-node" style="left:30.6%; top:76.7%;">
         <div class="feature-icon c-teal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/></svg></div>
-        <h4>Direct-link cancel</h4>
+        <h4>Direct-link cancel<span class="pro-flag">PRO</span></h4>
         <p title="No hunting through menus or retention-agent phone calls — every cancel or downgrade recommendation comes with a direct link straight to the right page, so you can act in one tap.">One-tap cancel, no phone calls</p>
       </div>
 
@@ -676,8 +683,8 @@
     <div class="program-guide reveal" id="program-guide">
       <div class="pg-head">
         <div class="pg-head-copy">
-          <h3>We tell you when to pause. You tap the link.</h3>
-          <p>One sample household's subscriptions over 12 months — real months, illustrative household. Hover any tile.</p>
+          <h3>We tell you when to pause. You tap the link.<span class="pro-flag">PRO</span></h3>
+          <p>One sample household's subscriptions over 12 months — real months, illustrative household. Hover any tile. Free tracks everything you see below; Pro adds these pause/resume prompts and the direct link.</p>
         </div>
         <div class="pg-legend">
           <span class="pg-legend-item"><span class="pg-swatch active"></span>Active</span>
@@ -904,7 +911,6 @@
           <li><span class="tick">✓</span> Track up to 5 subscriptions</li>
           <li><span class="tick">✓</span> Monthly usage insights</li>
           <li><span class="tick">✓</span> See your total monthly spend across tracked subscriptions</li>
-          <li><span class="tick">✓</span> Email price-hike alerts</li>
         </ul>
         <a href="dashboard.html" class="btn btn-ghost">Get Started Free</a>
       </div>
