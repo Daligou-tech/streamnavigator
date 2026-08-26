@@ -297,6 +297,15 @@
   .sub-price-alert{ font-size:14px; font-weight:800; color:var(--danger-deep); }
   .sub-price-alert.decrease{ color:var(--status-active-deep); }
   .sub-actions{ margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  /* Free-plan stand-in for the "Manage on site" link and the Pause/Activate
+     toggle — both are Pro actions now (see renderSubscriptions). Styled as
+     a dashed, non-interactive chip so it visually reads as "locked", not as
+     a disabled button someone might still try to click. */
+  .locked-chip{
+    display:inline-flex; align-items:center; gap:5px; padding:6px 12px; border-radius:999px;
+    font-size:12px; font-weight:700; color:var(--text-dim); background:var(--surface-2);
+    border:1.5px dashed var(--border-strong); cursor:default;
+  }
   .show-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
   .show-edit-row input[type="text"]{ flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:2px solid var(--ink); font-family:inherit; font-size:13.5px; }
   .price-edit-row{ display:flex; align-items:center; gap:8px; padding:0 0 14px; flex-wrap:wrap; width:100%; }
@@ -1152,7 +1161,7 @@
     if (note) {
       note.textContent = pro
         ? `You're on the ${userPlan === 'family' ? 'Family' : 'Pro'} plan! Real-time reminders and the plan optimizer are unlocked below.`
-        : "You're on the Free plan. Upgrade to unlock real-time pause & resume reminders and the plan optimizer.";
+        : "You're on the Free plan. Upgrade to unlock direct cancel/downgrade links, pause & resume prompts, and the plan optimizer.";
     }
     // Row-level suggestion text is Pro-gated too, so re-render with the
     // current plan now applied.
@@ -1650,6 +1659,11 @@
 
     let monthly = 0, activeCount = 0, pausedCount = 0, pausedMonthly = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
+    // Two per-row actions are Pro/Family only: the direct "Manage on site"
+    // link, and the Pause now / Activate now toggle itself. Free still sees
+    // its subscriptions, status, and spend — it just can't act on them from
+    // here or get told when to; see the locked-chip fallbacks below.
+    const pro = isPro();
     rows.forEach(r => {
       rowsById[r.id] = r;
       if (r.status === 'active') { monthly += Number(r.monthly_price); activeCount++; }
@@ -1743,10 +1757,14 @@
           ${realSuggestion && !suppressSuggestionText ? `<span class="sub-suggestion ${realSuggestion.type}">🔔 ${escapeHtml(realSuggestion.text)}</span>` : ''}
         </span>
         <span class="sub-actions">
-          <a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>
+          ${pro
+            ? `<a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>`
+            : `<span class="locked-chip" title="Direct cancel/downgrade links are a Pro feature">🔒 Direct link — Pro</span>`}
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">${untaggedSuggestion ? 'Tag now' : ('See shows' + (showCount ? ' (' + showCount + ')' : ''))}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
-          <button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>
+          ${pro
+            ? `<button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>`
+            : `<span class="locked-chip" title="Pro tells you exactly when to pause or activate">🔔 We'll prompt you — Pro</span>`}
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
