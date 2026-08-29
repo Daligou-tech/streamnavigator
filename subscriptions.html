@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Subscription Navigator — StreamNavigator AI</title>
+<meta name="description" content="Optimize every recurring subscription you pay for — not just streaming. Subscription Navigator recommends what to keep, cancel, rotate, or downgrade — for $49/year." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/subscriptions#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Subscription Navigator</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:8px;">
+    <div class="wrap">
+      <div class="pill"><span class="dot">✓</span> Beyond streaming — every subscription you pay for</div>
+      <h1>Optimize every subscription <span class="grad">you're paying for.</span></h1>
+      <p class="sub">Not just streaming — software, memberships, boxes, apps. Tell StreamNavigator what you're subscribed to and it recommends what to keep, cancel, rotate, or downgrade.</p>
+    </div>
+  </section>
+  <section id="how-it-works">
+    <div class="section-head reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>Every recurring charge, one recommendation each.</h2>
+      
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-num">1</div>
+        <h4>List or upload your subscriptions</h4>
+        <p>Bank/card statements work well, or just list what you remember paying for.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">2</div>
+        <h4>Pay $49/year</h4>
+        <p>One price, covers ongoing recommendations as your subscriptions change.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">3</div>
+        <h4>AI reviews usage and value</h4>
+        <p>Each subscription is checked against what it costs versus what it's realistically worth to you.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">4</div>
+        <h4>Get your keep/cancel/rotate list</h4>
+        <p>A clear recommendation for every subscription, with direct cancellation links where available.</p>
+      </div>
+    </div>
+  </section>
+  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>A clear call on every subscription — not just streaming.</h2>
+      
+    </div>
+    <div class="wrap" style="max-width:680px;">
+      <div class="check-card reveal">
+        <ul class="check-list">
+          <li><span class="tick">✓</span> Which subscriptions are worth keeping as-is</li>
+          <li><span class="tick">✓</span> Which to cancel outright</li>
+          <li><span class="tick">✓</span> Which to rotate (pause and resume seasonally)</li>
+          <li><span class="tick">✓</span> Which to downgrade to a cheaper tier</li>
+          <li><span class="tick">✓</span> Direct links to cancel or downgrade where available</li>
+          <li><span class="tick">✓</span> Total estimated annual savings</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    ============================================================================
+    To go live for Subscription Navigator:
+      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
+           "Subscription Navigator Report" — $49 per year
+      2. Payment links -> New -> pick that price -> Create link.
+      3. In the link's "After payment" step, set the redirect to:
+           https://streamnavigator.ai/navigator-status
+      4. Paste the resulting https://buy.stripe.com/... URL over
+         REPLACE_WITH_STRIPE_PAYMENT_LINK on the button below.
+      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
+         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
+         -> event: checkout.session.completed -> copy its signing secret into
+         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    This page already appends ?client_reference_id=<submission id> to the
+    link automatically (see navigator-shared.js) so payment ties back to the
+    right submission — nothing else to configure here.
+    ============================================================================
+  -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get started</div>
+      <h2>One price. A full year of recommendations.</h2>
+      <p>Tell us what you're subscribed to, pay once, get your plan.</p>
+    </div>
+    <div class="single-price-wrap">
+      <div class="price-card featured reveal" id="intake-card">
+        <span class="price-badge">One-time</span>
+        <h3>Subscription Navigator Report</h3>
+        <p class="desc">Keep/cancel/rotate/downgrade recommendations across every recurring subscription you have.</p>
+        <div class="price-amount">$49<span>/year</span></div>
+        <div class="price-period">billed once per year</div>
+
+        <div class="field-block">
+          <label>What are you subscribed to?</label>
+          <textarea id="intake-description" placeholder="e.g. Spotify, Adobe CC, gym, meal kit, cloud storage, streaming services..."></textarea>
+        </div>
+        <div class="field-block">
+          <label>Upload a statement (optional, improves accuracy)</label>
+          <div class="upload-zone" id="upload-zone">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+          </div>
+          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">A bank or card statement lets us catch subscriptions you might have forgotten about.</p>
+        </div>
+        <div class="field-block">
+          <label>Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+        </div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Covers software, memberships, boxes, apps — not just streaming</li>
+          <li><span class="tick">✓</span> Direct cancel/downgrade links where available</li>
+          <li><span class="tick">✓</span> One price covers a full year</li>
+        </ul>
+        <a href="REPLACE_WITH_STRIPE_PAYMENT_LINK" data-stripe-link="subscriptions" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+  </section>
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">How is this different from the streaming tracker on the homepage? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">The homepage tool is purpose-built for streaming services. Subscription Navigator covers everything else you pay for monthly or yearly — software, memberships, boxes, apps, and more.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do I need to connect my bank account? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — you can list subscriptions manually, or upload a statement as a PDF/photo. No bank login is ever required.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What does 'rotate' mean? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Pausing a subscription during months you won't use it and resuming it when you will — common for seasonal services.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Will you cancel things automatically? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — you get direct links and clear instructions, but you make every change yourself.</div></div>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:0; padding-bottom:90px;">
+    <div class="cta-final reveal">
+      <h2>You're probably paying for something you forgot about.</h2>
+      <p>Find out what, and fix it in a few clicks.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Review My Subscriptions</a>
+    </div>
+  </section>
+</main>
+<footer id="contact">
+  <div class="other-navs">
+    <h5>Other Navigators</h5>
+    <div class="other-navs-grid">
+      <a href="/">Streaming Navigator (home)</a>
+      <a href="/contractor">🔧 Contractor Navigator</a>
+      <a href="/property-tax">🏠 Property Tax Navigator</a>
+      <a href="/home-savings">💡 Home Savings Navigator</a>
+      <a href="/rental">🔑 Rental Navigator</a>
+      <a href="/government-money">🏛️ Government Money Finder</a>
+      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+      <a href="/landlord">📋 Landlord Navigator</a>
+      <a href="/insurance">🛡️ Insurance Navigator</a>
+      <a href="/buying">🛒 Purchase Navigator</a>
+    </div>
+  </div>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Subscription Navigator provides AI-generated recommendations for informational purposes only and does not have the ability to cancel, pause, downgrade, or otherwise change your subscriptions on your behalf. You make every change yourself.</p>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text"></span>
+</div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('upload-input');
+  const list = document.getElementById('upload-list');
+  const uploader = wireUploadZone(zone, input, list);
+  let selectedCategory = null;
+
+  document.querySelectorAll('.category-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      selectedCategory = chip.dataset.value;
+    });
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const emailEl = document.getElementById('intake-email');
+    const descEl = document.getElementById('intake-description');
+    const email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const files = uploader.getFiles();
+    if (false && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your submission…';
+    btn.style.pointerEvents = 'none';
+    try {
+      const submission = await submitNavigatorIntake({
+        product: 'subscriptions',
+        email: email,
+        formData: { category: selectedCategory, description: descEl.value.trim() },
+        files: files,
+      });
+      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'subscriptions' }, email);
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Your Contractor Navigator report — StreamNavigator AI</title>
+<meta name="description" content="Your AI-generated contractor estimate report from StreamNavigator." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Contractor Navigator</span>
+    </a>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:0;">
+    <div class="wrap">
+
+      <div class="status-shell" id="waiting-view">
+        <div class="status-card reveal in">
+          <div class="status-spinner" id="wait-spinner"></div>
+          <h2 id="wait-title">Reading your estimate…</h2>
+          <p id="wait-body">This usually takes under a minute. Feel free to leave this tab open — it'll update automatically.</p>
+        </div>
+      </div>
+
+      <div class="report-shell" id="report-view" hidden>
+        <div class="section-head reveal in" style="text-align:left; margin-bottom:36px;">
+          <div class="eyebrow">Your report</div>
+          <h2 id="report-category-h2">Contractor Navigator Report</h2>
+          <p id="report-summary"></p>
+        </div>
+
+        <div id="quotes-block" class="report-block" hidden>
+          <h3>📄 Quotes analyzed</h3>
+          <div id="quotes-list"></div>
+        </div>
+
+        <div class="report-block">
+          <h3>💰 Is the price reasonable?</h3>
+          <span class="verdict-pill" id="price-verdict-pill"></span>
+          <p id="price-explanation"></p>
+        </div>
+
+        <div id="apples-block" class="report-block" hidden>
+          <h3>⚖️ Apples-to-apples comparison</h3>
+          <p id="apples-explanation"></p>
+        </div>
+
+        <div id="strongest-block" class="report-block" hidden>
+          <h3>🏆 Strongest quote</h3>
+          <p id="strongest-explanation"></p>
+        </div>
+
+        <div class="report-block">
+          <h3>🔍 What's missing or unclear</h3>
+          <ul id="missing-list"></ul>
+        </div>
+
+        <div class="report-block">
+          <h3>⚠️ Potential change orders</h3>
+          <ul id="changeorders-list"></ul>
+        </div>
+
+        <div class="report-block">
+          <h3>❓ Questions to ask</h3>
+          <ul id="questions-list"></ul>
+        </div>
+
+        <div class="report-block">
+          <h3>🤝 What to negotiate</h3>
+          <ul id="negotiate-list"></ul>
+        </div>
+
+        <div class="report-block">
+          <h3>✉️ Ready-to-send email</h3>
+          <div class="email-box" id="email-box"></div>
+          <button class="btn btn-ghost btn-sm copy-btn" id="copy-email-btn">Copy email</button>
+        </div>
+      </div>
+
+      <div class="status-shell" id="failed-view" hidden>
+        <div class="status-card reveal in">
+          <h2>We hit a snag generating your report</h2>
+          <p id="failed-body">Our team has been notified — email info@streamnavigator.ai and we'll sort it out personally, no charge lost.</p>
+        </div>
+      </div>
+
+      <div class="status-shell" id="missing-view" hidden>
+        <div class="status-card reveal in">
+          <h2>We couldn't find that submission</h2>
+          <p>This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section style="padding-top:50px; padding-bottom:90px;">
+    <div class="other-navs">
+      <h5>Explore the other Navigators</h5>
+      <div class="other-navs-grid">
+        <a href="/">Streaming Navigator (home)</a>
+        <a href="/property-tax">🏠 Property Tax Navigator</a>
+        <a href="/home-savings">💡 Home Savings Navigator</a>
+        <a href="/rental">🔑 Rental Navigator</a>
+        <a href="/subscriptions">📺 Subscription Navigator</a>
+        <a href="/government-money">🏛️ Government Money Finder</a>
+        <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+        <a href="/landlord">📋 Landlord Navigator</a>
+        <a href="/insurance">🛡️ Insurance Navigator</a>
+        <a href="/buying">🛒 Purchase Navigator</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="contact">
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul><li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li></ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Contractor Navigator provides an independent, AI-generated second opinion for informational purposes — it is not a licensed contractor, engineer, or legal service, and its assessment is not a guarantee of price, quality, or workmanship.</p>
+  <div class="footer-bottom"><p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p></div>
+</footer>
+
+<div class="toast" id="toast"><span class="ico">✓</span> <span id="toast-text"></span></div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  function show(id){
+    ['waiting-view','report-view','failed-view','missing-view'].forEach(function(v){
+      document.getElementById(v).hidden = (v !== id);
+    });
+  }
+  function fillList(ulId, items){
+    var ul = document.getElementById(ulId);
+    ul.innerHTML = '';
+    (items || []).forEach(function(item){
+      var li = document.createElement('li');
+      li.textContent = item;
+      ul.appendChild(li);
+    });
+  }
+
+  function renderReport(report){
+    document.getElementById('report-category-h2').textContent = (report.category || 'Contractor') + ' Estimate Report';
+    document.getElementById('report-summary').textContent = report.summary || '';
+
+    if (report.quotes && report.quotes.length) {
+      document.getElementById('quotes-block').hidden = false;
+      var list = document.getElementById('quotes-list');
+      list.innerHTML = '';
+      report.quotes.forEach(function(q){
+        var card = document.createElement('div');
+        card.className = 'quote-card';
+        card.innerHTML = '<h5>' + (q.label || 'Quote') + (q.contractor_name ? ' — ' + q.contractor_name : '') + '</h5>' +
+          (q.total_price ? '<div class="qprice">' + q.total_price + '</div>' : '') +
+          (q.scope_summary ? '<p style="margin-top:6px; font-size:13px; color:var(--text-dim);">' + q.scope_summary + '</p>' : '');
+        list.appendChild(card);
+      });
+    }
+
+    var pv = document.getElementById('price-verdict-pill');
+    var verdict = (report.price_assessment && report.price_assessment.verdict) || '';
+    pv.textContent = verdict;
+    pv.className = 'verdict-pill' + (/high|unclear/i.test(verdict) ? ' warn' : '');
+    document.getElementById('price-explanation').textContent = (report.price_assessment && report.price_assessment.explanation) || '';
+
+    if (report.apples_to_apples && report.apples_to_apples.explanation) {
+      document.getElementById('apples-block').hidden = false;
+      document.getElementById('apples-explanation').textContent =
+        (report.apples_to_apples.verdict ? report.apples_to_apples.verdict + ' — ' : '') + report.apples_to_apples.explanation;
+    }
+
+    if (report.strongest_quote && report.strongest_quote.why) {
+      document.getElementById('strongest-block').hidden = false;
+      document.getElementById('strongest-explanation').textContent =
+        (report.strongest_quote.which ? report.strongest_quote.which + ': ' : '') + report.strongest_quote.why;
+    }
+
+    fillList('missing-list', report.missing_or_unclear_items);
+    fillList('changeorders-list', report.potential_change_orders);
+    fillList('questions-list', report.questions_to_ask);
+    fillList('negotiate-list', report.negotiation_points);
+
+    document.getElementById('email-box').textContent = report.negotiation_email || '';
+    show('report-view');
+  }
+
+  document.getElementById('copy-email-btn').addEventListener('click', function(){
+    var text = document.getElementById('email-box').textContent;
+    navigator.clipboard.writeText(text).then(function(){
+      showToast('Email copied to clipboard.');
+    }).catch(function(){
+      showToast('Could not copy automatically — select the text manually.');
+    });
+  });
+
+  var stored = getStoredSubmission();
+  if (!stored || !stored.id || !stored.token) {
+    show('missing-view');
+    return;
+  }
+
+  pollNavigatorSubmission(stored.id, stored.token, {
+    intervalMs: 3000,
+    maxTries: 60,
+    onUpdate: function(data){
+      if (!data.ok) { show('missing-view'); return; }
+      if (data.status === 'complete' && data.report) {
+        renderReport(data.report);
+      } else if (data.status === 'failed') {
+        document.getElementById('failed-body').textContent = data.error
+          ? ('Details: ' + data.error + ' — email info@streamnavigator.ai and we will sort it out personally, no charge lost.')
+          : 'Our team has been notified — email info@streamnavigator.ai and we will sort it out personally, no charge lost.';
+        show('failed-view');
+      } else {
+        document.getElementById('wait-title').textContent =
+          data.status === 'processing' ? 'Analyzing your estimate…' : 'Confirming your payment…';
+      }
+    },
+  });
+})();
+</script>
+</body>
+</html>

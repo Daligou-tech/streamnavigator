@@ -540,6 +540,23 @@
     .radial-hub{ position:static; transform:none; width:100px; height:100px; min-width:0; min-height:0; }
     .radial-node{ position:static; transform:none; width:100%; max-width:320px; }
   }
+
+  /* ---------- Expansion section (beyond streaming) ---------- */
+  .expansion-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:20px; max-width:1080px; margin:0 auto; }
+  .expansion-card{
+    background:var(--surface); border:1.5px solid var(--border-strong); border-radius:var(--radius-sm);
+    padding:24px 24px 20px; transition:border-color .2s ease, transform .15s ease;
+  }
+  .expansion-card:hover{ border-color:var(--ink); transform:translateY(-2px); }
+  .expansion-icon{ font-size:26px; margin-bottom:10px; }
+  .expansion-card h4{ font-size:16px; margin-bottom:6px; }
+  .expansion-card > p{ font-size:13.5px; color:var(--text-dim); margin-bottom:16px; }
+  .expansion-card ul{ list-style:none; display:flex; flex-direction:column; gap:9px; }
+  .expansion-card ul a{ font-size:13.5px; font-weight:700; color:var(--accent-deep); }
+  .expansion-card ul a:hover{ text-decoration:underline; }
+  @media (max-width: 900px){
+    .expansion-grid{ grid-template-columns:1fr; max-width:420px; }
+  }
 </style>
 </head>
 <body>
@@ -949,6 +966,56 @@
 
     </div>
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. <a href="dashboard.html#billing" class="footnote-link">Cancel anytime</a>, no phone calls or emails required.</p>
+  </section>
+
+  <!--
+    ============================================================================
+    EXPANSION SECTION (project blueprint, section 11 "Homepage Strategy")
+    Kept deliberately subtle — this streaming homepage stays the focused
+    front door it always was. Each card links out to an independent product
+    page (contractor.html, property-tax.html, etc.) that has nothing to do
+    with the streaming product above and shares only the visual design.
+    ============================================================================
+  -->
+  <section id="expansion" style="padding-top:56px; padding-bottom:56px;">
+    <div class="section-head reveal">
+      <div class="eyebrow">Beyond streaming</div>
+      <h2>More ways to navigate your spending.</h2>
+      <p>StreamNavigator is expanding into AI tools that help you make expensive decisions with confidence.</p>
+    </div>
+    <div class="expansion-grid">
+      <div class="expansion-card reveal">
+        <div class="expansion-icon">🔧</div>
+        <h4>Home Projects</h4>
+        <p>Check a contractor's quote before you sign.</p>
+        <ul>
+          <li><a href="contractor.html">Contractor Navigator →</a></li>
+          <li><a href="home-maintenance.html">Home Maintenance Navigator →</a></li>
+        </ul>
+      </div>
+      <div class="expansion-card reveal">
+        <div class="expansion-icon">🏠</div>
+        <h4>Property</h4>
+        <p>Find potential savings in taxes and property expenses.</p>
+        <ul>
+          <li><a href="property-tax.html">Property Tax Navigator →</a></li>
+          <li><a href="rental.html">Rental Navigator →</a></li>
+          <li><a href="landlord.html">Landlord Navigator →</a></li>
+        </ul>
+      </div>
+      <div class="expansion-card reveal">
+        <div class="expansion-icon">💡</div>
+        <h4>Household Bills</h4>
+        <p>Find recurring expenses you can reduce.</p>
+        <ul>
+          <li><a href="home-savings.html">Home Savings Navigator →</a></li>
+          <li><a href="subscriptions.html">Subscription Navigator →</a></li>
+          <li><a href="insurance.html">Insurance Navigator →</a></li>
+          <li><a href="government-money.html">Government Money Finder →</a></li>
+          <li><a href="buying.html">Purchase Navigator →</a></li>
+        </ul>
+      </div>
+    </div>
   </section>
 
   <!-- FAQ -->

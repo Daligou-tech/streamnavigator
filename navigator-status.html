@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Submission received — StreamNavigator AI</title>
+<meta name="description" content="Your StreamNavigator Navigator submission and payment status." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator
+    </a>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:0;">
+    <div class="wrap status-shell">
+      <div class="status-card reveal in" id="status-card">
+        <div class="status-spinner" id="status-spinner"></div>
+        <h2 id="status-title">Checking your submission…</h2>
+        <p id="status-body">One moment.</p>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:40px; padding-bottom:90px;">
+    <div class="other-navs">
+      <h5>Explore the other Navigators</h5>
+      <div class="other-navs-grid" id="other-navs-grid"></div>
+    </div>
+  </section>
+</main>
+
+<footer id="contact">
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul><li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li></ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast"><span class="ico">✓</span> <span id="toast-text"></span></div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  var NAV = [
+    ['/', 'Streaming Navigator'],
+    ['/contractor', '🔧 Contractor Navigator'],
+    ['/property-tax', '🏠 Property Tax Navigator'],
+    ['/home-savings', '💡 Home Savings Navigator'],
+    ['/rental', '🔑 Rental Navigator'],
+    ['/subscriptions', '📺 Subscription Navigator'],
+    ['/government-money', '🏛️ Government Money Finder'],
+    ['/home-maintenance', '🛠️ Home Maintenance Navigator'],
+    ['/landlord', '📋 Landlord Navigator'],
+    ['/insurance', '🛡️ Insurance Navigator'],
+    ['/buying', '🛒 Purchase Navigator'],
+  ];
+  var grid = document.getElementById('other-navs-grid');
+  NAV.forEach(function(n){
+    var a = document.createElement('a');
+    a.href = n[0]; a.textContent = n[1];
+    grid.appendChild(a);
+  });
+
+  var titleEl = document.getElementById('status-title');
+  var bodyEl = document.getElementById('status-body');
+  var spinnerEl = document.getElementById('status-spinner');
+
+  function render(status, err, product){
+    if (product === 'contractor' && (status === 'paid' || status === 'processing')) {
+      window.location.href = '/contractor-report.html';
+      return;
+    }
+    spinnerEl.style.display = (status === 'pending_payment') ? 'block' : 'none';
+    if (status === 'paid' || status === 'processing' || status === 'complete') {
+      titleEl.textContent = 'Payment received — thank you!';
+      bodyEl.textContent = "We're on it. Your report will be ready within 24 hours, and we'll reach out to the email you provided.";
+    } else if (status === 'pending_payment') {
+      titleEl.textContent = 'Almost there…';
+      bodyEl.textContent = "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.";
+    } else if (status === 'failed') {
+      titleEl.textContent = 'Something went wrong on our end';
+      bodyEl.textContent = (err || "We'll be in touch to sort it out — no charge is lost. Email info@streamnavigator.ai if you don't hear from us soon.");
+    } else {
+      titleEl.textContent = "We couldn't find that submission";
+      bodyEl.textContent = "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.";
+    }
+  }
+
+  var stored = getStoredSubmission();
+  if (!stored || !stored.id || !stored.token) {
+    render(null, null, null);
+    return;
+  }
+  fetch('/api/get-navigator-submission', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id: stored.id, token: stored.token }),
+  }).then(function(r){ return r.json(); }).then(function(data){
+    if (!data.ok) { render(null, null, null); return; }
+    render(data.status, data.error, data.product);
+  }).catch(function(){ render(null, null, null); });
+})();
+</script>
+</body>
+</html>

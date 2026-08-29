@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Insurance Navigator — StreamNavigator AI</title>
+<meta name="description" content="Upload your renewal before you accept it. Insurance Navigator compares premium, limits, deductibles, and coverage changes, and tells you what to ask — for $79/renewal." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/insurance#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Insurance Navigator</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:8px;">
+    <div class="wrap">
+      <div class="pill"><span class="dot">✓</span> Before you accept that renewal</div>
+      <h1>Check your renewal <span class="grad">before you accept it.</span></h1>
+      <p class="sub">Upload your insurance renewal notice. StreamNavigator compares the premium, limits, deductibles, and coverage against your old policy — and tells you exactly what to ask or shop for.</p>
+    </div>
+  </section>
+  <section id="how-it-works">
+    <div class="section-head reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>From renewal notice to a clear verdict.</h2>
+      
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-num">1</div>
+        <h4>Upload your renewal notice</h4>
+        <p>And your prior policy or declarations page, if you have it — the comparison is sharper with both.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">2</div>
+        <h4>Pay $79/renewal</h4>
+        <p>One flat price per renewal reviewed.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">3</div>
+        <h4>AI compares old vs. new</h4>
+        <p>Premium, coverage limits, deductibles, and exclusions are checked line by line.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">4</div>
+        <h4>Get your verdict and questions</h4>
+        <p>A clear read on whether the renewal is fair, plus exactly what to ask your insurer or shop for elsewhere.</p>
+      </div>
+    </div>
+  </section>
+  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>Know exactly what changed — and what to do about it.</h2>
+      
+    </div>
+    <div class="wrap" style="max-width:680px;">
+      <div class="check-card reveal">
+        <ul class="check-list">
+          <li><span class="tick">✓</span> How much your premium changed, and whether that's typical</li>
+          <li><span class="tick">✓</span> Coverage limit changes between your old policy and this renewal</li>
+          <li><span class="tick">✓</span> Deductible changes and what they mean for you</li>
+          <li><span class="tick">✓</span> New exclusions or coverage gaps introduced in this renewal</li>
+          <li><span class="tick">✓</span> Specific questions to ask your insurer</li>
+          <li><span class="tick">✓</span> Whether it's worth shopping this renewal elsewhere</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    ============================================================================
+    To go live for Insurance Navigator:
+      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
+           "Insurance Navigator Report" — $79 one-time
+      2. Payment links -> New -> pick that price -> Create link.
+      3. In the link's "After payment" step, set the redirect to:
+           https://streamnavigator.ai/navigator-status
+      4. Paste the resulting https://buy.stripe.com/... URL over
+         REPLACE_WITH_STRIPE_PAYMENT_LINK on the button below.
+      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
+         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
+         -> event: checkout.session.completed -> copy its signing secret into
+         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    This page already appends ?client_reference_id=<submission id> to the
+    link automatically (see navigator-shared.js) so payment ties back to the
+    right submission — nothing else to configure here.
+    ============================================================================
+  -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get started</div>
+      <h2>One flat price per renewal.</h2>
+      <p>Upload your renewal, pay once, know where you stand.</p>
+    </div>
+    <div class="single-price-wrap">
+      <div class="price-card featured reveal" id="intake-card">
+        <span class="price-badge">One-time</span>
+        <h3>Insurance Navigator Report</h3>
+        <p class="desc">A full comparison of your renewal against your prior policy, for any line of insurance.</p>
+        <div class="price-amount">$79<span>/renewal</span></div>
+        <div class="price-period">one-time payment per renewal</div>
+      <div class="field-block">
+        <label>Category</label>
+        <div class="chip-row">
+          <button type="button" class="chip-toggle category-chip" data-value="Auto">Auto</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Home">Home</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Renters">Renters</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Umbrella">Umbrella</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Other">Other</button>
+        </div>
+      </div>
+        <div class="field-block">
+          <label>What's changed since your last policy? (optional)</label>
+          <textarea id="intake-description" placeholder="e.g. Added a teen driver, no claims filed, moved last year..."></textarea>
+        </div>
+        <div class="field-block">
+          <label>Upload your renewal notice</label>
+          <div class="upload-zone" id="upload-zone">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+          </div>
+          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">Add your prior policy or declarations page too, if you have it, for a sharper comparison.</p>
+        </div>
+        <div class="field-block">
+          <label>Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+        </div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Works for auto, home, renters, umbrella, and more</li>
+          <li><span class="tick">✓</span> Line-by-line comparison against your prior policy</li>
+          <li><span class="tick">✓</span> Specific questions and shopping guidance included</li>
+        </ul>
+        <a href="REPLACE_WITH_STRIPE_PAYMENT_LINK" data-stripe-link="insurance" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+  </section>
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">What types of insurance does this cover? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Auto, home, renters, and umbrella policies most commonly — upload your renewal and we'll do our best with what's provided.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do I need my old policy too? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">It's not required, but including your prior policy or declarations page makes the comparison significantly more precise.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Will you shop for a new policy for me? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — you get a clear read on your current renewal plus guidance on what to shop for, but you make contact with insurers yourself.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if my renewal looks fine? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">You'll be told plainly — the report doesn't manufacture concerns that aren't there.</div></div>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:0; padding-bottom:90px;">
+    <div class="cta-final reveal">
+      <h2>Renewals auto-approve if you do nothing.</h2>
+      <p>Spend two minutes checking first.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Check My Renewal</a>
+    </div>
+  </section>
+</main>
+<footer id="contact">
+  <div class="other-navs">
+    <h5>Other Navigators</h5>
+    <div class="other-navs-grid">
+      <a href="/">Streaming Navigator (home)</a>
+      <a href="/contractor">🔧 Contractor Navigator</a>
+      <a href="/property-tax">🏠 Property Tax Navigator</a>
+      <a href="/home-savings">💡 Home Savings Navigator</a>
+      <a href="/rental">🔑 Rental Navigator</a>
+      <a href="/subscriptions">📺 Subscription Navigator</a>
+      <a href="/government-money">🏛️ Government Money Finder</a>
+      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+      <a href="/landlord">📋 Landlord Navigator</a>
+      <a href="/buying">🛒 Purchase Navigator</a>
+    </div>
+  </div>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Insurance Navigator provides AI-generated analysis for informational purposes only and is not licensed insurance advice. Always review your full policy documents and consult a licensed insurance agent before making coverage decisions.</p>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text"></span>
+</div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('upload-input');
+  const list = document.getElementById('upload-list');
+  const uploader = wireUploadZone(zone, input, list);
+  let selectedCategory = "Auto";
+
+  document.querySelectorAll('.category-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      selectedCategory = chip.dataset.value;
+    });
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const emailEl = document.getElementById('intake-email');
+    const descEl = document.getElementById('intake-description');
+    const email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const files = uploader.getFiles();
+    if (true && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your submission…';
+    btn.style.pointerEvents = 'none';
+    try {
+      const submission = await submitNavigatorIntake({
+        product: 'insurance',
+        email: email,
+        formData: { category: selectedCategory, description: descEl.value.trim() },
+        files: files,
+      });
+      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'insurance' }, email);
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+})();
+</script>
+</body>
+</html>

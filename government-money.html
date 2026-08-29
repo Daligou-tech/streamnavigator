@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Government Money Finder — StreamNavigator AI</title>
+<meta name="description" content="Find the rebates, tax credits, and public programs you actually qualify for — with instructions for claiming them. Government Money Finder — $39/report." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/government-money#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Government Money Finder</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:8px;">
+    <div class="wrap">
+      <div class="pill"><span class="dot">✓</span> Rebates and credits most people never claim</div>
+      <h1>Find the money the government <span class="grad">already owes you.</span></h1>
+      <p class="sub">Tell StreamNavigator about your household, home, and situation. It searches for rebates, tax credits, utility incentives, and grants you actually qualify for — with instructions for claiming each one.</p>
+    </div>
+  </section>
+  <section id="how-it-works">
+    <div class="section-head reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>From your situation to a claim list.</h2>
+      
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-num">1</div>
+        <h4>Tell us about your situation</h4>
+        <p>Homeownership, income range, recent purchases (like an EV or heat pump), household size — whatever's relevant.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">2</div>
+        <h4>Pay $39</h4>
+        <p>One flat price per report.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">3</div>
+        <h4>AI searches current programs</h4>
+        <p>Federal, state, and local rebates, credits, incentives, and grants are checked against what you told us.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">4</div>
+        <h4>Get your personalized claim list</h4>
+        <p>Every program you likely qualify for, with plain-English instructions for claiming it.</p>
+      </div>
+    </div>
+  </section>
+  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>A personalized list, not a generic database dump.</h2>
+      
+    </div>
+    <div class="wrap" style="max-width:680px;">
+      <div class="check-card reveal">
+        <ul class="check-list">
+          <li><span class="tick">✓</span> Federal, state, and local programs you likely qualify for</li>
+          <li><span class="tick">✓</span> Utility rebates and incentives specific to your situation</li>
+          <li><span class="tick">✓</span> Tax credits worth claiming on your next return</li>
+          <li><span class="tick">✓</span> Estimated dollar value of each program</li>
+          <li><span class="tick">✓</span> Step-by-step instructions for claiming each one</li>
+          <li><span class="tick">✓</span> Deadlines or windows you shouldn't miss</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    ============================================================================
+    To go live for Government Money Finder:
+      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
+           "Government Money Finder Report" — $39 one-time
+      2. Payment links -> New -> pick that price -> Create link.
+      3. In the link's "After payment" step, set the redirect to:
+           https://streamnavigator.ai/navigator-status
+      4. Paste the resulting https://buy.stripe.com/... URL over
+         REPLACE_WITH_STRIPE_PAYMENT_LINK on the button below.
+      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
+         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
+         -> event: checkout.session.completed -> copy its signing secret into
+         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    This page already appends ?client_reference_id=<submission id> to the
+    link automatically (see navigator-shared.js) so payment ties back to the
+    right submission — nothing else to configure here.
+    ============================================================================
+  -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get started</div>
+      <h2>One flat price per report.</h2>
+      <p>Tell us your situation, pay once, get your claim list.</p>
+    </div>
+    <div class="single-price-wrap">
+      <div class="price-card featured reveal" id="intake-card">
+        <span class="price-badge">One-time</span>
+        <h3>Government Money Finder Report</h3>
+        <p class="desc">A personalized search for rebates, credits, and public programs you qualify for.</p>
+        <div class="price-amount">$39<span>/report</span></div>
+        <div class="price-period">one-time payment</div>
+
+        <div class="field-block">
+          <label>Tell us about your situation</label>
+          <textarea id="intake-description" placeholder="e.g. Homeowner, installed solar panels in 2025, household of 4, live in Ohio..."></textarea>
+        </div>
+        <div class="field-block">
+          <label>Upload supporting documents (optional)</label>
+          <div class="upload-zone" id="upload-zone">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+          </div>
+          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">Recent purchase receipts or utility bills can help identify more programs.</p>
+        </div>
+        <div class="field-block">
+          <label>Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+        </div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Covers federal, state, and local programs</li>
+          <li><span class="tick">✓</span> Plain-English claiming instructions for each</li>
+          <li><span class="tick">✓</span> Estimated dollar value per program</li>
+        </ul>
+        <a href="REPLACE_WITH_STRIPE_PAYMENT_LINK" data-stripe-link="government-money" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+  </section>
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">What kind of programs does this cover? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Rebates, tax credits, utility incentives, and grants — for things like energy efficiency, EVs, homeownership, childcare, and more, depending on your situation.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do you file the claims for me? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — you get clear, step-by-step instructions for each program, but you (or your tax preparer) submit the actual claim.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">How current is the information? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Each report is generated fresh using current program information at the time of purchase — programs and eligibility rules do change over time.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if I don't qualify for anything? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">You'll be told honestly — but most households qualify for at least one program they didn't know about.</div></div>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:0; padding-bottom:90px;">
+    <div class="cta-final reveal">
+      <h2>There's a good chance you're leaving money unclaimed.</h2>
+      <p>Find out what it is, for $39.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Find My Money</a>
+    </div>
+  </section>
+</main>
+<footer id="contact">
+  <div class="other-navs">
+    <h5>Other Navigators</h5>
+    <div class="other-navs-grid">
+      <a href="/">Streaming Navigator (home)</a>
+      <a href="/contractor">🔧 Contractor Navigator</a>
+      <a href="/property-tax">🏠 Property Tax Navigator</a>
+      <a href="/home-savings">💡 Home Savings Navigator</a>
+      <a href="/rental">🔑 Rental Navigator</a>
+      <a href="/subscriptions">📺 Subscription Navigator</a>
+      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+      <a href="/landlord">📋 Landlord Navigator</a>
+      <a href="/insurance">🛡️ Insurance Navigator</a>
+      <a href="/buying">🛒 Purchase Navigator</a>
+    </div>
+  </div>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Government Money Finder provides AI-generated research for informational purposes only and is not legal, tax, or financial advice. Program eligibility, availability, and deadlines are determined solely by the issuing government agency or utility and can change without notice.</p>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text"></span>
+</div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('upload-input');
+  const list = document.getElementById('upload-list');
+  const uploader = wireUploadZone(zone, input, list);
+  let selectedCategory = null;
+
+  document.querySelectorAll('.category-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      selectedCategory = chip.dataset.value;
+    });
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const emailEl = document.getElementById('intake-email');
+    const descEl = document.getElementById('intake-description');
+    const email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const files = uploader.getFiles();
+    if (false && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your submission…';
+    btn.style.pointerEvents = 'none';
+    try {
+      const submission = await submitNavigatorIntake({
+        product: 'government-money',
+        email: email,
+        formData: { category: selectedCategory, description: descEl.value.trim() },
+        files: files,
+      });
+      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'government-money' }, email);
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+})();
+</script>
+</body>
+</html>

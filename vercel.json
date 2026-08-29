@@ -1,9 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
   "crons": [
     {
       "path": "/api/refresh-shows",
       "schedule": "0 13 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "api/get-navigator-submission.js": { "maxDuration": 60 },
+    "api/generate-contractor-report.js": { "maxDuration": 60 }
+  }
 }

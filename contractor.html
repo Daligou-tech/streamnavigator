@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Contractor Navigator — StreamNavigator AI</title>
+<meta name="description" content="Upload a contractor's estimate before you sign. Contractor Navigator checks the price, flags what's missing, and hands you a ready-to-send negotiation email — for $49." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/contractor#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Contractor Navigator</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:8px;">
+    <div class="wrap">
+      <div class="pill"><span class="dot">✓</span> Before you spend $5,000+ on a home repair</div>
+      <h1>Get a second opinion <span class="grad">before you sign that estimate.</span></h1>
+      <p class="sub">Upload one or more contractor estimates. StreamNavigator's AI checks the scope, equipment, and pricing, tells you what's missing, and writes the email that gets you a better deal.</p>
+    </div>
+  </section>
+  <section id="how-it-works">
+    <div class="section-head reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>From upload to action plan in minutes.</h2>
+      <p>No account, no phone call, no waiting on hold with a contractor's office.</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-num">1</div>
+        <h4>Land on this page</h4>
+        <p>Read what Contractor Navigator checks for, then upload your estimate(s) below.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">2</div>
+        <h4>Upload your estimate(s)</h4>
+        <p>One quote or several — PDFs or photos both work. The more you upload, the better the comparison.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">3</div>
+        <h4>Pay $49</h4>
+        <p>A single Stripe-secured payment. No subscription, no account required.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">4</div>
+        <h4>AI extracts the details</h4>
+        <p>Scope, equipment, labor, materials, and pricing are pulled straight from your documents.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">5</div>
+        <h4>AI researches the context</h4>
+        <p>Typical price ranges and what's normal for this category are factored in.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">6</div>
+        <h4>Get your report + email</h4>
+        <p>A structured report and a ready-to-send negotiation email, usually within a couple of minutes.</p>
+      </div>
+    </div>
+  </section>
+  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>A straight answer to the questions that actually matter.</h2>
+      
+    </div>
+    <div class="wrap" style="max-width:680px;">
+      <div class="check-card reveal">
+        <ul class="check-list">
+          <li><span class="tick">✓</span> Is the price reasonable for this category and scope?</li>
+          <li><span class="tick">✓</span> Are the quotes actually apples-to-apples?</li>
+          <li><span class="tick">✓</span> What appears to be missing from the estimate?</li>
+          <li><span class="tick">✓</span> What could turn into a costly change order later?</li>
+          <li><span class="tick">✓</span> What should you ask the contractor before signing?</li>
+          <li><span class="tick">✓</span> What's worth negotiating — and how to phrase it?</li>
+          <li><span class="tick">✓</span> Which quote is strongest, and why?</li>
+          <li><span class="tick">✓</span> A ready-to-send email to the contractor(s)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    ============================================================================
+    To go live for Contractor Navigator:
+      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
+           "Contractor Navigator Report" — $49 one-time
+      2. Payment links -> New -> pick that price -> Create link.
+      3. In the link's "After payment" step, set the redirect to:
+           https://streamnavigator.ai/contractor-report
+      4. Paste the resulting https://buy.stripe.com/... URL over
+         REPLACE_WITH_STRIPE_PAYMENT_LINK on the button below.
+      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
+         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
+         -> event: checkout.session.completed -> copy its signing secret into
+         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    This page already appends ?client_reference_id=<submission id> to the
+    link automatically (see navigator-shared.js) so payment ties back to the
+    right submission — nothing else to configure here.
+    ============================================================================
+  -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get started</div>
+      <h2>One flat price. No subscription.</h2>
+      <p>Upload your estimate, pay once, get your report.</p>
+    </div>
+    <div class="single-price-wrap">
+      <div class="price-card featured reveal" id="intake-card">
+        <span class="price-badge">One-time</span>
+        <h3>Contractor Navigator Report</h3>
+        <p class="desc">A full second opinion on any HVAC, roofing, window, plumbing, or electrical estimate.</p>
+        <div class="price-amount">$49<span>/report</span></div>
+        <div class="price-period">one-time payment, no account needed</div>
+      <div class="field-block">
+        <label>Category</label>
+        <div class="chip-row">
+          <button type="button" class="chip-toggle category-chip" data-value="HVAC">HVAC</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Roofing">Roofing</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Windows">Windows</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Plumbing">Plumbing</button>
+          <button type="button" class="chip-toggle category-chip" data-value="Electrical">Electrical</button>
+        </div>
+      </div>
+        <div class="field-block">
+          <label>Tell us about the job (optional)</label>
+          <textarea id="intake-description" placeholder="e.g. Replacing a 15-year-old central AC unit, 2,000 sq ft house..."></textarea>
+        </div>
+        <div class="field-block">
+          <label>Upload your estimate(s)</label>
+          <div class="upload-zone" id="upload-zone">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+          </div>
+          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">Attach every competing quote you have — Contractor Navigator will compare them directly.</p>
+        </div>
+        <div class="field-block">
+          <label>Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+        </div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Works with any HVAC, roofing, window, plumbing, or electrical estimate</li>
+          <li><span class="tick">✓</span> Compares multiple quotes side by side</li>
+          <li><span class="tick">✓</span> Delivered in minutes, not days</li>
+        </ul>
+        <a href="REPLACE_WITH_STRIPE_PAYMENT_LINK" data-stripe-link="contractor" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+  </section>
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">Do I need to create an account? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No. Upload your estimate, pay, and your report is generated automatically — no login required.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What file types can I upload? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">PDF estimates and photos of paper estimates (JPG, PNG) both work.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Is my contractor's information kept private? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Your documents are stored securely and used only to generate your report. StreamNavigator never contacts your contractor on your behalf.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if I only have one estimate, not several? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">That's fine — you'll still get a full price-reasonableness check, missing-item flags, negotiation points, and a ready-to-send email.</div></div>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:0; padding-bottom:90px;">
+    <div class="cta-final reveal">
+      <h2>Don't sign until you know what you're signing.</h2>
+      <p>A $49 report is a lot cheaper than a $2,000 surprise.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Upload My Estimate</a>
+    </div>
+  </section>
+</main>
+<footer id="contact">
+  <div class="other-navs">
+    <h5>Other Navigators</h5>
+    <div class="other-navs-grid">
+      <a href="/">Streaming Navigator (home)</a>
+      <a href="/property-tax">🏠 Property Tax Navigator</a>
+      <a href="/home-savings">💡 Home Savings Navigator</a>
+      <a href="/rental">🔑 Rental Navigator</a>
+      <a href="/subscriptions">📺 Subscription Navigator</a>
+      <a href="/government-money">🏛️ Government Money Finder</a>
+      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+      <a href="/landlord">📋 Landlord Navigator</a>
+      <a href="/insurance">🛡️ Insurance Navigator</a>
+      <a href="/buying">🛒 Purchase Navigator</a>
+    </div>
+  </div>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Contractor Navigator provides an independent, AI-generated second opinion for informational purposes — it is not a licensed contractor, engineer, or legal service, and its assessment is not a guarantee of price, quality, or workmanship. Always verify licensing, insurance, and permits with your contractor and local authority.</p>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text"></span>
+</div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('upload-input');
+  const list = document.getElementById('upload-list');
+  const uploader = wireUploadZone(zone, input, list);
+  let selectedCategory = "HVAC";
+
+  document.querySelectorAll('.category-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      selectedCategory = chip.dataset.value;
+    });
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const emailEl = document.getElementById('intake-email');
+    const descEl = document.getElementById('intake-description');
+    const email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const files = uploader.getFiles();
+    if (true && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your submission…';
+    btn.style.pointerEvents = 'none';
+    try {
+      const submission = await submitNavigatorIntake({
+        product: 'contractor',
+        email: email,
+        formData: { category: selectedCategory, description: descEl.value.trim() },
+        files: files,
+      });
+      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'contractor' }, email);
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+})();
+</script>
+</body>
+</html>

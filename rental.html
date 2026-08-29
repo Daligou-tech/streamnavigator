@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rental Navigator — StreamNavigator AI</title>
+<meta name="description" content="Upload your rent roll and expenses. Rental Navigator flags abnormal costs and cash-flow leaks across your rental properties — for $149/year." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/rental#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator<span class="nav-subbrand">Rental Navigator</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
+    </div>
+  </nav>
+</header>
+<main id="top">
+  <section class="hero" style="padding-bottom:8px;">
+    <div class="wrap">
+      <div class="pill"><span class="dot">✓</span> For landlords with 1+ rental properties</div>
+      <h1>Find the cash-flow leaks <span class="grad">in your rental property.</span></h1>
+      <p class="sub">Upload your rent roll and expenses. StreamNavigator flags abnormal maintenance, utility, insurance, tax, and debt-service costs — and shows you exactly where the leaks are.</p>
+    </div>
+  </section>
+  <section id="how-it-works">
+    <div class="section-head reveal">
+      <div class="eyebrow">How it works</div>
+      <h2>From rent roll to action list.</h2>
+      
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal">
+        <div class="step-num">1</div>
+        <h4>Upload your rent roll and expenses</h4>
+        <p>Rent statements, expense records, mortgage/debt-service details — whatever you have.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">2</div>
+        <h4>Pay $149/year</h4>
+        <p>One price covers ongoing checks across your properties for a year.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">3</div>
+        <h4>AI benchmarks every line</h4>
+        <p>Maintenance, utilities, insurance, taxes, rents, and debt service are compared against realistic ranges.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">4</div>
+        <h4>Get your cash-flow report</h4>
+        <p>Every abnormal cost and leak flagged, ranked by dollar impact.</p>
+      </div>
+    </div>
+  </section>
+  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head reveal">
+      <div class="eyebrow">What you get</div>
+      <h2>See exactly where your rental income is leaking.</h2>
+      
+    </div>
+    <div class="wrap" style="max-width:680px;">
+      <div class="check-card reveal">
+        <ul class="check-list">
+          <li><span class="tick">✓</span> Abnormal or above-market maintenance costs</li>
+          <li><span class="tick">✓</span> Utility costs out of line with comparable units</li>
+          <li><span class="tick">✓</span> Insurance and tax costs worth a second look</li>
+          <li><span class="tick">✓</span> Rents that are below what comparable units are getting</li>
+          <li><span class="tick">✓</span> Debt-service and financing costs worth revisiting</li>
+          <li><span class="tick">✓</span> A ranked list of cash-flow leaks by dollar impact</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+  <!--
+    ============================================================================
+    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    ============================================================================
+    To go live for Rental Navigator:
+      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
+           "Rental Navigator Report" — $149 per year
+      2. Payment links -> New -> pick that price -> Create link.
+      3. In the link's "After payment" step, set the redirect to:
+           https://streamnavigator.ai/navigator-status
+      4. Paste the resulting https://buy.stripe.com/... URL over
+         REPLACE_WITH_STRIPE_PAYMENT_LINK on the button below.
+      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
+         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
+         -> event: checkout.session.completed -> copy its signing secret into
+         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    This page already appends ?client_reference_id=<submission id> to the
+    link automatically (see navigator-shared.js) so payment ties back to the
+    right submission — nothing else to configure here.
+    ============================================================================
+  -->
+  <section id="pricing">
+    <div class="section-head reveal">
+      <div class="eyebrow">Get started</div>
+      <h2>One price. A full year of monitoring.</h2>
+      <p>Upload your numbers, pay once, get your cash-flow report.</p>
+    </div>
+    <div class="single-price-wrap">
+      <div class="price-card featured reveal" id="intake-card">
+        <span class="price-badge">One-time</span>
+        <h3>Rental Navigator Report</h3>
+        <p class="desc">A full expense audit and cash-flow leak analysis for your rental property or portfolio.</p>
+        <div class="price-amount">$149<span>/year</span></div>
+        <div class="price-period">billed once per year</div>
+
+        <div class="field-block">
+          <label>Tell us about your property/portfolio</label>
+          <textarea id="intake-description" placeholder="e.g. 4-unit multifamily, purchased 2019, self-managed..."></textarea>
+        </div>
+        <div class="field-block">
+          <label>Upload your rent roll and expenses</label>
+          <div class="upload-zone" id="upload-zone">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+          </div>
+          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">Spreadsheets, PDFs, or photos of statements all work.</p>
+        </div>
+        <div class="field-block">
+          <label>Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+        </div>
+        <ul class="price-feats">
+          <li><span class="tick">✓</span> Covers maintenance, utilities, insurance, taxes, rents, and debt service</li>
+          <li><span class="tick">✓</span> Ranked by dollar impact</li>
+          <li><span class="tick">✓</span> One price covers a full year</li>
+        </ul>
+        <a href="REPLACE_WITH_STRIPE_PAYMENT_LINK" data-stripe-link="rental" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <p class="price-secure">🔒 Secured by Stripe</p>
+      </div>
+    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+  </section>
+  <section id="faq">
+    <div class="section-head reveal">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions, answered.</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">How many properties can I include? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">One report covers the property or portfolio you upload data for — for larger portfolios, email info@streamnavigator.ai.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do I need property management software? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — a rent roll and expense records in any common format (spreadsheet, PDF, statements) are enough to get started.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Will this tell me if my rents are too low? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes — comparable-rent analysis is part of the report, alongside the expense-side leak detection.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Is this useful for a single rental property, not just portfolios? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes — it's built for anything from one rental unit up to a multi-property portfolio.</div></div>
+      </div>
+    </div>
+  </section>
+  <section style="padding-top:0; padding-bottom:90px;">
+    <div class="cta-final reveal">
+      <h2>Every leaked dollar is a dollar you already earned.</h2>
+      <p>Find out where they're going.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Audit My Rental</a>
+    </div>
+  </section>
+</main>
+<footer id="contact">
+  <div class="other-navs">
+    <h5>Other Navigators</h5>
+    <div class="other-navs-grid">
+      <a href="/">Streaming Navigator (home)</a>
+      <a href="/contractor">🔧 Contractor Navigator</a>
+      <a href="/property-tax">🏠 Property Tax Navigator</a>
+      <a href="/home-savings">💡 Home Savings Navigator</a>
+      <a href="/subscriptions">📺 Subscription Navigator</a>
+      <a href="/government-money">🏛️ Government Money Finder</a>
+      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
+      <a href="/landlord">📋 Landlord Navigator</a>
+      <a href="/insurance">🛡️ Insurance Navigator</a>
+      <a href="/buying">🛒 Purchase Navigator</a>
+    </div>
+  </div>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h5>Product</h5>
+      <ul>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h5>Contact</h5>
+      <ul>
+        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+      </ul>
+    </div>
+  </div>
+  <p class="footer-disclaimer">Rental Navigator provides AI-generated financial analysis for informational purposes only and is not accounting, tax, or investment advice. Benchmarks are based on available market data and may not reflect every local factor affecting your property.</p>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <span class="ico">✓</span> <span id="toast-text"></span>
+</div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  const zone = document.getElementById('upload-zone');
+  const input = document.getElementById('upload-input');
+  const list = document.getElementById('upload-list');
+  const uploader = wireUploadZone(zone, input, list);
+  let selectedCategory = null;
+
+  document.querySelectorAll('.category-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      chip.classList.add('active');
+      selectedCategory = chip.dataset.value;
+    });
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const emailEl = document.getElementById('intake-email');
+    const descEl = document.getElementById('intake-description');
+    const email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const files = uploader.getFiles();
+    if (true && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your submission…';
+    btn.style.pointerEvents = 'none';
+    try {
+      const submission = await submitNavigatorIntake({
+        product: 'rental',
+        email: email,
+        formData: { category: selectedCategory, description: descEl.value.trim() },
+        files: files,
+      });
+      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'rental' }, email);
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+})();
+</script>
+</body>
+</html>
