@@ -32,7 +32,7 @@ function getSupabaseAdmin() {
 const ALLOWED_PRODUCTS = [
   'contractor', 'property-tax', 'home-savings', 'rental',
   'subscriptions', 'government-money', 'home-maintenance',
-  'landlord', 'insurance', 'buying',
+  'landlord', 'insurance', 'buying', 'hoa', 'closing',
 ];
 
 module.exports = { getSupabaseAdmin, ALLOWED_PRODUCTS };
