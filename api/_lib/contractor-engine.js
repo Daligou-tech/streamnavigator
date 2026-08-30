@@ -192,33 +192,65 @@ async function generateContractorReport(submissionId) {
 
     contentBlocks.push({ type: 'text', text: contextLines || 'No additional context was provided.' });
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: ANTHROPIC_MODEL,
-        max_tokens: 4096,
-        system: SYSTEM_PROMPT,
-        tools: [REPORT_TOOL],
-        tool_choice: { type: 'tool', name: 'submit_contractor_report' },
-        messages: [{ role: 'user', content: contentBlocks }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      throw new Error(`Anthropic API error ${response.status}: ${errText.slice(0, 500)}`);
+    // Occasionally the model's structured tool-call output gets corrupted —
+    // observed in testing (on the generalized navigator-engine.js, which
+    // shares this exact call pattern) as a stray closing tag / parameter
+    // fragment (e.g. "</summary>\n<parameter name=\"key_numbers\">...")
+    // leaking into a text field instead of populating the real field. The
+    // JSON still parses fine, so a plain JSON.parse check wouldn't catch
+    // it — it would silently ship a garbled-looking report to a paying
+    // customer. Detect it and retry the whole generation once before
+    // giving up.
+    const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/;
+    function reportLooksContaminated(value) {
+      if (typeof value === 'string') return TAG_LEAK_PATTERN.test(value);
+      if (Array.isArray(value)) return value.some(reportLooksContaminated);
+      if (value && typeof value === 'object') return Object.values(value).some(reportLooksContaminated);
+      return false;
     }
 
-    const data = await response.json();
-    const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_contractor_report');
-    if (!toolUse) throw new Error('Model did not return a structured report');
+    const MAX_ATTEMPTS = 2;
+    let report = null;
+    let lastError = null;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS && !report; attempt++) {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL,
+          max_tokens: 4096,
+          system: SYSTEM_PROMPT,
+          tools: [REPORT_TOOL],
+          tool_choice: { type: 'tool', name: 'submit_contractor_report' },
+          messages: [{ role: 'user', content: contentBlocks }],
+        }),
+      });
 
-    const report = toolUse.input;
+      if (!response.ok) {
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Anthropic API error ${response.status}: ${errText.slice(0, 500)}`);
+      }
+
+      const data = await response.json();
+      const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_contractor_report');
+      if (!toolUse) {
+        lastError = new Error('Model did not return a structured report');
+        continue;
+      }
+
+      if (reportLooksContaminated(toolUse.input)) {
+        lastError = new Error('Model output contained malformed/leaked formatting artifacts');
+        continue;
+      }
+
+      report = toolUse.input;
+    }
+
+    if (!report) throw lastError || new Error('Failed to generate a valid report after retrying');
 
     await admin.from('contractor_reports').insert({
       submission_id: submissionId,
