@@ -30,7 +30,9 @@
     {"@type":"ListItem","position":8,"url":"https://streamnavigator.ai/contractor","name":"Contractor Navigator"},
     {"@type":"ListItem","position":9,"url":"https://streamnavigator.ai/home-maintenance","name":"Home Maintenance Navigator"},
     {"@type":"ListItem","position":10,"url":"https://streamnavigator.ai/government-money","name":"Government Money Finder"},
-    {"@type":"ListItem","position":11,"url":"https://streamnavigator.ai/buying","name":"Purchase Navigator"}
+    {"@type":"ListItem","position":11,"url":"https://streamnavigator.ai/buying","name":"Purchase Navigator"},
+    {"@type":"ListItem","position":12,"url":"https://streamnavigator.ai/hoa","name":"HOA Navigator"},
+    {"@type":"ListItem","position":13,"url":"https://streamnavigator.ai/closing","name":"Closing Navigator"}
   ]
 }
 </script>
@@ -334,6 +336,8 @@
         <li><a href="/landlord">Landlord Navigator</a></li>
         <li><a href="/insurance">Insurance Navigator</a></li>
         <li><a href="/buying">Purchase Navigator</a></li>
+        <li><a href="/hoa">HOA Navigator</a></li>
+        <li><a href="/closing">Closing Navigator</a></li>
       </ul>
     </noscript>
   </section>
@@ -353,6 +357,8 @@
       <a href="/landlord">Landlord Navigator</a>
       <a href="/insurance">Insurance Navigator</a>
       <a href="/buying">Purchase Navigator</a>
+      <a href="/hoa">HOA Navigator</a>
+      <a href="/closing">Closing Navigator</a>
     </nav>
     <p>Each StreamNavigator tool gives independent, AI-generated guidance for informational purposes — none of them are licensed financial, legal, tax, or contracting advice, and none automate changes on your behalf beyond a direct link to do it yourself.</p>
     <p>Questions? <a class="mail" href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></p>
@@ -375,9 +381,11 @@
     { slug:'/rental',           label:'Rental Navigator',           icon:'🔑', ring:2, angle:230 },
     { slug:'/landlord',         label:'Landlord Navigator',         icon:'📋', ring:2, angle:320 },
     { slug:'/contractor',       label:'Contractor Navigator',       icon:'👷', ring:3, angle:0   },
-    { slug:'/home-maintenance', label:'Home Maintenance Navigator', icon:'🛠️', ring:3, angle:90  },
+    { slug:'/hoa',              label:'HOA Navigator',              icon:'🏘️', ring:3, angle:60  },
+    { slug:'/home-maintenance', label:'Home Maintenance Navigator', icon:'🛠️', ring:3, angle:120 },
     { slug:'/government-money', label:'Government Money Finder',    icon:'🏛️', ring:3, angle:180 },
-    { slug:'/buying',           label:'Purchase Navigator',         icon:'🛒', ring:3, angle:270 }
+    { slug:'/closing',          label:'Closing Navigator',          icon:'🔍', ring:3, angle:240 },
+    { slug:'/buying',           label:'Purchase Navigator',         icon:'🛒', ring:3, angle:300 }
   ];
   var RING_RADIUS = { 1:17, 2:30.5, 3:44 };
   var CENTER = 50;
