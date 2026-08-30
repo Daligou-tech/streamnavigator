@@ -14,4 +14,6 @@
   <url><loc>https://streamnavigator.ai/buying</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://streamnavigator.ai/hoa</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://streamnavigator.ai/closing</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://streamnavigator.ai/privacy-policy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://streamnavigator.ai/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

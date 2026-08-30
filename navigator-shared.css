@@ -485,6 +485,8 @@
     display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;
   }
   .footer-bottom p{ font-size:13px; color:var(--text-dimmer); }
+  .footer-legal a{ color:var(--text-dimmer); text-decoration:underline; }
+  .footer-legal a:hover{ color:var(--accent-deep); }
   .footer-disclaimer{ max-width:1180px; margin:0 auto 24px; padding-top:24px; border-top:1px solid var(--border); font-size:12px; line-height:1.6; color:var(--text-dimmer); }
 
   /* toast */
