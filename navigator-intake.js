@@ -50,6 +50,16 @@ module.exports = async function handler(req, res) {
   const formData = (body.formData && typeof body.formData === 'object') ? body.formData : {};
   const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES) : [];
 
+  // D-04 fix: require at least one piece of substantive input — a non-empty
+  // description/address, or an uploaded document — before accepting a
+  // submission for payment. Enforced here (not just client-side in each
+  // product page) so it can't be bypassed by calling this endpoint directly.
+  const description = typeof formData.description === 'string' ? formData.description.trim() : '';
+  if (!description && files.length === 0) {
+    res.status(400).json({ ok: false, error: 'Please provide a description (or address, situation, etc.) or upload at least one file so we have something to generate your report from.' });
+    return;
+  }
+
   let totalBytes = 0;
   for (const f of files) {
     if (!f || typeof f.dataBase64 !== 'string' || !f.name) {

@@ -258,7 +258,8 @@
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
     const files = uploader.getFiles();
-    if (false && files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    const description = descEl.value.trim();
+    if (!description && files.length === 0) { showToast('Add your property address or upload your assessment notice so we have something to work with.'); descEl.focus(); return; }
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
