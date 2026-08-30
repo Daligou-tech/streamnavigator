@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "redirects": [
+    { "source": "/streamnavigator-landing", "destination": "/streaming", "permanent": true },
+    { "source": "/index_3", "destination": "/", "permanent": true },
+    { "source": "/home", "destination": "/", "permanent": true }
+  ],
   "crons": [
     {
       "path": "/api/refresh-shows",

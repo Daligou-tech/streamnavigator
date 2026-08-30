@@ -408,7 +408,7 @@
 
 <header>
   <nav>
-    <a href="index.html" class="logo">
+    <a href="/streaming" class="logo">
       <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
       StreamNavigator
     </a>
@@ -1627,7 +1627,7 @@
 
   logoutBtn.addEventListener('click', async () => {
     await client.auth.signOut();
-    window.location.href = 'index.html';
+    window.location.href = '/streaming';
   });
 
   // ---- Subscriptions CRUD ----
