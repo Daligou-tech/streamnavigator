@@ -105,6 +105,17 @@
   .logo-mark svg{ width:16px; height:16px; }
   .nav-right{ display:flex; align-items:center; gap:10px; }
 
+  /* D-11 fix: below ~420px (e.g. iPhone SE/mini) the logo text + Manage
+     Billing/Upgrade/Log out buttons no longer fit on one row and were
+     clipping with a horizontal scrollbar. Match the wrap-onto-a-second-row
+     pattern navigator-shared.css already uses for the marketing pages'
+     header at narrow widths, instead of clipping. */
+  @media (max-width: 480px){
+    nav{ flex-wrap:wrap; row-gap:10px; padding:14px 16px; }
+    .logo{ font-size:16px; }
+    .nav-right{ width:100%; justify-content:flex-end; flex-wrap:wrap; }
+  }
+
   .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:10px 18px; border-radius:999px; font-weight:700; font-size:14px; border:2px solid var(--ink); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .2s ease; white-space:nowrap; font-family:inherit; }
   .btn:active{ transform:translate(3px,3px); box-shadow:none !important; }
   .btn-primary{ background:var(--accent); color:var(--ink); font-weight:800; box-shadow:var(--shadow-hard-sm); }
@@ -403,6 +414,11 @@
   .confirm-card p{ font-size:15px; font-weight:700; margin-bottom:20px; line-height:1.5; }
   .confirm-actions{ display:flex; gap:10px; justify-content:center; }
 </style>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
 
@@ -451,7 +467,23 @@
         <button type="submit" class="btn btn-ghost auth-submit" id="auth-submit-btn">Log In</button>
       </form>
       <p class="auth-msg" id="auth-msg"></p>
+      <p class="auth-note" id="forgot-password-row"><a href="#" id="forgot-password-link">Forgot password?</a></p>
       <p class="auth-note">Passwords are hashed and stored securely by Supabase — StreamNavigator never sees or stores them in plain text.</p>
+    </div>
+  </div>
+
+  <!-- Password recovery: shown only when arriving via a Supabase reset-password email link -->
+  <div id="reset-password-view" hidden>
+    <div class="auth-card">
+      <h3 style="margin-bottom:14px;">Set a new password</h3>
+      <form id="reset-password-form">
+        <div class="field">
+          <label for="reset-new-password">New password</label>
+          <input type="password" id="reset-new-password" required autocomplete="new-password" minlength="6" />
+        </div>
+        <button type="submit" class="btn btn-ghost auth-submit" id="reset-password-submit-btn">Set new password</button>
+      </form>
+      <p class="auth-msg" id="reset-password-msg"></p>
     </div>
   </div>
 
@@ -755,7 +787,7 @@
     &nbsp;&middot;&nbsp;
     <a href="/terms" style="color:var(--text-dimmer);text-decoration:underline;">Terms of Service</a>
     &nbsp;&middot;&nbsp;
-    &copy; 2026 StreamNavigator, Inc. All rights reserved.
+    &copy; 2026 StreamNavigator LLC. All rights reserved.
   </p>
 </footer>
 
@@ -1594,7 +1626,58 @@
       // in already has one on file (or doesn't, and can add it from the
       // dashboard), so there's nothing useful to collect here.
       document.getElementById('auth-first-name-field').hidden = mode !== 'signup';
+      document.getElementById('forgot-password-row').hidden = mode === 'signup';
     });
+  });
+
+  document.getElementById('forgot-password-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('auth-email').value.trim();
+    const msgEl = document.getElementById('auth-msg');
+    msgEl.className = 'auth-msg';
+    if (!email || email.indexOf('@') === -1) {
+      msgEl.textContent = 'Enter your email above first, then click "Forgot password?" again.';
+      msgEl.classList.add('error');
+      document.getElementById('auth-email').focus();
+      return;
+    }
+    try {
+      const { error } = await client.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/dashboard',
+      });
+      if (error) throw error;
+      msgEl.textContent = "If an account exists for that email, we've sent a password reset link.";
+      msgEl.classList.add('ok');
+    } catch (err) {
+      msgEl.textContent = err.message || 'Something went wrong sending the reset email.';
+      msgEl.classList.add('error');
+    }
+  });
+
+  document.getElementById('reset-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newPassword = document.getElementById('reset-new-password').value;
+    const msgEl = document.getElementById('reset-password-msg');
+    const btn = document.getElementById('reset-password-submit-btn');
+    msgEl.className = 'auth-msg';
+    btn.disabled = true;
+    try {
+      const { error } = await client.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      msgEl.textContent = 'Password updated — taking you to your dashboard…';
+      msgEl.classList.add('ok');
+      setTimeout(() => {
+        document.getElementById('reset-password-view').hidden = true;
+        client.auth.getSession().then(({ data: { session } }) => {
+          if (session && session.user) showLoggedIn(session.user);
+        });
+      }, 900);
+    } catch (err) {
+      msgEl.textContent = err.message || 'Something went wrong setting your new password.';
+      msgEl.classList.add('error');
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   document.getElementById('auth-form').addEventListener('submit', async (e) => {
@@ -2410,6 +2493,16 @@
   });
 
   client.auth.onAuthStateChange((_event, session) => {
+    if (_event === 'PASSWORD_RECOVERY') {
+      // Supabase lands the user back here (redirectTo above) with a
+      // temporary recovery session — show the "set a new password" form
+      // instead of silently dropping them into the dashboard on someone
+      // else's clicked link.
+      document.getElementById('auth-view').hidden = true;
+      document.getElementById('dashboard-view').hidden = true;
+      document.getElementById('reset-password-view').hidden = false;
+      return;
+    }
     if (session && session.user) showLoggedIn(session.user);
     else showLoggedOut();
   });

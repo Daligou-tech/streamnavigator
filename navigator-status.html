@@ -10,6 +10,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
 <div class="bg-noise"></div>
@@ -26,11 +31,40 @@
 </header>
 <main id="top">
   <section class="hero" style="padding-bottom:0;">
-    <div class="wrap status-shell">
-      <div class="status-card reveal in" id="status-card">
-        <div class="status-spinner" id="status-spinner"></div>
-        <h2 id="status-title">Checking your submission…</h2>
-        <p id="status-body">One moment.</p>
+    <div class="wrap">
+      <div class="status-shell" id="waiting-view">
+        <div class="status-card reveal in" id="status-card">
+          <div class="status-spinner" id="status-spinner"></div>
+          <h2 id="status-title">Checking your submission…</h2>
+          <p id="status-body">One moment.</p>
+        </div>
+      </div>
+
+      <div class="report-shell" id="report-view" hidden>
+        <div class="section-head reveal in" style="text-align:left; margin-bottom:36px;">
+          <div class="eyebrow">Your report</div>
+          <h2 id="report-headline"></h2>
+          <span class="verdict-pill" id="report-tag" hidden></span>
+          <p id="report-summary"></p>
+        </div>
+
+        <div id="numbers-block" class="report-block" hidden>
+          <h3>🔢 Key numbers</h3>
+          <div id="numbers-grid" class="report-numbers-grid"></div>
+        </div>
+
+        <div id="report-sections"></div>
+
+        <div id="uncertain-block" class="report-block" hidden>
+          <h3>❓ What I couldn't verify</h3>
+          <ul id="uncertain-list"></ul>
+        </div>
+
+        <div id="closing-block" class="report-block" hidden>
+          <h3 id="closing-title"></h3>
+          <div class="email-box" id="closing-body"></div>
+          <button class="btn btn-ghost btn-sm copy-btn" id="copy-closing-btn">Copy</button>
+        </div>
       </div>
     </div>
   </section>
@@ -50,7 +84,7 @@
     </div>
   </div>
   <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator, Inc. All rights reserved.</p>
+    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
   </div>
 </footer>
@@ -84,41 +118,126 @@
   var titleEl = document.getElementById('status-title');
   var bodyEl = document.getElementById('status-body');
   var spinnerEl = document.getElementById('status-spinner');
+  var waitingView = document.getElementById('waiting-view');
+  var reportView = document.getElementById('report-view');
 
-  function render(status, err, product){
-    if (product === 'contractor' && (status === 'paid' || status === 'processing')) {
-      window.location.href = '/contractor-report.html';
-      return;
-    }
-    spinnerEl.style.display = (status === 'pending_payment') ? 'block' : 'none';
-    if (status === 'paid' || status === 'processing' || status === 'complete') {
-      titleEl.textContent = 'Payment received — thank you!';
-      bodyEl.textContent = "We're on it. Your report will be ready within 24 hours, and we'll reach out to the email you provided.";
-    } else if (status === 'pending_payment') {
-      titleEl.textContent = 'Almost there…';
-      bodyEl.textContent = "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.";
-    } else if (status === 'failed') {
-      titleEl.textContent = 'Something went wrong on our end';
-      bodyEl.textContent = (err || "We'll be in touch to sort it out — no charge is lost. Email info@streamnavigator.ai if you don't hear from us soon.");
-    } else {
-      titleEl.textContent = "We couldn't find that submission";
-      bodyEl.textContent = "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.";
-    }
+  function showWaiting(title, body, showSpinner){
+    reportView.hidden = true;
+    waitingView.hidden = false;
+    titleEl.textContent = title;
+    bodyEl.textContent = body;
+    spinnerEl.style.display = showSpinner ? 'block' : 'none';
   }
+
+  // Generic renderer for the shared report shape produced by
+  // api/_lib/navigator-engine.js (headline / key_numbers / sections /
+  // missing_or_uncertain / optional closing block) — used by all 11
+  // Navigator products except Contractor, which has its own richer
+  // dedicated page at /contractor-report.html.
+  function renderGenericReport(report){
+    document.getElementById('report-headline').textContent = report.headline || 'Your report';
+    document.getElementById('report-summary').textContent = report.summary || '';
+
+    var tagEl = document.getElementById('report-tag');
+    if (report.headline_tag) {
+      tagEl.hidden = false;
+      tagEl.textContent = report.headline_tag;
+      tagEl.className = 'verdict-pill' + (/high|critical|moderate|above|over|worth shopping|replace|reconsider|denied|concern/i.test(report.headline_tag) ? ' warn' : '');
+    } else {
+      tagEl.hidden = true;
+    }
+
+    if (report.key_numbers && report.key_numbers.length) {
+      document.getElementById('numbers-block').hidden = false;
+      var grid = document.getElementById('numbers-grid');
+      grid.innerHTML = '';
+      report.key_numbers.forEach(function(n){
+        var card = document.createElement('div');
+        card.className = 'report-number-card';
+        card.innerHTML = '<div class="num-label"></div><div class="num-value"></div>';
+        card.querySelector('.num-label').textContent = n.label || '';
+        card.querySelector('.num-value').textContent = n.value || '';
+        grid.appendChild(card);
+      });
+    }
+
+    var sectionsEl = document.getElementById('report-sections');
+    sectionsEl.innerHTML = '';
+    (report.sections || []).forEach(function(sec){
+      var block = document.createElement('div');
+      block.className = 'report-block';
+      var h3 = document.createElement('h3');
+      h3.textContent = (sec.icon ? sec.icon + ' ' : '') + (sec.title || '');
+      block.appendChild(h3);
+      var ul = document.createElement('ul');
+      (sec.items || []).forEach(function(item){
+        var li = document.createElement('li');
+        li.textContent = item;
+        ul.appendChild(li);
+      });
+      block.appendChild(ul);
+      sectionsEl.appendChild(block);
+    });
+
+    if (report.missing_or_uncertain && report.missing_or_uncertain.length) {
+      document.getElementById('uncertain-block').hidden = false;
+      var ul2 = document.getElementById('uncertain-list');
+      ul2.innerHTML = '';
+      report.missing_or_uncertain.forEach(function(item){
+        var li = document.createElement('li');
+        li.textContent = item;
+        ul2.appendChild(li);
+      });
+    }
+
+    if (report.closing_title && report.closing_body) {
+      document.getElementById('closing-block').hidden = false;
+      document.getElementById('closing-title').textContent = report.closing_title;
+      document.getElementById('closing-body').textContent = report.closing_body;
+    }
+
+    waitingView.hidden = true;
+    reportView.hidden = false;
+  }
+
+  document.getElementById('copy-closing-btn').addEventListener('click', function(){
+    var text = document.getElementById('closing-body').textContent;
+    navigator.clipboard.writeText(text).then(function(){
+      showToast('Copied to clipboard.');
+    }).catch(function(){
+      showToast('Could not copy automatically — select the text manually.');
+    });
+  });
 
   var stored = getStoredSubmission();
   if (!stored || !stored.id || !stored.token) {
-    render(null, null, null);
+    showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.", false);
     return;
   }
-  fetch('/api/get-navigator-submission', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: stored.id, token: stored.token }),
-  }).then(function(r){ return r.json(); }).then(function(data){
-    if (!data.ok) { render(null, null, null); return; }
-    render(data.status, data.error, data.product);
-  }).catch(function(){ render(null, null, null); });
+
+  pollNavigatorSubmission(stored.id, stored.token, {
+    intervalMs: 3000,
+    maxTries: 60,
+    onUpdate: function(data){
+      if (!data.ok) {
+        showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.", false);
+        return;
+      }
+      if (data.product === 'contractor' && (data.status === 'paid' || data.status === 'processing' || data.status === 'complete')) {
+        window.location.href = '/contractor-report.html';
+        return;
+      }
+      if (data.status === 'complete' && data.report) {
+        renderGenericReport(data.report);
+      } else if (data.status === 'paid' || data.status === 'processing') {
+        showWaiting('Generating your report…', "This usually takes under a minute. Feel free to leave this tab open — it'll update automatically.", true);
+      } else if (data.status === 'pending_payment') {
+        showWaiting('Almost there…', "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.", true);
+      } else if (data.status === 'failed') {
+        showWaiting('Something went wrong on our end', data.error ? ('Details: ' + data.error + ' — email info@streamnavigator.ai and we will sort it out personally, no charge lost.') : "We'll be in touch to sort it out — no charge is lost. Email info@streamnavigator.ai if you don't hear from us soon.", false);
+      }
+    },
+  });
 })();
 </script>
 </body>

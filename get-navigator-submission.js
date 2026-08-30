@@ -13,6 +13,7 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateContractorReport } = require('./_lib/contractor-engine');
+const { generateNavigatorReport, PRODUCT_CONFIGS } = require('./_lib/navigator-engine');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -54,6 +55,18 @@ module.exports = async function handler(req, res) {
       // an error message via contractor-engine's own catch block, which is
       // what the response below reports back to the browser.
     }
+  } else if (PRODUCT_CONFIGS[submission.product] && submission.status === 'paid') {
+    // Same lazy-trigger pattern as Contractor Navigator, generalized to the
+    // other 11 products (see api/_lib/navigator-engine.js) — this used to
+    // be a no-op for every product except Contractor, meaning a paid
+    // submission for any of these would sit at "paid" forever with no
+    // report ever generated. Fixed as part of closing out D-03/D-12.
+    try {
+      await generateNavigatorReport(submission.id);
+    } catch (err) {
+      // Swallow — status is now 'failed' with an error message via
+      // navigator-engine's own catch block, reported back below.
+    }
   }
 
   const { data: fresh } = await admin
@@ -75,6 +88,17 @@ module.exports = async function handler(req, res) {
     if (report) {
       result.report = report.report_json;
       result.negotiation_email = report.negotiation_email;
+    }
+  } else if (PRODUCT_CONFIGS[fresh.product] && fresh.status === 'complete') {
+    const { data: report } = await admin
+      .from('navigator_reports')
+      .select('report_json, created_at')
+      .eq('submission_id', id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (report) {
+      result.report = report.report_json;
     }
   }
 

@@ -634,6 +634,10 @@
   color:var(--text-dim); white-space:pre-wrap; line-height:1.6; max-height:340px; overflow-y:auto; font-family:'Inter',monospace;
 }
 .copy-btn{ margin-top:12px; }
+.report-numbers-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; }
+.report-number-card{ background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:10px; padding:14px 16px; }
+.report-number-card .num-label{ font-size:12px; color:var(--text-dimmer); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px; }
+.report-number-card .num-value{ font-family:'Sora',sans-serif; font-weight:800; font-size:18px; color:var(--accent-deep); }
 
 /* "Other Navigators" footer block */
 .other-navs{ max-width:1180px; margin:0 auto 40px; }
