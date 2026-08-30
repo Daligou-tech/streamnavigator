@@ -18,6 +18,7 @@
 // (see api/_lib/contractor-engine.js for the one product wired up so far).
 
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
+const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 
 const MAX_FILES = 4;
 const MAX_FILE_BYTES = 6 * 1024 * 1024; // 6MB per file
@@ -50,14 +51,37 @@ module.exports = async function handler(req, res) {
   const formData = (body.formData && typeof body.formData === 'object') ? body.formData : {};
   const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES) : [];
 
-  // D-04 fix: require at least one piece of substantive input — a non-empty
-  // description/address, or an uploaded document — before accepting a
-  // submission for payment. Enforced here (not just client-side in each
-  // product page) so it can't be bypassed by calling this endpoint directly.
-  const description = typeof formData.description === 'string' ? formData.description.trim() : '';
-  if (!description && files.length === 0) {
-    res.status(400).json({ ok: false, error: 'Please provide a description (or address, situation, etc.) or upload at least one file so we have something to generate your report from.' });
-    return;
+  // Purchase Navigator gets a stricter, structured sufficiency gate instead
+  // of the generic D-04 check below: a non-empty description was letting
+  // customers pay $19 for something like "fridge purchase 33 inch" with no
+  // price, financing, or usage info, and the AI could only honestly report
+  // back that it didn't have enough to work with — a bait-and-switch, since
+  // that was discoverable before payment and wasn't checked. This uses the
+  // exact same rules buying.html uses to gate its own checkout button, so a
+  // customer can never reach checkout with input this endpoint would then
+  // reject — and calling this endpoint directly can't bypass the frontend
+  // gate either.
+  if (product === 'buying') {
+    const sufficiency = checkBuyingSufficiency(formData.category, formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: 'A few more details are needed before this can be analyzed — see missing[].',
+        missing: sufficiency.missing,
+      });
+      return;
+    }
+  } else {
+    // D-04 fix: require at least one piece of substantive input — a
+    // non-empty description/address, or an uploaded document — before
+    // accepting a submission for payment. Enforced here (not just
+    // client-side in each product page) so it can't be bypassed by calling
+    // this endpoint directly.
+    const description = typeof formData.description === 'string' ? formData.description.trim() : '';
+    if (!description && files.length === 0) {
+      res.status(400).json({ ok: false, error: 'Please provide a description (or address, situation, etc.) or upload at least one file so we have something to generate your report from.' });
+      return;
+    }
   }
 
   let totalBytes = 0;
