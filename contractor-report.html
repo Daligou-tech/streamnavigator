@@ -232,9 +232,11 @@
       if (data.status === 'complete' && data.report) {
         renderReport(data.report);
       } else if (data.status === 'failed') {
-        document.getElementById('failed-body').textContent = data.error
-          ? ('Details: ' + data.error + ' — email info@streamnavigator.ai and we will sort it out personally, no charge lost.')
-          : 'Our team has been notified — email info@streamnavigator.ai and we will sort it out personally, no charge lost.';
+        // Don't surface data.error verbatim here — it's an internal/API
+        // failure detail meant for us to debug from the database, not for
+        // a customer to read.
+        document.getElementById('failed-body').textContent =
+          "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.";
         show('failed-view');
       } else {
         document.getElementById('wait-title').textContent =

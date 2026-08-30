@@ -234,7 +234,10 @@
       } else if (data.status === 'pending_payment') {
         showWaiting('Almost there…', "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.", true);
       } else if (data.status === 'failed') {
-        showWaiting('Something went wrong on our end', data.error ? ('Details: ' + data.error + ' — email info@streamnavigator.ai and we will sort it out personally, no charge lost.') : "We'll be in touch to sort it out — no charge is lost. Email info@streamnavigator.ai if you don't hear from us soon.", false);
+        // Don't surface data.error verbatim here — it's an internal/API
+        // failure detail (e.g. a raw error from the model provider) meant
+        // for us to debug from the database, not for a customer to read.
+        showWaiting('Something went wrong on our end', "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.", false);
       }
     },
   });
