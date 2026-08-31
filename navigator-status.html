@@ -237,7 +237,11 @@
         // Don't surface data.error verbatim here — it's an internal/API
         // failure detail (e.g. a raw error from the model provider) meant
         // for us to debug from the database, not for a customer to read.
-        showWaiting('Something went wrong on our end', "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.", false);
+        var failMsg = "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.";
+        if (data.product === 'buying') {
+          failMsg = "We couldn't produce your total-cost-of-ownership analysis on our end this time — this is a delivery problem, not an information problem, since your submission already had everything needed. No charge is lost: email info@streamnavigator.ai with your confirmation email and we'll regenerate your report at no extra charge, or refund you in full, whichever you'd prefer.";
+        }
+        showWaiting('Something went wrong on our end', failMsg, false);
       }
     },
   });

@@ -5,6 +5,9 @@
   "engines": {
     "node": "24.x"
   },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
   "dependencies": {
     "stripe": "^22.5.0",
     "@supabase/supabase-js": "^2.112.3"

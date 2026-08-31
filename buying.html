@@ -15,6 +15,39 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  /* Scoped to this page only — the pre-payment sufficiency gate UI. */
+  .sufficiency-panel{
+    margin:18px 0 22px; padding:14px 16px; border-radius:var(--radius-sm);
+    background:var(--bg-alt); border:1.5px solid var(--border-strong);
+  }
+  .sufficiency-progress{ font-size:13px; font-weight:700; color:var(--text-dim); }
+  .missing-title{ font-size:12.5px; font-weight:700; color:var(--text-dim); margin-top:10px; text-transform:uppercase; letter-spacing:0.03em; }
+  .missing-list{ list-style:none; margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+  .missing-list li{ font-size:13px; color:var(--text-dim); line-height:1.5; padding-left:16px; position:relative; }
+  .missing-list li::before{ content:"○"; position:absolute; left:0; color:var(--text-dimmer); }
+  .missing-list li strong{ color:var(--text); }
+  .ready-summary{
+    margin:18px 0 22px; padding:16px 18px; border-radius:var(--radius-sm);
+    background:rgba(74,222,158,0.14); border:1.5px solid var(--accent-2-deep);
+  }
+  .ready-summary h4{ font-size:14.5px; color:var(--accent-2-deep); margin-bottom:8px; }
+  .ready-summary p{ font-size:13.5px; color:var(--text-dim); }
+  .ready-summary .check-list{ margin-top:4px; }
+  .buying-field{ margin-bottom:18px; }
+  /* navigator-shared.css only styles input[type=text/email] and textarea
+     inside .field-block — extend the same look to the select and number
+     inputs this page's dynamic fields use, scoped here so the other 12
+     product pages that share that stylesheet are untouched. */
+  .buying-field select, .buying-field input[type="number"]{
+    width:100%; padding:12px 16px; border-radius:10px; border:1.5px solid var(--border-strong);
+    background:var(--surface); color:var(--text); font-size:14.5px; font-family:inherit; outline:none;
+  }
+  .buying-field select:focus, .buying-field input[type="number"]:focus{ border-color:var(--accent-deep); }
+  .btn.btn-disabled{ opacity:0.55; cursor:not-allowed; box-shadow:none; transform:none; }
+  .btn.btn-disabled:hover{ transform:none; box-shadow:none; }
+  .retry-policy{ text-align:center; margin-top:10px; }
+</style>
 </head>
 <body>
 <div class="bg-noise"></div>
@@ -53,22 +86,27 @@
       <div class="step-card reveal">
         <div class="step-num">1</div>
         <h4>Tell us what you're considering</h4>
-        <p>The item or model, the price you've been quoted, and how you'd use it.</p>
+        <p>The item or model and what category it falls into.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">2</div>
-        <h4>Pay $19</h4>
-        <p>One flat price per report.</p>
+        <h4>Answer a few tailored questions</h4>
+        <p>Price, financing, how long you'll keep it, and a couple of category-specific details — each one explained.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">3</div>
-        <h4>AI calculates total cost of ownership</h4>
-        <p>Financing, maintenance, depreciation, insurance, and running costs are factored in, not just the sticker price.</p>
+        <h4>We confirm we can deliver everything</h4>
+        <p>Checkout only unlocks once we have enough to produce all six parts of the report — never before.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">4</div>
+        <h4>Pay $19</h4>
+        <p>One flat price per report — charged only once we can actually deliver.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">5</div>
         <h4>Get your comparison</h4>
-        <p>A clear picture of true cost, plus how realistic alternatives stack up.</p>
+        <p>A clear picture of true cost, researched where it helps, plus how a realistic alternative stacks up.</p>
       </div>
     </div>
   </section>
@@ -127,9 +165,13 @@
         <div class="price-period">one-time payment</div>
 
         <div class="field-block">
-          <label>What are you considering buying?</label>
-          <textarea id="intake-description" placeholder="e.g. 2023 truck, $38,000, financing over 5 years, ~12,000 miles/year..."></textarea>
+          <label>What kind of purchase is this?</label>
+          <div class="chip-row" id="category-chips"></div>
+          <p class="field-hint">Pick one so we can ask the right follow-up questions instead of generic ones.</p>
         </div>
+
+        <div id="buying-fields"></div>
+
         <div class="field-block">
           <label>Upload a quote or listing (optional)</label>
           <div class="upload-zone" id="upload-zone">
@@ -139,23 +181,31 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">A dealer quote, listing, or spec sheet helps sharpen the numbers.</p>
+          <p class="field-hint">A dealer quote, listing, or spec sheet helps sharpen the numbers — optional, not required.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Works for vehicles, appliances, and other major purchases</li>
-          <li><span class="tick">✓</span> Factors in financing, maintenance, and depreciation</li>
-          <li><span class="tick">✓</span> Includes at least one realistic alternative comparison</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
-        </ul>
-        <a href="https://buy.stripe.com/dRm8wPbsw6Uk4W81BuabK0c" data-stripe-link="buying" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+
+        <div class="sufficiency-panel" id="sufficiency-panel">
+          <div class="sufficiency-progress" id="sufficiency-progress">Pick a category above to see what we need.</div>
+          <div class="sufficiency-missing" id="sufficiency-missing"></div>
+        </div>
+
+        <div class="ready-summary" id="ready-summary" hidden>
+          <h4>✓ We have enough to deliver your full report</h4>
+          <p id="ready-summary-text"></p>
+          <p class="field-hint" style="margin-top:10px; margin-bottom:6px;">You'll receive:</p>
+          <ul class="check-list" id="ready-summary-outputs"></ul>
+        </div>
+
+        <a href="https://buy.stripe.com/dRm8wPbsw6Uk4W81BuabK0c" data-stripe-link="buying" class="btn btn-primary btn-disabled" id="pay-btn" aria-disabled="true">Answer the questions above to unlock checkout</a>
         <p class="price-secure">🔒 Secured by Stripe</p>
+        <p class="field-hint retry-policy">If we can't deliver the full analysis after payment, we'll regenerate it at no extra charge or refund you in full — see FAQ.</p>
       </div>
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
+    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. You will not be charged until checkout confirms every part of the report can be delivered.</p>
   </section>
   <section id="faq">
     <div class="section-head reveal">
@@ -169,7 +219,11 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Do I need exact numbers to get a useful report? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — reasonable estimates are enough to get a directionally accurate total-cost-of-ownership picture.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">You don't need exact quotes — a budget range and your best estimate for things like mileage or how long you'll keep it are fine. But we do need <em>something</em> for each required field (price, financing, timeline, and a couple of category-specific details) before checkout unlocks. That's a deliberate change: we used to accept a bare description and let you pay before checking whether it was enough, which sometimes meant paying for a report that came back saying it needed more detail. Now that check happens before payment, not after.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Why do you need my location, financing details, and how long I'll keep it? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Each one materially changes the answer: location affects energy rates, insurance, and typical prices in your area; financing terms determine the actual interest cost; and how long you'll own it drives the maintenance and depreciation math. Every question on this page exists because it changes a number in your report — none are collected just to collect them, and each field explains why it's asked.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Will it tell me not to buy something? <span class="plus">+</span></button>
@@ -177,7 +231,11 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">How is this different from just comparing prices online? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Online comparisons usually show sticker price alone. This factors in financing, maintenance, depreciation, and running costs — the numbers that actually determine what something costs you over time.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Online comparisons usually show sticker price alone. This factors in financing, maintenance, depreciation, and running costs — the numbers that actually determine what something costs you over time — and uses live web research where it can sharpen a figure, not just general knowledge.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if something goes wrong after I pay? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Because checkout is gated on having enough information, the report should never come back saying it lacks detail. If report generation fails for a technical reason on our end, or a section genuinely can't be completed, we'll tell you plainly what happened and either regenerate your report at no extra charge or refund you in full — just email info@streamnavigator.ai with your confirmation email. No charge is ever kept for a report we couldn't deliver.</div></div>
       </div>
     </div>
   </section>
@@ -234,41 +292,208 @@
 <div class="toast" id="toast">
   <span class="ico">✓</span> <span id="toast-text"></span>
 </div>
+<script src="/navigator-buying-rules.js"></script>
 <script src="/navigator-shared.js"></script>
 <script>
 (function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
+  var Rules = window.NavigatorBuyingRules;
+  var zone = document.getElementById('upload-zone');
+  var input = document.getElementById('upload-input');
+  var list = document.getElementById('upload-list');
+  var uploader = wireUploadZone(zone, input, list);
 
-  document.querySelectorAll('.category-chip').forEach(function(chip){
+  var selectedCategory = null;
+  var fieldValues = {};
+
+  var chipsWrap = document.getElementById('category-chips');
+  Rules.CATEGORIES.forEach(function(cat){
+    var chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip-toggle category-chip';
+    chip.dataset.value = cat.value;
+    chip.title = cat.hint;
+    chip.textContent = cat.icon + ' ' + cat.label;
     chip.addEventListener('click', function(){
       document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
       chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
+      selectedCategory = cat.value;
+      fieldValues = {};
+      renderFields();
+      updateSufficiency();
     });
+    chipsWrap.appendChild(chip);
   });
 
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
+  var fieldsWrap = document.getElementById('buying-fields');
+
+  function renderFields(){
+    fieldsWrap.innerHTML = '';
+    if (!selectedCategory) return;
+    var fields = Rules.fieldsForCategory(selectedCategory);
+    fields.forEach(function(field){
+      var block = document.createElement('div');
+      block.className = 'field-block buying-field';
+      block.dataset.fieldKey = field.key;
+
+      var label = document.createElement('label');
+      label.textContent = field.label;
+      block.appendChild(label);
+
+      var inputEl;
+      if (field.type === 'select') {
+        inputEl = document.createElement('select');
+        var ph = document.createElement('option');
+        ph.value = ''; ph.textContent = 'Select…';
+        inputEl.appendChild(ph);
+        field.options.forEach(function(o){
+          var opt = document.createElement('option');
+          opt.value = o.value; opt.textContent = o.label;
+          inputEl.appendChild(opt);
+        });
+        block.appendChild(inputEl);
+      } else if (field.type === 'currency') {
+        var wrap = document.createElement('div');
+        wrap.className = 'budget-field';
+        var dollar = document.createElement('span');
+        dollar.textContent = '$';
+        inputEl = document.createElement('input');
+        inputEl.type = 'number';
+        inputEl.setAttribute('inputmode', 'decimal');
+        if (field.min != null) inputEl.min = field.min;
+        if (field.placeholder) inputEl.placeholder = field.placeholder;
+        wrap.appendChild(dollar);
+        wrap.appendChild(inputEl);
+        block.appendChild(wrap);
+      } else if (field.type === 'number') {
+        inputEl = document.createElement('input');
+        inputEl.type = 'number';
+        if (field.min != null) inputEl.min = field.min;
+        if (field.max != null) inputEl.max = field.max;
+        if (field.placeholder) inputEl.placeholder = field.placeholder;
+        block.appendChild(inputEl);
+      } else {
+        inputEl = document.createElement('input');
+        inputEl.type = 'text';
+        if (field.placeholder) inputEl.placeholder = field.placeholder;
+        block.appendChild(inputEl);
+      }
+
+      var hint = document.createElement('p');
+      hint.className = 'field-hint';
+      hint.textContent = field.why;
+      block.appendChild(hint);
+
+      if (fieldValues[field.key] !== undefined) inputEl.value = fieldValues[field.key];
+
+      function onChange(){
+        fieldValues[field.key] = inputEl.value;
+        updateConditionalVisibility();
+        updateSufficiency();
+      }
+      inputEl.addEventListener('input', onChange);
+      inputEl.addEventListener('change', onChange);
+
+      fieldsWrap.appendChild(block);
+    });
+    updateConditionalVisibility();
+  }
+
+  function updateConditionalVisibility(){
+    var fields = Rules.fieldsForCategory(selectedCategory);
+    fields.forEach(function(field){
+      var block = fieldsWrap.querySelector('[data-field-key="' + field.key + '"]');
+      if (!block) return;
+      block.hidden = !Rules.isFieldApplicable(field, fieldValues);
+    });
+  }
+
+  var payBtn = document.getElementById('pay-btn');
+
+  function setPayEnabled(enabled){
+    payBtn.classList.toggle('btn-disabled', !enabled);
+    payBtn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+    payBtn.textContent = enabled ? 'Get My Report →' : 'Answer the questions above to unlock checkout';
+  }
+
+  function updateSufficiency(){
+    var result = Rules.checkBuyingSufficiency(selectedCategory, fieldValues);
+    var progressEl = document.getElementById('sufficiency-progress');
+    var missingEl = document.getElementById('sufficiency-missing');
+    var readyBlock = document.getElementById('ready-summary');
+
+    if (!result.categoryValid) {
+      progressEl.textContent = 'Pick a category above to see what we need.';
+      missingEl.innerHTML = '';
+      readyBlock.hidden = true;
+      setPayEnabled(false);
+      return;
+    }
+
+    progressEl.textContent = result.filledCount + ' of ' + result.requiredCount + ' required details provided';
+
+    if (result.sufficient) {
+      missingEl.innerHTML = '';
+      readyBlock.hidden = false;
+      document.getElementById('ready-summary-text').textContent = Rules.buildReadySummary(selectedCategory, fieldValues);
+      var outputsList = document.getElementById('ready-summary-outputs');
+      outputsList.innerHTML = '';
+      Rules.PROMISED_OUTPUTS.forEach(function(o){
+        var li = document.createElement('li');
+        li.innerHTML = '<span class="tick">✓</span> ' + o;
+        outputsList.appendChild(li);
+      });
+      setPayEnabled(true);
+    } else {
+      readyBlock.hidden = true;
+      missingEl.innerHTML = '';
+      var title = document.createElement('p');
+      title.className = 'missing-title';
+      title.textContent = 'Still needed before checkout:';
+      missingEl.appendChild(title);
+      var ul = document.createElement('ul');
+      ul.className = 'missing-list';
+      result.missing.forEach(function(m){
+        var li = document.createElement('li');
+        var strong = document.createElement('strong');
+        strong.textContent = m.label;
+        li.appendChild(strong);
+        li.appendChild(document.createTextNode(' — ' + m.why));
+        ul.appendChild(li);
+      });
+      missingEl.appendChild(ul);
+      setPayEnabled(false);
+    }
+  }
+
+  setPayEnabled(false);
+  updateSufficiency();
+
+  payBtn.addEventListener('click', async function(e){
     e.preventDefault();
-    const btn = e.currentTarget;
-    const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
-    const email = emailEl.value.trim();
+    var btn = e.currentTarget;
+
+    if (btn.getAttribute('aria-disabled') === 'true') {
+      var result = Rules.checkBuyingSufficiency(selectedCategory, fieldValues);
+      if (!result.categoryValid) { showToast('Pick a category above first so we know what to ask.'); return; }
+      var first = result.missing[0];
+      showToast(first ? ('Still needed: ' + first.label) : 'A few more details are needed before checkout — see above.');
+      return;
+    }
+
+    var emailEl = document.getElementById('intake-email');
+    var email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
-    const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { showToast('Tell us what you\'re considering buying, or upload a quote, so we have something to work with.'); descEl.focus(); return; }
-    const originalText = btn.textContent;
+
+    var files = uploader.getFiles();
+    var originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
     try {
-      const submission = await submitNavigatorIntake({
+      var formData = Object.assign({ category: selectedCategory }, fieldValues);
+      var submission = await submitNavigatorIntake({
         product: 'buying',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: formData,
         files: files,
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'buying' }, email);

@@ -14,6 +14,7 @@
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateContractorReport } = require('./_lib/contractor-engine');
 const { generateNavigatorReport, PRODUCT_CONFIGS } = require('./_lib/navigator-engine');
+const { generatePurchaseReport } = require('./_lib/purchase-engine');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -54,6 +55,21 @@ module.exports = async function handler(req, res) {
       // Swallow here — the submission row now carries status:'failed' and
       // an error message via contractor-engine's own catch block, which is
       // what the response below reports back to the browser.
+    }
+  } else if (submission.product === 'buying' && submission.status === 'paid') {
+    // Purchase Navigator has its own dedicated engine (api/_lib/
+    // purchase-engine.js) — same lazy-trigger pattern, but a bespoke schema
+    // that guarantees all six promised report sections are present (see
+    // that file's isReportComplete) rather than the generic engine's
+    // free-form sections. This submission would not have reached "paid" in
+    // the first place without passing the pre-payment sufficiency gate in
+    // navigator-buying-rules.js, enforced both client-side on buying.html
+    // and server-side in api/navigator-intake.js.
+    try {
+      await generatePurchaseReport(submission.id);
+    } catch (err) {
+      // Swallow — status is now 'failed' with an error message via
+      // purchase-engine's own catch block, reported back below.
     }
   } else if (PRODUCT_CONFIGS[submission.product] && submission.status === 'paid') {
     // Same lazy-trigger pattern as Contractor Navigator, generalized to the
