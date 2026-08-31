@@ -63,8 +63,8 @@ const REPORT_TOOL = {
         type: 'object',
         description: 'Required. The true total cost over the ownership period the customer gave you, not just the purchase price.',
         properties: {
-          estimate_low: { type: 'string', description: 'Low end of the total estimate over the ownership period, e.g. "$3,200".' },
-          estimate_high: { type: 'string', description: 'High end of the estimate, e.g. "$4,100".' },
+          low_end: { type: 'string', description: 'Low end of the total cost range over the ownership period, e.g. "$3,200".' },
+          high_end: { type: 'string', description: 'High end of the total cost range, e.g. "$4,100".' },
           time_horizon_years: { type: 'number' },
           explanation: { type: 'string', description: 'Required, non-empty. What is included (purchase price, financing cost, running costs, etc.) and how you arrived at these numbers.' },
         },
@@ -300,10 +300,10 @@ function firstIncompleteField(report) {
 function mapToGenericReport(report) {
   const keyNumbers = [];
   const tco = report.total_cost_of_ownership || {};
-  if (tco.estimate_low || tco.estimate_high) {
+  if (tco.low_end || tco.high_end) {
     keyNumbers.push({
       label: `Total cost of ownership${tco.time_horizon_years ? ` (${tco.time_horizon_years}yr)` : ''}`,
-      value: [tco.estimate_low, tco.estimate_high].filter(Boolean).join(' – ') || '—',
+      value: [tco.low_end, tco.high_end].filter(Boolean).join(' – ') || '—',
     });
   }
   if (report.financing_impact && report.financing_impact.applicable && report.financing_impact.extra_cost_estimate) {
