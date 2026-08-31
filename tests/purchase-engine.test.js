@@ -238,6 +238,74 @@ test('a submission that already exhausted MAX_ATTEMPTS is marked failed immediat
   assert.ok(submissionUpdates.some((u) => u.status === 'failed'));
 });
 
+test('a leaked tool-syntax fragment attached to otherwise-real prose is stripped in place and the report succeeds on the first attempt', async (t) => {
+  // Regression test for a real production incident (2026-08-31): a live
+  // vehicle+financing submission leaked the literal text
+  // `<parameter name="estimate_low">` into total_cost_of_ownership.explanation
+  // on 2 separate real attempts, and the OLD behavior (reject outright) both
+  // times exhausted MAX_ATTEMPTS and left the customer with nothing despite
+  // having paid. The fix strips tag-like fragments instead of discarding the
+  // whole report over them — this must resolve in ONE attempt, not two.
+  const submission = fakeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let call = 0;
+  global.fetch = async () => {
+    call++;
+    const contaminated = completeReportInput({
+      total_cost_of_ownership: {
+        estimate_low: '$2,700',
+        estimate_high: '$3,100',
+        time_horizon_years: 8,
+        explanation: 'Purchase price plus roughly $400-$500 in electricity over 8 years, using the <parameter name="estimate_low"> baseline.',
+      },
+    });
+    return toolUseResponse(contaminated);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(call, 1, 'a stray tag fragment must be repaired, not spent as a whole retry attempt');
+  assert.equal(reportInserts.length, 1);
+  assert.ok(submissionUpdates.some((u) => u.status === 'complete'));
+  assert.equal(submission.generation_attempts, 1);
+  const reportText = JSON.stringify(report);
+  assert.ok(!reportText.includes('<parameter'), 'the stored report must not contain the leaked tag fragment');
+  assert.ok(reportText.includes('roughly $400-$500 in electricity'), 'the real surrounding prose must survive the strip');
+});
+
+test('a leaked tag that is the entire content of a required field still triggers a retry (stripping correctly leaves it empty)', async (t) => {
+  const submission = fakeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let call = 0;
+  global.fetch = async () => {
+    call++;
+    if (call === 1) {
+      const bad = completeReportInput({
+        financing_impact: { applicable: false, explanation: '<parameter name="estimate_low">' },
+      });
+      return toolUseResponse(bad);
+    }
+    return toolUseResponse(completeReportInput());
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const firstResult = await generatePurchaseReport('sub-1');
+  assert.equal(firstResult, null, 'stripping down to an empty required field must still hand back to "paid", not throw');
+  assert.equal(submission.status, 'paid');
+
+  const report = await generatePurchaseReport('sub-1');
+  assert.equal(call, 2);
+  assert.equal(reportInserts.length, 1);
+  assert.ok(report.headline);
+});
+
 test('an unsupported web_search tool error on the first call falls back to a knowledge-only call and still succeeds', async (t) => {
   const submission = fakeSubmission();
   const { reportInserts } = installFakes({ submission });
@@ -310,6 +378,25 @@ test('__internal.isReportComplete rejects a report missing any one of the six re
     const broken = completeReportInput(patch);
     assert.equal(__internal.isReportComplete(broken), false, `expected incomplete for patch ${JSON.stringify(patch)}`);
   });
+});
+
+test('__internal.sanitizeReportTags strips tag-like substrings recursively but leaves normal prose and numbers untouched', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(
+    __internal.sanitizeReportTags('Cost was <parameter name="estimate_low"> around $3,200 for the year.'),
+    'Cost was around $3,200 for the year.'
+  );
+  assert.equal(
+    __internal.sanitizeReportTags('A 33-inch fridge with $2,400 price and 8-year horizon.'),
+    'A 33-inch fridge with $2,400 price and 8-year horizon.',
+    'ordinary prose containing angle-bracket-free numbers/units must be untouched'
+  );
+  assert.deepEqual(
+    __internal.sanitizeReportTags({ a: ['ok', '<b>bad</b> good'], b: { c: '<x>' } }),
+    { a: ['ok', 'bad good'], b: { c: '' } },
+    'must recurse through arrays and nested objects'
+  );
+  assert.equal(__internal.sanitizeReportTags(42), 42, 'non-string values must pass through unchanged');
 });
 
 test('__internal.mapToGenericReport always emits exactly six core sections in a fixed, promise-matching order', () => {

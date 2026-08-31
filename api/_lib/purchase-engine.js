@@ -177,8 +177,9 @@ ${HONESTY_RULES}
 Respond ONLY by calling the submit_purchase_report tool.`;
 }
 
+const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/g;
+
 function reportLooksContaminated(value, hits) {
-  const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/g;
   if (typeof value === 'string') {
     const matches = value.match(TAG_LEAK_PATTERN);
     if (matches && hits) hits.push(...matches);
@@ -187,6 +188,36 @@ function reportLooksContaminated(value, hits) {
   if (Array.isArray(value)) return value.some((v) => reportLooksContaminated(v, hits));
   if (value && typeof value === 'object') return Object.values(value).some((v) => reportLooksContaminated(v, hits));
   return false;
+}
+
+// Live production traffic on 2026-08-31 showed the model occasionally
+// leaking a stray formatting-tag fragment (observed: literally the text
+// `<parameter name="estimate_low">`, matching this report schema's own
+// field name — apparently a self-referential artifact of the model
+// narrating its own reasoning) into an otherwise-good string field, on 2
+// separate real attempts for the same submission. Discarding the whole
+// report over one stray tag fragment cost the customer another wait, and
+// after MAX_ATTEMPTS, their money with nothing to show for it — so strip
+// any HTML/XML-tag-like substrings from every string field first, rather
+// than rejecting outright. This is safe here specifically because
+// mapToGenericReport's output is rendered as plain text (see
+// navigator-status.html), never as raw HTML, so there's no injection risk
+// being traded away — only a defense against a customer seeing literal
+// tag syntax in their report. If a field is left empty by the strip
+// (meaning the tag WAS the entire content, not just a fragment attached to
+// real prose), isReportComplete below still correctly catches that and
+// this falls back to a retry as before.
+function sanitizeReportTags(value) {
+  if (typeof value === 'string') {
+    return value.replace(TAG_LEAK_PATTERN, '').replace(/[ \t]{2,}/g, ' ').trim();
+  }
+  if (Array.isArray(value)) return value.map(sanitizeReportTags);
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, v] of Object.entries(value)) out[key] = sanitizeReportTags(v);
+    return out;
+  }
+  return value;
 }
 
 function nonEmpty(str) {
@@ -493,11 +524,27 @@ async function generatePurchaseReport(submissionId) {
     }
 
     if (candidate && !recoverableError) {
-      const contaminationHits = [];
-      if (reportLooksContaminated(candidate, contaminationHits)) {
-        recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts: ${JSON.stringify(contaminationHits.slice(0, 5))}`);
+      const preSanitizeHits = [];
+      const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
+      if (wasContaminated) {
+        candidate = sanitizeReportTags(candidate);
+        console.warn(
+          `[purchase-engine] Stripped leaked formatting artifact(s) from submission ${submissionId} rather than discarding the report: ${JSON.stringify(preSanitizeHits.slice(0, 5))}`
+        );
+      }
+      // Re-check after stripping: a genuinely unusual/unhandled artifact
+      // that the strip didn't fully clean (defensive — shouldn't happen
+      // given the same pattern drives both) still gets caught here rather
+      // than shipped to the customer.
+      const postSanitizeHits = [];
+      if (reportLooksContaminated(candidate, postSanitizeHits)) {
+        recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization: ${JSON.stringify(postSanitizeHits.slice(0, 5))}`);
       } else if (!isReportComplete(candidate)) {
-        recoverableError = new Error('Model output was missing one or more of the six required report sections');
+        recoverableError = new Error(
+          wasContaminated
+            ? 'Model output was missing one or more of the six required report sections after stripping a leaked formatting artifact'
+            : 'Model output was missing one or more of the six required report sections'
+        );
       }
     }
 
@@ -549,6 +596,7 @@ module.exports = {
     isReportComplete,
     mapToGenericReport,
     reportLooksContaminated,
+    sanitizeReportTags,
     runOneAttempt,
     REPORT_TOOL,
     WEB_SEARCH_TOOL,
