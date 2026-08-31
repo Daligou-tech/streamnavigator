@@ -97,10 +97,10 @@ function isoSecondsAgo(seconds) {
   return new Date(Date.now() - seconds * 1000).toISOString();
 }
 
-test('a buying submission stuck at "processing" for over 70s triggers another generation attempt', async (t) => {
+test('a buying submission stuck at "processing" past the stuck threshold triggers another generation attempt', async (t) => {
   const submission = {
     id: 'sub-stuck', product: 'buying', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(200), updated_at: isoSecondsAgo(90), generation_attempts: 1,
+    error: null, created_at: isoSecondsAgo(500), updated_at: isoSecondsAgo(400), generation_attempts: 1,
   };
   const { generateCalls } = installFakes({ submission });
   t.after(uninstallFakes);
@@ -113,10 +113,10 @@ test('a buying submission stuck at "processing" for over 70s triggers another ge
   assert.equal(res.statusCode, 200);
 });
 
-test('a buying submission still recently "processing" (under 70s) is NOT re-triggered — it may just be an in-flight attempt', async (t) => {
+test('a buying submission still recently "processing" (under the stuck threshold) is NOT re-triggered — it may just be an in-flight attempt', async (t) => {
   const submission = {
     id: 'sub-fresh', product: 'buying', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(10), updated_at: isoSecondsAgo(10), generation_attempts: 1,
+    error: null, created_at: isoSecondsAgo(200), updated_at: isoSecondsAgo(200), generation_attempts: 1,
   };
   const { generateCalls } = installFakes({ submission });
   t.after(uninstallFakes);
@@ -146,7 +146,7 @@ test('a buying submission at "paid" still triggers generation as before (unaffec
 test('a non-buying product stuck at "processing" is left alone by this check (scoped to buying only)', async (t) => {
   const submission = {
     id: 'sub-other', product: 'insurance', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(300), updated_at: isoSecondsAgo(300), generation_attempts: 0,
+    error: null, created_at: isoSecondsAgo(400), updated_at: isoSecondsAgo(400), generation_attempts: 0,
   };
   const { generateCalls } = installFakes({ submission });
   t.after(uninstallFakes);
@@ -161,7 +161,7 @@ test('a non-buying product stuck at "processing" is left alone by this check (sc
 test('the handler responds 200 even when the recovered generation attempt itself throws (error already recorded by purchase-engine)', async (t) => {
   const submission = {
     id: 'sub-stuck-2', product: 'buying', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(200), updated_at: isoSecondsAgo(90), generation_attempts: 2,
+    error: null, created_at: isoSecondsAgo(500), updated_at: isoSecondsAgo(400), generation_attempts: 2,
   };
   const { generateCalls } = installFakes({ submission, generateShouldThrow: true });
   t.after(uninstallFakes);

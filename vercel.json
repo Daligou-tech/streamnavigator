@@ -13,7 +13,7 @@
     }
   ],
   "functions": {
-    "api/get-navigator-submission.js": { "maxDuration": 60 },
-    "api/generate-contractor-report.js": { "maxDuration": 60 }
+    "api/get-navigator-submission.js": { "maxDuration": 300 },
+    "api/generate-contractor-report.js": { "maxDuration": 300 }
   }
 }
