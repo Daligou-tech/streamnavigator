@@ -23,13 +23,19 @@ function makeFakeAdmin({ submission, reportInserts, submissionUpdates }) {
             return {
               eq() {
                 return {
-                  single: async () => ({ data: submission, error: null }),
+                  // Returns the CURRENT (mutated) state, not a frozen
+                  // snapshot — generatePurchaseReport is now called once per
+                  // attempt (see purchase-engine.js), and each call must see
+                  // the generation_attempts / status left by the previous
+                  // one, the same way separate polls would in production.
+                  single: async () => ({ data: { ...submission }, error: null }),
                 };
               },
             };
           },
           update(patch) {
             submissionUpdates.push(patch);
+            Object.assign(submission, patch);
             return { eq: async () => ({ data: null, error: null }) };
           },
         };
@@ -146,7 +152,16 @@ test('a complete first response produces a report with all six sections and mark
   assert.ok(!submissionUpdates.some((u) => u.status === 'failed'));
 });
 
-test('a response missing a required section (financing_impact.explanation) is retried and recovers on the second attempt', async (t) => {
+test('a response missing a required section (financing_impact.explanation) hands back to "paid" instead of retrying inside one call, and a second call recovers', async (t) => {
+  // Regression test for a real production incident: two full attempts
+  // stacked inside a single generatePurchaseReport call could exceed
+  // Vercel's 60s Hobby-plan function limit and get hard-killed mid-flight,
+  // leaving the row stuck at status:'processing' forever with no failure
+  // message. The fix makes each call attempt exactly once and, on a
+  // recoverable failure, sets status back to 'paid' so the next poll (a
+  // separate invocation, with its own full time budget) tries again — this
+  // test drives that as two separate generatePurchaseReport('sub-1') calls,
+  // the way two separate polls actually would.
   const submission = fakeSubmission();
   const { reportInserts, submissionUpdates } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
@@ -164,11 +179,19 @@ test('a response missing a required section (financing_impact.explanation) is re
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+
+  const firstResult = await generatePurchaseReport('sub-1');
+  assert.equal(firstResult, null, 'a recoverable failure with attempts remaining must not throw or return a report');
+  assert.equal(submission.status, 'paid', 'must hand back to "paid" so the next poll retries, not stay stuck at "processing"');
+  assert.equal(submission.generation_attempts, 1);
+  assert.equal(reportInserts.length, 0);
+
   const report = await generatePurchaseReport('sub-1');
 
-  assert.ok(call >= 2, 'expected at least one retry after the incomplete first response');
-  assert.ok(report.sections[1].items[0].length > 0, 'financing section must be populated after retry');
+  assert.equal(call, 2, 'expected exactly one Anthropic call per generatePurchaseReport invocation');
+  assert.ok(report.sections[1].items[0].length > 0, 'financing section must be populated after the second attempt');
   assert.equal(reportInserts.length, 1);
+  assert.equal(submission.generation_attempts, 2);
   assert.ok(submissionUpdates.some((u) => u.status === 'complete'));
 });
 
@@ -181,12 +204,38 @@ test('a response missing every required section on both attempts marks the submi
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+
+  const firstResult = await generatePurchaseReport('sub-1');
+  assert.equal(firstResult, null, 'first attempt with attempts remaining must hand back to "paid", not throw');
+  assert.equal(submission.status, 'paid');
+
   await assert.rejects(() => generatePurchaseReport('sub-1'));
 
   assert.equal(reportInserts.length, 0, 'an incomplete report must never be stored');
   assert.ok(submissionUpdates.some((u) => u.status === 'failed'));
   const failedUpdate = submissionUpdates.find((u) => u.status === 'failed');
   assert.ok(failedUpdate.error && failedUpdate.error.length > 0);
+});
+
+test('a submission that already exhausted MAX_ATTEMPTS is marked failed immediately without making another API call', async (t) => {
+  // Guards against the stuck-processing recovery path in
+  // get-navigator-submission.js re-triggering generation forever if every
+  // single attempt times out — once attempts are used up, this must fail
+  // fast rather than starting yet another attempt.
+  const submission = fakeSubmission({ generation_attempts: 2 });
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let callCount = 0;
+  global.fetch = async () => { callCount++; return toolUseResponse(completeReportInput()); };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  await assert.rejects(() => generatePurchaseReport('sub-1'));
+
+  assert.equal(callCount, 0, 'must not call the Anthropic API once attempts are exhausted');
+  assert.equal(reportInserts.length, 0);
+  assert.ok(submissionUpdates.some((u) => u.status === 'failed'));
 });
 
 test('an unsupported web_search tool error on the first call falls back to a knowledge-only call and still succeeds', async (t) => {

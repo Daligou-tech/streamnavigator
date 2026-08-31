@@ -39,7 +39,7 @@ module.exports = async function handler(req, res) {
 
   const { data: submission, error } = await admin
     .from('navigator_submissions')
-    .select('id, product, status, access_token, error, created_at')
+    .select('id, product, status, access_token, error, created_at, updated_at, generation_attempts')
     .eq('id', id)
     .maybeSingle();
 
@@ -47,6 +47,19 @@ module.exports = async function handler(req, res) {
     res.status(404).json({ ok: false, error: 'Not found' });
     return;
   }
+
+  // A submission can get stuck at 'processing' if Vercel's 60-second
+  // function limit kills a Purchase Navigator generation attempt mid-flight
+  // (the platform does this outside this codebase's own try/catch, so the
+  // row is left exactly as it was). Treat a 'processing' buying submission
+  // whose last update is more than 70 seconds old — safely past that 60s
+  // ceiling — as abandoned and eligible for the next attempt, rather than
+  // leaving the customer's page polling a status that will never change.
+  const STUCK_PROCESSING_MS = 70 * 1000;
+  const isStuckProcessing = submission.product === 'buying'
+    && submission.status === 'processing'
+    && submission.updated_at
+    && (Date.now() - new Date(submission.updated_at).getTime()) > STUCK_PROCESSING_MS;
 
   if (submission.product === 'contractor' && submission.status === 'paid') {
     try {
@@ -56,7 +69,7 @@ module.exports = async function handler(req, res) {
       // an error message via contractor-engine's own catch block, which is
       // what the response below reports back to the browser.
     }
-  } else if (submission.product === 'buying' && submission.status === 'paid') {
+  } else if (submission.product === 'buying' && (submission.status === 'paid' || isStuckProcessing)) {
     // Purchase Navigator has its own dedicated engine (api/_lib/
     // purchase-engine.js) — same lazy-trigger pattern, but a bespoke schema
     // that guarantees all six promised report sections are present (see

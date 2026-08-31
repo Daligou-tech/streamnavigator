@@ -133,7 +133,11 @@ const REPORT_TOOL = {
   },
 };
 
-const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
+// max_uses trimmed from 5 to 3: each search round adds real wall-clock time
+// against this function's 60s hard cap (Vercel Hobby plan), and generation
+// is now split into single-attempt-per-invocation (see generatePurchaseReport)
+// specifically to fit that cap reliably.
+const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 3 };
 
 function categoryLabel(category) {
   const found = CATEGORIES.filter((c) => c.value === category)[0];
@@ -381,6 +385,30 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
   return toolUse.input;
 }
 
+const MAX_ATTEMPTS = 2;
+// Vercel Hobby plan hard-caps a serverless function invocation at 60s
+// (see vercel.json's maxDuration on this function) — that ceiling cannot be
+// raised without a plan upgrade. Two full attempts back-to-back inside one
+// invocation (each potentially involving a web_search round plus a forced
+// follow-up call) can exceed that, and when the platform kills a function
+// mid-flight it does so OUTSIDE this file's try/catch — so the row was
+// getting stuck at status:'processing' forever, with no failure message and
+// no way to retry, since the trigger in get-navigator-submission.js only
+// re-ran generation for status:'paid'. Real customer money hit exactly this
+// failure mode in production before this fix.
+//
+// Fix: this function now makes exactly ONE attempt per call, tracked via
+// generation_attempts on the row. A recoverable failure (contamination,
+// incomplete, or a normal API error) sets status back to 'paid' so the
+// existing 3-second client poll naturally re-invokes this function for the
+// next attempt — each with its own fresh 60s budget — instead of stacking
+// attempts inside a single request. get-navigator-submission.js also treats
+// a submission stuck at 'processing' for more than ~70s (i.e. one that got
+// hard-killed by the platform mid-attempt) as eligible for the next attempt,
+// so a raw timeout no longer strands the row permanently. Only after
+// MAX_ATTEMPTS is truly exhausted does this mark the submission 'failed'
+// with a real message, which is what triggers the existing regenerate/refund
+// copy on navigator-status.html.
 async function generatePurchaseReport(submissionId) {
   const admin = getSupabaseAdmin();
 
@@ -393,9 +421,30 @@ async function generatePurchaseReport(submissionId) {
   if (fetchError || !submission) throw new Error('Submission not found');
   if (submission.product !== 'buying') throw new Error('Not a Purchase Navigator submission');
 
+  // Guards the case where a previous attempt was itself killed by the
+  // platform's 60s limit mid-flight (rather than failing inside this file's
+  // own try/catch) — without this, a submission that times out on every
+  // attempt could get re-triggered indefinitely by the stuck-processing
+  // check in get-navigator-submission.js. Once attempts are exhausted this
+  // marks the row 'failed' immediately instead of starting another attempt.
+  if ((submission.generation_attempts || 0) >= MAX_ATTEMPTS) {
+    const admin2 = admin;
+    await admin2
+      .from('navigator_submissions')
+      .update({
+        status: 'failed',
+        error: `Report generation did not complete within ${MAX_ATTEMPTS} attempts (each attempt is time-limited to fit this deployment's serverless timeout).`,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', submissionId);
+    throw new Error('Exhausted generation attempts');
+  }
+
+  const attemptNumber = (submission.generation_attempts || 0) + 1;
+
   await admin
     .from('navigator_submissions')
-    .update({ status: 'processing', updated_at: new Date().toISOString() })
+    .update({ status: 'processing', generation_attempts: attemptNumber, updated_at: new Date().toISOString() })
     .eq('id', submissionId);
 
   try {
@@ -423,37 +472,43 @@ async function generatePurchaseReport(submissionId) {
     }
     contentBlocks.push({ type: 'text', text: 'Analyze the purchase described in the system prompt and produce the report.' });
 
-    const MAX_ATTEMPTS = 2;
-    let report = null;
-    let lastError = null;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS && !report; attempt++) {
-      let candidate;
-      try {
-        candidate = await runOneAttempt({
-          apiKey: ANTHROPIC_API_KEY,
-          systemPrompt,
-          contentBlocks,
-          allowSearch: ENABLE_WEB_SEARCH,
-        });
-      } catch (err) {
-        lastError = err;
-        continue;
-      }
-
-      const contaminationHits = [];
-      if (reportLooksContaminated(candidate, contaminationHits)) {
-        lastError = new Error(`Model output contained malformed/leaked formatting artifacts: ${JSON.stringify(contaminationHits.slice(0, 5))}`);
-        continue;
-      }
-      if (!isReportComplete(candidate)) {
-        lastError = new Error('Model output was missing one or more of the six required report sections');
-        continue;
-      }
-      report = candidate;
+    let candidate;
+    let recoverableError = null;
+    try {
+      candidate = await runOneAttempt({
+        apiKey: ANTHROPIC_API_KEY,
+        systemPrompt,
+        contentBlocks,
+        allowSearch: ENABLE_WEB_SEARCH,
+      });
+    } catch (err) {
+      recoverableError = err;
     }
 
-    if (!report) throw lastError || new Error('Failed to generate a complete report after retrying');
+    if (candidate && !recoverableError) {
+      const contaminationHits = [];
+      if (reportLooksContaminated(candidate, contaminationHits)) {
+        recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts: ${JSON.stringify(contaminationHits.slice(0, 5))}`);
+      } else if (!isReportComplete(candidate)) {
+        recoverableError = new Error('Model output was missing one or more of the six required report sections');
+      }
+    }
 
+    if (recoverableError) {
+      if (attemptNumber < MAX_ATTEMPTS) {
+        // Not out of attempts yet — hand back to 'paid' so the next client
+        // poll (a few seconds away) triggers a fresh attempt with its own
+        // full time budget, rather than retrying inside this same request.
+        await admin
+          .from('navigator_submissions')
+          .update({ status: 'paid', error: String(recoverableError.message || recoverableError).slice(0, 500), updated_at: new Date().toISOString() })
+          .eq('id', submissionId);
+        return null;
+      }
+      throw recoverableError;
+    }
+
+    const report = candidate;
     const genericReport = mapToGenericReport(report);
 
     await admin.from('navigator_reports').insert({
@@ -465,7 +520,7 @@ async function generatePurchaseReport(submissionId) {
 
     await admin
       .from('navigator_submissions')
-      .update({ status: 'complete', updated_at: new Date().toISOString() })
+      .update({ status: 'complete', error: null, updated_at: new Date().toISOString() })
       .eq('id', submissionId);
 
     return genericReport;
