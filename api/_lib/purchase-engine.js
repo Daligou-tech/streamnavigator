@@ -241,6 +241,82 @@ function nonEmpty(str) {
   return typeof str === 'string' && str.trim().length > 0;
 }
 
+// Narrow, evidence-scoped recovery for the one failure mode actually
+// observed in production (2026-08-31): sanitizeReportTags strips a leaked
+// artifact that was an entire required "explanation" field's only content,
+// leaving that one field empty while the rest of an otherwise-good,
+// expensively-produced report (six sections, possibly several web_search
+// rounds) is intact. Two earlier mitigations this same day — a prompt
+// instruction, and renaming the field the leak kept referencing — both
+// failed to stop the leak itself (a live re-test after the rename still
+// leaked, just referencing the new name instead — see incident notes).
+// Given the leak isn't reliably preventable, the more robust fix is
+// cheapening recovery: instead of discarding the whole report and gambling
+// on a full fresh attempt (its own web_search round plus full
+// regeneration, and one of only MAX_ATTEMPTS chances) to fix one sentence,
+// ask for just that one sentence again in a small, tightly-scoped,
+// forced-tool-choice follow-up. A narrow "write one plain sentence" ask is
+// both far cheaper and, going by the pattern so far, meaningfully less
+// likely to trigger the same self-referential-schema leak than a large
+// structured call with many nested fields is.
+//
+// Deliberately narrow: only the four simple, single required "explanation"
+// fields nested one level under a known section are eligible — exactly
+// the shape this incident recurred on. A top-level field, a compound
+// section needing 2+ sub-fields, or multiple fields empty at once all fall
+// through to the existing full-retry path below instead, since a repair
+// strategy for those hasn't been built or tested against anything real.
+const REPAIRABLE_EXPLANATION_FIELDS = {
+  'total_cost_of_ownership.explanation': { section: 'total_cost_of_ownership', label: 'total cost of ownership' },
+  'financing_impact.explanation': { section: 'financing_impact', label: 'financing impact' },
+  'maintenance_running_costs.explanation': { section: 'maintenance_running_costs', label: 'maintenance and running costs' },
+  'depreciation_resale.explanation': { section: 'depreciation_resale', label: 'depreciation / resale value' },
+};
+
+const FIELD_REPAIR_TOOL = {
+  name: 'submit_field_repair',
+  description: 'Submit the replacement text for the one field that needs to be rewritten.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      value: { type: 'string', description: 'Plain natural-language prose only — 2-4 sentences, no tool-call, function-call, or parameter-tag syntax of any kind.' },
+    },
+    required: ['value'],
+  },
+};
+
+// One small, cheap, forced-tool-choice call asking for a single field's
+// replacement text — no web_search, no thinking, no other required
+// sections to juggle. Returns the replacement string, or null if the
+// repair itself came back empty, missing, or (rare, but checked
+// defensively) leaked the same way the original attempt did — a failed
+// repair falls through to the existing full-retry logic rather than
+// shipping a still-bad field or looping repair attempts indefinitely.
+async function repairExplanationField({ apiKey, systemPrompt, candidate, fieldPath }) {
+  const meta = REPAIRABLE_EXPLANATION_FIELDS[fieldPath];
+  if (!meta) return null;
+
+  const repairPrompt = `Your previous analysis below was almost complete, but the "${meta.label}" explanation was lost to a formatting glitch on our end before it reached us — nothing you need to avoid or worry about this time, just answer plainly.
+
+Please provide ONLY a replacement: 2-4 sentences of plain prose covering the "${meta.label}" explanation, consistent with the rest of your analysis below. Do not include any tool-call, function-call, or parameter-tag syntax (anything shaped like <tag> or <parameter name="...">) — just the plain sentences themselves.
+
+The rest of your analysis, for consistency:
+${JSON.stringify({ headline: candidate.headline, summary: candidate.summary, recommendation: candidate.recommendation }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [FIELD_REPAIR_TOOL],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 1024,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  const value = toolUse && toolUse.input && toolUse.input.value;
+  if (typeof value !== 'string' || !nonEmpty(value) || value.match(TAG_LEAK_PATTERN)) return null;
+  return value.trim();
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -621,11 +697,32 @@ async function generatePurchaseReport(submissionId) {
         recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization in field(s): ${postSanitizeHits.map((h) => h.field).join(', ')}`);
       } else if (!isReportComplete(candidate)) {
         const emptyField = firstIncompleteField(candidate);
-        recoverableError = new Error(
-          wasContaminated
-            ? `Missing required field "${emptyField}" — was emptied by stripping a leaked formatting artifact that was its entire content`
-            : `Missing required field "${emptyField}"`
-        );
+        const meta = REPAIRABLE_EXPLANATION_FIELDS[emptyField];
+        let repairSucceeded = false;
+        if (meta) {
+          let repairedValue = null;
+          try {
+            repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt, candidate, fieldPath: emptyField });
+          } catch (err) {
+            repairedValue = null; // a failing repair call just falls through to the existing retry logic below
+          }
+          if (repairedValue) {
+            candidate[meta.section] = { ...candidate[meta.section], explanation: repairedValue };
+            repairSucceeded = isReportComplete(candidate);
+            if (repairSucceeded) {
+              console.warn(
+                `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
+              );
+            }
+          }
+        }
+        if (!repairSucceeded) {
+          recoverableError = new Error(
+            wasContaminated
+              ? `Missing required field "${emptyField}" — was emptied by stripping a leaked formatting artifact that was its entire content`
+              : `Missing required field "${emptyField}"`
+          );
+        }
       }
     }
 
@@ -679,6 +776,9 @@ module.exports = {
     mapToGenericReport,
     reportLooksContaminated,
     sanitizeReportTags,
+    repairExplanationField,
+    REPAIRABLE_EXPLANATION_FIELDS,
+    FIELD_REPAIR_TOOL,
     runOneAttempt,
     REPORT_TOOL,
     WEB_SEARCH_TOOL,
