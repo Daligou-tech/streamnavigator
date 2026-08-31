@@ -418,4 +418,9 @@ test('__internal.buildSystemPrompt grounds the prompt in the customer\'s submitt
   assert.match(prompt, /2400/);
   assert.match(prompt, /30301/);
   assert.match(prompt, /do not respond by asking for more information or declaring the input insufficient/i);
+  assert.match(
+    prompt,
+    /never write out tool-call, function-call, or parameter-tag syntax/i,
+    'must explicitly instruct the model against the leaked-artifact failure mode seen in production on 2026-08-31'
+  );
 });
