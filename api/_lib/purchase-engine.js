@@ -171,11 +171,15 @@ ${HONESTY_RULES}
 Respond ONLY by calling the submit_purchase_report tool.`;
 }
 
-function reportLooksContaminated(value) {
-  const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/;
-  if (typeof value === 'string') return TAG_LEAK_PATTERN.test(value);
-  if (Array.isArray(value)) return value.some(reportLooksContaminated);
-  if (value && typeof value === 'object') return Object.values(value).some(reportLooksContaminated);
+function reportLooksContaminated(value, hits) {
+  const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/g;
+  if (typeof value === 'string') {
+    const matches = value.match(TAG_LEAK_PATTERN);
+    if (matches && hits) hits.push(...matches);
+    return !!matches;
+  }
+  if (Array.isArray(value)) return value.some((v) => reportLooksContaminated(v, hits));
+  if (value && typeof value === 'object') return Object.values(value).some((v) => reportLooksContaminated(v, hits));
   return false;
 }
 
@@ -436,8 +440,9 @@ async function generatePurchaseReport(submissionId) {
         continue;
       }
 
-      if (reportLooksContaminated(candidate)) {
-        lastError = new Error('Model output contained malformed/leaked formatting artifacts');
+      const contaminationHits = [];
+      if (reportLooksContaminated(candidate, contaminationHits)) {
+        lastError = new Error(`Model output contained malformed/leaked formatting artifacts: ${JSON.stringify(contaminationHits.slice(0, 5))}`);
         continue;
       }
       if (!isReportComplete(candidate)) {
