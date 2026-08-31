@@ -39,11 +39,26 @@ const { fieldsForCategory, CATEGORIES } = require('../../navigator-buying-rules'
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const ENABLE_WEB_SEARCH = process.env.PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH !== 'true';
 
-const HONESTY_RULES = `
+const WEB_SEARCH_HONESTY_RULE = `
 You have access to a web_search tool — use it when it would let you ground the analysis in something more current or specific than your general knowledge (typical current prices for this size/category, typical current financing rates, typical resale patterns). Use your judgment about when a search is worth it; you don't need to search for everything, and a handful of searches is plenty. When you do search and use what you find, say so briefly in research_notes and reflect it in the relevant explanation. When you have not searched, or a search did not turn up anything useful, that's fine — rely on general knowledge instead — but never present a specific current price, rate, or figure as verified when it is really a directional estimate from training knowledge. Ground every specific claim in one of: (a) something you found via web_search in this conversation, (b) the customer's own submitted details, or (c) general knowledge you are genuinely confident is still directionally accurate. Never invent a specific current price, interest rate, or resale percentage presented as verified fact when you are not confident it is both real and current — a clearly-labeled directional estimate is always better than a confident-sounding fabrication.
-
-Every field in submit_purchase_report must be plain natural-language prose (or the specific short-string/number format its description asks for) — nothing else. In particular: never write out tool-call, function-call, or parameter-tag syntax (anything shaped like <tag>, <parameter name="...">, <invoke ...>, or similar) inside any field's value, even as a way of showing your work or thinking through a calculation. If you want to show how a number was derived, just say it in words directly in that field's own "explanation" — e.g. "$38,000 purchase + roughly $6,200 in interest over 60 months = about $44,200" — never by simulating a nested call to another tool or to yourself.
 `.trim();
+
+// Parameterized by tool name so this can be reused, correctly, for both
+// the main submit_purchase_report call and the smaller submit_field_repair
+// follow-up (see buildRepairSystemPrompt) — a hardcoded tool name here was
+// itself a bug found via a failing test while fixing the 2026-08-31
+// incident: this text used to name submit_purchase_report unconditionally,
+// which is factually wrong (and potentially confusing to the model in the
+// same way that caused the original leak) when reused verbatim for a
+// request that's actually forcing a different tool.
+function noLeakRule(toolName) {
+  return `Every field in ${toolName} must be plain natural-language prose (or the specific short-string/number format its description asks for) — nothing else. In particular: never write out tool-call, function-call, or parameter-tag syntax (anything shaped like <tag>, <parameter name="...">, <invoke ...>, or similar) inside any field's value, even as a way of showing your work or thinking through a calculation. If you want to show how a number was derived, just say it in words directly in that field's own "explanation" — e.g. "$38,000 purchase + roughly $6,200 in interest over 60 months = about $44,200" — never by simulating a nested call to another tool or to yourself.`;
+}
+
+// Kept for the main call, which gets both rules.
+const HONESTY_RULES = `${WEB_SEARCH_HONESTY_RULE}
+
+${noLeakRule('submit_purchase_report')}`;
 
 const REPORT_TOOL = {
   name: 'submit_purchase_report',
@@ -179,6 +194,28 @@ ${HONESTY_RULES}
 Respond ONLY by calling the submit_purchase_report tool.`;
 }
 
+// A separate, minimal system prompt for the targeted-repair follow-up
+// (see repairExplanationField below) — NOT the main systemPrompt reused
+// verbatim, which was the actual bug found after the first live retest of
+// the repair mechanism failed on every attempt. buildSystemPrompt's last
+// line explicitly instructs "Respond ONLY by calling the
+// submit_purchase_report tool", and the body above it frames the task as
+// producing all six report sections — both directly conflict with a
+// forced call to a completely different, single-field tool, and plausibly
+// primed the same kind of confusion that caused the original leak. This
+// keeps the customer grounding and the anti-leak honesty rules the repair
+// still needs, without the conflicting framing.
+function buildRepairSystemPrompt(submission) {
+  const brief = buildIntakeBrief(submission);
+  return `You previously analyzed the following purchase for Purchase Navigator, a StreamNavigator AI product:
+
+${brief}
+
+${noLeakRule('submit_field_repair')}
+
+Respond ONLY by calling the submit_field_repair tool.`;
+}
+
 const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/g;
 
 // `hits`, when passed, collects rich diagnostics (which field, what tags,
@@ -292,7 +329,7 @@ const FIELD_REPAIR_TOOL = {
 // defensively) leaked the same way the original attempt did — a failed
 // repair falls through to the existing full-retry logic rather than
 // shipping a still-bad field or looping repair attempts indefinitely.
-async function repairExplanationField({ apiKey, systemPrompt, candidate, fieldPath }) {
+async function repairExplanationField({ apiKey, systemPrompt, candidate, fieldPath, submissionId }) {
   const meta = REPAIRABLE_EXPLANATION_FIELDS[fieldPath];
   if (!meta) return null;
 
@@ -312,8 +349,25 @@ ${JSON.stringify({ headline: candidate.headline, summary: candidate.summary, rec
     maxTokens: 1024,
   });
   const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
-  const value = toolUse && toolUse.input && toolUse.input.value;
-  if (typeof value !== 'string' || !nonEmpty(value) || value.match(TAG_LEAK_PATTERN)) return null;
+  // Every failure path below logs — a silent null return here was exactly
+  // the diagnostic gap that made the first live retest of this mechanism
+  // (2026-08-31) a dead end: it failed on 4/4 attempts with no way to tell
+  // whether repair was even attempted, let alone why it didn't help.
+  if (!toolUse) {
+    console.warn(
+      `[purchase-engine] Repair call for submission ${submissionId} (${fieldPath}) returned no submit_field_repair tool_use. content block types: ${(data.content || []).map((b) => b.type).join(', ') || '(none)'}`
+    );
+    return null;
+  }
+  const value = toolUse.input && toolUse.input.value;
+  if (typeof value !== 'string' || !nonEmpty(value)) {
+    console.warn(`[purchase-engine] Repair call for submission ${submissionId} (${fieldPath}) returned an empty or non-string value.`);
+    return null;
+  }
+  if (value.match(TAG_LEAK_PATTERN)) {
+    console.warn(`[purchase-engine] Repair call for submission ${submissionId} (${fieldPath}) itself leaked a tag-like fragment: ${JSON.stringify(value.slice(0, 200))}`);
+    return null;
+  }
   return value.trim();
 }
 
@@ -702,9 +756,10 @@ async function generatePurchaseReport(submissionId) {
         if (meta) {
           let repairedValue = null;
           try {
-            repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt, candidate, fieldPath: emptyField });
+            repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, fieldPath: emptyField, submissionId });
           } catch (err) {
-            repairedValue = null; // a failing repair call just falls through to the existing retry logic below
+            console.warn(`[purchase-engine] Repair call for submission ${submissionId} (${emptyField}) threw: ${String((err && err.message) || err)}`);
+            repairedValue = null;
           }
           if (repairedValue) {
             candidate[meta.section] = { ...candidate[meta.section], explanation: repairedValue };
@@ -712,6 +767,13 @@ async function generatePurchaseReport(submissionId) {
             if (repairSucceeded) {
               console.warn(
                 `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
+              );
+            } else {
+              // The repair itself worked, but the report is still
+              // incomplete somewhere else — repairing one field is only
+              // designed to cover the "exactly one field empty" case.
+              console.warn(
+                `[purchase-engine] Repair for submission ${submissionId} (${emptyField}) succeeded, but the report is still incomplete elsewhere (now: "${firstIncompleteField(candidate)}") — falling through to a full retry.`
               );
             }
           }
@@ -770,6 +832,7 @@ module.exports = {
   // Exported for unit testing without hitting the network or Supabase.
   __internal: {
     buildSystemPrompt,
+    buildRepairSystemPrompt,
     buildIntakeBrief,
     isReportComplete,
     firstIncompleteField,
