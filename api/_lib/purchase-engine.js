@@ -369,7 +369,30 @@ function mapToGenericReport(report) {
   };
 }
 
-async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens }) {
+async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens, thinkingBudget }) {
+  const body = {
+    model: ANTHROPIC_MODEL,
+    max_tokens: maxTokens || 4096,
+    system,
+    tools,
+    tool_choice: toolChoice,
+    messages,
+  };
+  // Extended thinking gives the model a dedicated scratch space for
+  // multi-step arithmetic (e.g. total-cost-of-ownership, financing-interest
+  // math) — worked theory for the 2026-08-31 incident where the model
+  // reproducibly (7/7 live attempts) tried to "show its work" for exactly
+  // this kind of calculation by emitting a stray simulated tool-call
+  // fragment INTO the final answer's explanation field instead of just
+  // stating the result. Giving it a real place to work through the
+  // arithmetic first, separate from the graded output, is a more direct fix
+  // than asking it not to via the system prompt (which did not stop the
+  // leak — see the 0005 patch notes). Only valid with tool_choice:'auto'
+  // (Anthropic disallows combining it with a forced tool_choice), so this
+  // is only passed on the first, non-forced call.
+  if (thinkingBudget) {
+    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
+  }
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -377,14 +400,7 @@ async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxT
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
-      max_tokens: maxTokens || 4096,
-      system,
-      tools,
-      tool_choice: toolChoice,
-      messages,
-    }),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
@@ -422,7 +438,11 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
       tools,
       toolChoice: { type: 'auto' },
       messages: baseMessages,
-      maxTokens: 8000,
+      // max_tokens must exceed thinkingBudget (thinking + final output share
+      // this budget) — 4000 for thinking, comfortable headroom left for the
+      // actual tool-call JSON on top.
+      maxTokens: 12000,
+      thinkingBudget: 4000,
     });
   } catch (err) {
     if (allowSearch && looksLikeUnsupportedToolError(err)) {
@@ -436,9 +456,16 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
   if (toolUse) return toolUse.input;
 
   // Model didn't call the submit tool on the first turn — force it on a
-  // bounded follow-up instead of looping indefinitely.
+  // bounded follow-up instead of looping indefinitely. The follow-up call
+  // doesn't itself enable extended thinking (forced tool_choice and
+  // thinking can't be combined — see callAnthropic), so strip any
+  // thinking/redacted_thinking blocks from the replayed turn rather than
+  // risk the API rejecting a thinking block in a request where thinking
+  // isn't enabled; the model's own text summary in `content` already
+  // carries what the follow-up needs.
+  const replayContent = content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
   const followMessages = baseMessages.concat([
-    { role: 'assistant', content },
+    { role: 'assistant', content: replayContent },
     { role: 'user', content: 'Now call submit_purchase_report with your complete findings, using anything useful you found above.' },
   ]);
   const followData = await callAnthropic({

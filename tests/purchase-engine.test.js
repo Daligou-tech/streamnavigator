@@ -349,11 +349,26 @@ test('a model that only searches and summarizes in text (no tool_use on the firs
   global.fetch = async (url, opts) => {
     call++;
     if (call === 1) {
-      // Model responded with plain text, never calling submit_purchase_report.
-      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here is what I found from searching...' }] }) };
+      // Model responded with a thinking block plus plain text, never
+      // calling submit_purchase_report.
+      return {
+        ok: true,
+        json: async () => ({
+          content: [
+            { type: 'thinking', thinking: 'Let me work through the math...' },
+            { type: 'text', text: 'Here is what I found from searching...' },
+          ],
+        }),
+      };
     }
     const parsedBody = JSON.parse(opts.body);
     assert.equal(parsedBody.tool_choice.type, 'tool', 'the forced follow-up must force the submit tool');
+    assert.equal(parsedBody.thinking, undefined, 'the forced follow-up must not enable thinking — incompatible with a forced tool_choice');
+    const replayedAssistantTurn = parsedBody.messages.find((m) => m.role === 'assistant');
+    assert.ok(
+      !replayedAssistantTurn.content.some((b) => b.type === 'thinking' || b.type === 'redacted_thinking'),
+      'thinking blocks from the first turn must be stripped before replaying it into a request where thinking is off'
+    );
     return toolUseResponse(completeReportInput());
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
@@ -364,6 +379,34 @@ test('a model that only searches and summarizes in text (no tool_use on the firs
   assert.equal(call, 2);
   assert.equal(reportInserts.length, 1);
   assert.ok(report.headline);
+});
+
+test('the first, non-forced call enables extended thinking as scratch space for the report\'s arithmetic', async (t) => {
+  // Direct fix for the 2026-08-31 incident: the model reproducibly (7/7
+  // live attempts) leaked a simulated tool-call fragment into
+  // total_cost_of_ownership.explanation instead of just stating the
+  // computed number — plausibly because it had nowhere else to "show its
+  // work" for the financing/TCO arithmetic. Giving it a real thinking
+  // channel is the structural fix; this locks in that the first call
+  // actually requests it.
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let firstBody = null;
+  global.fetch = async (url, opts) => {
+    if (!firstBody) firstBody = JSON.parse(opts.body);
+    return toolUseResponse(completeReportInput());
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  await generatePurchaseReport('sub-1');
+
+  assert.equal(firstBody.tool_choice.type, 'auto', 'thinking is only valid alongside a non-forced tool_choice');
+  assert.equal(firstBody.thinking.type, 'enabled');
+  assert.ok(firstBody.thinking.budget_tokens > 0);
+  assert.ok(firstBody.max_tokens > firstBody.thinking.budget_tokens, 'max_tokens must exceed the thinking budget to leave room for the actual output');
 });
 
 test('__internal.isReportComplete rejects a report missing any one of the six required sections', () => {
