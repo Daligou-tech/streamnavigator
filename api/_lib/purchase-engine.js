@@ -133,11 +133,13 @@ const REPORT_TOOL = {
   },
 };
 
-// max_uses trimmed from 5 to 3: each search round adds real wall-clock time
-// against this function's 60s hard cap (Vercel Hobby plan), and generation
-// is now split into single-attempt-per-invocation (see generatePurchaseReport)
-// specifically to fit that cap reliably.
-const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 3 };
+// Restored to 5 (from a temporary 3) now that this function runs on Vercel
+// Pro with a 300s ceiling (see vercel.json) instead of Hobby's 60s — the
+// earlier trim was a stopgap to fit real, live-verified generations inside
+// 60s, which two live tests showed didn't reliably work anyway (see
+// MAX_ATTEMPTS below). More search rounds means fresher pricing data for
+// the alternative-comparison and depreciation/resale sections.
+const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 
 function categoryLabel(category) {
   const found = CATEGORIES.filter((c) => c.value === category)[0];
@@ -386,29 +388,34 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
 }
 
 const MAX_ATTEMPTS = 2;
-// Vercel Hobby plan hard-caps a serverless function invocation at 60s
-// (see vercel.json's maxDuration on this function) — that ceiling cannot be
-// raised without a plan upgrade. Two full attempts back-to-back inside one
-// invocation (each potentially involving a web_search round plus a forced
-// follow-up call) can exceed that, and when the platform kills a function
-// mid-flight it does so OUTSIDE this file's try/catch — so the row was
-// getting stuck at status:'processing' forever, with no failure message and
-// no way to retry, since the trigger in get-navigator-submission.js only
-// re-ran generation for status:'paid'. Real customer money hit exactly this
-// failure mode in production before this fix.
+// Originally written for the Vercel Hobby plan's 60s hard cap on a
+// serverless function invocation, which real live-money traffic showed was
+// too tight for this report (web_search rounds plus a forced follow-up call
+// routinely ran past it) — when the platform kills a function mid-flight it
+// does so OUTSIDE this file's try/catch, so the row got stuck at
+// status:'processing' forever with no failure message and no way to retry.
+// As of 2026-08-31 this project is on Vercel Pro, and vercel.json's
+// maxDuration for this function's caller (get-navigator-submission.js) is
+// 300s — five times the old ceiling — so a single attempt should have ample
+// room to complete normally now. The single-attempt-per-invocation
+// architecture and the stuck-processing self-heal below are kept anyway as
+// a safety net: they cost nothing when generation succeeds well within
+// budget, and they mean a genuinely slow or hung attempt (network issue,
+// provider outage, etc.) still resolves to a clean 'failed' instead of
+// silently stranding the row, whatever the current plan's ceiling is.
 //
-// Fix: this function now makes exactly ONE attempt per call, tracked via
+// This function makes exactly ONE attempt per call, tracked via
 // generation_attempts on the row. A recoverable failure (contamination,
 // incomplete, or a normal API error) sets status back to 'paid' so the
 // existing 3-second client poll naturally re-invokes this function for the
-// next attempt — each with its own fresh 60s budget — instead of stacking
+// next attempt — each with its own fresh budget — instead of stacking
 // attempts inside a single request. get-navigator-submission.js also treats
-// a submission stuck at 'processing' for more than ~70s (i.e. one that got
-// hard-killed by the platform mid-attempt) as eligible for the next attempt,
-// so a raw timeout no longer strands the row permanently. Only after
-// MAX_ATTEMPTS is truly exhausted does this mark the submission 'failed'
-// with a real message, which is what triggers the existing regenerate/refund
-// copy on navigator-status.html.
+// a submission stuck at 'processing' for longer than the function's own
+// maxDuration (i.e. one that got hard-killed by the platform mid-attempt)
+// as eligible for the next attempt, so a raw timeout no longer strands the
+// row permanently. Only after MAX_ATTEMPTS is truly exhausted does this
+// mark the submission 'failed' with a real message, which is what triggers
+// the existing regenerate/refund copy on navigator-status.html.
 async function generatePurchaseReport(submissionId) {
   const admin = getSupabaseAdmin();
 

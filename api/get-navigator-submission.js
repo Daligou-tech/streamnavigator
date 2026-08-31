@@ -48,14 +48,17 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // A submission can get stuck at 'processing' if Vercel's 60-second
-  // function limit kills a Purchase Navigator generation attempt mid-flight
+  // A submission can get stuck at 'processing' if Vercel's function
+  // execution limit kills a Purchase Navigator generation attempt mid-flight
   // (the platform does this outside this codebase's own try/catch, so the
   // row is left exactly as it was). Treat a 'processing' buying submission
-  // whose last update is more than 70 seconds old — safely past that 60s
-  // ceiling — as abandoned and eligible for the next attempt, rather than
-  // leaving the customer's page polling a status that will never change.
-  const STUCK_PROCESSING_MS = 70 * 1000;
+  // whose last update is older than this function's own maxDuration (see
+  // vercel.json — 300s on Vercel Pro as of 2026-08-31, was 60s on Hobby) as
+  // abandoned and eligible for the next attempt, rather than leaving the
+  // customer's page polling a status that will never change. Kept a bit
+  // above the actual maxDuration so an attempt still legitimately finishing
+  // right at the wire isn't raced.
+  const STUCK_PROCESSING_MS = 320 * 1000;
   const isStuckProcessing = submission.product === 'buying'
     && submission.status === 'processing'
     && submission.updated_at
