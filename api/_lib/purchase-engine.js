@@ -390,9 +390,9 @@ async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxT
   // leak — see the 0005 patch notes). Only valid with tool_choice:'auto'
   // (Anthropic disallows combining it with a forced tool_choice), so this
   // is only passed on the first, non-forced call.
-  if (thinkingBudget) {
-    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
-  }
+   if (thinkingBudget) 
+   { body.thinking = { type: 'adaptive' }; body.output_config = { effort: 'high' }; 
+   }
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
