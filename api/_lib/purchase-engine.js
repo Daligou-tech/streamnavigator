@@ -181,14 +181,29 @@ Respond ONLY by calling the submit_purchase_report tool.`;
 
 const TAG_LEAK_PATTERN = /<\/?[a-zA-Z][a-zA-Z0-9_-]*(\s[^>]*)?>/g;
 
-function reportLooksContaminated(value, hits) {
+// `hits`, when passed, collects rich diagnostics (which field, what tags,
+// and enough surrounding text to see whether it was an isolated fragment
+// or the field's entire content) — plain matched substrings alone (the
+// original shape of this function) turned out not to be enough to
+// distinguish those two cases without another live round-trip; see the
+// 2026-08-31 incident notes on sanitizeReportTags below.
+function reportLooksContaminated(value, hits, path) {
+  const here = path || [];
   if (typeof value === 'string') {
     const matches = value.match(TAG_LEAK_PATTERN);
-    if (matches && hits) hits.push(...matches);
+    if (matches && hits) {
+      hits.push({
+        field: here.join('.') || '(root)',
+        tags: matches,
+        context: value.length > 300 ? `${value.slice(0, 300)}…` : value,
+      });
+    }
     return !!matches;
   }
-  if (Array.isArray(value)) return value.some((v) => reportLooksContaminated(v, hits));
-  if (value && typeof value === 'object') return Object.values(value).some((v) => reportLooksContaminated(v, hits));
+  if (Array.isArray(value)) return value.some((v, i) => reportLooksContaminated(v, hits, [...here, i]));
+  if (value && typeof value === 'object') {
+    return Object.entries(value).some(([key, v]) => reportLooksContaminated(v, hits, [...here, key]));
+  }
   return false;
 }
 
@@ -256,6 +271,25 @@ function isReportComplete(report) {
   if (!Array.isArray(report.assumptions) || !Array.isArray(report.missing_or_uncertain)) return false;
 
   return true;
+}
+
+// Diagnostic-only companion to isReportComplete: names the first missing
+// field instead of just true/false, so an incomplete-report error message
+// says WHICH of the six sections was empty rather than making that a
+// mystery every time (this is exactly the gap that made the 2026-08-31
+// leaked-tag incident take 3 live rounds to narrow down instead of 1).
+function firstIncompleteField(report) {
+  if (!report || typeof report !== 'object') return '(no report object)';
+  if (!nonEmpty(report.headline)) return 'headline';
+  if (!nonEmpty(report.summary)) return 'summary';
+  if (!report.total_cost_of_ownership || !nonEmpty(report.total_cost_of_ownership.explanation)) return 'total_cost_of_ownership.explanation';
+  if (!report.financing_impact || typeof report.financing_impact.applicable !== 'boolean' || !nonEmpty(report.financing_impact.explanation)) return 'financing_impact.explanation';
+  if (!report.maintenance_running_costs || !nonEmpty(report.maintenance_running_costs.explanation)) return 'maintenance_running_costs.explanation';
+  if (!report.depreciation_resale || !nonEmpty(report.depreciation_resale.explanation)) return 'depreciation_resale.explanation';
+  if (!report.alternative_comparison || !nonEmpty(report.alternative_comparison.alternative_name) || !nonEmpty(report.alternative_comparison.explanation)) return 'alternative_comparison';
+  if (!report.recommendation || !['buy', 'wait', 'reconsider'].includes(report.recommendation.verdict) || !nonEmpty(report.recommendation.reasoning)) return 'recommendation';
+  if (!Array.isArray(report.assumptions) || !Array.isArray(report.missing_or_uncertain)) return 'assumptions/missing_or_uncertain';
+  return '(unknown — isReportComplete said false but firstIncompleteField found nothing; these two have drifted apart)';
 }
 
 // Maps the bespoke, guaranteed-complete schema above into the generic
@@ -420,7 +454,19 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
   return toolUse.input;
 }
 
-const MAX_ATTEMPTS = 2;
+// Raised from 2 to 4 on 2026-08-31: live testing after the Vercel Pro
+// upgrade showed the timeout problem was fully solved, but a *separate*,
+// still-unresolved issue (the model occasionally leaking a stray tool-call
+// fragment into a required field — see sanitizeReportTags and
+// reportLooksContaminated above) reproduced on 4 consecutive real attempts
+// across 2 different submissions, exhausting MAX_ATTEMPTS=2 every time
+// despite a prompt-level mitigation already being in place. Since each
+// attempt now comfortably fits inside the 300s budget (see below), more
+// attempts costs only a little extra API spend on the rare submissions that
+// hit this, in exchange for a real chance at recovering automatically
+// instead of failing a customer's report outright while the root cause is
+// still being narrowed down.
+const MAX_ATTEMPTS = 4;
 // Originally written for the Vercel Hobby plan's 60s hard cap on a
 // serverless function invocation, which real live-money traffic showed was
 // too tight for this report (web_search rounds plus a forced follow-up call
@@ -530,8 +576,13 @@ async function generatePurchaseReport(submissionId) {
       const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
       if (wasContaminated) {
         candidate = sanitizeReportTags(candidate);
+        // Full field + context detail goes to the function log (Vercel
+        // retains this) rather than the DB error column, which stays short
+        // for the customer-facing status endpoint. Grep Vercel's logs for
+        // this submission id if the leak recurs and needs deeper diagnosis.
         console.warn(
-          `[purchase-engine] Stripped leaked formatting artifact(s) from submission ${submissionId} rather than discarding the report: ${JSON.stringify(preSanitizeHits.slice(0, 5))}`
+          `[purchase-engine] Stripped leaked formatting artifact(s) from submission ${submissionId} on attempt ${attemptNumber}:`,
+          JSON.stringify(preSanitizeHits.slice(0, 5))
         );
       }
       // Re-check after stripping: a genuinely unusual/unhandled artifact
@@ -540,12 +591,13 @@ async function generatePurchaseReport(submissionId) {
       // than shipped to the customer.
       const postSanitizeHits = [];
       if (reportLooksContaminated(candidate, postSanitizeHits)) {
-        recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization: ${JSON.stringify(postSanitizeHits.slice(0, 5))}`);
+        recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization in field(s): ${postSanitizeHits.map((h) => h.field).join(', ')}`);
       } else if (!isReportComplete(candidate)) {
+        const emptyField = firstIncompleteField(candidate);
         recoverableError = new Error(
           wasContaminated
-            ? 'Model output was missing one or more of the six required report sections after stripping a leaked formatting artifact'
-            : 'Model output was missing one or more of the six required report sections'
+            ? `Missing required field "${emptyField}" — was emptied by stripping a leaked formatting artifact that was its entire content`
+            : `Missing required field "${emptyField}"`
         );
       }
     }
@@ -596,11 +648,13 @@ module.exports = {
     buildSystemPrompt,
     buildIntakeBrief,
     isReportComplete,
+    firstIncompleteField,
     mapToGenericReport,
     reportLooksContaminated,
     sanitizeReportTags,
     runOneAttempt,
     REPORT_TOOL,
     WEB_SEARCH_TOOL,
+    MAX_ATTEMPTS,
   },
 };

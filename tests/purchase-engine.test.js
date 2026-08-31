@@ -195,7 +195,8 @@ test('a response missing a required section (financing_impact.explanation) hands
   assert.ok(submissionUpdates.some((u) => u.status === 'complete'));
 });
 
-test('a response missing every required section on both attempts marks the submission failed rather than storing a broken report', async (t) => {
+test('a response missing every required section on every attempt marks the submission failed rather than storing a broken report', async (t) => {
+  const { __internal } = require('../api/_lib/purchase-engine');
   const submission = fakeSubmission();
   const { reportInserts, submissionUpdates } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
@@ -205,16 +206,21 @@ test('a response missing every required section on both attempts marks the submi
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
 
-  const firstResult = await generatePurchaseReport('sub-1');
-  assert.equal(firstResult, null, 'first attempt with attempts remaining must hand back to "paid", not throw');
-  assert.equal(submission.status, 'paid');
-
-  await assert.rejects(() => generatePurchaseReport('sub-1'));
+  // Drive exactly MAX_ATTEMPTS calls (whatever that's currently set to,
+  // rather than hardcoding it — this bumped from 2 to 4 on 2026-08-31 and
+  // a hardcoded loop count would have silently stopped testing exhaustion).
+  for (let i = 1; i < __internal.MAX_ATTEMPTS; i++) {
+    const result = await generatePurchaseReport('sub-1');
+    assert.equal(result, null, `attempt ${i} with attempts remaining must hand back to "paid", not throw`);
+    assert.equal(submission.status, 'paid');
+  }
+  await assert.rejects(() => generatePurchaseReport('sub-1'), 'the final attempt must throw once MAX_ATTEMPTS is reached');
 
   assert.equal(reportInserts.length, 0, 'an incomplete report must never be stored');
   assert.ok(submissionUpdates.some((u) => u.status === 'failed'));
   const failedUpdate = submissionUpdates.find((u) => u.status === 'failed');
   assert.ok(failedUpdate.error && failedUpdate.error.length > 0);
+  assert.match(failedUpdate.error, /recommendation/, 'the failure message should name the actual empty field for diagnosability');
 });
 
 test('a submission that already exhausted MAX_ATTEMPTS is marked failed immediately without making another API call', async (t) => {
@@ -222,7 +228,8 @@ test('a submission that already exhausted MAX_ATTEMPTS is marked failed immediat
   // get-navigator-submission.js re-triggering generation forever if every
   // single attempt times out — once attempts are used up, this must fail
   // fast rather than starting yet another attempt.
-  const submission = fakeSubmission({ generation_attempts: 2 });
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const submission = fakeSubmission({ generation_attempts: __internal.MAX_ATTEMPTS });
   const { reportInserts, submissionUpdates } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
@@ -377,6 +384,24 @@ test('__internal.isReportComplete rejects a report missing any one of the six re
   cases.forEach((patch) => {
     const broken = completeReportInput(patch);
     assert.equal(__internal.isReportComplete(broken), false, `expected incomplete for patch ${JSON.stringify(patch)}`);
+  });
+});
+
+test('__internal.firstIncompleteField names which specific field is missing, for diagnosable failure messages', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const cases = [
+    [{ headline: '' }, 'headline'],
+    [{ summary: '   ' }, 'summary'],
+    [{ total_cost_of_ownership: { explanation: '' } }, 'total_cost_of_ownership.explanation'],
+    [{ financing_impact: { applicable: false, explanation: '' } }, 'financing_impact.explanation'],
+    [{ maintenance_running_costs: { explanation: '' } }, 'maintenance_running_costs.explanation'],
+    [{ depreciation_resale: { explanation: '' } }, 'depreciation_resale.explanation'],
+    [{ alternative_comparison: { alternative_name: '', explanation: 'x' } }, 'alternative_comparison'],
+    [{ recommendation: { verdict: 'buy', reasoning: '' } }, 'recommendation'],
+  ];
+  cases.forEach(([patch, expectedField]) => {
+    const broken = completeReportInput(patch);
+    assert.equal(__internal.firstIncompleteField(broken), expectedField, `expected "${expectedField}" for patch ${JSON.stringify(patch)}`);
   });
 });
 
