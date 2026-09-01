@@ -744,6 +744,27 @@ async function generatePurchaseReport(submissionId) {
     }
 
     if (candidate && !recoverableError) {
+      // financing_impact.applicable is fully determined by the customer's
+      // OWN submitted answer (form_data.financing: 'cash' | 'financing') —
+      // the server already knows this with certainty, independent of
+      // anything the model says. Real live evidence (2026-09-01) showed
+      // the model unreliably providing this specific boolean (missing, or
+      // not a real boolean) on a meaningful fraction of attempts, for
+      // reasons that turned out to be entirely UNRELATED to the tag-leak
+      // issue — every one of those attempts showed zero contamination
+      // anywhere near financing_impact; the field was simply never set
+      // correctly to begin with. Asking the model to re-answer a yes/no
+      // question the server can already answer with certainty was the
+      // wrong fix; overriding it here removes this failure mode entirely,
+      // for every attempt, regardless of what the model outputs. Only
+      // applied when the model at least produced a financing_impact
+      // object — if the whole section is missing, that's the model
+      // failing to write the (non-derivable) explanation text too, which
+      // still needs the normal repair/retry handling below.
+      if (candidate.financing_impact && typeof candidate.financing_impact === 'object') {
+        candidate.financing_impact.applicable = !!(submission.form_data && submission.form_data.financing === 'financing');
+      }
+
       const preSanitizeHits = [];
       const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
       if (wasContaminated) {
