@@ -65,6 +65,20 @@
           <div class="email-box" id="closing-body"></div>
           <button class="btn btn-ghost btn-sm copy-btn" id="copy-closing-btn">Copy</button>
         </div>
+
+        <div id="pdf-block" class="report-block" hidden>
+          <h3>📄 Want a PDF copy?</h3>
+          <div id="pdf-prompt">
+            <p>We can email you a PDF version of this report to keep or share.</p>
+            <button class="btn btn-primary btn-sm" id="pdf-yes-btn">Yes, email me a PDF</button>
+            <button class="btn btn-ghost btn-sm" id="pdf-no-btn">No thanks</button>
+          </div>
+          <div id="pdf-form" hidden>
+            <input type="email" id="pdf-email-input" placeholder="you@example.com" style="padding:10px 14px; border-radius:10px; border:1px solid #D8D2C4; font-size:14px; margin-right:8px; min-width:220px;" />
+            <button class="btn btn-primary btn-sm" id="pdf-send-btn">Send PDF</button>
+          </div>
+          <p id="pdf-status-msg" style="margin-top:10px;"></p>
+        </div>
       </div>
     </div>
   </section>
@@ -122,11 +136,54 @@
   var reportView = document.getElementById('report-view');
 
   function showWaiting(title, body, showSpinner){
+    stopWaitingMessages();
     reportView.hidden = true;
     waitingView.hidden = false;
     titleEl.textContent = title;
     bodyEl.textContent = body;
     spinnerEl.style.display = showSpinner ? 'block' : 'none';
+  }
+
+  // Rotating messages for the "actively generating" wait, added
+  // 2026-09-01: a real customer (and the site owner testing as one) saw a
+  // static "Checking your submission… One moment." message sit unchanged
+  // for 1-3 minutes — genuinely normal given how much real work an
+  // AI-researched report involves, but with nothing on screen actually
+  // changing, it looks identical to a frozen/broken page. Deliberately
+  // vague about exact section names (the messages don't need to match
+  // real generation order) — the point is showing visible progress, not
+  // narrating internals.
+  var WAITING_MESSAGES = [
+    'This can take a couple of minutes — feel free to leave this tab open, it\'ll update automatically.',
+    'Reading your submission details…',
+    'Researching current prices and rates…',
+    'Working through financing and running costs…',
+    'Comparing against a realistic alternative…',
+    'Checking depreciation and resale value…',
+    'Double-checking every section for accuracy…',
+    'Almost there — putting your report together…',
+  ];
+  var waitingMessageTimer = null;
+  var waitingMessageIndex = 0;
+
+  function startWaitingMessages(){
+    if (waitingMessageTimer) return; // already running — don't reset progress on every 3s poll tick
+    waitingMessageIndex = 0;
+    bodyEl.textContent = WAITING_MESSAGES[0];
+    waitingMessageTimer = setInterval(function(){
+      waitingMessageIndex = (waitingMessageIndex + 1) % WAITING_MESSAGES.length;
+      bodyEl.textContent = WAITING_MESSAGES[waitingMessageIndex];
+    }, 12000);
+  }
+  function stopWaitingMessages(){
+    if (waitingMessageTimer) { clearInterval(waitingMessageTimer); waitingMessageTimer = null; }
+  }
+  function showGeneratingReport(){
+    reportView.hidden = true;
+    waitingView.hidden = false;
+    titleEl.textContent = 'Generating your report…';
+    spinnerEl.style.display = 'block';
+    startWaitingMessages();
   }
 
   // Generic renderer for the shared report shape produced by
@@ -196,6 +253,9 @@
       document.getElementById('closing-body').textContent = report.closing_body;
     }
 
+    document.getElementById('pdf-block').hidden = false;
+
+    stopWaitingMessages();
     waitingView.hidden = true;
     reportView.hidden = false;
   }
@@ -207,6 +267,54 @@
     }).catch(function(){
       showToast('Could not copy automatically — select the text manually.');
     });
+  });
+
+  // PDF-by-email — added 2026-09-01. Always asks for the email at request
+  // time rather than trying to reuse one from intake: the client only
+  // ever stores {id, token} in localStorage (see goToStripe in
+  // navigator-shared.js), never the customer's email, so there's nothing
+  // to prefill here without a separate round trip just to check.
+  var pdfPromptEl = document.getElementById('pdf-prompt');
+  var pdfFormEl = document.getElementById('pdf-form');
+  var pdfStatusEl = document.getElementById('pdf-status-msg');
+  var pdfEmailInput = document.getElementById('pdf-email-input');
+  var pdfSendBtn = document.getElementById('pdf-send-btn');
+
+  document.getElementById('pdf-yes-btn').addEventListener('click', function(){
+    pdfPromptEl.hidden = true;
+    pdfFormEl.hidden = false;
+    pdfEmailInput.focus();
+  });
+  document.getElementById('pdf-no-btn').addEventListener('click', function(){
+    document.getElementById('pdf-block').hidden = true;
+  });
+  pdfSendBtn.addEventListener('click', function(){
+    var email = (pdfEmailInput.value || '').trim();
+    if (!email || email.indexOf('@') === -1) {
+      pdfStatusEl.textContent = 'Please enter a valid email address.';
+      return;
+    }
+    pdfSendBtn.disabled = true;
+    pdfStatusEl.textContent = 'Sending…';
+    fetch('/api/email-report-pdf', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: stored.id, token: stored.token, email: email }),
+    })
+      .then(function(resp){ return resp.json().then(function(data){ return { ok: resp.ok, data: data }; }); })
+      .then(function(result){
+        pdfSendBtn.disabled = false;
+        if (result.ok && result.data.ok) {
+          pdfFormEl.hidden = true;
+          pdfStatusEl.textContent = 'Sent! Check your inbox (and spam folder, just in case).';
+        } else {
+          pdfStatusEl.textContent = (result.data && result.data.error) || 'Something went wrong sending that — please try again.';
+        }
+      })
+      .catch(function(){
+        pdfSendBtn.disabled = false;
+        pdfStatusEl.textContent = 'Something went wrong sending that — please try again.';
+      });
   });
 
   var stored = getStoredSubmission();
@@ -230,7 +338,7 @@
       if (data.status === 'complete' && data.report) {
         renderGenericReport(data.report);
       } else if (data.status === 'paid' || data.status === 'processing') {
-        showWaiting('Generating your report…', "This usually takes under a minute. Feel free to leave this tab open — it'll update automatically.", true);
+        showGeneratingReport();
       } else if (data.status === 'pending_payment') {
         showWaiting('Almost there…', "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.", true);
       } else if (data.status === 'failed') {
