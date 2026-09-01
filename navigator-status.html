@@ -15,6 +15,12 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+.fix-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0;font-size:14px;}
+.fix-row input{width:140px;padding:8px 10px;border:1px solid #D8D2C4;border-radius:8px;font:inherit;}
+.fixups-note{font-size:12px;opacity:.75;margin-top:10px;}
+#fixups-status{font-size:13px;margin-top:8px;}
+</style>
 </head>
 <body>
 <div class="bg-noise"></div>
@@ -64,6 +70,15 @@
           <h3 id="closing-title"></h3>
           <div class="email-box" id="closing-body"></div>
           <button class="btn btn-ghost btn-sm copy-btn" id="copy-closing-btn">Copy</button>
+        </div>
+
+        <div id="fixups-block" class="report-block" hidden>
+          <h3>Figures we could not read</h3>
+          <p id="fixups-intro"></p>
+          <div id="fixups-fields"></div>
+          <button class="btn btn-primary btn-sm" id="fixups-btn">Add these and rebuild my report</button>
+          <p class="fixups-note">We cannot verify what you type, so any finding based on a figure you enter will say so.</p>
+          <p id="fixups-status"></p>
         </div>
 
         <div id="pdf-block" class="report-block" hidden>
@@ -247,6 +262,8 @@
       });
     }
 
+    renderFixups();
+
     if (report.closing_title && report.closing_body) {
       document.getElementById('closing-block').hidden = false;
       document.getElementById('closing-title').textContent = report.closing_title;
@@ -298,6 +315,74 @@
     document.getElementById('pdf-block').hidden = true;
   });
   var stored = getStoredSubmission();
+
+  // A customer who paid while figures were still unreadable is holding an audit
+  // with known holes. Adding the figures here rebuilds the report rather than
+  // patching the page — a report is a generated object, so new inputs mean a new
+  // generation.
+  function renderFixups() {
+    var block = document.getElementById('fixups-block');
+    if (!block || !stored || !stored.unreadable_fields || !stored.unreadable_fields.length) return;
+    var fields = stored.unreadable_fields;
+    document.getElementById('fixups-intro').textContent =
+      'We could not read ' + fields.length + ' figure' + (fields.length === 1 ? '' : 's')
+      + ' from your document, so the checks that needed '
+      + (fields.length === 1 ? 'it' : 'them') + ' did not run. Read '
+      + (fields.length === 1 ? 'it' : 'them') + ' off your own copy and we will rebuild the report.';
+    var wrap = document.getElementById('fixups-fields');
+    wrap.innerHTML = '';
+    fields.forEach(function(f){
+      var row = document.createElement('label');
+      row.className = 'fix-row';
+      var span = document.createElement('span');
+      span.textContent = f.label + (f.page ? ' (page ' + f.page + ')' : '');
+      var inp = document.createElement('input');
+      inp.type = 'text'; inp.inputMode = 'decimal'; inp.placeholder = '$0.00';
+      inp.setAttribute('data-path', f.path);
+      row.appendChild(span); row.appendChild(inp);
+      wrap.appendChild(row);
+    });
+    block.hidden = false;
+  }
+
+  var fixupsBtn = document.getElementById('fixups-btn');
+  if (fixupsBtn) fixupsBtn.addEventListener('click', function(){
+    var status = document.getElementById('fixups-status');
+    var values = {};
+    document.querySelectorAll('#fixups-fields input[data-path]').forEach(function(inp){
+      var v = (inp.value || '').trim();
+      if (v) values[inp.getAttribute('data-path')] = v;
+    });
+    if (!Object.keys(values).length) { status.textContent = 'Enter at least one figure first.'; return; }
+    fixupsBtn.disabled = true;
+    status.textContent = 'Rebuilding your report…';
+    fetch('/api/closing-corrections', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: stored.id, token: stored.token, values: values }),
+    })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        if (!res.ok || !res.data.ok) throw new Error((res.data && res.data.error) || 'Could not apply those figures.');
+        if (res.data.regenerating) {
+          status.textContent = 'Rebuilding with ' + res.data.applied + ' new figure'
+            + (res.data.applied === 1 ? '' : 's') + '. This page will refresh shortly.';
+          setTimeout(function(){ window.location.reload(); }, 6000);
+        } else if (res.data.regeneration_blocked) {
+          fixupsBtn.disabled = false;
+          status.textContent = 'Your figures were saved, but this report has already been rebuilt '
+            + 'the maximum number of times. Reply to your confirmation email and we will sort it out.';
+        } else {
+          fixupsBtn.disabled = false;
+          status.textContent = 'Saved ' + res.data.applied + ' figure'
+            + (res.data.applied === 1 ? '' : 's') + '.';
+        }
+      })
+      .catch(function(err){
+        fixupsBtn.disabled = false;
+        status.textContent = err.message || 'Something went wrong — please try again.';
+      });
+  });
 
   function sendPdf(email) {
     if (!email || email.indexOf('@') === -1) {

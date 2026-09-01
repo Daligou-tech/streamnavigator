@@ -298,6 +298,8 @@
   const uploader = wireUploadZone(zone, input, list);
 
   let submissionRef = null;
+  let unreadableRemaining = 0;
+  let acknowledgedGaps = false;
   function showError(title, detail, slot) {
     const box = document.getElementById(slot || 'scorecard-error');
     box.innerHTML = '<strong></strong><span></span>';
@@ -321,6 +323,8 @@
   // names a flagged fee or its dollar impact — that is the paid report. It has to
   // be worth reading on its own without being a substitute for what it sells.
   function renderScorecard(sc) {
+    unreadableRemaining = (sc.unreadable_fields || []).length;
+    acknowledgedGaps = false;   // a fresh scorecard means a fresh decision
     const panel = document.getElementById('scorecard-panel');
     const pct = sc.closing_costs_pct_of_loan;
     const rows = [];
@@ -501,7 +505,12 @@
         return;
       }
 
-      submissionRef = { id: data.id, token: data.token, product: 'closing' };
+      // Carried through checkout so the paid report page knows which figures are
+      // still missing and can offer to rebuild once they are supplied.
+      submissionRef = {
+        id: data.id, token: data.token, product: 'closing',
+        unreadable_fields: data.scorecard.unreadable_fields || [],
+      };
       renderScorecard(data.scorecard);
       document.getElementById('stage-1').style.display = 'none';
       document.getElementById('stage-2').style.display = 'block';
@@ -521,6 +530,22 @@
     if (!propertyType) { showToast('Please answer the property type question.'); return; }
     if (!providerList) { showToast('Please answer the service provider list question.'); return; }
     if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
+
+    // Stop someone paying $59 for an audit with known holes without being told.
+    // The figures are free to fix right here, and the customer is engaged now in
+    // a way they will not be after checkout. One explicit confirmation, not a
+    // hard block — some people genuinely do not have the document to hand.
+    if (unreadableRemaining > 0 && !acknowledgedGaps) {
+      acknowledgedGaps = true;
+      showError(
+        unreadableRemaining + ' figure' + (unreadableRemaining === 1 ? '' : 's') + ' still unread',
+        'Checks that need ' + (unreadableRemaining === 1 ? 'it' : 'them') + ' will not run, and your '
+        + 'report will say so. Filling ' + (unreadableRemaining === 1 ? 'it' : 'them')
+        + ' in above is free and takes a moment. Click again to continue without.',
+        'pay-error'
+      );
+      return;
+    }
 
     clearError('pay-error');
     const originalText = btn.textContent;
