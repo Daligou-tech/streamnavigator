@@ -18,6 +18,8 @@ const {
   extractClosingDisclosure,
   runClosingAudit,
   buildScorecard,
+  ACCEPTED_DOCUMENT_TYPES,
+  DOCUMENT_LABELS,
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 
@@ -156,9 +158,12 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // The customer uploaded something that is not a Closing Disclosure. Say so
-  // now, for free, rather than after taking their money.
-  if (extraction.document_type !== 'closing_disclosure') {
+  // The customer uploaded something we cannot audit. Say so now, for free,
+  // rather than after taking their money. An ALTA Settlement Statement IS
+  // accepted — it is the title company's own form and is routinely mistaken for
+  // the Closing Disclosure, so turning it away would lose customers who are
+  // holding a perfectly usable document.
+  if (!ACCEPTED_DOCUMENT_TYPES.includes(extraction.document_type)) {
     await admin
       .from('navigator_submissions')
       .update({
@@ -173,9 +178,10 @@ module.exports = async (req, res) => {
       token: submission.access_token,
       scorecard: null,
       error_message:
-        `That looks like a ${String(extraction.document_type).replace(/_/g, ' ')}, not a Closing ` +
-        'Disclosure. The Closing Disclosure is the five-page form your lender sends at least three ' +
-        'business days before closing, headed "Closing Disclosure". Upload that and we will take another look.',
+        `That looks like a ${DOCUMENT_LABELS[extraction.document_type] || 'document'}, which we cannot ` +
+        'audit on its own. We need either your Closing Disclosure — the five-page form headed ' +
+        '"Closing Disclosure" that your lender sends at least three business days before closing — or ' +
+        'your settlement agent\'s ALTA Settlement Statement. Upload either and we will take another look.',
     });
     return;
   }
