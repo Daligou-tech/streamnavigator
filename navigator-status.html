@@ -282,20 +282,32 @@
 
   document.getElementById('pdf-yes-btn').addEventListener('click', function(){
     pdfPromptEl.hidden = true;
+    // If we already know the customer's email, just send. Making someone retype
+    // an address they gave at intake, then find a second button, is how a
+    // one-click action turns into "I clicked yes and nothing happened".
+    var known = stored && stored.email;
+    if (known) {
+      sendPdf(known);
+      return;
+    }
     pdfFormEl.hidden = false;
     pdfEmailInput.focus();
+    pdfFormEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
   document.getElementById('pdf-no-btn').addEventListener('click', function(){
     document.getElementById('pdf-block').hidden = true;
   });
-  pdfSendBtn.addEventListener('click', function(){
-    var email = (pdfEmailInput.value || '').trim();
+  var stored = getStoredSubmission();
+
+  function sendPdf(email) {
     if (!email || email.indexOf('@') === -1) {
       pdfStatusEl.textContent = 'Please enter a valid email address.';
+      pdfFormEl.hidden = false;
+      pdfEmailInput.focus();
       return;
     }
     pdfSendBtn.disabled = true;
-    pdfStatusEl.textContent = 'Sending…';
+    pdfStatusEl.textContent = 'Sending your PDF…';
     fetch('/api/email-report-pdf', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -315,9 +327,13 @@
         pdfSendBtn.disabled = false;
         pdfStatusEl.textContent = 'Something went wrong sending that — please try again.';
       });
+  }
+
+  pdfSendBtn.addEventListener('click', function(){
+    sendPdf((pdfEmailInput.value || '').trim());
   });
 
-  var stored = getStoredSubmission();
+  // (stored is hoisted above the PDF handlers)
   if (!stored || !stored.id || !stored.token) {
     showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.", false);
     return;

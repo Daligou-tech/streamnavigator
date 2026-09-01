@@ -123,7 +123,12 @@ async function submitNavigatorIntake({ product, email, formData, files }) {
 }
 
 function goToStripe(paymentLinkUrl, submission, email) {
-  localStorage.setItem('sn_last_submission', JSON.stringify({ ...submission, product: submission.product, ts: Date.now() }));
+  // Store the email too. The status page offers to send a PDF and used to show
+  // an empty box, forcing the customer to retype an address they had already
+  // given us two screens earlier.
+  localStorage.setItem('sn_last_submission', JSON.stringify({
+    ...submission, product: submission.product, email: email || null, ts: Date.now(),
+  }));
   if (!paymentLinkUrl || paymentLinkUrl.includes('REPLACE_WITH_')) {
     showToast('Payment portal not connected yet — add your Stripe Payment Link to enable checkout.');
     return;
