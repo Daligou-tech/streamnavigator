@@ -19,6 +19,7 @@ const {
   runClosingAudit,
   buildScorecard,
 } = require('./_lib/closing-extract');
+const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 9 * 1024 * 1024;
@@ -84,6 +85,16 @@ module.exports = async (req, res) => {
 
   const admin = getSupabaseAdmin();
 
+  // Checked BEFORE the row is inserted and before the model is called, so a
+  // blocked request costs nothing and leaves no record to inflate the next count.
+  const ipHash = hashIp(clientIp(req));
+  const limit = await checkScorecardRateLimit(admin, { email: email || null, ipHash });
+  if (!limit.allowed) {
+    res.setHeader('Retry-After', String(limit.retryAfterMinutes * 60));
+    res.status(429).json({ ok: false, error: limit.message });
+    return;
+  }
+
   const { data: submission, error: insertError } = await admin
     .from('navigator_submissions')
     .insert({
@@ -92,6 +103,7 @@ module.exports = async (req, res) => {
       form_data: {
         description: typeof body.description === 'string' ? body.description.trim() : '',
         stage: 'scorecard',
+        ip_hash: ipHash,
       },
     })
     .select('id, access_token')
@@ -150,7 +162,7 @@ module.exports = async (req, res) => {
     await admin
       .from('navigator_submissions')
       .update({
-        form_data: { ...(body.formData || {}), stage: 'scorecard', extraction, wrong_document: true },
+        form_data: { stage: 'scorecard', ip_hash: ipHash, extraction, wrong_document: true },
         updated_at: new Date().toISOString(),
       })
       .eq('id', submission.id);
@@ -177,6 +189,7 @@ module.exports = async (req, res) => {
       form_data: {
         description: typeof body.description === 'string' ? body.description.trim() : '',
         stage: 'scorecard',
+        ip_hash: ipHash,
         extraction,
         scorecard,
       },
