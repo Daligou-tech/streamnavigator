@@ -27,6 +27,12 @@
 .scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
 .inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
 .inline-error strong{display:block;margin-bottom:4px;}
+.fix-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0;font-size:13px;}
+.fix-row em{opacity:.7;font-style:normal;}
+.fix-row input{width:130px;padding:8px 10px;border:2px solid var(--ink);border-radius:8px;font:inherit;font-size:14px;}
+#fix-fields{margin-top:12px;}
+.fix-note{font-size:12px;opacity:.75;margin:8px 0 0;}
+#fix-status{font-size:13px;margin:8px 0 0;}
 #stage-2 select{width:100%;padding:12px;font:inherit;font-size:15px;border:2px solid var(--ink);border-radius:8px;background:#fff;}
 </style>
 </head>
@@ -371,13 +377,30 @@
         + '. Upload the Closing Disclosure too and those run as well.</p>';
     }
 
-    if (sc.extraction_warning_count > 0) {
-      html += '<p class="scorecard-warn"><strong>Extraction warning:</strong> '
-        + sc.extraction_warning_count + ' value'
-        + (sc.extraction_warning_count === 1 ? ' was' : 's were')
-        + ' too unclear to read reliably and '
-        + (sc.extraction_warning_count === 1 ? 'was' : 'were')
-        + ' excluded rather than guessed. A clearer copy would give you a fuller audit.</p>';
+    if (sc.unreadable_fields && sc.unreadable_fields.length) {
+      // Previously this said "a clearer copy would give you a fuller audit" and
+      // stopped there — advice with nothing behind it. Now the customer can read
+      // the figure off their own document and we re-run the audit against it.
+      html += '<div class="scorecard-warn"><strong>We could not read '
+        + sc.unreadable_fields.length + ' figure'
+        + (sc.unreadable_fields.length === 1 ? '' : 's') + '.</strong> '
+        + 'We excluded '
+        + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
+        + ' rather than guessing. Type '
+        + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
+        + ' in from your own copy and we will run the checks that need '
+        + (sc.unreadable_fields.length === 1 ? 'it' : 'them') + '.'
+        + '<div id="fix-fields">'
+        + sc.unreadable_fields.map(function(f){
+            return '<label class="fix-row"><span>' + f.label
+              + (f.page ? ' <em>(page ' + f.page + ')</em>' : '')
+              + '</span><input type="text" inputmode="decimal" placeholder="$0.00" data-path="'
+              + f.path + '" /></label>';
+          }).join('')
+        + '<button class="btn btn-ghost btn-sm" id="fix-btn">Recheck with these figures</button>'
+        + '<p class="fix-note">We cannot verify what you type, so any finding based on '
+        + 'a figure you enter will say so.</p>'
+        + '<p id="fix-status"></p></div></div>';
     }
 
     if (sc.cannot_benchmark_count) {
@@ -399,6 +422,43 @@
 
     panel.innerHTML = html;
   }
+
+  // Delegated because the fields are rendered into the scorecard after load.
+  document.addEventListener('click', async function(ev){
+    if (!ev.target || ev.target.id !== 'fix-btn') return;
+    ev.preventDefault();
+    const btn = ev.target;
+    const status = document.getElementById('fix-status');
+    const values = {};
+    document.querySelectorAll('#fix-fields input[data-path]').forEach(function(inp){
+      const v = (inp.value || '').trim();
+      if (v) values[inp.getAttribute('data-path')] = v;
+    });
+    if (!Object.keys(values).length) { status.textContent = 'Enter at least one figure first.'; return; }
+    if (!submissionRef) { status.textContent = 'Please run a scorecard first.'; return; }
+
+    btn.disabled = true;
+    status.textContent = 'Rechecking…';
+    try {
+      const resp = await fetch('/api/closing-corrections', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: submissionRef.id, token: submissionRef.token, values: values }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not apply those figures.');
+      renderScorecard(data.scorecard);
+      const s2 = document.getElementById('fix-status');
+      if (s2) {
+        s2.textContent = 'Updated with ' + data.applied + ' figure'
+          + (data.applied === 1 ? '' : 's') + '. '
+          + (data.remaining.length ? data.remaining.length + ' still missing.' : 'Nothing else outstanding.');
+      }
+    } catch (err) {
+      btn.disabled = false;
+      status.textContent = err.message || 'Something went wrong — please try again.';
+    }
+  });
 
   document.getElementById('scorecard-btn').addEventListener('click', async function(e){
     e.preventDefault();
