@@ -16,6 +16,14 @@
       "schedule": "*/15 * * * *"
     }
   ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    }
+  ],
   "functions": {
     "api/get-navigator-submission.js": { "maxDuration": 300 },
     "api/generate-contractor-report.js": { "maxDuration": 300 },
