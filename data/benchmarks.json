@@ -1,0 +1,6 @@
+{
+  "_README": "Benchmark corpus. EVERY row must carry source_name, source_url, effective_date and verified_at, or the corpus refuses to load — see api/_lib/benchmark-corpus.js validateRow(). Do not add a row from memory or from a secondary source: open the publishing authority's own page, read the figure, and paste that URL. A wrong benchmark becomes a dollar figure in a customer's email to their lender.",
+  "_KINDS": "exact | tiered | per_unit | percent | range. Hard rules (statute, filed rate table, government fee schedule) must NOT use kind 'range'; market norms MUST use 'range' and need sample_size >= 30.",
+  "_STALENESS": "Rows stop answering 400 days after verified_at, or on superseded_date. County schedules typically change 1 January or 1 July — re-verify and bump verified_at.",
+  "rows": []
+}
