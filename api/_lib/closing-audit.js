@@ -89,6 +89,10 @@ function finding(f) {
       recommendedAction: '',
       askLender: false,
       askSettlement: false,
+      // True when any input to this check was typed by the customer rather than
+      // read from the document. We cannot verify what they typed, so a finding
+      // built on it must never present itself as independently confirmed.
+      basedOnCustomerInput: false,
       detail: {},
     },
     f
@@ -97,6 +101,25 @@ function finding(f) {
 
 // Ranks everything and drops nothing. The UI highlights the top 5; it must not
 // be the thing that decides which findings exist.
+// Applies the customer-input caveat to a finding: flags it, downgrades a
+// "confirmed" mathematical error to something the customer must verify first,
+// and says so in the basis. A confirmed error means the DOCUMENT is wrong. If
+// the number came from the customer's own typing, that has not been established.
+function markCustomerSourced(f) {
+  if (!f) return f;
+  f.basedOnCustomerInput = true;
+  f.basis = (f.basis ? f.basis + ' ' : '') +
+    'Based on a figure you entered manually, which we could not read from the document and cannot verify.';
+  if (f.severity === Severity.CONFIRMED_MATH_ERROR) {
+    f.severity = Severity.REQUIRES_DOCUMENTATION;
+    f.title = f.title + ' (based on your entered figure)';
+    f.recommendedAction =
+      'Double-check the figure you entered against the document before raising this. ' +
+      (f.recommendedAction || '');
+  }
+  return f;
+}
+
 function rankFindings(findings) {
   return [...findings].sort((a, b) => {
     const s = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
@@ -920,6 +943,7 @@ function gateExtraction(fields, threshold = 0.85) {
 
 module.exports = {
   feeNameOnly,
+  markCustomerSourced,
   Severity, EvidenceKind, Actionability, Bucket,
   toCents, toDollars, finding, rankFindings,
   daysToMonthEndInclusive, perDiem, checkPrepaidInterest,

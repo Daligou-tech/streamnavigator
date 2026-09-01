@@ -344,6 +344,7 @@ function runClosingAudit(extraction, options = {}) {
     name: li.label || `line ${i + 1}`,
     page: li.page || 0,
     confidence: typeof li.confidence === 'number' ? li.confidence : 0,
+    path: `line_items.${i}`,
     item: li,
   }));
   const { usable, warnings } = audit.gateExtraction(fields, CONF_THRESHOLD);
@@ -387,18 +388,22 @@ function runClosingAudit(extraction, options = {}) {
   const st = e.section_totals || {};
   const totalsUsable = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].every((k) => confident(st[k]));
   if (totalsUsable) {
-    findings.push(...audit.checkSectionArithmetic({
+    const totalsFromCustomer = ['A','B','C','D','E','F','G','H','I','J']
+      .some((k) => isCustomer(st[k]));
+    const arith = audit.checkSectionArithmetic({
       A: val(st.A), B: val(st.B), C: val(st.C), D: val(st.D),
       E: val(st.E), F: val(st.F), G: val(st.G), H: val(st.H),
       I: val(st.I), J: val(st.J), lenderCredits: val(st.lender_credits) || 0,
-    }));
+    });
+    findings.push(...(totalsFromCustomer ? arith.map(audit.markCustomerSourced) : arith));
   } else {
     skipped.push('section subtotals');
   }
 
   const ctc = e.cash_to_close || {};
   if (confident(ctc.stated_cash_to_close) && confident(ctc.total_closing_costs_j)) {
-    findings.push(audit.checkCashToClose({
+    const ctcFromCustomer = Object.values(ctc).some(isCustomer);
+    const ctcFinding = audit.checkCashToClose({
       totalClosingCostsJ: val(ctc.total_closing_costs_j),
       closingCostsPaidBeforeClosing: val(ctc.closing_costs_paid_before_closing) || 0,
       downPaymentFundsFromBorrower: val(ctc.down_payment_funds_from_borrower) || 0,
@@ -407,7 +412,8 @@ function runClosingAudit(extraction, options = {}) {
       sellerCredits: val(ctc.seller_credits) || 0,
       adjustmentsAndOtherCredits: val(ctc.adjustments_and_other_credits) || 0,
       statedCashToClose: val(ctc.stated_cash_to_close),
-    }));
+    });
+    findings.push(ctcFromCustomer ? audit.markCustomerSourced(ctcFinding) : ctcFinding);
   } else {
     skipped.push('Cash to Close');
   }
@@ -415,13 +421,14 @@ function runClosingAudit(extraction, options = {}) {
   // --- prepaid interest -----------------------------------------------------
   const pi = e.prepaid_interest;
   if (pi && confident(pi) && e.loan_amount && e.interest_rate_pct && e.closing_date) {
-    findings.push(audit.checkPrepaidInterest({
+    const piFinding = audit.checkPrepaidInterest({
       loanAmount: e.loan_amount,
       annualRatePct: e.interest_rate_pct,
       closingDate: e.closing_date,
       chargedAmount: pi.amount,
       daysCharged: typeof pi.days === 'number' ? pi.days : null,
-    }));
+    });
+    findings.push(isCustomer(pi) ? audit.markCustomerSourced(piFinding) : piFinding);
   } else {
     skipped.push('prepaid interest');
   }
@@ -474,13 +481,14 @@ function runClosingAudit(extraction, options = {}) {
   for (const li of lines) {
     if (!BENCHMARKABLE.has(li.category)) continue;
     if (!li.amount) continue;
-    findings.push(audit.compareToBenchmark(li.label, li.amount, getBenchmark({
+    const bmFinding = audit.compareToBenchmark(li.label, li.amount, getBenchmark({
       category: li.category,
       state: e.property_state,
       county: e.property_county,
       loanAmount: e.loan_amount,
       salePrice: e.sale_price || null,
-    })));
+    }));
+    findings.push(isCustomer(li) ? audit.markCustomerSourced(bmFinding) : bmFinding);
   }
 
   // --- TRID tolerances, only if Loan Estimates were supplied ----------------
@@ -529,6 +537,125 @@ function normalizeProviderListAnswer(a) {
   if (a === 'no' || a === false) return false;
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// customer-supplied corrections
+// ---------------------------------------------------------------------------
+
+// Fields a customer can meaningfully read off their own document. Deliberately
+// narrow: figures printed on the page they are holding, nothing that requires
+// research. Asking someone to look up their county's transfer tax rate would be
+// asking them to do the job they paid us for; asking them to read a number off
+// page 3 is not.
+const CORRECTABLE_TOTALS = {
+  A: 'Section A total (Origination Charges)',
+  B: 'Section B total (Services Borrower Did Not Shop For)',
+  C: 'Section C total (Services Borrower Did Shop For)',
+  D: 'Section D — Total Loan Costs',
+  E: 'Section E total (Taxes and Other Government Fees)',
+  F: 'Section F total (Prepaids)',
+  G: 'Section G total (Initial Escrow Payment at Closing)',
+  H: 'Section H total (Other)',
+  I: 'Section I — Total Other Costs',
+  J: 'Section J — Total Closing Costs',
+};
+
+const CORRECTABLE_CTC = {
+  total_closing_costs_j: 'Total Closing Costs (J) on the Cash to Close table',
+  down_payment_funds_from_borrower: 'Down payment / funds from borrower',
+  deposit: 'Deposit',
+  seller_credits: 'Seller credits',
+  adjustments_and_other_credits: 'Adjustments and other credits',
+  stated_cash_to_close: 'Cash to Close',
+};
+
+// Returns the list of values we could not read confidently, each with a stable
+// path, a human label, and the page to look at. This is what the UI renders.
+function listUnreadableFields(extraction) {
+  const e = extraction || {};
+  const out = [];
+  const lowConf = (o) => o && typeof o.confidence === 'number' && o.confidence < CONF_THRESHOLD;
+
+  (e.line_items || []).forEach((li, i) => {
+    if (lowConf(li)) {
+      out.push({
+        path: `line_items.${i}`,
+        label: li.label || `Charge on line ${i + 1}`,
+        page: li.page || null,
+        kind: 'amount',
+        read_confidence: li.confidence,
+      });
+    }
+  });
+
+  const st = e.section_totals || {};
+  for (const [key, label] of Object.entries(CORRECTABLE_TOTALS)) {
+    if (st[key] && lowConf(st[key])) {
+      out.push({
+        path: `section_totals.${key}`, label, page: st[key].page || 2,
+        kind: 'amount', read_confidence: st[key].confidence,
+      });
+    }
+  }
+
+  const ctc = e.cash_to_close || {};
+  for (const [key, label] of Object.entries(CORRECTABLE_CTC)) {
+    if (ctc[key] && lowConf(ctc[key])) {
+      out.push({
+        path: `cash_to_close.${key}`, label, page: ctc[key].page || 3,
+        kind: 'amount', read_confidence: ctc[key].confidence,
+      });
+    }
+  }
+
+  if (e.prepaid_interest && lowConf(e.prepaid_interest)) {
+    out.push({
+      path: 'prepaid_interest.amount', label: 'Prepaid interest amount (Section F)',
+      page: e.prepaid_interest.page || 2, kind: 'amount',
+      read_confidence: e.prepaid_interest.confidence,
+    });
+  }
+
+  return out;
+}
+
+// Applies customer-entered values, tagging each with value_source: 'customer'.
+// Confidence is set to 1 so the check will RUN, but the tag is what travels into
+// the finding — a typed number must never look like a verified reading.
+function mergeCustomerValues(extraction, values) {
+  const e = JSON.parse(JSON.stringify(extraction || {}));
+  const applied = [];
+  const rejected = [];
+  const allowed = new Set(listUnreadableFields(extraction).map((f) => f.path));
+
+  for (const [path, raw] of Object.entries(values || {})) {
+    // Only fields we actually flagged as unreadable can be overwritten. Without
+    // this, a caller could rewrite any figure on the document.
+    if (!allowed.has(path)) { rejected.push({ path, reason: 'not_flagged_as_unreadable' }); continue; }
+
+    const num = typeof raw === 'number' ? raw : Number(String(raw).replace(/[$,\s]/g, ''));
+    if (!Number.isFinite(num)) { rejected.push({ path, reason: 'not_a_number' }); continue; }
+
+    const parts = path.split('.');
+    let target = null;
+    if (parts[0] === 'line_items') target = e.line_items[Number(parts[1])];
+    else if (parts[0] === 'section_totals') target = e.section_totals[parts[1]];
+    else if (parts[0] === 'cash_to_close') target = e.cash_to_close[parts[1]];
+    else if (parts[0] === 'prepaid_interest') target = e.prepaid_interest;
+    if (!target) { rejected.push({ path, reason: 'not_found' }); continue; }
+
+    if (parts[0] === 'line_items' || parts[0] === 'prepaid_interest') target.amount = num;
+    else target.value = num;
+
+    target.confidence = 1;
+    target.value_source = 'customer';
+    applied.push({ path, value: num });
+  }
+
+  return { extraction: e, applied, rejected };
+}
+
+const isCustomer = (o) => Boolean(o && o.value_source === 'customer');
 
 // ---------------------------------------------------------------------------
 // free scorecard
@@ -612,6 +739,13 @@ function buildScorecard(extraction, findings, skipped = []) {
       : null,
     extraction_warning_count: extractionWarnings.length,
     checks_skipped: skipped,
+    unreadable_fields: listUnreadableFields(e),
+    customer_supplied_count: [
+      ...(e.line_items || []),
+      ...Object.values(e.section_totals || {}),
+      ...Object.values(e.cash_to_close || {}),
+      e.prepaid_interest,
+    ].filter(isCustomer).length,
     line_items_read: (e.line_items || []).length,
     pages_read: e.pages_present || null,
   };
@@ -619,6 +753,8 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  listUnreadableFields,
+  mergeCustomerValues,
   ACCEPTED_DOCUMENT_TYPES,
   DOCUMENT_LABELS,
   CD_ONLY_CHECKS,
