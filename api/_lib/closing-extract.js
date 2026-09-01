@@ -14,6 +14,18 @@
 'use strict';
 
 const audit = require('./closing-audit');
+const { makeGetBenchmark } = require('./benchmark-corpus');
+
+// Loaded once per cold start. If the corpus file is malformed the corpus refuses
+// to load entirely and every fee falls back to "cannot benchmark" — the safe
+// direction. A broken corpus must never half-answer.
+let defaultGetBenchmark = () => null;
+try {
+  const corpus = require('../../data/benchmarks.json');
+  defaultGetBenchmark = makeGetBenchmark(corpus.rows || []);
+} catch (err) {
+  console.error('[benchmarks] corpus unavailable, all fees will report cannot-benchmark:', err.message);
+}
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -288,7 +300,7 @@ function runClosingAudit(extraction, options = {}) {
     answers = {},
     loanEstimates = null,
     contractTerms = null,
-    getBenchmark = () => null,
+    getBenchmark = defaultGetBenchmark,
   } = options;
 
   const e = extraction || {};
@@ -414,6 +426,7 @@ function runClosingAudit(extraction, options = {}) {
       state: e.property_state,
       county: e.property_county,
       loanAmount: e.loan_amount,
+      salePrice: e.sale_price || null,
     })));
   }
 
