@@ -25,6 +25,8 @@
 .scorecard-rows b{font-size:19px;white-space:nowrap;}
 .scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
 .scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+.inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
+.inline-error strong{display:block;margin-bottom:4px;}
 #stage-2 select{width:100%;padding:12px;font:inherit;font-size:15px;border:2px solid var(--ink);border-radius:8px;background:#fff;}
 </style>
 </head>
@@ -164,6 +166,7 @@
           <li><span class="tick">✓</span> Every material finding ranked by dollar impact</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
+        <div class="inline-error" id="scorecard-error" style="display:none;" role="alert" aria-live="assertive"></div>
         <a href="#" class="btn btn-primary" id="scorecard-btn">Get My Free Scorecard →</a>
         <p class="price-secure">No card required for the scorecard.</p>
         </div><!-- /stage-1 -->
@@ -194,6 +197,7 @@
               </select>
               <p class="field-hint">This decides which tolerance rule applies to several of your charges. If no written list was given, fees you might assume were flexible are often held to a stricter standard.</p>
             </div>
+            <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
             <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" class="btn btn-primary" id="pay-btn">Unlock the Full Audit — $59 →</a>
             <p class="price-secure">🔒 Secured by Stripe</p>
           </div>
@@ -288,6 +292,20 @@
   const uploader = wireUploadZone(zone, input, list);
 
   let submissionRef = null;
+  function showError(title, detail, slot) {
+    const box = document.getElementById(slot || 'scorecard-error');
+    box.innerHTML = '<strong></strong><span></span>';
+    box.querySelector('strong').textContent = title;
+    box.querySelector('span').textContent = detail;
+    box.style.display = 'block';
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function clearError(slot) {
+    const box = document.getElementById(slot || 'scorecard-error');
+    box.style.display = 'none';
+    box.textContent = '';
+  }
 
   const money = (n) => n === null || n === undefined
     ? '—'
@@ -307,10 +325,18 @@
     ];
 
     let html = '<div class="scorecard-head"><strong>Your free scorecard</strong>'
+      + (sc.document_label ? ' &middot; read from your ' + sc.document_label : '')
       + (sc.property_county ? ' &middot; ' + sc.property_county + (sc.property_state ? ', ' + sc.property_state : '') : '')
       + '</div><ul class="scorecard-rows">'
       + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
       + '</ul>';
+
+    if (sc.checks_unavailable && sc.checks_unavailable.length) {
+      html += '<p class="scorecard-warn"><strong>Some checks need your Closing Disclosure.</strong> '
+        + 'A settlement statement carries the charges but not your loan terms, section subtotals or '
+        + 'escrow disclosure, so we could not test: ' + sc.checks_unavailable.join(', ')
+        + '. Upload the Closing Disclosure too and those run as well.</p>';
+    }
 
     if (sc.extraction_warning_count > 0) {
       html += '<p class="scorecard-warn"><strong>Extraction warning:</strong> '
@@ -341,10 +367,11 @@
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
     const files = uploader.getFiles();
-    if (files.length === 0) { showToast('Please attach your Closing Disclosure to continue.'); return; }
+    if (files.length === 0) { showToast('Please attach your Closing Disclosure or settlement statement to continue.'); return; }
 
+    clearError();
     const originalText = btn.textContent;
-    btn.textContent = 'Reading your Closing Disclosure…';
+    btn.textContent = 'Reading your document…';
     btn.style.pointerEvents = 'none';
 
     try {
@@ -363,7 +390,11 @@
       // A document we could not read, or one that is not a CD, is caught here —
       // while it is still free — instead of after taking the customer's money.
       if (!data.scorecard) {
-        showToast(data.error_message || 'We could not read that document. Please try a clearer copy.');
+        // Shown inline and left on screen. This used to be a toast that faded
+        // after a few seconds; a customer watching the button saw nothing at all
+        // and concluded the site was broken.
+        showError('We could not audit that document', data.error_message
+          || 'We could not read it clearly enough. Try the original PDF from your lender rather than a photo or scan.');
         btn.textContent = originalText;
         btn.style.pointerEvents = 'auto';
         return;
@@ -375,7 +406,7 @@
       document.getElementById('stage-2').style.display = 'block';
       document.getElementById('stage-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
     } catch (err) {
-      showToast(err.message || 'Something went wrong — please try again.');
+      showError('Something went wrong', err.message || 'Please try again in a moment.');
       btn.textContent = originalText;
       btn.style.pointerEvents = 'auto';
     }
@@ -390,6 +421,7 @@
     if (!providerList) { showToast('Please answer the service provider list question.'); return; }
     if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
 
+    clearError('pay-error');
     const originalText = btn.textContent;
     btn.textContent = 'Saving your answers…';
     btn.style.pointerEvents = 'none';
@@ -406,7 +438,7 @@
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not save your answers.');
       goToStripe(btn.getAttribute('href'), submissionRef, document.getElementById('intake-email').value.trim());
     } catch (err) {
-      showToast(err.message || 'Something went wrong — please try again.');
+      showError('Could not save your answers', err.message || 'Please try again in a moment.', 'pay-error');
       btn.textContent = originalText;
       btn.style.pointerEvents = 'auto';
     }
