@@ -19,6 +19,7 @@
   "functions": {
     "api/get-navigator-submission.js": { "maxDuration": 300 },
     "api/generate-contractor-report.js": { "maxDuration": 300 },
-    "api/retry-failed-buying.js": { "maxDuration": 300 }
+    "api/retry-failed-buying.js": { "maxDuration": 300 },
+    "api/email-report-pdf.js": { "maxDuration": 60, "includeFiles": "node_modules/{pdfkit,fontkit}/**" }
   }
 }
