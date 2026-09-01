@@ -20,7 +20,11 @@
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 
-const MAX_FILES = 4;
+// Raised from 4: a full closing file is the CD, the purchase contract, and the
+// complete Loan Estimate sequence. NOTE: MAX_TOTAL_BYTES below still caps the
+// whole request at 9MB, so this ceiling is not yet reachable in practice — see
+// the direct-upload note in the handover.
+const MAX_FILES = 12;
 const MAX_FILE_BYTES = 6 * 1024 * 1024; // 6MB per file
 const MAX_TOTAL_BYTES = 9 * 1024 * 1024; // keep the whole request under Vercel's body limit
 
