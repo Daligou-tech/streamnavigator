@@ -567,10 +567,23 @@ function buildScorecard(extraction, findings, skipped = []) {
   // showing a blank where the headline number should be, total the borrower-paid
   // charge lines — and label it as calculated, because it is not the same figure
   // as J and must not be passed off as one.
-  const chargeLines = (e.line_items || []).filter(
+  //
+  // Deposits and holdbacks are excluded. The first real document through this
+  // system was a rehab loan carrying a $24,000 construction escrow; counting it
+  // as a "charge" produced a headline of $31,948 at 33.3% of the loan, when the
+  // borrower's actual fees were $7,948 at 8.3%. That money is the borrower's own,
+  // held for the renovation — it is not a cost, and presenting it as one would
+  // alarm a customer over nothing and destroy trust in every other number.
+  const NOT_A_CHARGE = new Set(['escrow_deposit', 'property_insurance', 'hoa_dues']);
+
+  const allBorrowerLines = (e.line_items || []).filter(
     (li) => li.category && (li.paid_by || 'borrower') === 'borrower' && typeof li.amount === 'number'
   );
+  const chargeLines = allBorrowerLines.filter((li) => !NOT_A_CHARGE.has(li.category));
+  const depositLines = allBorrowerLines.filter((li) => NOT_A_CHARGE.has(li.category));
+
   const derivedTotal = chargeLines.reduce((a, li) => a + li.amount, 0);
+  const depositTotal = depositLines.reduce((a, li) => a + li.amount, 0);
   const extractionWarnings = findings.filter((f) => f.checkId === 'EXTRACTION_CONFIDENCE');
 
   const isAlta = e.document_type === 'alta_settlement_statement';
@@ -594,6 +607,9 @@ function buildScorecard(extraction, findings, skipped = []) {
     total_is_derived: totalClosingCosts === null && chargeLines.length > 0,
     total_borrower_charges: chargeLines.length ? Math.round(derivedTotal * 100) / 100 : null,
     charge_lines_counted: chargeLines.length,
+    deposits_excluded: depositLines.length
+      ? { total: Math.round(depositTotal * 100) / 100, count: depositLines.length }
+      : null,
     extraction_warning_count: extractionWarnings.length,
     checks_skipped: skipped,
     line_items_read: (e.line_items || []).length,
