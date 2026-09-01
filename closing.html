@@ -353,7 +353,11 @@
       + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
       + '</ul>';
 
-    if (sc.deposits_excluded) {
+    // Only meaningful when we added the total up ourselves. A real Closing
+    // Disclosure prints Total Closing Costs (J), and J already includes the
+    // initial escrow payment in section G — telling the customer those were
+    // "not counted above" would be flatly untrue.
+    if (sc.deposits_excluded && sc.total_is_derived) {
       html += '<p class="scorecard-note">Not counted above: ' + money(sc.deposits_excluded.total)
         + ' in deposits or holdbacks across ' + sc.deposits_excluded.count + ' line'
         + (sc.deposits_excluded.count === 1 ? '' : 's') + '. That is your own money set aside, '
