@@ -404,3 +404,24 @@ test('deposits and holdbacks are not counted as closing charges', () => {
   assert.equal(sc.deposits_excluded.total, 24000); // surfaced, not silently dropped
   assert.equal(sc.deposits_excluded.count, 1);
 });
+
+test('the deposits note applies only to a derived total, never to a printed J', () => {
+  // Total Closing Costs (J) already includes the section G escrow payment, so
+  // claiming those amounts were excluded from it would be untrue.
+  const cd = cleanExtraction();
+  const cdRun = runClosingAudit(cd);
+  const cdCard = buildScorecard(cd, cdRun.findings, cdRun.skipped);
+  assert.equal(cdCard.total_is_derived, false);
+  assert.equal(cdCard.total_closing_costs, 5797.26);
+
+  const alta = altaExtraction({
+    line_items: [
+      { section: 'none', label: 'Escrow Deposit', amount: 1200, payee: 'X', paid_by: 'borrower', category: 'escrow_deposit', confidence: HI, page: 1 },
+      { section: 'none', label: 'Settlement Fee to X', amount: 500, payee: 'X', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 1 },
+    ],
+  });
+  const altaRun = runClosingAudit(alta);
+  const altaCard = buildScorecard(alta, altaRun.findings, altaRun.skipped);
+  assert.equal(altaCard.total_is_derived, true);
+  assert.equal(altaCard.deposits_excluded.total, 1200);
+});
