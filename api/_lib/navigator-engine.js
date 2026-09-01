@@ -23,6 +23,7 @@
 // browser.
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
+const { runClosingAudit } = require('./closing-extract');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -197,11 +198,30 @@ Assess reserve funding levels, planned capital projects, special-assessment risk
   },
 
   'closing': {
-    label: 'Closing Navigator',
+    label: 'Closing Disclosure Audit',
     requiresFiles: true,
-    task: `You are the analysis engine behind Closing Navigator. A homebuyer paid for a Loan Estimate vs. Closing Disclosure comparison and uploaded both (and optionally an earlier Loan Estimate or lender worksheet).
+    // The findings in this report are produced by api/_lib/closing-audit.js, not
+    // by the model. The model's job is to write them up. It must not originate a
+    // number, a benchmark, or a severity — the previous version of this prompt
+    // asked it to judge fees from "general knowledge of standard closing-cost
+    // tolerances", which is the model's priors sold to a customer as analysis.
+    task: `You are the writer for a Closing Disclosure Audit. A homebuyer paid for an independent audit of their final Closing Disclosure, and optionally supplied a purchase contract and Loan Estimates.
 
-Compare loan terms, payment, closing costs, credits, and cash to close line by line between the documents provided. Compute the overall dollar change and rank the top individual changes by dollar impact. For each change, give a plain read on whether it looks typical/normal or worth a question, grounded in general knowledge of standard closing-cost tolerances and common lender practices — flag when something looks like it may exceed a typical tolerance threshold without being certain, and recommend the customer confirm with their loan officer. List specific questions to ask the lender or title company, and close with a pre-closing checklist. Never state a dollar figure that isn't traceable to the documents provided.`,
+The deterministic audit engine has already run every check and produced a ranked list of findings. Each finding carries a severity, an evidence basis, an actionability label, and where applicable a charged amount, an expected amount, and a dollar impact. Your job is to present those findings clearly. It is not to add to them.
+
+Hard rules:
+- Never state a dollar figure, benchmark, expected amount, or regulatory citation that is not present in the findings you were given. If a fee is not covered by a finding, it is not in the report.
+- Never upgrade a severity. Reproduce the engine's language exactly: a confirmed mathematical error, a potential TRID violation, a potential overcharge, above the available benchmark, a potential duplicate, requires documentation, cannot benchmark, or informational. Never say a fee is illegal, never promise a refund, never call a charge excessive unless the finding says so.
+- Distinguish hard rules from market norms exactly as the finding's evidence basis does. A published rate table or a statute is a requirement. A market range is not — say so plainly when you cite one.
+- Carry each finding's actionability through to the customer: still changeable before closing, likely locked in, a possible post-closing remedy, or needing another document. Do not imply everything can still be renegotiated.
+- Where a finding says cannot benchmark, say that in those words rather than filling the gap.
+- If extraction-confidence warnings are present, surface them prominently. Never present a number that was flagged as unreadable.
+
+Structure and length. The report must fit on one to two pages. Lead with the top five findings by rank, each in two or three lines: what the charge is, what it should be, the basis, the dollar impact, and whether it can still be changed. Then list every remaining material finding as a single compact line each — one sentence, with its dollar impact. Do not omit findings to save space, and do not pad the top five with detail at the expense of listing the rest. Because space is tight, keep the basis to a short phrase rather than a full citation; the finding data carries the full basis for anyone who asks.
+
+Close with two short ready-to-send emails, one to the lender and one to the settlement agent, each covering only the findings flagged for that recipient and naming the specific fee, the amount, the reason, and the remedy requested.
+
+State plainly that this is not legal advice.`,
   },
 };
 
@@ -271,7 +291,36 @@ async function generateNavigatorReport(submissionId) {
 
     contentBlocks.push({ type: 'text', text: contextLines || 'No additional context or documents were provided — work from the product task alone and flag the lack of input in missing_or_uncertain.' });
 
-    const systemPrompt = `${config.task}\n\n${HONESTY_RULES}\n\nRespond ONLY by calling the submit_navigator_report tool.`;
+    // Closing Disclosure Audit is the one product where the model is not the
+    // analyst. The findings were computed deterministically by closing-audit.js
+    // from the extraction captured at the free-scorecard stage; the model's job
+    // is to write them up. Handing it the findings as data — rather than the
+    // documents plus an instruction to judge — is what stops it inventing a
+    // benchmark when the corpus has no entry for a county.
+    let auditBlock = '';
+    if (submission.product === 'closing') {
+      const stored = submission.form_data || {};
+      if (!stored.extraction) {
+        throw new Error('This closing submission has no stored extraction — the free scorecard step did not complete.');
+      }
+      const { findings, skipped, cureNote } = runClosingAudit(stored.extraction, {
+        answers: stored.answers || {},
+        loanEstimates: stored.loan_estimates || null,
+        contractTerms: stored.contract_terms || null,
+      });
+      auditBlock = [
+        '',
+        'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
+        'recompute them, and do not soften or escalate any severity.',
+        JSON.stringify(findings, null, 1),
+        skipped.length
+          ? `Checks that could not be run because the required values were missing or unreadable: ${skipped.join(', ')}. Say so plainly rather than implying they passed.`
+          : '',
+        cureNote || '',
+      ].filter(Boolean).join('\n');
+    }
+
+    const systemPrompt = `${config.task}\n\n${HONESTY_RULES}${auditBlock}\n\nRespond ONLY by calling the submit_navigator_report tool.`;
 
     // Occasionally the model's structured tool-call output gets corrupted —
     // observed in testing as a stray closing tag / parameter fragment (e.g.
