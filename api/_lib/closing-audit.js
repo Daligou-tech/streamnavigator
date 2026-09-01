@@ -421,6 +421,15 @@ function checkCashToClose(c, toleranceDollars = 1.0) {
 const NOISE = /\b(fee|charge|to|the|and|of|for|inc|llc|company|co)\b|[^a-z0-9 ]/g;
 const norm = (s) => String(s || '').toLowerCase().replace(NOISE, ' ').split(/\s+/).filter(Boolean).join(' ');
 
+// Settlement statements write the payee into the fee label: "Credit Report to
+// Superior Settlement Services, LLC". Matching against the whole string made
+// every fee paid to that company look like a settlement charge, so a credit
+// report and a rehab escrow came back as duplicates of each other. Match on the
+// fee name only.
+function feeNameOnly(label) {
+  return String(label || '').split(/\s+(?:to|with|payable to)\s+/i)[0];
+}
+
 // Hypotheses, not accusations. Every pair is surfaced as a question.
 const DUPLICATE_CLUSTERS = [
   ['settlement/closing/escrow services', ['settlement', 'closing', 'escrow', 'attorney closing']],
@@ -445,12 +454,20 @@ function detectDuplicates(items) {
   );
 
   for (const [clusterName, keys] of DUPLICATE_CLUSTERS) {
-    const hits = considered.filter((i) => keys.some((k) => norm(i.label).includes(k)));
+    const hits = considered.filter((i) => keys.some((k) => norm(feeNameOnly(i.label)).includes(k)));
     for (let a = 0; a < hits.length; a++) {
       for (let b = a + 1; b < hits.length; b++) {
         const x = hits[a];
         const y = hits[b];
         const samePayee = Boolean(x.payee && y.payee && norm(x.payee) === norm(y.payee));
+        const payeesUnknown = !x.payee && !y.payee;
+
+        // Two similar charges from DIFFERENT providers are not a duplicate —
+        // they are two providers. Without a shared payee there is no question
+        // worth putting in front of a customer, and the noise buries the real
+        // findings.
+        if (!samePayee && !payeesUnknown) continue;
+
         const impact = Math.min(toCents(x.amount), toCents(y.amount));
         out.push(
           finding({
@@ -483,7 +500,7 @@ function detectDuplicates(items) {
   }
 
   const stacked = considered.filter(
-    (i) => i.section === 'A' && STACKING_CLUSTER.some((k) => norm(i.label).includes(k))
+    (i) => i.section === 'A' && STACKING_CLUSTER.some((k) => norm(feeNameOnly(i.label)).includes(k))
   );
   if (stacked.length >= 3) {
     const total = stacked.reduce((a, i) => a + toCents(i.amount), 0);
@@ -902,6 +919,7 @@ function gateExtraction(fields, threshold = 0.85) {
 }
 
 module.exports = {
+  feeNameOnly,
   Severity, EvidenceKind, Actionability, Bucket,
   toCents, toDollars, finding, rankFindings,
   daysToMonthEndInclusive, perDiem, checkPrepaidInterest,

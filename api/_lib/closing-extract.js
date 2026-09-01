@@ -542,9 +542,12 @@ const FLAG_SEVERITIES = new Set([
   audit.Severity.ABOVE_BENCHMARK,
 ]);
 
+// Deliberately does NOT include CANNOT_BENCHMARK. "We have no rate data for
+// your county" is our gap, not a missing document, and telling a customer they
+// need to supply 23 more documents when no document would help is a lie by
+// category error.
 const NEEDS_DOCS_SEVERITIES = new Set([
   audit.Severity.REQUIRES_DOCUMENTATION,
-  audit.Severity.CANNOT_BENCHMARK,
 ]);
 
 // Deliberately counts and headline figures only — enough to show the audit
@@ -558,6 +561,16 @@ function buildScorecard(extraction, findings, skipped = []) {
 
   const flags = findings.filter((f) => FLAG_SEVERITIES.has(f.severity));
   const needsDocs = findings.filter((f) => NEEDS_DOCS_SEVERITIES.has(f.severity));
+  const cannotBenchmark = findings.filter((f) => f.severity === audit.Severity.CANNOT_BENCHMARK);
+
+  // A settlement statement prints no "Total Closing Costs (J)". Rather than
+  // showing a blank where the headline number should be, total the borrower-paid
+  // charge lines — and label it as calculated, because it is not the same figure
+  // as J and must not be passed off as one.
+  const chargeLines = (e.line_items || []).filter(
+    (li) => li.category && (li.paid_by || 'borrower') === 'borrower' && typeof li.amount === 'number'
+  );
+  const derivedTotal = chargeLines.reduce((a, li) => a + li.amount, 0);
   const extractionWarnings = findings.filter((f) => f.checkId === 'EXTRACTION_CONFIDENCE');
 
   const isAlta = e.document_type === 'alta_settlement_statement';
@@ -577,6 +590,10 @@ function buildScorecard(extraction, findings, skipped = []) {
         : null,
     flag_count: flags.length,
     needs_more_documents_count: needsDocs.length,
+    cannot_benchmark_count: cannotBenchmark.length,
+    total_is_derived: totalClosingCosts === null && chargeLines.length > 0,
+    total_borrower_charges: chargeLines.length ? Math.round(derivedTotal * 100) / 100 : null,
+    charge_lines_counted: chargeLines.length,
     extraction_warning_count: extractionWarnings.length,
     checks_skipped: skipped,
     line_items_read: (e.line_items || []).length,
