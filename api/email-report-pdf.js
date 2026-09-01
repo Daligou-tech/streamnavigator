@@ -82,6 +82,11 @@ module.exports = async function handler(req, res) {
       generatedAt: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     });
   } catch (err) {
+    // Logged in full — a silent catch here was exactly the diagnostic gap
+    // that made an earlier failure in this incident (2026-09-01) hard to
+    // track down; the actual error (e.g. a missing bundled font data file
+    // in the deployed function) is exactly what's needed to fix it.
+    console.error(`[email-report-pdf] PDF generation failed for submission ${id}:`, err);
     res.status(500).json({ ok: false, error: 'Could not generate the PDF.' });
     return;
   }
@@ -104,6 +109,7 @@ module.exports = async function handler(req, res) {
       return;
     }
   } catch (err) {
+    console.error(`[email-report-pdf] Resend request failed for submission ${id}:`, err);
     res.status(502).json({ ok: false, error: 'Could not send the email.' });
     return;
   }
