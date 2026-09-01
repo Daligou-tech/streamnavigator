@@ -425,3 +425,104 @@ test('the deposits note applies only to a derived total, never to a printed J', 
   assert.equal(altaCard.total_is_derived, true);
   assert.equal(altaCard.deposits_excluded.total, 1200);
 });
+
+// --- customer-supplied corrections ------------------------------------------
+// Closing the loop on "type the value in manually" — which the product used to
+// say with nowhere to type and nothing that would recompute.
+
+const { listUnreadableFields, mergeCustomerValues } = require('../api/_lib/closing-extract');
+
+function unreadableCD() {
+  const e = cleanExtraction();
+  e.line_items[1].confidence = 0.70;          // Appraisal Fee, page 2
+  e.section_totals.J = { value: 5797.26, confidence: 0.60, page: 2 };
+  return e;
+}
+
+test('unreadable figures are listed with a path, a label and a page', () => {
+  const fields = listUnreadableFields(unreadableCD());
+  const paths = fields.map((f) => f.path);
+  assert.ok(paths.includes('line_items.1'));
+  assert.ok(paths.includes('section_totals.J'));
+  const j = fields.find((f) => f.path === 'section_totals.J');
+  assert.match(j.label, /Total Closing Costs/);
+  assert.equal(j.page, 2);
+});
+
+test('a clean document offers nothing to correct', () => {
+  assert.deepEqual(listUnreadableFields(cleanExtraction()), []);
+});
+
+test('only fields we flagged as unreadable can be overwritten', () => {
+  // Otherwise this endpoint would let a caller rewrite any figure on the
+  // document, including ones we read correctly.
+  const { applied, rejected } = mergeCustomerValues(unreadableCD(), {
+    'line_items.1': '650',
+    'section_totals.A': '99999',   // read fine, must not be accepted
+    'loan_amount': '1',
+  });
+  assert.equal(applied.length, 1);
+  assert.equal(applied[0].path, 'line_items.1');
+  assert.equal(rejected.length, 2);
+  assert.ok(rejected.every((r) => r.reason === 'not_flagged_as_unreadable'));
+});
+
+test('currency formatting and junk input are handled', () => {
+  const { applied, rejected } = mergeCustomerValues(unreadableCD(), {
+    'section_totals.J': '$5,797.26',
+    'line_items.1': 'about six hundred',
+  });
+  assert.equal(applied.find((a) => a.path === 'section_totals.J').value, 5797.26);
+  assert.ok(rejected.some((r) => r.reason === 'not_a_number'));
+});
+
+test('a corrected value unblocks the check that needed it', () => {
+  const before = runClosingAudit(unreadableCD());
+  assert.ok(before.skipped.includes('section subtotals'));
+
+  const { extraction } = mergeCustomerValues(unreadableCD(), {
+    'section_totals.J': '5797.26', 'line_items.1': '650',
+  });
+  const after = runClosingAudit(extraction);
+  assert.equal(after.skipped.includes('section subtotals'), false);
+});
+
+test('a typed figure never looks like a verified reading', () => {
+  // The whole risk of this feature: a mistyped digit becoming a confident
+  // accusation the customer emails to their lender.
+  const { extraction } = mergeCustomerValues(unreadableCD(), {
+    'section_totals.J': '9999.99',   // wrong on purpose — J no longer foots
+    'line_items.1': '650',
+  });
+  const { findings } = runClosingAudit(extraction);
+  const arith = findings.filter((f) => f.checkId.startsWith('ARITH_J'));
+  assert.equal(arith.length, 1);
+  assert.equal(arith[0].basedOnCustomerInput, true);
+  // downgraded: the DOCUMENT has not been shown to be wrong, the typing might be
+  assert.equal(arith[0].severity, Severity.REQUIRES_DOCUMENTATION);
+  assert.match(arith[0].basis, /figure you entered manually/);
+  assert.match(arith[0].recommendedAction, /Double-check the figure you entered/);
+});
+
+test('findings from correctly-read values keep their full weight', () => {
+  const e = cleanExtraction();
+  e.section_totals.D = { value: 3545, confidence: HI, page: 2 }; // A+B+C is 3345
+  const { findings } = runClosingAudit(e);
+  const arith = findings.find((f) => f.checkId.startsWith('ARITH_D'));
+  assert.equal(arith.severity, Severity.CONFIRMED_MATH_ERROR);
+  assert.equal(arith.basedOnCustomerInput, false);
+});
+
+test('the scorecard reports what is still unread and what was supplied', () => {
+  const e = unreadableCD();
+  const r1 = runClosingAudit(e);
+  const c1 = buildScorecard(e, r1.findings, r1.skipped);
+  assert.equal(c1.unreadable_fields.length, 2);
+  assert.equal(c1.customer_supplied_count, 0);
+
+  const { extraction } = mergeCustomerValues(e, { 'section_totals.J': '5797.26' });
+  const r2 = runClosingAudit(extraction);
+  const c2 = buildScorecard(extraction, r2.findings, r2.skipped);
+  assert.equal(c2.unreadable_fields.length, 1);   // shrinking list
+  assert.equal(c2.customer_supplied_count, 1);
+});
