@@ -371,6 +371,97 @@ ${JSON.stringify({ headline: candidate.headline, summary: candidate.summary, rec
   return value.trim();
 }
 
+// Extends the same targeted-repair strategy to the two remaining required
+// sections that need MORE than one plain-text field — alternative_comparison
+// (a name plus an explanation) and recommendation (an enum verdict plus
+// reasoning). These were deliberately left out of the original repair
+// mechanism as an unbuilt, untested case; live evidence (2026-09-01) then
+// showed alternative_comparison hitting the exact same emptied-by-leak
+// failure the four simple explanation fields did, on 4/4 attempts for one
+// real submission, with no way to recover it. Given the same failure mode
+// clearly isn't confined to single-field sections, extending the working
+// mechanism here rather than waiting to rediscover the same gap at
+// recommendation too.
+const REPAIRABLE_COMPOUND_FIELDS = {
+  alternative_comparison: {
+    label: 'the realistic alternative comparison',
+    fields: {
+      alternative_name: { type: 'string', description: 'The specific alternative being compared — a different model, tier, or approach. Plain text only, no tool-call or parameter-tag syntax.' },
+      explanation: { type: 'string', description: 'How it compares on price, total cost, and the customer\'s stated must-haves. 2-4 sentences of plain prose, no tool-call or parameter-tag syntax.' },
+    },
+  },
+  recommendation: {
+    label: 'the buy/wait/reconsider recommendation',
+    fields: {
+      verdict: { type: 'string', enum: ['buy', 'wait', 'reconsider'], description: 'One of: buy, wait, reconsider.' },
+      reasoning: { type: 'string', description: 'Specific reasoning grounded in the analysis above, not generic advice. 2-4 sentences of plain prose, no tool-call or parameter-tag syntax.' },
+    },
+  },
+};
+
+function compoundRepairTool(sectionKey) {
+  const spec = REPAIRABLE_COMPOUND_FIELDS[sectionKey];
+  return {
+    name: 'submit_field_repair',
+    description: `Submit the replacement values for ${spec.label}.`,
+    input_schema: {
+      type: 'object',
+      properties: spec.fields,
+      required: Object.keys(spec.fields),
+    },
+  };
+}
+
+// Same shape as repairExplanationField above, generalized to a section
+// needing multiple fields at once instead of one. Rejects the whole
+// repair (not just the bad sub-field) if ANY expected field comes back
+// empty, invalid, or leaked — a partially-repaired compound section is
+// still an incomplete report, so there's no partial-credit case worth
+// keeping here the way there is for the single-field version.
+async function repairCompoundField({ apiKey, systemPrompt, candidate, sectionKey, submissionId }) {
+  const spec = REPAIRABLE_COMPOUND_FIELDS[sectionKey];
+  if (!spec) return null;
+  const fieldNames = Object.keys(spec.fields);
+
+  const repairPrompt = `Your previous analysis below was almost complete, but ${spec.label} was lost to a formatting glitch on our end before it reached us — nothing you need to avoid or worry about this time, just answer plainly.
+
+Please provide ONLY a replacement for that section. Do not include any tool-call, function-call, or parameter-tag syntax (anything shaped like <tag> or <parameter name="...">) — just plain text.
+
+The rest of your analysis, for consistency:
+${JSON.stringify({ headline: candidate.headline, summary: candidate.summary }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [compoundRepairTool(sectionKey)],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 1024,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  if (!toolUse || !toolUse.input) {
+    console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${sectionKey}) returned no usable tool_use.`);
+    return null;
+  }
+  const result = {};
+  for (const key of fieldNames) {
+    const value = toolUse.input[key];
+    if (typeof value !== 'string' || !nonEmpty(value) || value.match(TAG_LEAK_PATTERN)) {
+      console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${sectionKey}.${key}) returned an empty, invalid, or leaked value.`);
+      return null;
+    }
+    result[key] = value.trim();
+  }
+  // The tool schema's enum isn't guaranteed any more reliably than any
+  // other field has been this whole incident — checked explicitly rather
+  // than trusted.
+  if (sectionKey === 'recommendation' && !['buy', 'wait', 'reconsider'].includes(result.verdict)) {
+    console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (recommendation.verdict) returned an invalid verdict: ${JSON.stringify(result.verdict)}`);
+    return null;
+  }
+  return result;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -786,20 +877,36 @@ async function generatePurchaseReport(submissionId) {
       if (reportLooksContaminated(candidate, postSanitizeHits)) {
         recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization in field(s): ${postSanitizeHits.map((h) => h.field).join(', ')}`);
       } else if (!isReportComplete(candidate)) {
-        // A LOOP, not a single check: live evidence (2026-08-31) showed a
-        // single response can have more than one of the four repairable
-        // fields empty at once — total_cost_of_ownership.explanation AND
-        // financing_impact.explanation both empty in the same attempt.
-        // Repairing only the first one left the report still incomplete
-        // and fell through to a full retry even though every problem was
-        // individually repairable. Bounded by the number of known
-        // repairable fields (4), so this can never loop indefinitely —
-        // each successful repair fixes a specific, different field, so the
-        // loop can only run that many times before either completing or
-        // hitting a field/failure it can't repair.
-        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length;
+        // A LOOP, not a single check: live evidence (2026-08-31/09-01)
+        // showed a single response can have several repairable problems
+        // at once — up to four explanation fields empty in the same
+        // attempt, plus (separately) the compound alternative_comparison/
+        // recommendation sections hitting the identical failure mode.
+        // Repairing only the first found field left the report still
+        // incomplete and fell through to a full retry even when every
+        // problem was individually repairable. Bounded by the total
+        // number of known repairable fields, so this can never loop
+        // indefinitely — each successful repair fixes a specific,
+        // different field, so the loop can only run that many times
+        // before either completing or hitting something it can't repair.
+        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length;
         for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate); round++) {
           const emptyField = firstIncompleteField(candidate);
+          if (REPAIRABLE_COMPOUND_FIELDS[emptyField]) {
+            let repaired = null;
+            try {
+              repaired = await repairCompoundField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, sectionKey: emptyField, submissionId });
+            } catch (err) {
+              console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${emptyField}) threw: ${String((err && err.message) || err)}`);
+              repaired = null;
+            }
+            if (!repaired) break; // a failed repair stops the loop — falls through to a full retry below
+            candidate[emptyField] = { ...candidate[emptyField], ...repaired };
+            console.warn(
+              `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
+            );
+            continue;
+          }
           const meta = REPAIRABLE_EXPLANATION_FIELDS[emptyField];
           if (!meta) break; // not a field this mechanism knows how to repair
           let repairedValue = null;
@@ -880,6 +987,8 @@ module.exports = {
     repairExplanationField,
     REPAIRABLE_EXPLANATION_FIELDS,
     FIELD_REPAIR_TOOL,
+    repairCompoundField,
+    REPAIRABLE_COMPOUND_FIELDS,
     runOneAttempt,
     REPORT_TOOL,
     WEB_SEARCH_TOOL,
