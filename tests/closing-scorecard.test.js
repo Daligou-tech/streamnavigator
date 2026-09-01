@@ -375,8 +375,32 @@ test('a settlement statement gets a total added up from its charge lines', () =>
   const sc = buildScorecard(e, findings, skipped);
   assert.equal(sc.total_closing_costs, null);        // no printed J on an ALTA
   assert.equal(sc.total_is_derived, true);           // so it is labelled calculated
-  // borrower-paid charge lines only: 50+3000+450+24000+35+250+395+60+115 = 28355
-  assert.equal(sc.total_borrower_charges, 28355);
-  assert.equal(sc.charge_lines_counted, 9);
-  // sale price, loan amount and the seller's commission are excluded
+  // borrower-paid FEE lines only: 50+3000+450+35+250+395+60+115 = 4355.
+  // The $24,000 rehab escrow is a holdback, not a charge, and is reported
+  // separately. Sale price, loan amount and the seller's commission are excluded.
+  assert.equal(sc.total_borrower_charges, 4355);
+  assert.equal(sc.charge_lines_counted, 8);
+  assert.equal(sc.deposits_excluded.total, 24000);
+});
+
+test('deposits and holdbacks are not counted as closing charges', () => {
+  // A rehab loan's construction escrow is the borrower's own money held back for
+  // the work. The first real document through this system carried $24,000 of it,
+  // and counting it as a charge produced a headline of 33.3% of the loan against
+  // a true figure near 8%.
+  const e = altaExtraction({
+    loan_amount: 96000,
+    line_items: [
+      { section: 'none', label: 'Rehab Escrow to Superior Settlement Services, LLC', amount: 24000, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'escrow_deposit', confidence: HI, page: 2 },
+      { section: 'none', label: 'Lender Discount Fee to Superior Settlement Services, LLC', amount: 3000, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'lender_fee', confidence: HI, page: 1 },
+      { section: 'none', label: 'Title - Settlement Fee to Home First Title Group, LLC', amount: 250, payee: 'Home First Title Group, LLC', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+    ],
+  });
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+
+  assert.equal(sc.total_borrower_charges, 3250);   // not 27,250
+  assert.equal(sc.charge_lines_counted, 2);
+  assert.equal(sc.deposits_excluded.total, 24000); // surfaced, not silently dropped
+  assert.equal(sc.deposits_excluded.count, 1);
 });
