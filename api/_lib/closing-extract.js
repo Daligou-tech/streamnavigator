@@ -62,8 +62,14 @@ const EXTRACTION_TOOL = {
     properties: {
       document_type: {
         type: 'string',
-        enum: ['closing_disclosure', 'loan_estimate', 'purchase_contract', 'other'],
-        description: 'What this document actually is. Customers mislabel uploads routinely.',
+        enum: [
+          'closing_disclosure', 'alta_settlement_statement', 'loan_estimate',
+          'purchase_contract', 'other',
+        ],
+        description:
+          'What this document actually is. Customers mislabel uploads routinely — an ALTA ' +
+          'Settlement Statement is the title company\'s own form and is frequently mistaken for ' +
+          'the Closing Disclosure. Report what it IS; both are usable here.',
       },
       is_final: {
         type: 'boolean',
@@ -88,8 +94,10 @@ const EXTRACTION_TOOL = {
           properties: {
             section: {
               type: 'string',
-              enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
-              description: 'The lettered section this line sits under.',
+              enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'none'],
+              description:
+                'The lettered section this line sits under. Use "none" for documents that have no ' +
+                'lettered sections, such as an ALTA Settlement Statement.',
             },
             label: { type: 'string', description: 'The fee name exactly as printed.' },
             amount: { type: 'number', description: 'Amount in the borrower-at-closing column.' },
@@ -238,7 +246,7 @@ Absolute rules:
 - Report only values that are physically printed on the document. Never compute a value that is missing by deriving it from other values. Never fill in a typical or expected amount. Never carry a figure across from a different document.
 - If a subtotal looks arithmetically wrong, report it as printed anyway. Detecting that is the entire point of the system you are feeding.
 - Score confidence honestly on every field. A value below 0.85 confidence is discarded and the customer is asked for a clearer copy. That is a far better outcome than a confident wrong number, which becomes a dollar figure in a report the customer sends to their lender.
-- If a document is not a Closing Disclosure, say so in document_type rather than trying to force its contents into this shape.
+- If a document is not a Closing Disclosure, say so in document_type rather than trying to force its contents into this shape. An ALTA Settlement Statement is fully usable — report its charge lines, payees and prorations with section "none", and leave the CD-only fields (section_totals, cash_to_close, escrow) out rather than inventing them.
 - Use document_problems generously. Missing pages and cropped scans are common and matter.
 
 Respond ONLY by calling the submit_cd_extraction tool.`;
@@ -288,6 +296,30 @@ async function extractClosingDisclosure(apiKey, contentBlocks) {
 // audit orchestration
 // ---------------------------------------------------------------------------
 
+// Both forms carry the fee lines the audit is built on. Only the Closing
+// Disclosure carries loan terms, the lettered subtotals and the escrow
+// disclosure, so an ALTA statement supports a real but narrower audit — and the
+// customer is told exactly which checks it cannot support rather than being
+// turned away or quietly given less.
+const ACCEPTED_DOCUMENT_TYPES = ['closing_disclosure', 'alta_settlement_statement'];
+
+const DOCUMENT_LABELS = {
+  closing_disclosure: 'Closing Disclosure',
+  alta_settlement_statement: 'ALTA Settlement Statement',
+  loan_estimate: 'Loan Estimate',
+  purchase_contract: 'purchase contract',
+  other: 'document',
+};
+
+// Checks that structurally cannot run without the Closing Disclosure itself.
+const CD_ONLY_CHECKS = [
+  'section subtotals (A-J)',
+  'Cash to Close',
+  'prepaid interest',
+  'escrow cushion',
+  'TRID tolerance testing',
+];
+
 const CONF_THRESHOLD = 0.85;
 const confident = (o) => o && typeof o.confidence === 'number' && o.confidence >= CONF_THRESHOLD;
 const val = (o) => (confident(o) ? o.value : null);
@@ -317,6 +349,27 @@ function runClosingAudit(extraction, options = {}) {
   const { usable, warnings } = audit.gateExtraction(fields, CONF_THRESHOLD);
   findings.push(...warnings);
   const lines = usable.map((f) => f.item);
+
+  if (e.document_type === 'alta_settlement_statement') {
+    findings.push(audit.finding({
+      checkId: 'DOCUMENT_SCOPE',
+      title: 'Audited from an ALTA Settlement Statement',
+      severity: audit.Severity.REQUIRES_DOCUMENTATION,
+      evidence: audit.EvidenceKind.NONE,
+      actionability: audit.Actionability.NEEDS_DOCS,
+      basis:
+        'This is the settlement agent\'s statement, not the lender\'s Closing Disclosure. It carries ' +
+        'the charge lines, payees and prorations, so fee-level checks run normally. It does not carry ' +
+        'loan terms, the lettered subtotals or the escrow disclosure, so these could not be tested: ' +
+        CD_ONLY_CHECKS.join(', ') + '.',
+      whyItMatters:
+        'Prepaid interest and the escrow cushion are two of the most commonly miscalculated figures ' +
+        'in a closing, and neither can be checked without the Closing Disclosure.',
+      recommendedAction:
+        'Upload the Closing Disclosure as well — your lender must give it to you at least three ' +
+        'business days before closing — and these checks will run against it.',
+    }));
+  }
 
   for (const p of e.document_problems || []) {
     findings.push(audit.finding({
@@ -507,9 +560,13 @@ function buildScorecard(extraction, findings, skipped = []) {
   const needsDocs = findings.filter((f) => NEEDS_DOCS_SEVERITIES.has(f.severity));
   const extractionWarnings = findings.filter((f) => f.checkId === 'EXTRACTION_CONFIDENCE');
 
+  const isAlta = e.document_type === 'alta_settlement_statement';
+
   return {
     document_type: e.document_type || 'other',
+    document_label: DOCUMENT_LABELS[e.document_type] || 'document',
     is_closing_disclosure: e.document_type === 'closing_disclosure',
+    checks_unavailable: isAlta ? CD_ONLY_CHECKS : [],
     property_state: e.property_state || null,
     property_county: e.property_county || null,
     total_closing_costs: totalClosingCosts,
@@ -529,6 +586,9 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  ACCEPTED_DOCUMENT_TYPES,
+  DOCUMENT_LABELS,
+  CD_ONLY_CHECKS,
   EXTRACTION_TOOL,
   EXTRACTION_SYSTEM,
   extractClosingDisclosure,

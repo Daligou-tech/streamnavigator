@@ -437,8 +437,11 @@ const STACKING_CLUSTER = [
 
 function detectDuplicates(items) {
   const out = [];
+  // 'none' covers documents without lettered sections — an ALTA Settlement
+  // Statement lists the same charges with no A-H structure, and duplicate
+  // detection is just as valuable there.
   const considered = (items || []).filter(
-    (i) => ['A', 'B', 'C', 'E'].includes(i.section) && (i.paidBy || 'borrower') === 'borrower'
+    (i) => ['A', 'B', 'C', 'E', 'none'].includes(i.section) && (i.paidBy || 'borrower') === 'borrower'
   );
 
   for (const [clusterName, keys] of DUPLICATE_CLUSTERS) {
