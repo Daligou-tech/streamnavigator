@@ -1,0 +1,71 @@
+{
+  "_comment": "Source of truth for what each page SHOULD show. When you change a price, update it HERE FIRST, then update the page, then run: npm run check-prices. Amounts are in cents so they compare cleanly against Stripe's unit_amount.",
+
+  "pages": {
+    "buying.html": {
+      "label": "Purchase Navigator",
+      "expectedPriceCents": 3900,
+      "stripeLinkId": "5kQfZh1RWdiIgEQgwoabK0f",
+      "alsoCheckMetaDescription": true
+    },
+    "closing.html": {
+      "label": "Closing Navigator",
+      "expectedPriceCents": 5900,
+      "stripeLinkId": "28EdR90NS7Yo0FS0xqabK0e"
+    },
+    "contractor.html": {
+      "label": "Contractor Navigator",
+      "expectedPriceCents": 4900,
+      "stripeLinkId": "cNi14n1RW2E4bkw3JCabK03"
+    },
+    "government-money.html": {
+      "label": "Government Money Finder",
+      "expectedPriceCents": 3900,
+      "stripeLinkId": "00w14n0NS6UkdsEa80abK08"
+    },
+    "hoa.html": {
+      "label": "HOA Navigator",
+      "expectedPriceCents": 7900,
+      "stripeLinkId": "cNi00jaos92s60cfskabK0d"
+    },
+    "home-maintenance.html": {
+      "label": "Home Maintenance Navigator",
+      "expectedPriceCents": 5900,
+      "stripeLinkId": "28EeVd9ko3I80FS1BuabK09"
+    },
+    "home-savings.html": {
+      "label": "Home Savings Navigator",
+      "expectedPriceCents": 4900,
+      "stripeLinkId": "6oU8wPdAE92sdsE6VOabK05"
+    },
+    "insurance.html": {
+      "label": "Insurance Navigator",
+      "expectedPriceCents": 7900,
+      "stripeLinkId": "3cI9ATaosfqQ88k7ZSabK0b"
+    },
+    "landlord.html": {
+      "label": "Landlord Navigator",
+      "expectedPriceCents": 14900,
+      "stripeLinkId": "14AdR9548ceE88k6VOabK0a"
+    },
+    "property-tax.html": {
+      "label": "Property Tax Navigator",
+      "expectedPriceCents": 9900,
+      "stripeLinkId": "bJeaEX68c4Mc0FS2FyabK04"
+    },
+    "rental.html": {
+      "label": "Rental Navigator",
+      "expectedPriceCents": 14900,
+      "stripeLinkId": "4gM14nfIM5QggEQa80abK06"
+    },
+    "subscriptions.html": {
+      "label": "Subscription Navigator",
+      "expectedPriceCents": 4900,
+      "stripeLinkId": "4gMaEXbsw2E49co5RKabK07"
+    }
+  },
+
+  "_skipped": {
+    "streaming.html": "Multi-tier page ($0 / $4.99 / $8.99 with two links). Different shape from the single-price navigators, so the checker skips it rather than reporting a false mismatch."
+  }
+}
