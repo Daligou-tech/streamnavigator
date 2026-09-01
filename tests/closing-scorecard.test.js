@@ -190,7 +190,10 @@ test('the scorecard reports headline figures and counts', () => {
   assert.equal(sc.loan_amount, 400000);
   assert.equal(sc.closing_costs_pct_of_loan, 1.4); // 5797.26 / 400000 = 1.449% -> 1.4
   assert.equal(sc.property_county, 'Fairfax County');
-  assert.ok(sc.needs_more_documents_count >= 3);
+  // These three were CANNOT_BENCHMARK, which is our missing rate data, not a
+  // document the customer can supply. They are counted separately now.
+  assert.ok(sc.cannot_benchmark_count >= 3);
+  assert.equal(sc.needs_more_documents_count, 0);
 });
 
 test('the scorecard counts real flags', () => {
@@ -300,4 +303,80 @@ test('a Loan Estimate or unrelated document is still not accepted', () => {
   assert.deepEqual(ACCEPTED_DOCUMENT_TYPES, ['closing_disclosure', 'alta_settlement_statement']);
   assert.equal(ACCEPTED_DOCUMENT_TYPES.includes('loan_estimate'), false);
   assert.equal(ACCEPTED_DOCUMENT_TYPES.includes('other'), false);
+});
+
+// --- regression: a real ALTA statement from Baltimore City -------------------
+// Lines taken from an actual customer document. The first live run flagged 29
+// duplicates on this file, all false: the extractor writes the payee into the
+// label ("Credit Report to Superior Settlement Services, LLC"), so matching the
+// whole string made every fee paid to that company look like a settlement
+// charge. A credit report and a rehab escrow are not duplicates.
+
+const REAL_ALTA_LINES = [
+  { section: 'none', label: 'Sales Price of Property', amount: 90000, payee: null, paid_by: 'borrower', category: null, confidence: HI, page: 1 },
+  { section: 'none', label: 'Loan Amount', amount: 96000, payee: null, paid_by: 'borrower', category: null, confidence: HI, page: 1 },
+  { section: 'none', label: 'Credit Report to Superior Settlement Services, LLC', amount: 50, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'credit_report', confidence: HI, page: 1 },
+  { section: 'none', label: 'Lender Discount Fee to Superior Settlement Services, LLC', amount: 3000, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'origination', confidence: HI, page: 1 },
+  { section: 'none', label: 'Property Evaluation and Review to Superior Settlement Services, LLC', amount: 450, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'appraisal', confidence: HI, page: 1 },
+  { section: 'none', label: 'Rehab Escrow to Superior Settlement Services, LLC', amount: 24000, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'escrow_deposit', confidence: HI, page: 2 },
+  { section: 'none', label: 'Wire Fee to Superior Settlement Services, LLC', amount: 35, payee: 'Superior Settlement Services, LLC', paid_by: 'borrower', category: 'other', confidence: HI, page: 2 },
+  { section: 'none', label: 'Title - Settlement Fee to Home First Title Group, LLC', amount: 250, payee: 'Home First Title Group, LLC', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+  { section: 'none', label: 'Title - Title Examination to Home First Title Group, LLC', amount: 395, payee: 'Home First Title Group, LLC', paid_by: 'borrower', category: 'title_insurance_owners', confidence: HI, page: 2 },
+  { section: 'none', label: 'Recording Fees (Deed) to Circuit Court for Baltimore City', amount: 60, payee: 'Circuit Court for Baltimore City', paid_by: 'borrower', category: 'recording_fee', confidence: HI, page: 2 },
+  { section: 'none', label: 'Recording Fees (Mortgage) to Circuit Court for Baltimore City', amount: 115, payee: 'Circuit Court for Baltimore City', paid_by: 'borrower', category: 'recording_fee', confidence: HI, page: 2 },
+  { section: 'none', label: 'Real Estate Commission Sellers Broker to Long & Foster', amount: 4950, payee: 'Long & Foster Real Estate Inc.', paid_by: 'seller', category: 'settlement_service', confidence: HI, page: 3 },
+];
+
+const realAlta = () => altaExtraction({
+  property_state: 'MD', property_county: null, loan_amount: 96000,
+  line_items: REAL_ALTA_LINES,
+});
+
+test('the payee embedded in a fee label does not create phantom duplicates', () => {
+  const { findings } = runClosingAudit(realAlta());
+  const dupes = byCheck(findings, 'DUPLICATE_CANDIDATE');
+  assert.equal(dupes.length, 0, dupes.map((d) => d.title).join('\n'));
+});
+
+test('two charges from different providers are two providers, not a duplicate', () => {
+  const { findings } = runClosingAudit(altaExtraction({
+    line_items: [
+      { section: 'none', label: 'Wire Fee to Superior Settlement Services', amount: 35, payee: 'Superior Settlement Services', paid_by: 'borrower', category: 'other', confidence: HI, page: 1 },
+      { section: 'none', label: 'Title - Wire Fee to Home First Title', amount: 25, payee: 'Home First Title', paid_by: 'borrower', category: 'other', confidence: HI, page: 1 },
+    ],
+  }));
+  assert.equal(byCheck(findings, 'DUPLICATE_CANDIDATE').length, 0);
+});
+
+test('a genuine same-payee duplicate is still caught', () => {
+  const { findings } = runClosingAudit(altaExtraction({
+    line_items: [
+      { section: 'none', label: 'Settlement Fee to Acme Title', amount: 695, payee: 'Acme Title', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 1 },
+      { section: 'none', label: 'Closing Fee to Acme Title', amount: 450, payee: 'Acme Title', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 1 },
+    ],
+  }));
+  const dupes = byCheck(findings, 'DUPLICATE_CANDIDATE');
+  assert.equal(dupes.length, 1);
+  assert.equal(dupes[0].dollarImpact, 450);
+});
+
+test('missing rate data is not reported as a missing document', () => {
+  // The customer cannot upload anything that fixes an empty benchmark corpus.
+  const e = realAlta();
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.ok(sc.cannot_benchmark_count > 0);
+  assert.equal(sc.needs_more_documents_count < sc.cannot_benchmark_count, true);
+});
+
+test('a settlement statement gets a total added up from its charge lines', () => {
+  const e = realAlta();
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.equal(sc.total_closing_costs, null);        // no printed J on an ALTA
+  assert.equal(sc.total_is_derived, true);           // so it is labelled calculated
+  // borrower-paid charge lines only: 50+3000+450+24000+35+250+395+60+115 = 28355
+  assert.equal(sc.total_borrower_charges, 28355);
+  assert.equal(sc.charge_lines_counted, 9);
+  // sale price, loan amount and the seller's commission are excluded
 });
