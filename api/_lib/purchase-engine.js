@@ -413,7 +413,22 @@ function firstIncompleteField(report) {
   if (!nonEmpty(report.headline)) return 'headline';
   if (!nonEmpty(report.summary)) return 'summary';
   if (!report.total_cost_of_ownership || !nonEmpty(report.total_cost_of_ownership.explanation)) return 'total_cost_of_ownership.explanation';
-  if (!report.financing_impact || typeof report.financing_impact.applicable !== 'boolean' || !nonEmpty(report.financing_impact.explanation)) return 'financing_impact.explanation';
+  // Split into two distinct checks/labels (was one combined check under a
+  // single label) — a real bug found via live evidence (2026-09-01): when
+  // financing_impact.applicable was missing or not a proper boolean (not a
+  // leaked-tag problem at all), this used to report the SAME label,
+  // 'financing_impact.explanation', as when explanation itself was empty.
+  // The repair mechanism only knows how to rewrite explanation text, so it
+  // kept "successfully" repairing explanation over and over — 3 wasted
+  // repair calls in one real attempt — while the actual defect (a missing
+  // boolean, which no amount of rewriting a sentence fixes) went
+  // unaddressed, until the repair-round budget ran out and the whole
+  // report still fell through to a full retry anyway. Reporting a
+  // distinct label here (one that REPAIRABLE_EXPLANATION_FIELDS doesn't
+  // recognize) makes the repair loop correctly bail out immediately
+  // instead of wasting attempts on a fix that can't possibly work.
+  if (!report.financing_impact || typeof report.financing_impact.applicable !== 'boolean') return 'financing_impact.applicable';
+  if (!nonEmpty(report.financing_impact.explanation)) return 'financing_impact.explanation';
   if (!report.maintenance_running_costs || !nonEmpty(report.maintenance_running_costs.explanation)) return 'maintenance_running_costs.explanation';
   if (!report.depreciation_resale || !nonEmpty(report.depreciation_resale.explanation)) return 'depreciation_resale.explanation';
   if (!report.alternative_comparison || !nonEmpty(report.alternative_comparison.alternative_name) || !nonEmpty(report.alternative_comparison.explanation)) return 'alternative_comparison';
