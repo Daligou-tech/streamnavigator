@@ -856,6 +856,20 @@ async function generatePurchaseReport(submissionId) {
       }
       candidate.financing_impact.applicable = !!(submission.form_data && submission.form_data.financing === 'financing');
 
+      // assumptions and missing_or_uncertain are both explicitly allowed
+      // to be genuinely empty (the schema permits `[]` when there's
+      // nothing to add) — the completeness check only cares that they're
+      // arrays at all, not that they contain anything. Live evidence
+      // (2026-09-01) showed these occasionally coming back malformed as
+      // part of the same broader leak pattern, on an attempt that had six
+      // other fields corrupted at once. Since an empty array is always a
+      // valid, honest answer for both, coercing a malformed value to []
+      // needs no model call at all — cheaper and more reliable than the
+      // API-based repair mechanism above, and closes the one remaining
+      // required field it didn't cover.
+      if (!Array.isArray(candidate.assumptions)) candidate.assumptions = [];
+      if (!Array.isArray(candidate.missing_or_uncertain)) candidate.missing_or_uncertain = [];
+
       const preSanitizeHits = [];
       const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
       if (wasContaminated) {
