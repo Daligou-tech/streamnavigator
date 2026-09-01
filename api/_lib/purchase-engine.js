@@ -750,10 +750,22 @@ async function generatePurchaseReport(submissionId) {
       if (reportLooksContaminated(candidate, postSanitizeHits)) {
         recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization in field(s): ${postSanitizeHits.map((h) => h.field).join(', ')}`);
       } else if (!isReportComplete(candidate)) {
-        const emptyField = firstIncompleteField(candidate);
-        const meta = REPAIRABLE_EXPLANATION_FIELDS[emptyField];
-        let repairSucceeded = false;
-        if (meta) {
+        // A LOOP, not a single check: live evidence (2026-08-31) showed a
+        // single response can have more than one of the four repairable
+        // fields empty at once — total_cost_of_ownership.explanation AND
+        // financing_impact.explanation both empty in the same attempt.
+        // Repairing only the first one left the report still incomplete
+        // and fell through to a full retry even though every problem was
+        // individually repairable. Bounded by the number of known
+        // repairable fields (4), so this can never loop indefinitely —
+        // each successful repair fixes a specific, different field, so the
+        // loop can only run that many times before either completing or
+        // hitting a field/failure it can't repair.
+        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length;
+        for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate); round++) {
+          const emptyField = firstIncompleteField(candidate);
+          const meta = REPAIRABLE_EXPLANATION_FIELDS[emptyField];
+          if (!meta) break; // not a field this mechanism knows how to repair
           let repairedValue = null;
           try {
             repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, fieldPath: emptyField, submissionId });
@@ -761,24 +773,14 @@ async function generatePurchaseReport(submissionId) {
             console.warn(`[purchase-engine] Repair call for submission ${submissionId} (${emptyField}) threw: ${String((err && err.message) || err)}`);
             repairedValue = null;
           }
-          if (repairedValue) {
-            candidate[meta.section] = { ...candidate[meta.section], explanation: repairedValue };
-            repairSucceeded = isReportComplete(candidate);
-            if (repairSucceeded) {
-              console.warn(
-                `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
-              );
-            } else {
-              // The repair itself worked, but the report is still
-              // incomplete somewhere else — repairing one field is only
-              // designed to cover the "exactly one field empty" case.
-              console.warn(
-                `[purchase-engine] Repair for submission ${submissionId} (${emptyField}) succeeded, but the report is still incomplete elsewhere (now: "${firstIncompleteField(candidate)}") — falling through to a full retry.`
-              );
-            }
-          }
+          if (!repairedValue) break; // a failed repair stops the loop — falls through to a full retry below
+          candidate[meta.section] = { ...candidate[meta.section], explanation: repairedValue };
+          console.warn(
+            `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
+          );
         }
-        if (!repairSucceeded) {
+        if (!isReportComplete(candidate)) {
+          const emptyField = firstIncompleteField(candidate);
           recoverableError = new Error(
             wasContaminated
               ? `Missing required field "${emptyField}" — was emptied by stripping a leaked formatting artifact that was its entire content`
