@@ -12,6 +12,25 @@ test('a normal customer is never blocked', () => {
   assert.equal(r.message, null);
 });
 
+test('failed attempts must not lock a customer out of retrying', () => {
+  // The regression that caught the first real tester: three uploads rejected as
+  // the wrong document type, then a fourth with the correct file. Being refused
+  // here is the worst possible moment — the customer has just worked out what
+  // was wrong and is fixing it.
+  const afterThreeFailures = decide({ emailHour: 3, emailDay: 3, ipHour: 3, ipDay: 3, globalDay: 3 });
+  assert.equal(afterThreeFailures.allowed, true);
+
+  // And still fine after a couple more rounds of bad scans.
+  assert.equal(decide({ emailHour: 6, emailDay: 6, ipHour: 6, ipDay: 6, globalDay: 10 }).allowed, true);
+});
+
+test('the block message explains that failed attempts count', () => {
+  // Otherwise "you have used 8 scorecards" is baffling to someone who believes
+  // they never got one.
+  const r = decide({ emailHour: LIMITS.EMAIL_PER_HOUR });
+  assert.match(r.message, /could not be read count too/);
+});
+
 test('looping the same email is blocked at the hourly limit', () => {
   const r = decide({ emailHour: LIMITS.EMAIL_PER_HOUR, ipHour: 3, globalDay: 10 });
   assert.equal(r.allowed, false);
