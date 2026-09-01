@@ -20,13 +20,23 @@
 
 const crypto = require('crypto');
 
-// Tuned so a real customer never notices. Someone auditing two closings, with a
-// re-upload each because the first scan was poor, uses 4 in a day.
+// Tuned so a real customer never notices.
+//
+// The original numbers (3/hour per email) were too tight and locked out the
+// first person who tested this: three attempts that all FAILED — wrong document
+// type — consumed the whole hourly budget, so the retry with the right file was
+// refused. That is backwards. Failures are exactly when someone retries, and a
+// customer fighting a bad scan is the last person who should be blocked.
+//
+// Every attempt still counts, because every attempt costs a model call. The
+// answer is headroom, not exemptions: enough that a frustrated customer working
+// through three or four bad uploads never hits a wall, while the global cap
+// keeps the day's worst case bounded.
 const LIMITS = {
-  EMAIL_PER_HOUR: 3,
-  EMAIL_PER_DAY: 8,
-  IP_PER_HOUR: 6,
-  IP_PER_DAY: 20,
+  EMAIL_PER_HOUR: 8,
+  EMAIL_PER_DAY: 20,
+  IP_PER_HOUR: 15,
+  IP_PER_DAY: 40,
   GLOBAL_PER_DAY: 250, // ~$12-38/day worst case. Raise as real volume grows.
 };
 
@@ -68,7 +78,7 @@ function decide(counts, limits = LIMITS) {
     return {
       allowed: false,
       reason: 'email_hourly',
-      message: `You have run ${emailHour} free scorecards in the past hour. Please wait an hour before running another, or reply to your confirmation email if you need help.`,
+      message: `You have used ${emailHour} scorecard attempts in the past hour — attempts that could not be read count too, since each one still runs a full analysis. Please wait an hour, or email us and we will look at your document directly.`,
       retryAfterMinutes: 60,
     };
   }
