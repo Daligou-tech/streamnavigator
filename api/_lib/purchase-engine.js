@@ -34,6 +34,7 @@
 // other.
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
+const { sendFailureAlert } = require('./alerts');
 const { fieldsForCategory, CATEGORIES } = require('../../navigator-buying-rules');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -776,16 +777,28 @@ async function generatePurchaseReport(submissionId) {
   // attempt could get re-triggered indefinitely by the stuck-processing
   // check in get-navigator-submission.js. Once attempts are exhausted this
   // marks the row 'failed' immediately instead of starting another attempt.
+  //
+  // The alert only fires if this submission already got its one automatic
+  // background retry (see api/retry-failed-buying.js) and STILL failed —
+  // not on this first, ordinary exhaustion. The customer doesn't need the
+  // site owner paged for something the system is about to try fixing on
+  // its own within minutes; paging them for something that's already
+  // survived one full extra attempt and is genuinely stuck is the case
+  // that actually needs a human.
   if ((submission.generation_attempts || 0) >= MAX_ATTEMPTS) {
     const admin2 = admin;
+    const exhaustedError = `Report generation did not complete within ${MAX_ATTEMPTS} attempts (each attempt is time-limited to fit this deployment's serverless timeout).`;
     await admin2
       .from('navigator_submissions')
       .update({
         status: 'failed',
-        error: `Report generation did not complete within ${MAX_ATTEMPTS} attempts (each attempt is time-limited to fit this deployment's serverless timeout).`,
+        error: exhaustedError,
         updated_at: new Date().toISOString(),
       })
       .eq('id', submissionId);
+    if (submission.auto_recovery_attempted) {
+      await sendFailureAlert({ submissionId, product: 'buying', error: exhaustedError });
+    }
     throw new Error('Exhausted generation attempts');
   }
 
@@ -978,10 +991,14 @@ async function generatePurchaseReport(submissionId) {
 
     return genericReport;
   } catch (err) {
+    const errorMessage = String(err.message || err).slice(0, 500);
     await admin
       .from('navigator_submissions')
-      .update({ status: 'failed', error: String(err.message || err).slice(0, 500), updated_at: new Date().toISOString() })
+      .update({ status: 'failed', error: errorMessage, updated_at: new Date().toISOString() })
       .eq('id', submissionId);
+    if (submission.auto_recovery_attempted) {
+      await sendFailureAlert({ submissionId, product: 'buying', error: errorMessage });
+    }
     throw err;
   }
 }
