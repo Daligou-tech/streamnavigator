@@ -226,3 +226,78 @@ test('an unreadable document surfaces its warning count on the scorecard', () =>
 test('the confidence threshold is the documented 0.85', () => {
   assert.equal(CONF_THRESHOLD, 0.85);
 });
+
+// --- ALTA Settlement Statements ---------------------------------------------
+// The title company's own form. Buyers routinely have this and believe it IS
+// their closing paperwork, so refusing it loses customers holding a usable
+// document. It carries the charges but not the loan terms.
+
+function altaExtraction(over = {}) {
+  return Object.assign({
+    document_type: 'alta_settlement_statement',
+    property_state: 'VA',
+    property_county: 'Fairfax County',
+    pages_present: 3,
+    line_items: [
+      { section: 'none', label: 'Settlement Fee', amount: 695, payee: 'Acme Title', category: 'settlement_service', confidence: HI, page: 1 },
+      { section: 'none', label: 'Closing Fee', amount: 450, payee: 'Acme Title', category: 'settlement_service', confidence: HI, page: 1 },
+      { section: 'none', label: "Owner's Title Policy", amount: 2905, payee: 'Acme Title', category: 'title_insurance_owners', confidence: HI, page: 2 },
+      { section: 'none', label: 'Recording Fees', amount: 155, category: 'recording_fee', confidence: HI, page: 2 },
+    ],
+    prorations: [],
+    seller_credits_on_cd: [],
+    document_problems: [],
+  }, over);
+}
+
+test('an ALTA statement is audited, not rejected', () => {
+  const { findings } = runClosingAudit(altaExtraction());
+  assert.ok(findings.length > 0);
+  const sc = buildScorecard(altaExtraction(), findings, []);
+  assert.equal(sc.document_label, 'ALTA Settlement Statement');
+  assert.equal(sc.is_closing_disclosure, false);
+});
+
+test('duplicate detection works on a document with no lettered sections', () => {
+  // This is the regression that mattered: charges on an ALTA carry section
+  // 'none', and the detector used to only look at A, B, C and E.
+  const { findings } = runClosingAudit(altaExtraction());
+  const dupes = byCheck(findings, 'DUPLICATE_CANDIDATE');
+  assert.equal(dupes.length, 1);
+  assert.equal(dupes[0].dollarImpact, 450);
+  assert.equal(dupes[0].detail.samePayee, true);
+});
+
+test('an ALTA audit states which checks it cannot run', () => {
+  const { findings } = runClosingAudit(altaExtraction());
+  const scope = byCheck(findings, 'DOCUMENT_SCOPE')[0];
+  assert.equal(scope.severity, Severity.REQUIRES_DOCUMENTATION);
+  assert.match(scope.basis, /prepaid interest/);
+  assert.match(scope.basis, /escrow cushion/);
+  assert.match(scope.recommendedAction, /Closing Disclosure/);
+});
+
+test('the scorecard tells the customer what the missing document costs them', () => {
+  const e = altaExtraction();
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.ok(sc.checks_unavailable.includes('prepaid interest'));
+  assert.ok(sc.checks_unavailable.includes('escrow cushion'));
+  assert.ok(sc.checks_unavailable.includes('TRID tolerance testing'));
+});
+
+test('a real Closing Disclosure reports nothing as unavailable', () => {
+  const e = cleanExtraction();
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.deepEqual(sc.checks_unavailable, []);
+  assert.equal(sc.document_label, 'Closing Disclosure');
+  assert.equal(byCheck(findings, 'DOCUMENT_SCOPE').length, 0);
+});
+
+test('a Loan Estimate or unrelated document is still not accepted', () => {
+  const { ACCEPTED_DOCUMENT_TYPES } = require('../api/_lib/closing-extract');
+  assert.deepEqual(ACCEPTED_DOCUMENT_TYPES, ['closing_disclosure', 'alta_settlement_statement']);
+  assert.equal(ACCEPTED_DOCUMENT_TYPES.includes('loan_estimate'), false);
+  assert.equal(ACCEPTED_DOCUMENT_TYPES.includes('other'), false);
+});
