@@ -744,26 +744,26 @@ async function generatePurchaseReport(submissionId) {
     }
 
     if (candidate && !recoverableError) {
-      // financing_impact.applicable is fully determined by the customer's
-      // OWN submitted answer (form_data.financing: 'cash' | 'financing') —
-      // the server already knows this with certainty, independent of
-      // anything the model says. Real live evidence (2026-09-01) showed
-      // the model unreliably providing this specific boolean (missing, or
-      // not a real boolean) on a meaningful fraction of attempts, for
-      // reasons that turned out to be entirely UNRELATED to the tag-leak
-      // issue — every one of those attempts showed zero contamination
-      // anywhere near financing_impact; the field was simply never set
-      // correctly to begin with. Asking the model to re-answer a yes/no
-      // question the server can already answer with certainty was the
-      // wrong fix; overriding it here removes this failure mode entirely,
-      // for every attempt, regardless of what the model outputs. Only
-      // applied when the model at least produced a financing_impact
-      // object — if the whole section is missing, that's the model
-      // failing to write the (non-derivable) explanation text too, which
-      // still needs the normal repair/retry handling below.
-      if (candidate.financing_impact && typeof candidate.financing_impact === 'object') {
-        candidate.financing_impact.applicable = !!(submission.form_data && submission.form_data.financing === 'financing');
+      // Always ensure a financing_impact object exists — even if the model
+      // dropped the whole section, not just the applicable flag — so the
+      // deterministic override below can run unconditionally. Real live
+      // evidence (2026-09-01) showed the model sometimes omitting
+      // financing_impact ENTIRELY (not just a bad applicable value within
+      // an otherwise-present object), and the previous version of this
+      // override only handled the latter case — it skipped entirely when
+      // the whole section was missing, which meant every one of those
+      // attempts fell straight to a full retry even though the ONLY
+      // genuinely-model-dependent piece (the explanation sentence) is
+      // exactly the kind of thing the repair mechanism above already
+      // knows how to generate cheaply. Constructing the object here (with
+      // applicable already correct) means a wholly-missing section is now
+      // correctly reported as needing just 'financing_impact.explanation'
+      // — a repairable field — instead of being misreported as an
+      // unrepairable applicable problem.
+      if (!candidate.financing_impact || typeof candidate.financing_impact !== 'object') {
+        candidate.financing_impact = {};
       }
+      candidate.financing_impact.applicable = !!(submission.form_data && submission.form_data.financing === 'financing');
 
       const preSanitizeHits = [];
       const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
