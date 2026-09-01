@@ -526,3 +526,15 @@ test('the scorecard reports what is still unread and what was supplied', () => {
   assert.equal(c2.unreadable_fields.length, 1);   // shrinking list
   assert.equal(c2.customer_supplied_count, 1);
 });
+
+test('an unreadable-field finding gives no surface-specific instruction', () => {
+  // Findings render into the web report, a PDF, and forwarded emails. "Type the
+  // value in manually" is actionable on one of those and false on the others,
+  // so the finding states the fact and each surface decides what to offer.
+  const { warnings } = require('../api/_lib/closing-audit')
+    .gateExtraction([{ name: 'Mortgage Insurance Premium', page: 3, confidence: 0.70 }]);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].recommendedAction, '');
+  assert.match(warnings[0].whyItMatters, /excluded rather than guessed/);
+  assert.equal(/type the value|upload a clearer/i.test(JSON.stringify(warnings[0])), false);
+});
