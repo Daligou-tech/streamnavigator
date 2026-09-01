@@ -91,6 +91,15 @@ function buildReportPdfBuffer(report, meta) {
           addWrappedText(doc, `•  ${item}`, { width: 500 });
           doc.moveDown(0.25);
         });
+
+        // Surface-specific: a PDF has no input box, so it points at the place
+        // that does rather than telling the reader to type something here.
+        doc.moveDown(0.25);
+        addWrappedText(
+          doc,
+          'Any figures we could not read can be entered on your online report, and we will rebuild it with them included.',
+          { width: 500 }
+        );
       }
 
       // Footer — checked against remaining space first so a two-line

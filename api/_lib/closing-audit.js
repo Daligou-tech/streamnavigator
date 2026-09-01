@@ -933,8 +933,14 @@ function gateExtraction(fields, threshold = 0.85) {
         actionability: Actionability.NEEDS_DOCS,
         basis: `Read confidence ${f.confidence.toFixed(2)} is below the ${threshold.toFixed(2)} threshold.`,
         whyItMatters:
-          'We do not run checks on numbers we cannot read. This field was excluded rather than guessed.',
-        recommendedAction: 'Upload a clearer copy of this page, or type the value in manually.',
+          'We do not run checks on numbers we cannot read. This field was excluded rather than guessed, ' +
+          'so any check that needed it did not run.',
+        // Deliberately states a fact rather than issuing an instruction. Findings
+        // are rendered into the web report, a PDF, and emails the customer may
+        // forward. "Type the value in manually" is only actionable on a page with
+        // an input box; in a PDF it is simply false. Each surface decides what to
+        // offer about an unreadable field — the finding only reports it.
+        recommendedAction: '',
       })
     );
   }
