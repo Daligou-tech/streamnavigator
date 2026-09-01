@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Closing Navigator — StreamNavigator AI</title>
-<meta name="description" content="Upload your Loan Estimate and Closing Disclosure. Closing Navigator compares loan terms, costs, and cash to close line by line — and tells you what changed before you sign, for $59." />
+<title>Closing Disclosure Audit — StreamNavigator AI</title>
+<meta name="description" content="Upload your Closing Disclosure. We audit every charge against state and county rate schedules, escrow and per-diem rules, and the arithmetic on the document itself — and find errors, overcharges, and fees your lender may need to correct before you close. $59." />
 <link rel="canonical" href="https://streamnavigator.ai/closing" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,6 +15,18 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* Free scorecard panel + Step 2 questions */
+.scorecard-panel{border:2px solid var(--ink);border-radius:10px;padding:18px 20px;margin-bottom:8px;}
+.scorecard-head{font-size:15px;margin-bottom:12px;}
+.scorecard-rows{list-style:none;padding:0;margin:0 0 12px;}
+.scorecard-rows li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.08);font-size:15px;}
+.scorecard-rows li:last-child{border-bottom:0;}
+.scorecard-rows b{font-size:19px;white-space:nowrap;}
+.scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
+.scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+#stage-2 select{width:100%;padding:12px;font:inherit;font-size:15px;border:2px solid var(--ink);border-radius:8px;background:#fff;}
+</style>
 </head>
 <body>
 <div class="bg-noise"></div>
@@ -46,44 +58,50 @@
   <section id="how-it-works">
     <div class="section-head reveal">
       <div class="eyebrow">How it works</div>
-      <h2>From two disclosures to a clear verdict.</h2>
+      <h2>Not a comparison. An audit.</h2>
     </div>
     <div class="steps-grid">
       <div class="step-card reveal">
         <div class="step-num">1</div>
-        <h4>Upload your Loan Estimate and Closing Disclosure</h4>
-        <p>Add an earlier Loan Estimate or lender worksheet too, if you have one, for a sharper comparison.</p>
+        <h4>Upload your Closing Disclosure</h4>
+        <p>That is the only document we need to start. Add your purchase contract and Loan Estimates to unlock two further checks.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">2</div>
-        <h4>Pay $59</h4>
-        <p>One flat price per closing reviewed.</p>
+        <h4>Answer two quick questions</h4>
+        <p>Property type and occupancy, and whether your lender gave you a written list of service providers. About 30 seconds — both change the analysis.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">3</div>
-        <h4>AI compares old vs. new, line by line</h4>
-        <p>Loan terms, payment, closing costs, credits, and cash to close are checked against your Loan Estimate.</p>
+        <h4>Pay $59</h4>
+        <p>One flat price per closing audited.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">4</div>
-        <h4>Get your dollar-change report</h4>
-        <p>Every change ranked by dollar impact, plus what's normal and what's worth a question.</p>
+        <h4>We audit the charges themselves</h4>
+        <p>Every material fee is tested against county recording schedules, state title rate filings, transfer tax tables, the RESPA escrow cap, per-diem interest, and the arithmetic on the document — then against your Loan Estimate and contract if you provided them.</p>
+      </div>
+      <div class="step-card reveal">
+        <div class="step-num">5</div>
+        <h4>Get your action pack</h4>
+        <p>Every material finding ranked by dollar impact, the top 5 highlighted, each labelled changeable now, likely locked, or a possible post-closing refund — plus drafted emails for your lender and settlement agent.</p>
       </div>
     </div>
   </section>
   <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
     <div class="section-head reveal">
       <div class="eyebrow">What you get</div>
-      <h2>Know exactly what changed — before you sign.</h2>
+      <h2>Find what is wrong — before you sign.</h2>
     </div>
     <div class="wrap" style="max-width:680px;">
       <div class="check-card reveal">
         <ul class="check-list">
-          <li><span class="tick">✓</span> The overall dollar change between your Loan Estimate and Closing Disclosure</li>
-          <li><span class="tick">✓</span> Your top 5 changes, ranked by dollar impact</li>
-          <li><span class="tick">✓</span> A normal vs. needs-explanation read on each change</li>
-          <li><span class="tick">✓</span> Specific questions to ask your lender or title company</li>
-          <li><span class="tick">✓</span> A final pre-closing checklist</li>
+          <li><span class="tick">✓</span> Every material finding, ranked by dollar impact — with the top 5 highlighted, not the rest hidden</li>
+          <li><span class="tick">✓</span> What each charge is, what it should be, and the schedule, rate filing, or rule we measured it against</li>
+          <li><span class="tick">✓</span> Arithmetic verification: section subtotals, prepaid interest, escrow cushion, prorations, and Cash to Close</li>
+          <li><span class="tick">✓</span> Duplicate and stacked-fee detection, and missing seller credits</li>
+          <li><span class="tick">✓</span> Whether each finding is still changeable before closing, likely locked, or a possible post-closing refund</li>
+          <li><span class="tick">✓</span> Ready-to-send emails for your lender and your settlement agent</li>
         </ul>
       </div>
     </div>
@@ -110,43 +128,76 @@
   <section id="pricing">
     <div class="section-head reveal">
       <div class="eyebrow">Get started</div>
-      <h2>One flat price per closing.</h2>
-      <p>Upload both disclosures, pay once, know what changed.</p>
+      <h2>See what we found first. Then decide.</h2>
+      <p>Upload your Closing Disclosure and get a free scorecard. Pay only if it turns something up.</p>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
-        <span class="price-badge">One-time</span>
-        <h3>Closing Navigator Report</h3>
-        <p class="desc">A line-by-line comparison of your Closing Disclosure against your Loan Estimate, before you sign.</p>
+        <span class="price-badge">Free scorecard first</span>
+        <h3>Closing Disclosure Audit</h3>
+        <p class="desc">An independent audit of your Closing Disclosure against rate schedules, lending rules, and its own arithmetic — before you sign.</p>
         <div class="price-amount">$59</div>
-        <div class="price-period">one-time payment per closing</div>
+        <div class="price-period">after your free scorecard — one-time, per closing</div>
 
+        <div id="stage-1">
         <div class="field-block">
           <label>Anything we should know? (optional)</label>
           <textarea id="intake-description" placeholder="e.g. Rate locked 30 days ago, seller offered a credit..."></textarea>
         </div>
         <div class="field-block">
-          <label>Upload your Loan Estimate and Closing Disclosure</label>
+          <label>Upload your Closing Disclosure</label>
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG, or PNG — up to 4 files, 6MB each</div>
+            <div class="upload-sub">PDF, JPG, or PNG — 6MB each, 9MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Add an earlier Loan Estimate or a lender worksheet too, if you have one, for a sharper comparison.</p>
+          <p class="field-hint">Add the latest Loan Estimate if you have one, for a sharper comparison. Do not add an older Loan Estimate. Your purchase contract is highly useful too — it is how we catch a seller credit that shrank. If you have the full Loan Estimate sequence including revisions, upload it all; more history lets us establish the correct legal baseline instead of assuming one.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Compares loan terms, costs, and cash to close line by line</li>
-          <li><span class="tick">✓</span> Ranked by dollar impact</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
+          <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
+          <li><span class="tick">✓</span> Every material finding ranked by dollar impact</li>
+          <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
-        <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" class="btn btn-primary" id="pay-btn">Get My Report →</a>
-        <p class="price-secure">🔒 Secured by Stripe</p>
+        <a href="#" class="btn btn-primary" id="scorecard-btn">Get My Free Scorecard →</a>
+        <p class="price-secure">No card required for the scorecard.</p>
+        </div><!-- /stage-1 -->
+
+        <div id="stage-2" style="display:none;">
+          <div class="scorecard-panel" id="scorecard-panel"></div>
+
+          <div id="questions-block">
+            <p class="field-hint" style="margin-top:18px;"><strong>Two quick questions.</strong> Both change the analysis — about 30 seconds.</p>
+            <div class="field-block">
+              <label for="q-property-type">1. What is the property type and occupancy?</label>
+              <select id="q-property-type">
+                <option value="">Choose one…</option>
+                <option value="single_family">Single-family residence</option>
+                <option value="condo">Condo</option>
+                <option value="other_attached">Other attached housing</option>
+                <option value="investment">Investment property</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field-block">
+              <label for="q-provider-list">2. Did your lender give you a written list of service providers?</label>
+              <select id="q-provider-list">
+                <option value="">Choose one…</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+                <option value="dont_know">Don't know</option>
+              </select>
+              <p class="field-hint">This decides which tolerance rule applies to several of your charges. If no written list was given, fees you might assume were flexible are often held to a stricter standard.</p>
+            </div>
+            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" class="btn btn-primary" id="pay-btn">Unlock the Full Audit — $59 →</a>
+            <p class="price-secure">🔒 Secured by Stripe</p>
+          </div>
+        </div>
       </div>
     </div>
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
@@ -159,7 +210,7 @@
     <div class="faq-list">
       <div class="faq-item">
         <button class="faq-q">What documents do I need? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Your most recent Loan Estimate and Closing Disclosure. An earlier Loan Estimate or lender worksheet sharpens the comparison but isn't required.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Only your final Closing Disclosure. The purchase contract lets us check seller credits and concessions, and Loan Estimates let us test whether a fee increase exceeded what the lending rules allow — both are useful, neither is required.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">How is this different from reading the Closing Disclosure myself? <span class="plus">+</span></button>
@@ -178,8 +229,8 @@
   <section style="padding-top:0; padding-bottom:90px;">
     <div class="cta-final reveal">
       <h2>You have three business days. Use them.</h2>
-      <p>Upload both documents and see what changed in about five minutes.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Audit My Closing</a>
+      <p>Upload your Closing Disclosure and see your free scorecard in about five minutes.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Get My Free Scorecard</a>
     </div>
   </section>
 </main>
@@ -236,7 +287,53 @@
   const list = document.getElementById('upload-list');
   const uploader = wireUploadZone(zone, input, list);
 
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
+  let submissionRef = null;
+
+  const money = (n) => n === null || n === undefined
+    ? '—'
+    : '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+  // The scorecard shows counts and headline figures only. It deliberately never
+  // names a flagged fee or its dollar impact — that is the paid report. It has to
+  // be worth reading on its own without being a substitute for what it sells.
+  function renderScorecard(sc) {
+    const panel = document.getElementById('scorecard-panel');
+    const pct = sc.closing_costs_pct_of_loan;
+    const rows = [
+      ['Total closing costs', money(sc.total_closing_costs)],
+      ['As a share of your loan', pct === null ? '—' : pct + '%'],
+      ['Potential issues found', String(sc.flag_count)],
+      ['Items needing another document', String(sc.needs_more_documents_count)],
+    ];
+
+    let html = '<div class="scorecard-head"><strong>Your free scorecard</strong>'
+      + (sc.property_county ? ' &middot; ' + sc.property_county + (sc.property_state ? ', ' + sc.property_state : '') : '')
+      + '</div><ul class="scorecard-rows">'
+      + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
+      + '</ul>';
+
+    if (sc.extraction_warning_count > 0) {
+      html += '<p class="scorecard-warn"><strong>Extraction warning:</strong> '
+        + sc.extraction_warning_count + ' value'
+        + (sc.extraction_warning_count === 1 ? ' was' : 's were')
+        + ' too unclear to read reliably and '
+        + (sc.extraction_warning_count === 1 ? 'was' : 'were')
+        + ' excluded rather than guessed. A clearer copy would give you a fuller audit.</p>';
+    }
+
+    html += sc.flag_count > 0
+      ? '<p class="scorecard-note">The full audit shows you what each of these is, what it should be, '
+        + 'the rule or schedule we measured it against, the dollar impact, and whether it can still be '
+        + 'changed before you close — plus drafted emails for your lender and settlement agent.</p>'
+      : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
+        + 'goes further: benchmark checks against your county and state schedules, and — if you add your '
+        + 'Loan Estimates or purchase contract — tolerance testing and credit reconciliation, which are '
+        + 'where most recoverable money turns up.</p>';
+
+    panel.innerHTML = html;
+  }
+
+  document.getElementById('scorecard-btn').addEventListener('click', async function(e){
     e.preventDefault();
     const btn = e.currentTarget;
     const emailEl = document.getElementById('intake-email');
@@ -244,18 +341,70 @@
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
     const files = uploader.getFiles();
-    if (files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    if (files.length === 0) { showToast('Please attach your Closing Disclosure to continue.'); return; }
+
     const originalText = btn.textContent;
-    btn.textContent = 'Saving your submission…';
+    btn.textContent = 'Reading your Closing Disclosure…';
+    btn.style.pointerEvents = 'none';
+
+    try {
+      const encoded = [];
+      for (const f of files) {
+        encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+      }
+      const resp = await fetch('/api/closing-scorecard', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email, description: descEl.value.trim(), files: encoded }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');
+
+      // A document we could not read, or one that is not a CD, is caught here —
+      // while it is still free — instead of after taking the customer's money.
+      if (!data.scorecard) {
+        showToast(data.error_message || 'We could not read that document. Please try a clearer copy.');
+        btn.textContent = originalText;
+        btn.style.pointerEvents = 'auto';
+        return;
+      }
+
+      submissionRef = { id: data.id, token: data.token, product: 'closing' };
+      renderScorecard(data.scorecard);
+      document.getElementById('stage-1').style.display = 'none';
+      document.getElementById('stage-2').style.display = 'block';
+      document.getElementById('stage-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (err) {
+      showToast(err.message || 'Something went wrong — please try again.');
+      btn.textContent = originalText;
+      btn.style.pointerEvents = 'auto';
+    }
+  });
+
+  document.getElementById('pay-btn').addEventListener('click', async function(e){
+    e.preventDefault();
+    const btn = e.currentTarget;
+    const propertyType = document.getElementById('q-property-type').value;
+    const providerList = document.getElementById('q-provider-list').value;
+    if (!propertyType) { showToast('Please answer the property type question.'); return; }
+    if (!providerList) { showToast('Please answer the service provider list question.'); return; }
+    if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
+
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving your answers…';
     btn.style.pointerEvents = 'none';
     try {
-      const submission = await submitNavigatorIntake({
-        product: 'closing',
-        email: email,
-        formData: { description: descEl.value.trim() },
-        files: files,
+      const resp = await fetch('/api/closing-answers', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: submissionRef.id, token: submissionRef.token,
+          property_type: propertyType, provider_list: providerList,
+        }),
       });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'closing' }, email);
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not save your answers.');
+      goToStripe(btn.getAttribute('href'), submissionRef, document.getElementById('intake-email').value.trim());
     } catch (err) {
       showToast(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;

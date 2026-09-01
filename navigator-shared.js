@@ -65,7 +65,7 @@ function fileToBase64(file) {
   });
 }
 
-const MAX_FILES = 4;
+const MAX_FILES = 12;
 const MAX_FILE_MB = 6;
 
 function wireUploadZone(zoneEl, inputEl, listEl) {

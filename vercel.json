@@ -2,9 +2,21 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "redirects": [
-    { "source": "/streamnavigator-landing", "destination": "/streaming", "permanent": true },
-    { "source": "/index_3", "destination": "/", "permanent": true },
-    { "source": "/home", "destination": "/", "permanent": true }
+    {
+      "source": "/streamnavigator-landing",
+      "destination": "/streaming",
+      "permanent": true
+    },
+    {
+      "source": "/index_3",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    }
   ],
   "crons": [
     {
@@ -20,14 +32,29 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate"
+        }
       ]
     }
   ],
   "functions": {
-    "api/get-navigator-submission.js": { "maxDuration": 300 },
-    "api/generate-contractor-report.js": { "maxDuration": 300 },
-    "api/retry-failed-buying.js": { "maxDuration": 300 },
-    "api/email-report-pdf.js": { "maxDuration": 60, "includeFiles": "node_modules/{pdfkit,fontkit}/**" }
+    "api/get-navigator-submission.js": {
+      "maxDuration": 300
+    },
+    "api/generate-contractor-report.js": {
+      "maxDuration": 300
+    },
+    "api/retry-failed-buying.js": {
+      "maxDuration": 300
+    },
+    "api/email-report-pdf.js": {
+      "maxDuration": 60,
+      "includeFiles": "node_modules/{pdfkit,fontkit}/**"
+    },
+    "api/closing-scorecard.js": {
+      "maxDuration": 300
+    }
   }
 }
