@@ -327,7 +327,7 @@
       // added up from the charge lines. Labelled as calculated so it is never
       // mistaken for the lender's own total.
       rows.push([
-        'Your charges (added up from ' + sc.charge_lines_counted + ' lines)',
+        'Your fees and charges (' + sc.charge_lines_counted + ' lines)',
         money(sc.total_borrower_charges),
       ]);
       if (sc.loan_amount) {
@@ -352,6 +352,13 @@
       + '</div><ul class="scorecard-rows">'
       + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
       + '</ul>';
+
+    if (sc.deposits_excluded) {
+      html += '<p class="scorecard-note">Not counted above: ' + money(sc.deposits_excluded.total)
+        + ' in deposits or holdbacks across ' + sc.deposits_excluded.count + ' line'
+        + (sc.deposits_excluded.count === 1 ? '' : 's') + '. That is your own money set aside, '
+        + 'not a fee, so including it would overstate what this closing costs you.</p>';
+    }
 
     if (sc.checks_unavailable && sc.checks_unavailable.length) {
       html += '<p class="scorecard-warn"><strong>Some checks need your Closing Disclosure.</strong> '
