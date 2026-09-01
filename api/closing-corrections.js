@@ -25,6 +25,10 @@ const {
 
 const MAX_VALUES = 40;
 
+// A regeneration costs one model call — pennies against a $59 sale — so this cap
+// exists only to stop a loop, not to ration a legitimate correction.
+const MAX_REGENERATIONS = 3;
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -58,7 +62,7 @@ module.exports = async (req, res) => {
 
   const { data: submission, error: fetchError } = await admin
     .from('navigator_submissions')
-    .select('id, access_token, product, form_data')
+    .select('id, access_token, product, form_data, status')
     .eq('id', id)
     .single();
 
@@ -94,19 +98,35 @@ module.exports = async (req, res) => {
   const { findings, skipped } = runClosingAudit(merged, { answers: formData.answers || {} });
   const scorecard = buildScorecard(merged, findings, skipped);
 
+  // If the report has already been generated and paid for, the customer is
+  // holding an audit with known holes. New figures have to produce a new report
+  // or the correction is cosmetic. Resetting status to 'paid' is enough:
+  // get-navigator-submission regenerates any paid submission on its next poll,
+  // so this reuses the existing pipeline rather than duplicating it.
+  const regenCount = Number(formData.regeneration_count || 0);
+  const alreadyReported = submission.status === 'complete' || submission.status === 'failed';
+  const willRegenerate = alreadyReported && regenCount < MAX_REGENERATIONS;
+
+  const update = {
+    form_data: {
+      ...formData,
+      // Keep the untouched reading so corrections stay reversible and auditable.
+      original_extraction: baseExtraction,
+      extraction: merged,
+      customer_values: combined,
+      scorecard,
+      regeneration_count: willRegenerate ? regenCount + 1 : regenCount,
+    },
+    updated_at: new Date().toISOString(),
+  };
+  if (willRegenerate) {
+    update.status = 'paid';
+    update.error = null;
+  }
+
   const { error: updateError } = await admin
     .from('navigator_submissions')
-    .update({
-      form_data: {
-        ...formData,
-        // Keep the untouched reading so corrections stay reversible and auditable.
-        original_extraction: baseExtraction,
-        extraction: merged,
-        customer_values: combined,
-        scorecard,
-      },
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq('id', id);
 
   if (updateError) {
@@ -119,6 +139,9 @@ module.exports = async (req, res) => {
     scorecard,
     applied: applied.length,
     rejected,
+    regenerating: willRegenerate,
+    regenerations_left: willRegenerate ? MAX_REGENERATIONS - (regenCount + 1) : null,
+    regeneration_blocked: alreadyReported && !willRegenerate,
     // What is still missing, so the UI can show a shrinking list rather than
     // making the customer guess whether their entry did anything.
     remaining: listUnreadableFields(merged),
