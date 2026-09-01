@@ -3,7 +3,7 @@
 // Why this exists instead of routing 'buying' through the generic
 // api/_lib/navigator-engine.js: this product now makes six specific,
 // itemized promises to the customer (see buying.html's "What you get" list)
-// and is charged for as a flat $19 fee up front. The generic engine's
+// and is charged for as a flat $39 fee up front. The generic engine's
 // report shape is a free-form `sections[]` array the model curates itself —
 // fine for products whose report content varies submission to submission,
 // but not strong enough to *guarantee* every one of six named things is
@@ -183,7 +183,7 @@ function buildIntakeBrief(submission) {
 
 function buildSystemPrompt(submission) {
   const brief = buildIntakeBrief(submission);
-  return `You are the analysis engine behind Purchase Navigator, a StreamNavigator AI product. A customer paid $19 for a true total-cost-of-ownership analysis on something they're considering buying, and confirmed the details below before paying — treat this as sufficient to work with; do not respond by asking for more information or declaring the input insufficient.
+  return `You are the analysis engine behind Purchase Navigator, a StreamNavigator AI product. A customer paid $39 for a true total-cost-of-ownership analysis on something they're considering buying, and confirmed the details below before paying — treat this as sufficient to work with; do not respond by asking for more information or declaring the input insufficient.
 
 Customer-provided details:
 ${brief}
