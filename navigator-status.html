@@ -323,6 +323,23 @@
     return;
   }
 
+  // Show the rotating-message "generating" view immediately, before the
+  // first poll even goes out — not just after a response comes back.
+  // Real evidence (2026-09-01): api/get-navigator-submission.js triggers
+  // report generation SYNCHRONOUSLY and awaits it within that same
+  // request, so when a report succeeds on its first attempt (now the
+  // common case, given all the same-day repair work), the entire 1-3
+  // minute wait happens inside ONE long-running fetch — the page never
+  // receives a separate "processing" response to react to mid-wait, so
+  // waiting for onUpdate to trigger the rotating messages meant they
+  // never actually appeared in exactly this (now-common) case. Showing
+  // this optimistically here covers that whole duration; if the real
+  // status turns out to be something else (not found, still awaiting
+  // payment, already failed), the first onUpdate call below immediately
+  // overrides this display anyway, so there's no real downside to the
+  // optimism.
+  showGeneratingReport();
+
   pollNavigatorSubmission(stored.id, stored.token, {
     intervalMs: 3000,
     maxTries: 60,
