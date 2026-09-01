@@ -317,12 +317,34 @@
   function renderScorecard(sc) {
     const panel = document.getElementById('scorecard-panel');
     const pct = sc.closing_costs_pct_of_loan;
-    const rows = [
-      ['Total closing costs', money(sc.total_closing_costs)],
-      ['As a share of your loan', pct === null ? '—' : pct + '%'],
-      ['Potential issues found', String(sc.flag_count)],
-      ['Items needing another document', String(sc.needs_more_documents_count)],
-    ];
+    const rows = [];
+
+    if (sc.total_closing_costs !== null && sc.total_closing_costs !== undefined) {
+      rows.push(['Total closing costs', money(sc.total_closing_costs)]);
+      rows.push(['As a share of your loan', pct === null ? '—' : pct + '%']);
+    } else if (sc.total_borrower_charges) {
+      // A settlement statement prints no Total Closing Costs line, so this is
+      // added up from the charge lines. Labelled as calculated so it is never
+      // mistaken for the lender's own total.
+      rows.push([
+        'Your charges (added up from ' + sc.charge_lines_counted + ' lines)',
+        money(sc.total_borrower_charges),
+      ]);
+      if (sc.loan_amount) {
+        rows.push([
+          'As a share of your loan',
+          Math.round((sc.total_borrower_charges / sc.loan_amount) * 1000) / 10 + '%',
+        ]);
+      }
+    }
+
+    rows.push(['Potential issues found', String(sc.flag_count)]);
+    if (sc.needs_more_documents_count) {
+      rows.push(['Items needing another document', String(sc.needs_more_documents_count)]);
+    }
+    if (sc.cannot_benchmark_count) {
+      rows.push(['Fees we have no rate data for', String(sc.cannot_benchmark_count)]);
+    }
 
     let html = '<div class="scorecard-head"><strong>Your free scorecard</strong>'
       + (sc.document_label ? ' &middot; read from your ' + sc.document_label : '')
@@ -345,6 +367,14 @@
         + ' too unclear to read reliably and '
         + (sc.extraction_warning_count === 1 ? 'was' : 'were')
         + ' excluded rather than guessed. A clearer copy would give you a fuller audit.</p>';
+    }
+
+    if (sc.cannot_benchmark_count) {
+      html += '<p class="scorecard-note"><strong>On the rate data:</strong> we only tell you a fee is '
+        + 'high when we can show you the schedule or filing we measured it against. For '
+        + sc.cannot_benchmark_count + ' of your fees we do not yet hold reliable data for this '
+        + 'jurisdiction, so we say so rather than guessing. Those fees are still checked for '
+        + 'duplication, arithmetic and internal consistency.</p>';
     }
 
     html += sc.flag_count > 0
