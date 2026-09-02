@@ -20,6 +20,9 @@ const {
   buildScorecard,
   ACCEPTED_DOCUMENT_TYPES,
   DOCUMENT_LABELS,
+  classifyDocuments,
+  determineTier,
+  PRIMARY_TYPES,
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 
@@ -142,9 +145,27 @@ module.exports = async (req, res) => {
     .update({ file_paths: filePaths, updated_at: new Date().toISOString() })
     .eq('id', submission.id);
 
+  // With several files we classify first — one small call — then fully extract
+  // only the Closing Disclosure. Extracting every document at the free stage
+  // would multiply the cost of an unauthenticated endpoint, and the Loan
+  // Estimates and contract are not needed until the paid analysis runs.
+  let documents = [{ index: 0, document_type: null }];
+  let primaryIndex = 0;
+  if (contentBlocks.length > 1) {
+    try {
+      documents = await classifyDocuments(ANTHROPIC_API_KEY, contentBlocks);
+      const primary = documents.find((d) => PRIMARY_TYPES.includes(d.document_type));
+      if (primary) primaryIndex = primary.index;
+    } catch (err) {
+      // Classification failing is not fatal — fall back to treating the first
+      // file as the Closing Disclosure, which is what the single-file path does.
+      documents = [{ index: 0, document_type: null }];
+    }
+  }
+
   let extraction;
   try {
-    extraction = await extractClosingDisclosure(ANTHROPIC_API_KEY, contentBlocks);
+    extraction = await extractClosingDisclosure(ANTHROPIC_API_KEY, [contentBlocks[primaryIndex]]);
   } catch (err) {
     res.status(200).json({
       ok: true,
@@ -186,8 +207,14 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // The classifier only saw the other files; make sure the primary reflects what
+  // full extraction actually found, so the tier is based on real types.
+  const classified = documents.map((d) =>
+    d.index === primaryIndex ? { ...d, document_type: extraction.document_type } : d);
+  const tier = determineTier(classified);
+
   const { findings, skipped } = runClosingAudit(extraction);
-  const scorecard = buildScorecard(extraction, findings, skipped);
+  const scorecard = { ...buildScorecard(extraction, findings, skipped), tier };
 
   await admin
     .from('navigator_submissions')
@@ -198,6 +225,8 @@ module.exports = async (req, res) => {
         ip_hash: ipHash,
         extraction,
         scorecard,
+        documents: classified,
+        tier,
       },
       updated_at: new Date().toISOString(),
     })
