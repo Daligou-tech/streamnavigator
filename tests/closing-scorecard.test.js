@@ -934,3 +934,95 @@ test('total closing costs falls back to the Cash to Close table', () => {
   assert.equal(sc.total_closing_costs, 5977.57);
   assert.equal(sc.closing_costs_pct_of_loan, 4);   // 5977.57 / 150000 = 3.98%
 });
+
+// --- Loan Estimate extraction and tolerance testing --------------------------
+// The $59 tier is sold on tolerance testing. Before this existed, the Loan
+// Estimate was classified, priced and stored — and never opened. runClosingAudit
+// received loanEstimates: null every time, so the engine never ran on a paying
+// customer's documents.
+
+const { toLoanEstimateRecord } = require('../api/_lib/closing-extract');
+
+const rawLE = (over = {}) => Object.assign({
+  is_loan_estimate: true,
+  date_issued: '2013-02-15',
+  loan_amount: 150000,
+  changed_circumstance_documented: false,
+  charges: [
+    { section: 'A', label: 'Origination Fee', amount: 1802, category: 'origination', confidence: HI },
+    { section: 'B', label: 'Appraisal Fee', amount: 405, category: 'appraisal', confidence: HI },
+    { section: 'C', label: 'Title - Settlement Agent Fee', amount: 500, category: 'settlement_service', shoppable: true, confidence: HI },
+    { section: 'E', label: 'Recording Fees', amount: 85, category: 'recording_fee', confidence: HI },
+  ],
+}, over);
+
+test('a Loan Estimate becomes a baseline record the tolerance engine can use', () => {
+  const r = toLoanEstimateRecord(rawLE(), 'LE1');
+  assert.equal(r.docId, 'LE1');
+  assert.equal(r.dateIssued, '2013-02-15');
+  assert.equal(Object.keys(r.charges).length, 4);
+  assert.equal(r.charges['origination:origination_fee'].amount, 1802);
+});
+
+test('section C charges are marked shoppable even if the flag is absent', () => {
+  const raw = rawLE();
+  delete raw.charges[2].shoppable;
+  const r = toLoanEstimateRecord(raw, 'LE1');
+  assert.equal(r.charges['settlement_service:title_settlement_agent_fee'].shoppable, true);
+});
+
+test('an undocumented revision cannot reset the baseline', () => {
+  // "Not mentioned" must be false, not unknown. Treating silence as documented
+  // would let any revised LE become the tolerance baseline.
+  assert.equal(toLoanEstimateRecord(rawLE({ changed_circumstance_documented: undefined }), 'LE1')
+    .changedCircumstanceDocumented, false);
+  assert.equal(toLoanEstimateRecord(rawLE({ changed_circumstance_documented: true }), 'LE2')
+    .changedCircumstanceDocumented, true);
+});
+
+test('low-confidence Loan Estimate charges are dropped, not guessed', () => {
+  const raw = rawLE();
+  raw.charges[1].confidence = 0.4;
+  const r = toLoanEstimateRecord(raw, 'LE1');
+  assert.equal(Object.keys(r.charges).length, 3);
+  assert.equal(r.charges['appraisal:appraisal_fee'], undefined);
+});
+
+test('a zero-tolerance increase between LE and CD is found end to end', () => {
+  const le = toLoanEstimateRecord(rawLE(), 'LE1');
+  const cd = cleanExtraction({
+    closing_date: '2013-03-15',
+    line_items: [
+      { section: 'A', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 },
+      { section: 'B', label: 'Appraisal Fee', amount: 405, category: 'appraisal', confidence: HI, page: 2 },
+    ],
+  });
+  const { findings } = runClosingAudit(cd, { loanEstimates: [le], answers: { provider_list: 'yes' } });
+  const trid = byCheck(findings, 'TRID_ZERO_TOLERANCE');
+  assert.equal(trid.length, 1);
+  assert.equal(trid[0].dollarImpact, 300);   // 1,802 -> 2,102
+  assert.match(trid[0].basis, /1026\.19\(e\)\(3\)\(i\)/);
+});
+
+test('KNOWN LIMITATION: fee labels must match between the two documents', () => {
+  // The weakest link in the whole system. Charges are matched on a normalised
+  // category:label key, so an LE saying "Settlement Agent Fee" and a CD saying
+  // "Title - Settlement Fee" do not match — and the CD charge is then treated as
+  // absent from the baseline, reporting the FULL amount as an increase.
+  //
+  // This test documents the behaviour rather than claiming it is correct. Fuzzy
+  // matching is needed before tolerance findings are shown to customers without
+  // review.
+  const le = toLoanEstimateRecord(rawLE(), 'LE1');
+  const cd = cleanExtraction({
+    closing_date: '2013-03-15',
+    line_items: [
+      { section: 'C', label: 'Title - Settlement Fee', amount: 500, category: 'settlement_service', shoppable: true, confidence: HI, page: 2 },
+    ],
+  });
+  const { findings } = runClosingAudit(cd, { loanEstimates: [le], answers: { provider_list: 'no' } });
+  const trid = byCheck(findings, 'TRID_ZERO_TOLERANCE');
+  // Same fee, same amount, different wording -> reported as a $500 increase.
+  assert.equal(trid.length, 1);
+  assert.equal(trid[0].dollarImpact, 500);
+});
