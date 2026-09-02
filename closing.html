@@ -338,18 +338,20 @@
   // customer to "upload them above" — pointing at a box that was no longer on
   // the page. This brings it back, with the files they already chose intact, so
   // they only add the new ones.
-  document.addEventListener('click', function(ev){
-    if (!ev.target || ev.target.id !== 'add-docs-btn') return;
-    ev.preventDefault();
-    const s1 = document.getElementById('stage-1');
-    const s2 = document.getElementById('stage-2');
-    s1.style.display = 'block';
-    s2.style.display = 'none';
+  // Bound directly to the button after it is rendered rather than delegated from
+  // document. The delegated version matched on ev.target.id, which fails
+  // silently if anything inside the button becomes the click target — and a
+  // silent failure here strands the customer on a screen telling them to add
+  // documents with no way to do it.
+  function showUploader() {
+    document.getElementById('stage-2').style.display = 'none';
+    document.getElementById('stage-1').style.display = 'block';
     const btn = document.getElementById('scorecard-btn');
     btn.textContent = 'Update My Free Scorecard →';
     btn.style.pointerEvents = 'auto';
+    btn.disabled = false;
     document.getElementById('upload-zone').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
+  }
 
   function applyTier(tier) {
     const btn = document.getElementById('pay-btn');
@@ -415,7 +417,8 @@
           + 'what the lending rules permit, which can mean your lender owes you a refund. Add your '
           + '<strong>purchase contract</strong> and we can check that every credit you negotiated '
           + 'actually landed. Either one makes it $59.</p>'
-          + '<button class="btn btn-ghost btn-sm" id="add-docs-btn">Add those documents</button>';
+          + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
+          + 'style="margin-top:10px;">&#8593; Add those documents</button>';
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
           + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
@@ -485,6 +488,9 @@
         + 'where most recoverable money turns up.</p>';
 
     panel.innerHTML = html;
+
+    const addDocs = document.getElementById('add-docs-btn');
+    if (addDocs) addDocs.addEventListener('click', function(ev){ ev.preventDefault(); showUploader(); });
   }
 
   // Delegated because the fields are rendered into the scorecard after load.
