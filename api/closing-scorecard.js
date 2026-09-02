@@ -266,15 +266,33 @@ module.exports = async (req, res) => {
   // the rules permit" is a silent pass on a test that never ran, which is worse
   // than reporting nothing at all.
   const cdChargeCount = (extraction.line_items || []).length;
-  const toleranceTested = Boolean(loanEstimates) && cdChargeCount > 0;
+
+  // The audit refuses to compare documents describing different loans. That
+  // refusal was recorded in checks_skipped but never surfaced, so a customer who
+  // uploaded the wrong Loan Estimate saw an ordinary scorecard and no reason to
+  // fix it. The check worked; the telling did not.
+  const transactionMismatch = skipped.some((x) => /different loan/.test(x));
+  const toleranceTested = Boolean(loanEstimates) && cdChargeCount > 0 && !transactionMismatch;
 
   const scorecard = {
     ...buildScorecard(extraction, findings, skipped),
     tier,
     tolerance_tested: toleranceTested,
-    tolerance_blocked_reason: (loanEstimates && !cdChargeCount)
-      ? 'no_cd_charges'
-      : (leIndexes.length && !loanEstimates ? 'le_unreadable' : null),
+    tolerance_blocked_reason: transactionMismatch
+      ? 'different_loan'
+      : (loanEstimates && !cdChargeCount)
+        ? 'no_cd_charges'
+        : (leIndexes.length && !loanEstimates ? 'le_unreadable' : null),
+    // Surfaced so the page can tell the customer which checks did not run and
+    // why, rather than leaving it to a silent count.
+    checks_skipped_detail: skipped,
+    transaction_mismatch: transactionMismatch
+      ? {
+          fields: ((findings.find((f) => f.checkId === 'TRID_TRANSACTION_MISMATCH') || {}).detail || {}).mismatches || [],
+          cd_lender: extraction.lender_name || null,
+          le_lender: (loanEstimates && loanEstimates[0] && loanEstimates[0].lenderName) || null,
+        }
+      : null,
     loan_estimates_read: loanEstimates ? loanEstimates.length : 0,
     loan_estimates_uploaded: leIndexes.length,
     cd_charge_lines: cdChargeCount,
