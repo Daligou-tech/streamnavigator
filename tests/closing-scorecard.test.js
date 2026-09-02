@@ -1004,15 +1004,10 @@ test('a zero-tolerance increase between LE and CD is found end to end', () => {
   assert.match(trid[0].basis, /1026\.19\(e\)\(3\)\(i\)/);
 });
 
-test('KNOWN LIMITATION: fee labels must match between the two documents', () => {
-  // The weakest link in the whole system. Charges are matched on a normalised
-  // category:label key, so an LE saying "Settlement Agent Fee" and a CD saying
-  // "Title - Settlement Fee" do not match — and the CD charge is then treated as
-  // absent from the baseline, reporting the FULL amount as an increase.
-  //
-  // This test documents the behaviour rather than claiming it is correct. Fuzzy
-  // matching is needed before tolerance findings are shown to customers without
-  // review.
+test('the same fee worded differently no longer reads as an increase', () => {
+  // This was the weakest link in the system and is now fixed. The two documents
+  // describe the same $500 charge with different wording; multi-pass matching
+  // pairs them on category and amount, so nothing is reported.
   const le = toLoanEstimateRecord(rawLE(), 'LE1');
   const cd = cleanExtraction({
     closing_date: '2013-03-15',
@@ -1021,8 +1016,41 @@ test('KNOWN LIMITATION: fee labels must match between the two documents', () => 
     ],
   });
   const { findings } = runClosingAudit(cd, { loanEstimates: [le], answers: { provider_list: 'no' } });
-  const trid = byCheck(findings, 'TRID_ZERO_TOLERANCE');
-  // Same fee, same amount, different wording -> reported as a $500 increase.
-  assert.equal(trid.length, 1);
-  assert.equal(trid[0].dollarImpact, 500);
+  assert.equal(byCheck(findings, 'TRID_ZERO_TOLERANCE').length, 0);
+  assert.equal(byCheck(findings, 'TRID_UNMATCHED_CHARGE').length, 0);
+});
+
+test('tolerance findings appear in the free scorecard flag count', () => {
+  // Option B: the flag count is the basis of the purchase decision, so it must
+  // include the analysis the customer is paying extra for. A count that excludes
+  // tolerance testing tells a $59 customer "0 issues" before running the check
+  // they came for.
+  const le = toLoanEstimateRecord(rawLE(), 'LE1');
+  const cd = cleanExtraction({
+    closing_date: '2013-03-15',
+    // prepaid interest is tied to the closing date in the base fixture; drop it
+    // so this test measures tolerance findings and nothing else
+    prepaid_interest: undefined,
+    line_items: [
+      { section: 'A', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 },
+    ],
+  });
+
+  const without = runClosingAudit(cd);
+  assert.equal(buildScorecard(cd, without.findings, without.skipped).flag_count, 0);
+
+  const withLE = runClosingAudit(cd, { loanEstimates: [le] });
+  const sc = buildScorecard(cd, withLE.findings, withLE.skipped);
+  assert.equal(sc.flag_count, 1);
+  assert.equal(byCheck(withLE.findings, 'TRID_ZERO_TOLERANCE')[0].dollarImpact, 300);
+});
+
+test('a Loan Estimate with no issue date does not silently pass', () => {
+  // Without a date we cannot order revisions or establish which LE governs.
+  // Declining is correct; reporting zero findings as though the check ran is not.
+  const undated = toLoanEstimateRecord(rawLE({ date_issued: undefined }), 'LE1');
+  assert.equal(undated.dateIssued, null);
+  // the endpoint filters on dateIssued before passing anything to the audit
+  const dated = [undated].filter((r) => r.dateIssued);
+  assert.equal(dated.length, 0);
 });

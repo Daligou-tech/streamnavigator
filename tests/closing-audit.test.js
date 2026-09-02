@@ -10,7 +10,7 @@ const {
   checkEscrowCushion, checkProration, checkSectionArithmetic, checkCashToClose,
   detectDuplicates, compareToBenchmark, assignBucket, businessDaysBetween,
   selectBaseline, analyzeTolerances, cureDeadlineNote, reconcileContract,
-  gateExtraction,
+  gateExtraction, matchCharges, nameSimilarity,
 } = require('../api/_lib/closing-audit');
 
 // --- prepaid interest -------------------------------------------------------
@@ -337,11 +337,19 @@ test('answering "no" to the provider-list question moves money into the zero buc
   assert.equal(out[0].dollarImpact, 50);
 });
 
-test('a charge absent from the LE counts as a full increase', () => {
+test('a charge we cannot match is reported as ambiguous, not as an increase', () => {
+  // This previously asserted the bug: an unmatched charge was reported as a
+  // full-amount tolerance violation. A charge missing from the Loan Estimate may
+  // be genuinely new, or may be the same charge under a different name. Claiming
+  // the former manufactures a confident accusation out of a naming difference.
   const base = le('LE1', '2026-01-05', null, null, {});
   const out = analyzeTolerances(base,
     { admin: { label: 'Administration Fee', amount: 395, category: 'lender_fee' } }, true);
-  assert.equal(out[0].dollarImpact, 395);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].checkId, 'TRID_UNMATCHED_CHARGE');
+  assert.equal(out[0].severity, Severity.REQUIRES_DOCUMENTATION);
+  assert.equal(out[0].dollarImpact, null);   // never presented as money owed
+  assert.equal(out[0].charged, 395);
 });
 
 test('the cure deadline is 60 days after consummation', () => {
@@ -390,4 +398,91 @@ test('ranking orders by severity then dollars, and drops nothing', () => {
   ];
   assert.deepEqual(rankFindings(fs).map((f) => f.checkId), ['d', 'b', 'c', 'a']);
   assert.equal(rankFindings(fs).length, 4);
+});
+
+// --- charge matching between the two documents -------------------------------
+// The single largest source of false positives. An exact-key match meant the
+// same fee worded differently on each document did not pair, and the full amount
+// was reported as a tolerance increase.
+
+test('the same fee worded differently still matches', () => {
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'settlement_service:settlement_agent_fee': { label: 'Settlement Agent Fee', amount: 500, category: 'settlement_service' } },
+    { 'settlement_service:title_settlement_fee': { label: 'Title - Settlement Fee', amount: 500, category: 'settlement_service' } }
+  );
+  assert.equal(pairs.length, 1);
+  assert.equal(unmatchedCd.length, 0);
+  assert.equal(pairs[0].matchedBy, 'category+amount');
+});
+
+test('no violation is reported when the amount did not change', () => {
+  const base = le('LE1', '2026-01-05', null, null, {
+    'settlement_service:settlement_agent_fee': { label: 'Settlement Agent Fee', amount: 500, category: 'settlement_service' },
+  });
+  const out = analyzeTolerances(base, {
+    'settlement_service:title_settlement_fee': { label: 'Title - Settlement Fee', amount: 500, category: 'settlement_service' },
+  }, false);
+  assert.deepEqual(out, []);
+});
+
+test('a real increase is still caught through a renamed line', () => {
+  const base = le('LE1', '2026-01-05', null, null, {
+    'lender_fee:underwriting_fee': { label: 'Underwriting Fee', amount: 500, category: 'lender_fee' },
+  });
+  const out = analyzeTolerances(base, {
+    'lender_fee:underwriting_and_review_fee': { label: 'Underwriting and Review Fee', amount: 700, category: 'lender_fee' },
+  }, true);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].checkId, 'TRID_ZERO_TOLERANCE');
+  assert.equal(out[0].dollarImpact, 200);
+  assert.match(out[0].basis, /Matched to "Underwriting Fee"/);
+});
+
+test('a shared payee matches when names and amounts both differ', () => {
+  const { pairs } = matchCharges(
+    { 'settlement_service:closing_services': { label: 'Closing Services', amount: 400, category: 'settlement_service', payee: 'Acme Title LLC' } },
+    { 'settlement_service:escrow_handling': { label: 'Escrow Handling', amount: 450, category: 'settlement_service', payee: 'Acme Title, LLC' } }
+  );
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].matchedBy, 'category+payee');
+});
+
+test('one Loan Estimate charge is never consumed by two CD charges', () => {
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'lender_fee:processing': { label: 'Processing Fee', amount: 500, category: 'lender_fee' } },
+    {
+      'lender_fee:processing': { label: 'Processing Fee', amount: 500, category: 'lender_fee' },
+      'lender_fee:processing_2': { label: 'Processing Fee', amount: 500, category: 'lender_fee' },
+    }
+  );
+  assert.equal(pairs.length, 1);
+  assert.equal(unmatchedCd.length, 1);
+});
+
+test('unrelated charges do not get force-matched', () => {
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'appraisal:appraisal_fee': { label: 'Appraisal Fee', amount: 650, category: 'appraisal' } },
+    { 'recording_fee:recording_fees': { label: 'Recording Fees', amount: 155, category: 'recording_fee' } }
+  );
+  assert.equal(pairs.length, 0);
+  assert.equal(unmatchedCd.length, 1);
+});
+
+test('the 10% bucket only aggregates matched charges', () => {
+  // An unmatched charge added to the total with a zero baseline would inflate the
+  // cumulative test and produce a phantom cure.
+  const base = le('LE1', '2026-01-05', null, null, {
+    'recording_fee:recording_fees': { label: 'Recording Fees', amount: 400, category: 'recording_fee' },
+  });
+  const out = analyzeTolerances(base, {
+    'recording_fee:recording_fees': { label: 'Recording Fees', amount: 420, category: 'recording_fee' },
+    'recording_fee:e_recording_fee': { label: 'E-Recording Fee', amount: 900, category: 'recording_fee' },
+  }, true);
+  assert.equal(out.some((f) => f.checkId === 'TRID_TEN_PERCENT'), false);
+  assert.equal(out.filter((f) => f.checkId === 'TRID_UNMATCHED_CHARGE').length, 1);
+});
+
+test('name similarity scores the case that broke it', () => {
+  assert.ok(nameSimilarity('Settlement Agent Fee', 'Title - Settlement Fee') >= 0.5);
+  assert.ok(nameSimilarity('Appraisal Fee', 'Recording Fees') < 0.34);
 });
