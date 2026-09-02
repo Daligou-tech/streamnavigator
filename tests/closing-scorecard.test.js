@@ -1119,3 +1119,49 @@ test('a correction does not discard tier or tolerance results', () => {
   // and the freshly computed document fields are still present
   assert.equal(merged.total_closing_costs, 5797.26);
 });
+
+// --- regression: nested tool output ------------------------------------------
+// A real run returned { cd_extraction: { ...everything... } } instead of the
+// fields at the top level. The extraction was flawless — every line item, every
+// section total — but document_type was undefined, so a perfectly readable
+// Closing Disclosure was rejected as "a document we cannot audit".
+
+const { unwrapToolInput } = require('../api/_lib/closing-extract');
+
+test('a single redundant wrapper around tool output is unwrapped', () => {
+  const inner = { document_type: 'closing_disclosure', line_items: [], pages_present: 5 };
+  const wrapped = { cd_extraction: inner };
+  assert.deepEqual(
+    unwrapToolInput(wrapped, ['document_type', 'line_items', 'pages_present']),
+    inner
+  );
+});
+
+test('correctly shaped output is returned untouched', () => {
+  const good = { document_type: 'closing_disclosure', line_items: [{ label: 'x' }], pages_present: 5 };
+  assert.equal(unwrapToolInput(good, ['document_type', 'line_items']), good);
+});
+
+test('an unrecognisable object is not mangled into something else', () => {
+  // Two keys, neither expected: we cannot tell which is the payload, so leave it
+  // alone rather than guess and silently discard half the data.
+  const odd = { a: { document_type: 'closing_disclosure' }, b: { document_type: 'loan_estimate' } };
+  assert.equal(unwrapToolInput(odd, ['document_type']), odd);
+});
+
+test('unwrapping works for the classifier and the Loan Estimate too', () => {
+  assert.deepEqual(
+    unwrapToolInput({ result: { documents: [{ index: 0, document_type: 'closing_disclosure' }] } }, ['documents']),
+    { documents: [{ index: 0, document_type: 'closing_disclosure' }] }
+  );
+  assert.deepEqual(
+    unwrapToolInput({ le_extraction: { is_loan_estimate: true, charges: [] } }, ['is_loan_estimate', 'charges']),
+    { is_loan_estimate: true, charges: [] }
+  );
+});
+
+test('null and non-objects pass through safely', () => {
+  assert.equal(unwrapToolInput(null, ['x']), null);
+  assert.equal(unwrapToolInput(undefined, ['x']), undefined);
+  assert.equal(unwrapToolInput('text', ['x']), 'text');
+});
