@@ -46,6 +46,9 @@ const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
 const MAX_TOTAL_MB = Math.round((MAX_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
 const MAX_FILES = 12;
 
+// Mirrors TIERS.basic in _lib/closing-extract.js.
+const TIERS_BASIC = { id: 'basic', price_cents: 2900, price_label: '$29' };
+
 function guessMediaType(filename) {
   const ext = String(filename).toLowerCase().split('.').pop();
   if (ext === 'pdf') return 'application/pdf';
@@ -321,10 +324,30 @@ module.exports = async (req, res) => {
   // fix it. The check worked; the telling did not.
   const transactionMismatch = skipped.some((x) => /different loan/.test(x));
   const toleranceTested = Boolean(loanEstimates) && cdChargeCount > 0 && !transactionMismatch;
+  const contractReconciled = Boolean(contractTerms && contractTerms.length);
+
+  // The tier was decided by which document TYPES were uploaded, before anyone
+  // knew whether those documents could be used. A Loan Estimate for a different
+  // loan, or a contract we could not read, still moved the price to $59 — and
+  // the scorecard then listed the very check being charged for under "checks we
+  // could not run". Charge for analysis that ran, not for a file that arrived.
+  const usableUpgrades = (toleranceTested ? 1 : 0) + (contractReconciled ? 1 : 0);
+  const effectiveTier = usableUpgrades
+    ? { ...tier, upgrade_documents: usableUpgrades }
+    : {
+        ...TIERS_BASIC,
+        has_loan_estimate: tier.has_loan_estimate,
+        has_purchase_contract: tier.has_purchase_contract,
+        upgrade_documents: 0,
+        // The page needs to distinguish "you uploaded nothing extra" from
+        // "you uploaded something extra and it did not work", because the
+        // second case needs an explanation and a way to fix it.
+        downgraded_from_full: tier.id === 'full',
+      };
 
   const scorecard = {
     ...buildScorecard(extraction, findings, skipped),
-    tier,
+    tier: effectiveTier,
     tolerance_tested: toleranceTested,
     tolerance_blocked_reason: transactionMismatch
       ? 'different_loan'
@@ -334,7 +357,7 @@ module.exports = async (req, res) => {
     // Surfaced so the page can tell the customer which checks did not run and
     // why, rather than leaving it to a silent count.
     checks_skipped_detail: skipped,
-    contract_reconciled: Boolean(contractTerms && contractTerms.length),
+    contract_reconciled: contractReconciled,
     contract_terms_read: contractTerms ? contractTerms.length : 0,
     contract_uploaded: contractIndexes.length,
     contract_mismatch: contractMismatch,
