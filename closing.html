@@ -334,6 +334,23 @@
   // The scorecard shows counts and headline figures only. It deliberately never
   // names a flagged fee or its dollar impact — that is the paid report. It has to
   // be worth reading on its own without being a substitute for what it sells.
+  // The scorecard used to hide the upload section entirely and then tell the
+  // customer to "upload them above" — pointing at a box that was no longer on
+  // the page. This brings it back, with the files they already chose intact, so
+  // they only add the new ones.
+  document.addEventListener('click', function(ev){
+    if (!ev.target || ev.target.id !== 'add-docs-btn') return;
+    ev.preventDefault();
+    const s1 = document.getElementById('stage-1');
+    const s2 = document.getElementById('stage-2');
+    s1.style.display = 'block';
+    s2.style.display = 'none';
+    const btn = document.getElementById('scorecard-btn');
+    btn.textContent = 'Update My Free Scorecard →';
+    btn.style.pointerEvents = 'auto';
+    document.getElementById('upload-zone').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
   function applyTier(tier) {
     const btn = document.getElementById('pay-btn');
     const link = btn.getAttribute(tier.id === 'full' ? 'data-link-full' : 'data-link-basic');
@@ -397,7 +414,8 @@
           + '<br><br>Add your <strong>Loan Estimates</strong> and we can test whether a fee rose beyond '
           + 'what the lending rules permit, which can mean your lender owes you a refund. Add your '
           + '<strong>purchase contract</strong> and we can check that every credit you negotiated '
-          + 'actually landed. Either one makes it $59. Upload them above and run the scorecard again.</p>';
+          + 'actually landed. Either one makes it $59.</p>'
+          + '<button class="btn btn-ghost btn-sm" id="add-docs-btn">Add those documents</button>';
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
           + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
