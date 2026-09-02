@@ -7,7 +7,9 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "check-prices": "node scripts/check-prices.js"
+    "check-prices": "node scripts/check-prices.js",
+    "harness": "node scripts/audit-harness.js",
+    "check": "npm test && npm run harness"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
