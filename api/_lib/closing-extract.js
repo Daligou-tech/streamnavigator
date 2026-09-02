@@ -852,6 +852,13 @@ function runClosingAudit(extraction, options = {}) {
     for (const c of e.seller_credits_on_cd || []) {
       if (c.confidence >= CONF_THRESHOLD) cdCredits[c.label] = c.amount;
     }
+    // The Cash to Close table carries a printed seller-credits total. Prefer it
+    // when nothing was picked up line by line, so a credit shown only in the
+    // summary is not read as missing.
+    const ctcCredits = (e.cash_to_close || {}).seller_credits;
+    if (!Object.keys(cdCredits).length && confident(ctcCredits)) {
+      cdCredits['Seller credits (Cash to Close)'] = val(ctcCredits);
+    }
     findings.push(...audit.reconcileContract(contractTerms, cdCredits));
   }
 
@@ -972,6 +979,99 @@ function toLoanEstimateRecord(raw, docId) {
     changedCircumstanceDocumented: raw.changed_circumstance_documented === true,
     charges,
   };
+}
+
+// ---------------------------------------------------------------------------
+// purchase contract extraction
+// ---------------------------------------------------------------------------
+//
+// The other half of what the $59 tier is sold on. A seller credit that shrank
+// between contract and closing is the most recoverable error this product looks
+// for, and no comparison of lender documents can find it — only the contract
+// says what was agreed.
+
+const CONTRACT_TOOL = {
+  name: 'submit_contract_terms',
+  description:
+    'Report the financial terms agreed in this purchase contract that should appear on the '
+    + 'Closing Disclosure. Report only what the contract states.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      is_purchase_contract: { type: 'boolean' },
+      property_address: { type: 'string' },
+      buyer_names: { type: 'array', items: { type: 'string' } },
+      seller_names: { type: 'array', items: { type: 'string' } },
+      sale_price: { type: 'number' },
+      terms: {
+        type: 'array',
+        description:
+          'Each agreed financial term that should show up at closing. Include seller credits, '
+          + 'closing-cost contributions, repair credits, and any charge the contract assigns to a '
+          + 'particular party. Omit anything the contract does not state as a dollar amount — do not '
+          + 'estimate a percentage into a figure unless the contract does so itself.',
+        items: {
+          type: 'object',
+          properties: {
+            label: {
+              type: 'string',
+              description: 'What it is, in the contract\'s own words, e.g. "Seller credit toward buyer closing costs".',
+            },
+            amount: { type: 'number', description: 'The dollar amount as stated.' },
+            kind: {
+              type: 'string',
+              enum: ['seller_credit', 'closing_cost_contribution', 'repair_credit',
+                     'cost_allocation', 'deposit', 'other'],
+            },
+            provision: {
+              type: 'string',
+              description: 'Where in the contract this appears — paragraph or section number, and '
+                + 'addendum name if relevant. The customer will quote this back to their settlement agent.',
+            },
+            payable_by: { type: 'string', enum: ['seller', 'buyer', 'shared', 'unstated'] },
+            confidence: { type: 'number', description: CONFIDENCE_DESC },
+          },
+          required: ['label', 'amount', 'kind', 'confidence'],
+        },
+      },
+      contract_problems: {
+        type: 'array', items: { type: 'string' },
+        description: 'Missing pages, unsigned addenda, illegible amendments, or terms that reference '
+          + 'an addendum not included in what was uploaded.',
+      },
+    },
+    required: ['is_purchase_contract', 'terms'],
+  },
+};
+
+async function extractPurchaseContract(apiKey, contentBlock) {
+  const raw = await callAnthropic({
+    apiKey,
+    system: EXTRACTION_SYSTEM,
+    tools: [CONTRACT_TOOL],
+    contentBlocks: [contentBlock, {
+      type: 'text',
+      text: 'Extract the agreed financial terms that should appear at closing.',
+    }],
+  });
+  return unwrapToolInput(raw, ['is_purchase_contract', 'terms']);
+}
+
+// Only credits TO the buyer are reconciled. A cost allocation that merely says
+// who pays for something is not a credit and has no single figure to compare
+// against, so surfacing it as a shortfall would be wrong.
+const RECONCILABLE_KINDS = new Set(['seller_credit', 'closing_cost_contribution', 'repair_credit']);
+
+function toContractTerms(raw) {
+  return (raw.terms || [])
+    .filter((t) => typeof t.confidence !== 'number' || t.confidence >= CONF_THRESHOLD)
+    .filter((t) => RECONCILABLE_KINDS.has(t.kind) && typeof t.amount === 'number' && t.amount > 0)
+    .map((t) => ({
+      label: t.label,
+      amount: t.amount,
+      provision: t.provision || 'the purchase contract',
+      kind: t.kind,
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,6 +1358,9 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  CONTRACT_TOOL,
+  extractPurchaseContract,
+  toContractTerms,
   checkTransactionMatch,
   unwrapToolInput,
   LE_EXTRACTION_TOOL,

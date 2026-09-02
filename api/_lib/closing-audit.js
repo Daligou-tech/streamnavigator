@@ -1137,44 +1137,65 @@ function cureDeadlineNote(consummationDate) {
 // 8. purchase contract reconciliation
 // ---------------------------------------------------------------------------
 
+// Compared in AGGREGATE, not term by term.
+//
+// Matching a contract term to a Closing Disclosure line by label is the same
+// fragile approach that reported "Settlement Agent Fee" against "Title -
+// Settlement Fee" as a $500 violation. A contract saying "Seller credit toward
+// buyer closing costs" and a CD line saying "Seller Credit" are the same money,
+// and a $10,000 credit may legitimately appear as one line or several.
+//
+// So: total what the contract agreed against total what appears at closing. That
+// answers the customer's actual question — did all of my credit arrive? — without
+// inventing a shortfall out of naming.
 function reconcileContract(terms, cdCredits) {
-  return (terms || []).map((t) => {
-    const onCd = toCents((cdCredits || {})[t.label] || 0);
-    const shortfall = toCents(t.amount) - onCd;
+  const list = (terms || []).filter((t) => t && typeof t.amount === 'number' && t.amount > 0);
+  if (!list.length) return [];
 
-    if (shortfall <= 0) {
-      return finding({
-        checkId: 'CONTRACT_RECON',
-        title: `${t.label} appears in full on the Closing Disclosure`,
-        severity: Severity.WITHIN_NORMS,
-        evidence: EvidenceKind.CONTRACT,
-        actionability: Actionability.LIKELY_LOCKED,
-        charged: toDollars(onCd),
-        expected: toDollars(toCents(t.amount)),
-        basis: t.provision,
-      });
-    }
+  const agreedCents = list.reduce((a, t) => a + toCents(t.amount), 0);
+  const onCdCents = Object.values(cdCredits || {})
+    .reduce((a, v) => a + toCents(typeof v === 'number' ? v : 0), 0);
+  const shortfall = agreedCents - onCdCents;
 
-    return finding({
+  const breakdown = list
+    .map((t) => `${t.label} ${toDollars(toCents(t.amount))} (${t.provision})`)
+    .join('; ');
+
+  if (shortfall <= 0) {
+    return [finding({
       checkId: 'CONTRACT_RECON',
-      title: `${t.label} on the contract does not fully appear on the Closing Disclosure`,
-      severity: Severity.POTENTIAL_OVERCHARGE,
+      title: 'Your negotiated credits appear in full at closing',
+      severity: Severity.WITHIN_NORMS,
       evidence: EvidenceKind.CONTRACT,
-      actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
-      dollarImpact: toDollars(shortfall),
-      charged: toDollars(onCd),
-      expected: toDollars(toCents(t.amount)),
+      actionability: Actionability.LIKELY_LOCKED,
+      charged: toDollars(onCdCents),
+      expected: toDollars(agreedCents),
       variance: toDollars(-shortfall),
-      basis: `${t.provision} provides ${toDollars(toCents(t.amount))}; the Closing Disclosure shows ${toDollars(onCd)}.`,
-      whyItMatters:
-        'A missing negotiated credit is the single most recoverable error we look for, and a Loan ' +
-        'Estimate comparison cannot detect it.',
-      recommendedAction:
-        `Send ${t.provision} to the settlement agent and ask for the remaining ${toDollars(shortfall)} ` +
-        'to be added before the final figures are issued.',
-      askSettlement: true,
-    });
-  });
+      basis: `Contract provides ${toDollars(agreedCents)} — ${breakdown}. The Closing Disclosure `
+        + `shows ${toDollars(onCdCents)} in credits.`,
+    })];
+  }
+
+  return [finding({
+    checkId: 'CONTRACT_RECON',
+    title: `${toDollars(shortfall)} of your negotiated credits does not appear at closing`,
+    severity: Severity.POTENTIAL_OVERCHARGE,
+    evidence: EvidenceKind.CONTRACT,
+    actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
+    dollarImpact: toDollars(shortfall),
+    charged: toDollars(onCdCents),
+    expected: toDollars(agreedCents),
+    variance: toDollars(-shortfall),
+    basis: `Contract provides ${toDollars(agreedCents)} — ${breakdown}. The Closing Disclosure `
+      + `shows ${toDollars(onCdCents)} in credits, a shortfall of ${toDollars(shortfall)}.`,
+    whyItMatters:
+      'A missing negotiated credit is the most recoverable error we look for, and no comparison of '
+      + 'lender documents can find it — only the contract says what was agreed.',
+    recommendedAction:
+      'Send the contract provision above to your settlement agent and ask for the difference to be '
+      + 'added before the final figures are issued.',
+    askSettlement: true,
+  })];
 }
 
 // ---------------------------------------------------------------------------

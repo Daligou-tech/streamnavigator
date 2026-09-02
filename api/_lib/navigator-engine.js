@@ -358,6 +358,9 @@ async function generateNavigatorReport(submissionId) {
       const { findings, skipped, cureNote } = runClosingAudit(stored.extraction, {
         answers: stored.answers || {},
         loanEstimates,
+        // Extracted at the free scorecard stage and reused here, like the Loan
+        // Estimates — re-reading the contract would be a second model call for
+        // an identical result.
         contractTerms: stored.contract_terms || null,
       });
 
