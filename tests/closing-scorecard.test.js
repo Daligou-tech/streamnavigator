@@ -1085,3 +1085,37 @@ test('tolerance counts as tested only when both documents have charges', () => {
   // matched at the same amount, so no violation
   assert.equal(byCheck(runClosingAudit(cd, { loanEstimates: [le] }).findings, 'TRID_ZERO_TOLERANCE').length, 0);
 });
+
+test('a correction does not discard tier or tolerance results', () => {
+  // /api/closing-corrections rebuilt the scorecard by calling buildScorecard()
+  // alone, which returns only document-level fields. Every endpoint-level field
+  // — tier, tolerance_tested, loan_estimates_read, cd_charge_lines — was thrown
+  // away, so a $59 customer whose Loan Estimates had already been processed was
+  // shown the generic "add your Loan Estimates" message and no tolerance result.
+  const previousScorecard = {
+    tier: { id: 'full', price_label: '$59' },
+    tolerance_tested: true,
+    loan_estimates_read: 1,
+    loan_estimates_uploaded: 1,
+    cd_charge_lines: 23,
+    flag_count: 0,
+  };
+  const e = cleanExtraction({ prepaid_interest: undefined });
+  const { findings, skipped } = runClosingAudit(e);
+
+  const merged = {
+    ...previousScorecard,
+    ...buildScorecard(e, findings, skipped),
+    tier: previousScorecard.tier,
+    tolerance_tested: 1 > 0 && (e.line_items || []).length > 0,
+    loan_estimates_read: 1,
+    cd_charge_lines: (e.line_items || []).length,
+  };
+
+  assert.equal(merged.tier.id, 'full');
+  assert.equal(merged.tolerance_tested, true);
+  assert.equal(merged.loan_estimates_read, 1);
+  assert.ok(merged.cd_charge_lines > 0);
+  // and the freshly computed document fields are still present
+  assert.equal(merged.total_closing_costs, 5797.26);
+});
