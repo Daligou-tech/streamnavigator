@@ -23,6 +23,8 @@ const {
   classifyDocuments,
   determineTier,
   PRIMARY_TYPES,
+  extractLoanEstimate,
+  toLoanEstimateRecord,
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 
@@ -213,8 +215,50 @@ module.exports = async (req, res) => {
     d.index === primaryIndex ? { ...d, document_type: extraction.document_type } : d);
   const tier = determineTier(classified);
 
-  const { findings, skipped } = runClosingAudit(extraction);
-  const scorecard = { ...buildScorecard(extraction, findings, skipped), tier };
+  // Tolerance testing runs HERE, in the free scorecard, when Loan Estimates were
+  // uploaded — not only in the paid report.
+  //
+  // The flag count is the entire basis of the purchase decision. A count that
+  // silently excludes the analysis the customer is paying extra for is not a
+  // basis, it is a guess. Extracting the Loan Estimates costs a model call each,
+  // which is why this is limited to people who actually uploaded them — a fair
+  // proxy for intent — and the rate limiter still caps the exposure.
+  //
+  // The records are stored so the paid report reuses them instead of paying to
+  // read the same PDFs twice.
+  let loanEstimates = null;
+  const leIndexes = classified
+    .filter((d) => d.document_type === 'loan_estimate')
+    .map((d) => d.index)
+    .filter((i) => typeof i === 'number' && contentBlocks[i]);
+
+  if (leIndexes.length) {
+    const records = [];
+    for (const i of leIndexes) {
+      try {
+        const raw = await extractLoanEstimate(ANTHROPIC_API_KEY, contentBlocks[i]);
+        if (raw && raw.is_loan_estimate !== false && (raw.charges || []).length) {
+          records.push(toLoanEstimateRecord(raw, `LE${records.length + 1}`));
+        }
+      } catch (err) {
+        console.error('[closing-scorecard] loan estimate extraction failed:', err.message);
+      }
+    }
+    // selectBaseline orders revisions by issue date. Without one we cannot
+    // establish which Loan Estimate governs, and guessing a baseline is worse
+    // than declining to test.
+    const dated = records.filter((r) => r.dateIssued);
+    if (dated.length) loanEstimates = dated;
+  }
+
+  const { findings, skipped } = runClosingAudit(extraction, { loanEstimates });
+  const scorecard = {
+    ...buildScorecard(extraction, findings, skipped),
+    tier,
+    tolerance_tested: Boolean(loanEstimates),
+    loan_estimates_read: loanEstimates ? loanEstimates.length : 0,
+    loan_estimates_uploaded: leIndexes.length,
+  };
 
   await admin
     .from('navigator_submissions')
@@ -227,6 +271,7 @@ module.exports = async (req, res) => {
         scorecard,
         documents: classified,
         tier,
+        loan_estimates: loanEstimates,
       },
       updated_at: new Date().toISOString(),
     })
