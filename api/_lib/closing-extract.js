@@ -154,6 +154,9 @@ const EXTRACTION_TOOL = {
         description: 'The Calculating Cash to Close table on page 3.',
         properties: {
           total_closing_costs_j: amountField('Total closing costs (J)'),
+          total_payoffs_and_payments: amountField(
+            'Total Payoffs and Payments (K). Appears on the ALTERNATIVE Cash to Close table, '
+            + 'used for refinances. Omit entirely on a purchase.'),
           closing_costs_paid_before_closing: amountField('Closing costs paid before closing'),
           down_payment_funds_from_borrower: amountField('Down payment / funds from borrower'),
           deposit: amountField('Deposit, as a positive number'),
@@ -193,7 +196,18 @@ const EXTRACTION_TOOL = {
               required: ['item', 'annual_amount', 'confidence'],
             },
           },
-          cushion_amount: { type: 'number', description: 'The aggregate adjustment / cushion amount, if separately stated.' },
+          cushion_amount: {
+            type: 'number',
+            description: 'ONLY the cushion, if the document states one separately. This is NOT the '
+              + 'Section G total and NOT the aggregate adjustment. Most Closing Disclosures do not '
+              + 'state a cushion separately — in that case omit this field entirely rather than '
+              + 'substituting another number.',
+          },
+          aggregate_adjustment: {
+            type: 'number',
+            description: 'The aggregate adjustment line in Section G, as printed (normally negative).',
+          },
+          section_g_total: { type: 'number', description: 'Section G total initial escrow payment at closing.' },
           cushion_confidence: { type: 'number', description: CONFIDENCE_DESC },
         },
       },
@@ -500,6 +514,10 @@ function runClosingAudit(extraction, options = {}) {
       sellerCredits: val(ctc.seller_credits) || 0,
       adjustmentsAndOtherCredits: val(ctc.adjustments_and_other_credits) || 0,
       statedCashToClose: val(ctc.stated_cash_to_close),
+      totalPayoffsAndPayments: confident(ctc.total_payoffs_and_payments)
+        ? val(ctc.total_payoffs_and_payments) : null,
+      loanAmount: e.loan_amount,
+      transactionType: e.transaction_type,
     });
     findings.push(ctcFromCustomer ? audit.markCustomerSourced(ctcFinding) : ctcFinding);
   } else {
@@ -524,12 +542,37 @@ function runClosingAudit(extraction, options = {}) {
   // --- escrow cushion -------------------------------------------------------
   const esc = e.escrow || {};
   const disb = (esc.annual_disbursements || []).filter((d) => d.confidence >= CONF_THRESHOLD);
-  if (disb.length && typeof esc.cushion_amount === 'number' &&
-      (esc.cushion_confidence || 0) >= CONF_THRESHOLD) {
+  const cushionStated = typeof esc.cushion_amount === 'number'
+    && (esc.cushion_confidence === undefined || esc.cushion_confidence >= CONF_THRESHOLD);
+
+  if (disb.length && cushionStated) {
     findings.push(audit.checkEscrowCushion(
       Object.fromEntries(disb.map((d) => [d.item, d.annual_amount])),
       esc.cushion_amount
     ));
+  } else if (disb.length && typeof esc.aggregate_adjustment === 'number') {
+    // Most Closing Disclosures never state a cushion on its own. The aggregate
+    // adjustment is the line that brings the opening deposit down to the
+    // permitted balance, so its presence is evidence the cushion calculation was
+    // performed — not proof it was performed correctly. Report that honestly
+    // rather than testing a number that is not the cushion.
+    findings.push(audit.finding({
+      checkId: 'ESCROW_CUSHION',
+      title: 'Escrow cushion could not be tested directly',
+      severity: audit.Severity.INFORMATIONAL,
+      evidence: audit.EvidenceKind.NONE,
+      actionability: audit.Actionability.NEEDS_DOCS,
+      basis: `Section G shows an initial escrow deposit of `
+        + `${audit.toDollars(audit.toCents(esc.section_g_total || 0))} with an aggregate adjustment of `
+        + `${audit.toDollars(audit.toCents(esc.aggregate_adjustment))}. Section G is the whole opening `
+        + `deposit — months of funding plus any cushion — not the cushion itself, so the RESPA 1/6 cap `
+        + `cannot be applied to it. The aggregate adjustment is the line that limits the account to the `
+        + `permitted balance.`,
+      whyItMatters: 'Verifying the cushion requires the initial escrow account statement, which is a '
+        + 'separate document from the Closing Disclosure.',
+      recommendedAction: 'Ask the lender for the initial escrow account statement if you want this checked.',
+    }));
+    skipped.push('escrow cushion (needs the initial escrow account statement)');
   } else {
     skipped.push('escrow cushion');
   }

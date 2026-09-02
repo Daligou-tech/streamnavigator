@@ -245,6 +245,20 @@ function checkPrepaidInterest(opts) {
 // 2. escrow cushion — RESPA 12 CFR 1024.17(c)(1)(ii)
 // ---------------------------------------------------------------------------
 
+// IMPORTANT: cushionCharged must be the CUSHION, not the Section G total.
+//
+// Section G "Initial Escrow Payment at Closing" is the whole opening deposit —
+// the months needed to fund upcoming disbursements PLUS any cushion, less the
+// aggregate adjustment. The RESPA 1/6 cap applies only to the cushion.
+//
+// Passing Section G here was a shipped bug: a correct $1,536.72 initial deposit
+// (11 months of hazard insurance + 6 months of taxes − $380.85 aggregate
+// adjustment) was reported as a $1,024.48 overcharge against a $512.24 cushion
+// cap. The aggregate adjustment is itself the mechanism that enforces the
+// cushion limit, so its presence is evidence the calculation was done.
+//
+// A Closing Disclosure does not usually state the cushion separately. When it
+// does not, this check must not run — see isSeparatelyStatedCushion below.
 function checkEscrowCushion(annualDisbursements, cushionCharged) {
   const annualCents = Object.values(annualDisbursements || {}).reduce(
     (a, v) => a + toCents(v),
@@ -391,8 +405,74 @@ function checkSectionArithmetic(t, toleranceDollars = 1.0) {
   return out;
 }
 
+// The Closing Disclosure has TWO Cash to Close tables and they are not
+// interchangeable.
+//
+// A purchase uses the standard table: closing costs, down payment, deposit,
+// seller credits, adjustments. A refinance uses the alternative table, which is
+// a completely different calculation — Loan Amount minus Total Closing Costs
+// minus Total Payoffs and Payments.
+//
+// Applying the purchase formula to a refinance was a real, shipped bug: on an
+// otherwise perfect refinance CD it produced a "confirmed mathematical error" of
+// $95,155.17, because the purchase fields were all absent and the check expected
+// Cash to Close to equal the closing costs alone. It went out as the headline of
+// a paid report. Confirmed mathematical error is the strongest label this system
+// can apply; using it on a false positive damages every other finding.
 function checkCashToClose(c, toleranceDollars = 1.0) {
   const g = (k) => toCents(c[k] || 0);
+
+  // The alternative table applies to refinances. Detect it from the transaction
+  // type when given, and otherwise from the presence of payoffs, which only
+  // appear on the alternative table.
+  const isAlternative =
+    c.transactionType === 'refinance' ||
+    (c.transactionType !== 'purchase' && c.totalPayoffsAndPayments !== undefined
+      && c.totalPayoffsAndPayments !== null);
+
+  if (isAlternative) {
+    if (!c.loanAmount) {
+      return finding({
+        checkId: 'ARITH_CASH_TO_CLOSE',
+        title: 'Cash to Close could not be tested',
+        severity: Severity.REQUIRES_DOCUMENTATION,
+        evidence: EvidenceKind.NONE,
+        actionability: Actionability.NEEDS_DOCS,
+        basis: 'This looks like a refinance, which uses the alternative Cash to Close table. '
+          + 'The loan amount could not be read, so the calculation could not be reproduced.',
+      });
+    }
+    const expectedAlt =
+      toCents(c.loanAmount) -
+      g('totalClosingCostsJ') -
+      g('closingCostsPaidBeforeClosing') -
+      g('totalPayoffsAndPayments');
+    const statedAlt = g('statedCashToClose');
+    const varAlt = statedAlt - expectedAlt;
+    const okAlt = Math.abs(varAlt) <= toCents(toleranceDollars);
+
+    return finding({
+      checkId: 'ARITH_CASH_TO_CLOSE',
+      title: okAlt ? 'Cash to Close reconciles' : 'Cash to Close does not reconcile',
+      severity: okAlt ? Severity.WITHIN_NORMS : Severity.CONFIRMED_MATH_ERROR,
+      evidence: EvidenceKind.INTERNAL_ARITHMETIC,
+      actionability: okAlt ? Actionability.LIKELY_LOCKED : Actionability.CHANGEABLE_BEFORE_CLOSING,
+      dollarImpact: okAlt ? null : toDollars(Math.abs(varAlt)),
+      charged: toDollars(statedAlt),
+      expected: toDollars(expectedAlt),
+      variance: toDollars(varAlt),
+      basis: `Alternative Cash to Close table (refinance): loan amount `
+        + `${toDollars(toCents(c.loanAmount))} less total closing costs `
+        + `${toDollars(g('totalClosingCostsJ'))} less total payoffs and payments `
+        + `${toDollars(g('totalPayoffsAndPayments'))}.`,
+      whyItMatters: okAlt ? '' : 'This is the number you receive or wire.',
+      recommendedAction: okAlt ? ''
+        : 'Ask the settlement agent to reconcile the Cash to Close table line by line.',
+      askSettlement: !okAlt,
+      detail: { table: 'alternative' },
+    });
+  }
+
   const expected =
     g('totalClosingCostsJ') -
     g('closingCostsPaidBeforeClosing') +
@@ -453,6 +533,20 @@ function feeNameOnly(label) {
   return String(label || '').split(/\s+(?:to|with|payable to)\s+/i)[0];
 }
 
+// Charges that merely CONTAIN a cluster word but are distinct products.
+// "Title - Closing Protection Letter" contains "closing" and was flagged as a
+// duplicate of a settlement fee on a real report; a CPL is a standard, separate
+// title product. Note norm() strips the word "fee", so these must be matched on
+// the surviving tokens rather than on full fee names.
+const NOT_A_SERVICE_FEE = [
+  'protection', 'letter', 'insurance', 'policy', 'binder', 'endorsement', 'premium',
+];
+
+const isDistinctProduct = (label) => {
+  const n = norm(feeNameOnly(label));
+  return NOT_A_SERVICE_FEE.some((w) => n.includes(w));
+};
+
 // Hypotheses, not accusations. Every pair is surfaced as a question.
 const DUPLICATE_CLUSTERS = [
   ['settlement/closing/escrow services', ['settlement', 'closing', 'escrow', 'attorney closing']],
@@ -477,7 +571,9 @@ function detectDuplicates(items) {
   );
 
   for (const [clusterName, keys] of DUPLICATE_CLUSTERS) {
-    const hits = considered.filter((i) => keys.some((k) => norm(feeNameOnly(i.label)).includes(k)));
+    const hits = considered.filter(
+      (i) => !isDistinctProduct(i.label) && keys.some((k) => norm(feeNameOnly(i.label)).includes(k))
+    );
     for (let a = 0; a < hits.length; a++) {
       for (let b = a + 1; b < hits.length; b++) {
         const x = hits[a];
