@@ -422,12 +422,20 @@
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
           + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
-              ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both run'
+              ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both apply'
               : sc.tier.has_loan_estimate
-                ? 'Loan Estimates, so TRID tolerance testing runs against the correct baseline'
+                ? 'Loan Estimates, so TRID tolerance testing ' + (sc.tolerance_tested ? 'has already run against the correct baseline' : 'applies')
                 : 'a purchase contract, so we can check your negotiated credits against the closing figures')
           + '.</p>';
       }
+    }
+
+    if (sc.loan_estimates_uploaded && !sc.tolerance_tested) {
+      html += '<p class="scorecard-warn"><strong>Tolerance testing did not run.</strong> '
+        + 'We could not read your Loan Estimate'
+        + (sc.loan_estimates_uploaded === 1 ? '' : 's')
+        + ' clearly enough, or no issue date was printed — we need that to work out which one sets '
+        + 'the legal baseline. Try a clearer copy. This is not a clean result for those checks.</p>';
     }
 
     if (sc.deposits_excluded && sc.total_is_derived) {
@@ -482,10 +490,18 @@
       ? '<p class="scorecard-note">The full audit shows you what each of these is, what it should be, '
         + 'the rule or schedule we measured it against, the dollar impact, and whether it can still be '
         + 'changed before you close — plus drafted emails for your lender and settlement agent.</p>'
-      : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
-        + 'goes further: benchmark checks against your county and state schedules, and — if you add your '
-        + 'Loan Estimates or purchase contract — tolerance testing and credit reconciliation, which are '
-        + 'where most recoverable money turns up.</p>';
+      : (sc.tolerance_tested
+          // Tolerance testing has already run against the Loan Estimates. Say so,
+          // so the count means what the customer thinks it means.
+          ? '<p class="scorecard-note">No issues surfaced. That includes tolerance testing against '
+            + (sc.loan_estimates_read === 1 ? 'your Loan Estimate' : 'all ' + sc.loan_estimates_read + ' Loan Estimates')
+            + ' — we checked whether any fee rose beyond what the lending rules permit, and none did. '
+            + 'The full audit shows you every charge we examined, what we measured it against, and '
+            + 'the drafted emails.</p>'
+          : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
+            + 'goes further: benchmark checks against your county and state schedules, and — if you add your '
+            + 'Loan Estimates or purchase contract — tolerance testing and credit reconciliation, which are '
+            + 'where most recoverable money turns up.</p>');
 
     panel.innerHTML = html;
 
