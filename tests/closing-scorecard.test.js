@@ -796,3 +796,79 @@ test('a real settlement-plus-closing-fee pair is still caught', () => {
   });
   assert.equal(byCheck(runClosingAudit(e).findings, 'DUPLICATE_CANDIDATE').length, 1);
 });
+
+// --- regression: section subtotals are not charges ---------------------------
+// The extractor returned seven section headings and subtotals as if they were
+// individual charges on a real document. Consequences, all silent: a $1,320
+// section total ("Taxes and Other Government Fees") was benchmarked as if it
+// were a single recording fee; prepaid interest appeared twice; and the derived
+// borrower-charges total came out at $99,585 on a $10,056 closing because
+// subtotals and a $68,482 payoff were counted as fees.
+
+const { isSubtotalLine } = require('../api/_lib/closing-extract');
+
+test('section headings and totals are recognised as subtotals', () => {
+  const shouldFilter = [
+    'A. Origination Charges', 'Origination Charges',
+    'B. Services Borrower Did Not Shop For', 'C. Services Borrower Did Shop For',
+    'D. TOTAL LOAN COSTS (Borrower-Paid)', 'TOTAL LOAN COSTS (Borrower-Paid)',
+    'E. Taxes and Other Government Fees', 'Taxes and Other Government Fees',
+    'F. Prepaids', 'Prepaids', 'G. Initial Escrow Payment at Closing',
+    'I. TOTAL OTHER COSTS (Borrower-Paid)', 'J. TOTAL CLOSING COSTS (Borrower-Paid)',
+    'Loan Costs Subtotals (A + B + C)', 'K. TOTAL PAYOFFS AND PAYMENTS',
+    'Virginia National Bank (Payoff)',
+  ];
+  for (const label of shouldFilter) {
+    assert.equal(isSubtotalLine({ label }), true, `should filter: ${label}`);
+  }
+});
+
+test('real charges are never mistaken for subtotals', () => {
+  const shouldKeep = [
+    'Appraisal Fee', 'Credit Report', 'Flood Certification',
+    'Title - Settlement Fee', "Title - Lender's Title Insurance",
+    'Title - Closing Protection Letter', 'Recording Fees Deed: Mortgage: $115.00',
+    'City/County Tax/Stamps', 'Processing Fees', 'Underwriting Fees',
+    '2.125 % of Loan Amount (Points)', 'Prepaid Interest ( $35.869 per day )',
+    "Homeowner's Insurance $76.17 per month for 11 mo.", 'Aggregate Adjustment',
+    'Total Loan Amount Adjustment Fee',   // starts with "Total" but is a real charge? see below
+  ];
+  // "Total Loan Amount Adjustment Fee" legitimately starts with "Total" and WILL
+  // be filtered by the /^total\b/ rule. That is a deliberate trade: subtotals
+  // named "TOTAL ..." are common and dangerous, charges beginning with "Total"
+  // are rare and merely omitted. Assert the known behaviour rather than pretend.
+  for (const label of shouldKeep.slice(0, -1)) {
+    assert.equal(isSubtotalLine({ label }), false, `should keep: ${label}`);
+  }
+  assert.equal(isSubtotalLine({ label: 'Total Loan Amount Adjustment Fee' }), true);
+});
+
+test('a section subtotal is never benchmarked as a fee', () => {
+  const e = cleanExtraction({
+    property_state: 'MD',
+    line_items: [
+      { section: 'E', label: 'Recording Fees', amount: 165, category: 'recording_fee', confidence: HI, page: 2 },
+      { section: 'E', label: 'Taxes and Other Government Fees', amount: 1320, category: 'recording_fee', confidence: HI, page: 2 },
+    ],
+  });
+  const { findings } = runClosingAudit(e);
+  const benchmarked = findings.filter((f) => f.checkId === 'BENCHMARK').map((f) => f.title);
+  assert.equal(benchmarked.some((t) => /Taxes and Other Government Fees/.test(t)), false);
+  assert.equal(benchmarked.some((t) => /Recording Fees/.test(t)), true);
+});
+
+test('subtotals and payoffs are excluded from the derived charges total', () => {
+  const e = altaExtraction({
+    loan_amount: 183750,
+    line_items: [
+      { section: 'none', label: 'Appraisal Fee', amount: 770, payee: 'X', paid_by: 'borrower', category: 'appraisal', confidence: HI, page: 2 },
+      { section: 'none', label: 'Title - Settlement Fee', amount: 425, payee: 'Y', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+      { section: 'none', label: 'TOTAL CLOSING COSTS (Borrower-Paid)', amount: 10056.36, payee: null, paid_by: 'borrower', category: 'other', confidence: HI, page: 2 },
+      { section: 'none', label: 'Virginia National Bank (Payoff)', amount: 68482.11, payee: 'Virginia National Bank', paid_by: 'borrower', category: 'other', confidence: HI, page: 3 },
+    ],
+  });
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.equal(sc.total_borrower_charges, 1195);   // 770 + 425, not 79,733
+  assert.equal(sc.charge_lines_counted, 2);
+});
