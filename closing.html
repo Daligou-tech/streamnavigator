@@ -17,6 +17,15 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
 /* Free scorecard panel + Step 2 questions */
+.scorecard-alert{border:3px solid #b3261e;border-radius:12px;padding:20px 22px;margin:0 0 18px;background:rgba(179,38,30,.07);}
+.scorecard-alert h3{font-size:21px;line-height:1.25;margin:0 0 10px;color:#8c1d18;}
+.scorecard-alert p{font-size:15px;line-height:1.55;margin:0 0 10px;}
+.mismatch-rows{list-style:none;padding:0;margin:14px 0;}
+.mismatch-rows li{display:grid;grid-template-columns:1fr;gap:2px;padding:10px 0;border-top:1px solid rgba(140,29,24,.25);}
+.mismatch-rows li > span{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.75;}
+.mismatch-rows li > b{font-size:17px;}
+.mismatch-rows li > em{font-size:12px;font-style:normal;opacity:.7;margin-bottom:4px;}
+.mismatch-why{font-size:13px!important;opacity:.9;}
 .scorecard-panel{border:2px solid var(--ink);border-radius:10px;padding:18px 20px;margin-bottom:8px;}
 .scorecard-head{font-size:15px;margin-bottom:12px;}
 .scorecard-rows{list-style:none;padding:0;margin:0 0 12px;}
@@ -394,7 +403,32 @@
       rows.push(['Fees we have no rate data for', String(sc.cannot_benchmark_count)]);
     }
 
-    let html = '<div class="scorecard-head"><strong>Your free scorecard</strong>'
+    // Shown ABOVE the figures and at a size that cannot be skimmed past. Someone
+    // comparing two different properties' documents needs to know that before
+    // they read a single number, or they will trust findings built on the wrong
+    // pairing.
+    let html = '';
+    if (sc.transaction_mismatch) {
+      const m = sc.transaction_mismatch;
+      const rows = (m.fields || []).map(function(f){
+        return '<li><span>' + f.field + '</span>'
+          + '<b>' + (f.cd === null || f.cd === undefined ? 'not stated' : f.cd) + '</b>'
+          + '<em>on your Closing Disclosure</em>'
+          + '<b>' + (f.le === null || f.le === undefined ? 'not stated' : f.le) + '</b>'
+          + '<em>on your Loan Estimate</em></li>';
+      }).join('');
+      html += '<div class="scorecard-alert">'
+        + '<h3>These two documents are not the same loan</h3>'
+        + '<p>We stopped the comparison rather than give you findings that mean nothing.</p>'
+        + (rows ? '<ul class="mismatch-rows">' + rows + '</ul>' : '')
+        + '<p class="mismatch-why">A Loan Estimate is a promise made by one particular lender about '
+        + 'one particular property. Comparing it against a different loan\'s charges would produce '
+        + 'numbers that look like violations but are meaningless. Upload the Loan Estimate for this '
+        + 'property and lender, and we will run the comparison.</p>'
+        + '</div>';
+    }
+
+    html += '<div class="scorecard-head"><strong>Your free scorecard</strong>'
       + (sc.document_label ? ' &middot; read from your ' + sc.document_label : '')
       + (sc.property_county ? ' &middot; ' + sc.property_county + (sc.property_state ? ', ' + sc.property_state : '') : '')
       + '</div><ul class="scorecard-rows">'
@@ -431,8 +465,20 @@
     }
 
     if (sc.loan_estimates_uploaded && !sc.tolerance_tested) {
+      if (sc.tolerance_blocked_reason === 'different_loan') {
+        // already stated prominently above; do not repeat it in small print
+      } else
       html += '<p class="scorecard-warn"><strong>Tolerance testing did not run.</strong> '
-        + (sc.tolerance_blocked_reason === 'no_cd_charges'
+        + (sc.tolerance_blocked_reason === 'different_loan'
+            ? 'The Loan Estimate you uploaded appears to be for a different loan'
+              + (sc.transaction_mismatch && sc.transaction_mismatch.cd_lender && sc.transaction_mismatch.le_lender
+                  ? ' — your Closing Disclosure is from ' + sc.transaction_mismatch.cd_lender
+                    + ', but the Loan Estimate is from ' + sc.transaction_mismatch.le_lender
+                  : '')
+              + '. A Loan Estimate is a promise by one particular lender, so comparing it against a '
+              + 'different lender\'s charges would produce findings that mean nothing. Upload the '
+              + 'Loan Estimate for this loan and we will run the comparison.'
+            : sc.tolerance_blocked_reason === 'no_cd_charges'
             ? 'We read your Loan Estimate, but no individual charges could be read from your Closing '
               + 'Disclosure — page 2 carries the closing cost details and it appears to be missing or '
               + 'unreadable. There was nothing to compare the Loan Estimate against.'
@@ -450,6 +496,12 @@
         + 'Page 2 of the Closing Disclosure carries the closing cost details, and it appears to be '
         + 'missing or unreadable in what you uploaded. Most of the audit needs those lines, so a '
         + 'count of zero here does not mean your closing is clean.</p>';
+    }
+
+    if (sc.checks_skipped_detail && sc.checks_skipped_detail.length) {
+      html += '<p class="scorecard-note"><strong>Checks we could not run:</strong> '
+        + sc.checks_skipped_detail.join('; ')
+        + '. These are not passes — we could not test them at all.</p>';
     }
 
     if (sc.deposits_excluded && sc.total_is_derived) {
