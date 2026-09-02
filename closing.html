@@ -27,6 +27,11 @@
 .scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
 .inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
 .inline-error strong{display:block;margin-bottom:4px;}
+.upload-checklist{list-style:none;padding:0;margin:0 0 10px;font-size:14px;line-height:1.5;}
+.upload-checklist li{padding:6px 0 6px 20px;position:relative;border-bottom:1px solid rgba(0,0,0,.06);}
+.upload-checklist li:last-child{border-bottom:0;}
+.upload-checklist li:before{content:"•";position:absolute;left:4px;}
+.upload-note{font-size:13px;margin:0 0 12px;opacity:.85;}
 .fix-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0;font-size:13px;}
 .fix-row em{opacity:.7;font-style:normal;}
 .fix-row input{width:130px;padding:8px 10px;border:2px solid var(--ink);border-radius:8px;font:inherit;font-size:14px;}
@@ -153,15 +158,21 @@
           <textarea id="intake-description" placeholder="e.g. Rate locked 30 days ago, seller offered a credit..."></textarea>
         </div>
         <div class="field-block">
-          <label>Upload your Closing Disclosure</label>
+          <label>Upload your documents</label>
+          <ul class="upload-checklist">
+            <li><strong>Closing Disclosure</strong> — required. This alone is a $29 audit.</li>
+            <li><strong>Loan Estimate</strong> — optional. Lets us test whether a fee rose beyond what the lending rules allow.</li>
+            <li><strong>Purchase contract</strong> — optional. Lets us check the credits you negotiated actually landed.</li>
+          </ul>
+          <p class="upload-note">Add either optional document and your audit is $59 instead of $29. Drop them all in the same box.</p>
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG, or PNG — 6MB each, 9MB total</div>
+            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 6MB each, 9MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">The Closing Disclosure alone is a $29 audit. Add the latest Loan Estimate — do not add an older one — or your purchase contract, and it becomes $59, because two further analyses become possible: whether a fee rose beyond what the lending rules permit, and whether every credit you negotiated actually landed. If you have the full Loan Estimate sequence including revisions, upload it all; more history lets us establish the correct legal baseline instead of assuming one.</p>
+          <p class="field-hint">On Loan Estimates: add the most recent one, not an older one. If you have the full sequence including every revision, upload them all — more history lets us establish the correct legal baseline instead of assuming one.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
