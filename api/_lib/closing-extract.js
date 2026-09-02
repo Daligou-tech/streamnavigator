@@ -383,10 +383,19 @@ const CLASSIFY_TOOL = {
 async function classifyDocuments(apiKey, perFileBlocks) {
   const content = [];
   perFileBlocks.forEach((block, i) => {
-    content.push({ type: 'text', text: `Document ${i}:` });
+    content.push({ type: 'text', text: `FILE ${i}:` });
     content.push(block);
   });
-  content.push({ type: 'text', text: 'Identify each document.' });
+  content.push({
+    type: 'text',
+    text: `Identify what each FILE is. There are exactly ${perFileBlocks.length} files, numbered 0 `
+      + `to ${perFileBlocks.length - 1}. Return exactly one entry per FILE, using that file's number `
+      + `as the index.\n\n`
+      + `A single file often contains several documents bound together — a contract of sale with its `
+      + `addenda, or a closing package with a pre-qualification letter attached. Do NOT return one `
+      + `entry per document in that case. Return one entry for the FILE, choosing the type of the `
+      + `most significant document in it, and describe the rest in the note.`,
+  });
 
   const result = unwrapToolInput(await callAnthropic({
     apiKey,
@@ -395,7 +404,29 @@ async function classifyDocuments(apiKey, perFileBlocks) {
     contentBlocks: content,
     maxTokens: 1000,
   }), ['documents']);
-  return result.documents || [];
+
+  const raw = result.documents || [];
+
+  // Defensive: the index must address an uploaded FILE, not a document the model
+  // perceived inside one. A bundled contract-plus-addenda-plus-prequalification
+  // PDF was reported as three documents indexed 0,1,2 from two files, so the
+  // contract landed on index 2, contentBlocks[2] was undefined, and the file was
+  // silently dropped — classified, priced at $59, never extracted.
+  const perFile = new Map();
+  for (const d of raw) {
+    if (typeof d.index !== 'number' || d.index < 0 || d.index >= perFileBlocks.length) continue;
+    // Keep the first entry for each file; the prompt asks for the most
+    // significant document, and a later duplicate index is the bundling case.
+    if (!perFile.has(d.index)) perFile.set(d.index, d);
+  }
+
+  // Any file the model failed to describe still exists and must be represented,
+  // or its index disappears from every downstream filter.
+  for (let i = 0; i < perFileBlocks.length; i++) {
+    if (!perFile.has(i)) perFile.set(i, { index: i, document_type: 'other', note: 'not classified' });
+  }
+
+  return [...perFile.values()].sort((a, b) => a.index - b.index);
 }
 
 const PRIMARY_TYPES = ['closing_disclosure', 'alta_settlement_statement'];
@@ -564,13 +595,17 @@ function runClosingAudit(extraction, options = {}) {
 
   // --- internal arithmetic --------------------------------------------------
   const st = e.section_totals || {};
-  const totalsUsable = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].every((k) => confident(st[k]));
+  // A section with no charge lines totals zero. Requiring a confident reading of
+  // a blank section was suppressing the subtotal check on ordinary documents.
+  const sectionValue = (k) => (isEmptySection(e, k) ? 0 : val(st[k]));
+  const totalsUsable = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    .every((k) => confident(st[k]) || isEmptySection(e, k));
   if (totalsUsable) {
     const totalsFromCustomer = ['A','B','C','D','E','F','G','H','I','J']
       .some((k) => isCustomer(st[k]));
     const arith = audit.checkSectionArithmetic({
-      A: val(st.A), B: val(st.B), C: val(st.C), D: val(st.D),
-      E: val(st.E), F: val(st.F), G: val(st.G), H: val(st.H),
+      A: sectionValue('A'), B: sectionValue('B'), C: sectionValue('C'), D: val(st.D),
+      E: sectionValue('E'), F: sectionValue('F'), G: sectionValue('G'), H: sectionValue('H'),
       I: val(st.I), J: val(st.J), lenderCredits: val(st.lender_credits) || 0,
     });
     findings.push(...(totalsFromCustomer ? arith.map(audit.markCustomerSourced) : arith));
@@ -1107,6 +1142,38 @@ const CORRECTABLE_CTC = {
 
 // Returns the list of values we could not read confidently, each with a stable
 // path, a human label, and the page to look at. This is what the UI renders.
+// An empty section is not an unreadable one.
+//
+// Section H (Other) is blank on most Closing Disclosures. The extractor returned
+// it with low confidence — correctly, since there is nothing there to read — and
+// the customer was asked to go and type in a figure that does not exist. It also
+// blocked the section subtotal check, which needs every section total, so a
+// blank section silently suppressed a real arithmetic test.
+//
+// Only applies to the lettered charge sections. D, I and J are aggregate totals
+// and are always printed, so a missing one is genuinely unreadable.
+const CHARGE_SECTIONS = ['A', 'B', 'C', 'E', 'F', 'G', 'H'];
+
+function isEmptySection(extraction, key) {
+  if (!CHARGE_SECTIONS.includes(key)) return false;
+  const e = extraction || {};
+  const lines = e.line_items || [];
+
+  // If nothing at all was extracted we cannot conclude a section is empty —
+  // that is an unreadable document, not an empty section.
+  if (!lines.length) return false;
+  if (lines.some((li) => li.section === key)) return false;
+
+  // No lines captured for this section, but a non-zero total is printed: the
+  // section has content we did not itemise. Zeroing it would corrupt the
+  // subtotal check, which is what happened when prepaids and escrow totals were
+  // present without individual lines.
+  const total = (e.section_totals || {})[key];
+  if (total && typeof total.value === 'number' && Math.abs(total.value) > 0.005) return false;
+
+  return true;
+}
+
 function listUnreadableFields(extraction) {
   const e = extraction || {};
   const out = [];
@@ -1126,6 +1193,7 @@ function listUnreadableFields(extraction) {
 
   const st = e.section_totals || {};
   for (const [key, label] of Object.entries(CORRECTABLE_TOTALS)) {
+    if (isEmptySection(e, key)) continue;
     if (st[key] && lowConf(st[key])) {
       out.push({
         path: `section_totals.${key}`, label, page: st[key].page || 2,
@@ -1358,6 +1426,7 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  isEmptySection,
   CONTRACT_TOOL,
   extractPurchaseContract,
   toContractTerms,
