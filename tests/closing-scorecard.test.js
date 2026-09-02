@@ -872,3 +872,65 @@ test('subtotals and payoffs are excluded from the derived charges total', () => 
   assert.equal(sc.total_borrower_charges, 1195);   // 770 + 425, not 79,733
   assert.equal(sc.charge_lines_counted, 2);
 });
+
+// --- regression: CFPB sample H-25F1 ------------------------------------------
+// A refinance with $655 in closing costs paid before closing. Subtracting that
+// figure instead of adding it produced a phantom $1,310.00 "confirmed
+// mathematical error" — exactly twice the amount, the signature of a sign error.
+// Total Closing Costs (J) already includes amounts already paid; on the
+// alternative table J is subtracted, so the paid portion must be added back.
+
+const h25f1 = {
+  transactionType: 'refinance',
+  loanAmount: 150000,
+  totalClosingCostsJ: 5977.57,
+  closingCostsPaidBeforeClosing: 655,
+  totalPayoffsAndPayments: 115000,
+  statedCashToClose: 29677.43,
+};
+
+test('costs paid before closing are added back on the alternative table', () => {
+  // 150,000 − 5,977.57 + 655 − 115,000 = 29,677.43, exactly as printed.
+  const f = checkCashToClose(h25f1);
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+  assert.equal(f.expected, 29677.43);
+  assert.equal(f.variance, 0);
+});
+
+test('the sign error would show as exactly twice the paid-before amount', () => {
+  // Guards the specific failure: if this ever regresses the variance is 1,310,
+  // which is 2 x 655. Asserting the correct value keeps that from coming back.
+  const f = checkCashToClose(h25f1);
+  assert.notEqual(Math.abs(f.variance), 1310);
+});
+
+test('costs paid before closing are still subtracted on a purchase', () => {
+  // Opposite sign on the standard table, because there J is added.
+  const f = checkCashToClose({
+    transactionType: 'purchase',
+    totalClosingCostsJ: 13365,
+    closingCostsPaidBeforeClosing: 500,
+    downPaymentFundsFromBorrower: 80000,
+    deposit: 15000, sellerCredits: 6000, adjustmentsAndOtherCredits: 1200,
+    statedCashToClose: 70665,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
+test('a genuine error on the alternative table is still caught', () => {
+  const f = checkCashToClose({ ...h25f1, statedCashToClose: 30677.43 });
+  assert.equal(f.severity, Severity.CONFIRMED_MATH_ERROR);
+  assert.equal(f.dollarImpact, 1000);
+});
+
+test('total closing costs falls back to the Cash to Close table', () => {
+  // A page-3 excerpt, or a scan missing page 2, has no section subtotals but
+  // still carries J in the Cash to Close table. Showing a blank headline there
+  // is a worse answer than reading the figure that is present.
+  const e = cleanExtraction({ section_totals: {}, loan_amount: 150000 });
+  e.cash_to_close = { total_closing_costs_j: { value: 5977.57, confidence: HI, page: 2 } };
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+  assert.equal(sc.total_closing_costs, 5977.57);
+  assert.equal(sc.closing_costs_pct_of_loan, 4);   // 5977.57 / 150000 = 3.98%
+});
