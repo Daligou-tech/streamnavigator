@@ -24,9 +24,20 @@ const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 // complete Loan Estimate sequence. NOTE: MAX_TOTAL_BYTES below still caps the
 // whole request at 9MB, so this ceiling is not yet reachable in practice — see
 // the direct-upload note in the handover.
+// Uploads arrive base64-encoded in a JSON body. Vercel caps a function request
+// body at 4.5MB and returns 413 FUNCTION_PAYLOAD_TOO_LARGE above it — at the
+// edge, before this handler runs, so the friendly errors below never fire for
+// an oversized request. base64 inflates bytes by 4/3, so the real ceiling on
+// raw file bytes is ~3.2MB. The previous 6MB/9MB values were unreachable: a
+// single 5MB scan died with a generic client-side error and no retry could fix
+// it. Keep in step with navigator-shared.js.
+const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
+const BASE64_INFLATION = 4 / 3;
+const JSON_ENVELOPE_MARGIN = 0.94;
+const MAX_TOTAL_BYTES = Math.floor((VERCEL_BODY_LIMIT_BYTES / BASE64_INFLATION) * JSON_ENVELOPE_MARGIN);
+const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
+const MAX_TOTAL_MB = Math.round((MAX_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
 const MAX_FILES = 12;
-const MAX_FILE_BYTES = 6 * 1024 * 1024; // 6MB per file
-const MAX_TOTAL_BYTES = 9 * 1024 * 1024; // keep the whole request under Vercel's body limit
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -96,13 +107,13 @@ module.exports = async function handler(req, res) {
     }
     const approxBytes = Math.ceil((f.dataBase64.length * 3) / 4);
     if (approxBytes > MAX_FILE_BYTES) {
-      res.status(400).json({ ok: false, error: `${f.name} is larger than the 6MB limit.` });
+      res.status(400).json({ ok: false, error: `${f.name} is larger than the ${MAX_TOTAL_MB}MB limit. Try the original PDF from your lender rather than a photo.` });
       return;
     }
     totalBytes += approxBytes;
   }
   if (totalBytes > MAX_TOTAL_BYTES) {
-    res.status(400).json({ ok: false, error: 'Those files together are too large — please upload 9MB or less total.' });
+    res.status(400).json({ ok: false, error: `Those files together are too large — the limit is ${MAX_TOTAL_MB}MB total. Upload the Closing Disclosure now and add the rest afterwards.` });
     return;
   }
 
