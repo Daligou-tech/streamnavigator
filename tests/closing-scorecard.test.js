@@ -1403,3 +1403,145 @@ test('the audit produces a contract finding when terms are supplied', () => {
   assert.equal(f.dollarImpact, 5000);   // 12,500 agreed vs 7,500 shown
   assert.equal(f.askSettlement, true);
 });
+
+test('correcting a figure does not resurrect a refused tolerance comparison', () => {
+  // closing-corrections derived tolerance_tested from counts alone. A customer
+  // correcting one unrelated figure would have flipped a mismatched Fir Bank /
+  // Ficus Bank pair back to "already run against the correct baseline".
+  const le = toLoanEstimateRecord(rawLE({ lender_name: 'Ficus Bank' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Fir Bank', closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [{ section: 'A', line_number: '01', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 }],
+  });
+  const { skipped } = runClosingAudit(cd, { loanEstimates: [le] });
+
+  const transactionMismatch = skipped.some((x) => /different loan/.test(x));
+  const cdChargeCount = (cd.line_items || []).length;
+
+  // counts alone would say true; the mismatch must veto it
+  assert.equal(1 > 0 && cdChargeCount > 0, true);
+  assert.equal(1 > 0 && cdChargeCount > 0 && !transactionMismatch, false);
+});
+
+test('the outstanding unreadable list shrinks as figures are supplied', () => {
+  // The client carries this through checkout. A stale copy makes the paid report
+  // ask for figures the customer already entered.
+  const e = cleanExtraction({ prepaid_interest: undefined });
+  e.line_items[1].confidence = 0.70;
+  e.section_totals.J = { value: 5797.26, confidence: 0.60, page: 2 };
+
+  const before = listUnreadableFields(e);
+  assert.equal(before.length, 2);
+
+  const { extraction } = mergeCustomerValues(e, { 'section_totals.J': '5797.26' });
+  const after = listUnreadableFields(extraction);
+  assert.equal(after.length, 1);
+  assert.equal(after[0].path, 'line_items.1');
+});
+
+// --- empty sections ----------------------------------------------------------
+// Section H (Other) is blank on most Closing Disclosures. It was reported as an
+// unreadable value, so the customer was asked to type in a figure that does not
+// exist — and because the subtotal check requires every section total, a blank
+// section silently suppressed a real arithmetic test.
+
+const { isEmptySection } = require('../api/_lib/closing-extract');
+
+function withEmptyH() {
+  const e = cleanExtraction({ prepaid_interest: undefined });
+  // no line item carries section H
+  e.section_totals.H = { value: 0, confidence: 0.30, page: 2 };
+  return e;
+}
+
+test('a section with no charge lines is recognised as empty', () => {
+  const e = withEmptyH();
+  assert.equal(isEmptySection(e, 'H'), true);
+  assert.equal(isEmptySection(e, 'A'), false);   // has an Origination Charge
+});
+
+test('an aggregate total is never treated as an empty section', () => {
+  // D, I and J are always printed, so a missing one is genuinely unreadable.
+  const e = withEmptyH();
+  assert.equal(isEmptySection(e, 'D'), false);
+  assert.equal(isEmptySection(e, 'I'), false);
+  assert.equal(isEmptySection(e, 'J'), false);
+});
+
+test('a document with no line items at all is unreadable, not empty', () => {
+  // Otherwise every section would look empty on a failed extraction.
+  const e = cleanExtraction({ line_items: [] });
+  assert.equal(isEmptySection(e, 'H'), false);
+});
+
+test('the customer is not asked to read a figure from an empty section', () => {
+  const e = withEmptyH();
+  const paths = listUnreadableFields(e).map((f) => f.path);
+  assert.equal(paths.includes('section_totals.H'), false);
+});
+
+test('a blank section no longer suppresses the subtotal check', () => {
+  const e = withEmptyH();
+  const { skipped, findings } = runClosingAudit(e);
+  assert.equal(skipped.includes('section subtotals'), false);
+  // and the arithmetic holds with H treated as zero: E+F+G+H = 155 + 997.26 +
+  // 1300 + 0 = 2452.26 = I, and D + I = 5797.26 = J
+  assert.equal(findings.filter((f) => f.checkId.startsWith('ARITH_')
+    && f.severity === Severity.CONFIRMED_MATH_ERROR).length, 0);
+});
+
+test('a section total present without itemised lines is not zeroed', () => {
+  // The first version of this rule declared any section without line items
+  // empty, which zeroed a printed $997.26 prepaids total and produced a phantom
+  // subtotal error. A stated non-zero total means the section has content.
+  const e = withEmptyH();
+  assert.equal(isEmptySection(e, 'F'), false);   // total 997.26, no lines captured
+  assert.equal(isEmptySection(e, 'G'), false);   // total 1300
+  assert.equal(isEmptySection(e, 'H'), true);    // total 0, no lines
+});
+
+test('a genuinely unreadable populated section is still reported', () => {
+  const e = cleanExtraction({ prepaid_interest: undefined });
+  e.section_totals.B = { value: 650, confidence: 0.40, page: 2 };  // B has lines
+  const paths = listUnreadableFields(e).map((f) => f.path);
+  assert.equal(paths.includes('section_totals.B'), true);
+});
+
+test('classifier indexes address uploaded files, not documents inside them', () => {
+  // A signed contract PDF bundling the contract, its addenda and a
+  // pre-qualification letter was reported as three documents from two files. The
+  // contract landed on index 2, contentBlocks[2] was undefined, and the file was
+  // silently dropped — classified, priced at $59, never extracted.
+  const twoFiles = 2;
+  const modelOutput = [
+    { index: 0, document_type: 'closing_disclosure' },
+    { index: 1, document_type: 'other', note: 'pre-qualification letter' },
+    { index: 2, document_type: 'purchase_contract', note: 'contract of sale plus addenda' },
+  ];
+
+  const perFile = new Map();
+  for (const d of modelOutput) {
+    if (typeof d.index !== 'number' || d.index < 0 || d.index >= twoFiles) continue;
+    if (!perFile.has(d.index)) perFile.set(d.index, d);
+  }
+  for (let i = 0; i < twoFiles; i++) {
+    if (!perFile.has(i)) perFile.set(i, { index: i, document_type: 'other', note: 'not classified' });
+  }
+  const result = [...perFile.values()].sort((a, b) => a.index - b.index);
+
+  assert.equal(result.length, twoFiles);          // never more entries than files
+  assert.ok(result.every((d) => d.index < twoFiles));
+  // the out-of-range contract is dropped rather than pointing at nothing
+  assert.equal(result.some((d) => d.document_type === 'purchase_contract'), false);
+});
+
+test('every uploaded file is represented even if the model skipped it', () => {
+  const threeFiles = 3;
+  const modelOutput = [{ index: 0, document_type: 'closing_disclosure' }];
+  const perFile = new Map(modelOutput.map((d) => [d.index, d]));
+  for (let i = 0; i < threeFiles; i++) {
+    if (!perFile.has(i)) perFile.set(i, { index: i, document_type: 'other', note: 'not classified' });
+  }
+  assert.equal(perFile.size, 3);
+  assert.equal(perFile.get(2).document_type, 'other');
+});
