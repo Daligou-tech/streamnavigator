@@ -81,6 +81,11 @@ const EXTRACTION_TOOL = {
       transaction_type: { type: 'string', enum: ['purchase', 'refinance', 'other'] },
       closing_date: { type: 'string', description: 'Closing/disbursement date as YYYY-MM-DD.' },
       loan_amount: { type: 'number' },
+      sale_price: {
+        type: 'number',
+        description: 'Sale price / contract price from page 1 or the summaries of transactions. '
+          + 'Transfer and recordation taxes are computed on this, not on the loan amount.',
+      },
       interest_rate_pct: { type: 'number', description: 'Note rate as a percentage, e.g. 6.5 for 6.5%.' },
       loan_term_years: { type: 'number' },
 
@@ -280,6 +285,89 @@ async function callAnthropic({ apiKey, system, tools, contentBlocks, maxTokens =
   return toolUse.input;
 }
 
+// ---------------------------------------------------------------------------
+// document classification + pricing tier
+// ---------------------------------------------------------------------------
+
+// Cheap first pass over a multi-file upload. Full extraction of every document
+// at the free stage would multiply the model cost on an unauthenticated
+// endpoint; this returns only a type per file, so we can extract the Closing
+// Disclosure properly and defer the rest until after payment, which is when the
+// tolerance and contract analyses actually run.
+const CLASSIFY_TOOL = {
+  name: 'classify_documents',
+  description: 'Identify what each uploaded document is. Report only what you see.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      documents: {
+        type: 'array',
+        description: 'One entry per document, in the order supplied.',
+        items: {
+          type: 'object',
+          properties: {
+            index: { type: 'number', description: 'Zero-based position in the upload.' },
+            document_type: {
+              type: 'string',
+              enum: [
+                'closing_disclosure', 'alta_settlement_statement', 'loan_estimate',
+                'purchase_contract', 'other',
+              ],
+            },
+            note: { type: 'string', description: 'A few words on what it appears to be.' },
+          },
+          required: ['index', 'document_type'],
+        },
+      },
+    },
+    required: ['documents'],
+  },
+};
+
+async function classifyDocuments(apiKey, perFileBlocks) {
+  const content = [];
+  perFileBlocks.forEach((block, i) => {
+    content.push({ type: 'text', text: `Document ${i}:` });
+    content.push(block);
+  });
+  content.push({ type: 'text', text: 'Identify each document.' });
+
+  const result = await callAnthropic({
+    apiKey,
+    system: 'You identify mortgage closing documents. Report what each one is. Do not analyse them.',
+    tools: [CLASSIFY_TOOL],
+    contentBlocks: content,
+    maxTokens: 1000,
+  });
+  return result.documents || [];
+}
+
+const PRIMARY_TYPES = ['closing_disclosure', 'alta_settlement_statement'];
+const UPGRADE_TYPES = ['loan_estimate', 'purchase_contract'];
+
+// Two tiers, because the value is genuinely bimodal. A Closing Disclosure alone
+// supports arithmetic verification, duplicate detection and fee questions — a
+// competent second pair of eyes, but not a savings-finder. Loan Estimates unlock
+// TRID tolerance testing, and the purchase contract unlocks credit
+// reconciliation; both can conclude that money is owed back. Charging one price
+// for both would overcharge the first customer and undercharge the second.
+const TIERS = {
+  basic: { id: 'basic', price_cents: 2900, price_label: '$29' },
+  full: { id: 'full', price_cents: 5900, price_label: '$59' },
+};
+
+function determineTier(documents) {
+  const types = (documents || []).map((d) => d.document_type);
+  const extras = types.filter((t) => UPGRADE_TYPES.includes(t));
+  const tier = extras.length ? TIERS.full : TIERS.basic;
+  return {
+    ...tier,
+    has_loan_estimate: types.includes('loan_estimate'),
+    has_purchase_contract: types.includes('purchase_contract'),
+    upgrade_documents: extras.length,
+  };
+}
+
 async function extractClosingDisclosure(apiKey, contentBlocks) {
   return callAnthropic({
     apiKey,
@@ -474,9 +562,11 @@ function runClosingAudit(extraction, options = {}) {
   }))));
 
   // --- benchmarks -----------------------------------------------------------
+  // transfer_tax is deliberately absent: it is tested in aggregate below,
+  // because a single line is one party's contractual share of the tax.
   const BENCHMARKABLE = new Set([
     'title_insurance_owners', 'title_insurance_lenders', 'recording_fee',
-    'transfer_tax', 'appraisal', 'survey', 'attorney', 'settlement_service',
+    'appraisal', 'survey', 'attorney', 'settlement_service',
   ]);
   for (const li of lines) {
     if (!BENCHMARKABLE.has(li.category)) continue;
@@ -489,6 +579,84 @@ function runClosingAudit(extraction, options = {}) {
       salePrice: e.sale_price || null,
     }));
     findings.push(isCustomer(li) ? audit.markCustomerSourced(bmFinding) : bmFinding);
+  }
+
+  // --- transfer taxes: tested in aggregate, never line by line ---------------
+  //
+  // A settlement statement shows each party's SHARE. Buyer and seller commonly
+  // split these 50/50 by contract, so comparing one line against the statutory
+  // rate would report a correctly-paid half as a shortfall. Allocation is
+  // contractual; the tax is not. We test the total and say so.
+  //
+  // And we only ever flag a total that EXCEEDS the unexempted statutory figure.
+  // Maryland alone has first-time-buyer and owner-occupied reductions, so a
+  // total coming in low is far more likely to be a correctly applied exemption
+  // than an error, and calling it one would be a false accusation.
+  if (typeof getBenchmark.stacked === 'function' && e.sale_price) {
+    const taxLines = (e.line_items || []).filter(
+      (li) => li.category === 'transfer_tax' && typeof li.amount === 'number'
+    );
+    const stack = getBenchmark.stacked({
+      category: 'transfer_tax',
+      state: e.property_state,
+      county: e.property_county,
+      salePrice: e.sale_price,
+      loanAmount: e.loan_amount,
+    });
+
+    if (taxLines.length && stack.total !== null && e.sale_price <= 1000000) {
+      const charged = Math.round(taxLines.reduce((a, li) => a + li.amount, 0) * 100) / 100;
+      const variance = Math.round((charged - stack.total) * 100) / 100;
+      const breakdown = stack.components
+        .map((c) => `${c.label} ${audit.toDollars(audit.toCents(c.amount))}`).join(' + ');
+      const notes = stack.components.map((c) => c.note).filter(Boolean).join(' ');
+
+      if (variance > 1) {
+        findings.push(audit.finding({
+          checkId: 'TRANSFER_TAX_TOTAL',
+          title: 'Transfer taxes exceed the statutory amount for this jurisdiction',
+          severity: audit.Severity.POTENTIAL_OVERCHARGE,
+          evidence: stack.evidence,
+          actionability: audit.Actionability.CHANGEABLE_BEFORE_CLOSING,
+          dollarImpact: variance,
+          charged,
+          expected: stack.total,
+          variance,
+          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} on a sale price of `
+            + `${audit.toDollars(audit.toCents(e.sale_price))}. Source: ${stack.components[0].source}.`,
+          whyItMatters:
+            'These are statutory rates, not negotiable service charges. Buyer and seller may split them '
+            + 'however the contract says, but the total owed to the state and county is fixed.',
+          recommendedAction:
+            'Ask the settlement agent to show the transfer tax calculation against the sale price.',
+          askSettlement: true,
+          detail: { components: stack.components, lines_counted: taxLines.length },
+        }));
+      } else {
+        findings.push(audit.finding({
+          checkId: 'TRANSFER_TAX_TOTAL',
+          title: variance < -1
+            ? 'Transfer taxes are below the standard statutory amount'
+            : 'Transfer taxes match the statutory amount',
+          severity: variance < -1 ? audit.Severity.INFORMATIONAL : audit.Severity.WITHIN_NORMS,
+          evidence: stack.evidence,
+          actionability: audit.Actionability.LIKELY_LOCKED,
+          charged,
+          expected: stack.total,
+          variance,
+          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} before exemptions, on a `
+            + `sale price of ${audit.toDollars(audit.toCents(e.sale_price))}. Your statement shows `
+            + `${audit.toDollars(audit.toCents(charged))} across ${taxLines.length} line`
+            + `${taxLines.length === 1 ? '' : 's'}; the remainder is normally the other party's share, `
+            + `which the contract decides. Source: ${stack.components[0].source}.`
+            + (variance < -1 && notes ? ' ' + notes : ''),
+          whyItMatters: variance < -1
+            ? 'A total below the standard rate usually means an exemption was applied, not that '
+              + 'something is missing. We do not treat it as an error.'
+            : '',
+        }));
+      }
+    }
   }
 
   // --- TRID tolerances, only if Loan Estimates were supplied ----------------
@@ -753,6 +921,10 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  classifyDocuments,
+  determineTier,
+  TIERS,
+  PRIMARY_TYPES,
   listUnreadableFields,
   mergeCustomerValues,
   ACCEPTED_DOCUMENT_TYPES,

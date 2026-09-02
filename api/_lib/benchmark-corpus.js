@@ -50,6 +50,7 @@ function validateRow(row, index = 0) {
     at('missing or malformed source_url — a benchmark with no citable source must not be loaded');
   }
   if (!row.source_name) at('missing source_name');
+  if (row.stackable && !row.component_label) at('stackable rows need a component_label for the report');
   if (!row.effective_date) at('missing effective_date');
   if (!row.verified_at) at('missing verified_at');
 
@@ -216,7 +217,7 @@ function makeGetBenchmark(rows, options = {}) {
 
   const loaded = rows.slice();
 
-  return function getBenchmark(ctx = {}) {
+  function getBenchmark(ctx = {}) {
     const { category, state, county, municipality } = ctx;
     if (!category) return null;
 
@@ -249,6 +250,48 @@ function makeGetBenchmark(rows, options = {}) {
     }
     return null;
   };
+
+  // Some charges are the SUM of taxes levied at several levels at once — a
+  // Maryland deed carries a state transfer tax and a local one, and both appear
+  // on the settlement statement. The normal lookup returns the most specific
+  // single row, which would understate the true statutory figure. Rows marked
+  // stackable are added together across jurisdiction levels instead.
+  getBenchmark.stacked = function stacked(ctx = {}) {
+    const { category, state, county, municipality } = ctx;
+    if (!category) return { total: null, components: [] };
+
+    const when = now();
+    const rows = loaded.filter((r) => {
+      if (r.fee_category !== category || !r.stackable) return false;
+      if (isStale(r, when, staleAfterDays)) return false;
+      if (r.effective_date && new Date(r.effective_date) > when) return false;
+      if (r.jurisdiction_type === 'national') return true;
+      if (!state || norm(r.state) !== norm(state)) return false;
+      if (r.jurisdiction_type === 'county') return county && norm(r.county) === norm(county);
+      if (r.jurisdiction_type === 'municipality') return municipality && norm(r.municipality) === norm(municipality);
+      return true;
+    });
+
+    if (!rows.length) return { total: null, components: [] };
+
+    const components = [];
+    let total = 0;
+    for (const row of rows) {
+      const bm = toBenchmark(row, ctx);
+      if (!bm || bm.exact === null) return { total: null, components: [] }; // incomplete: refuse
+      total += bm.exact;
+      components.push({
+        label: row.component_label || row.jurisdiction_type,
+        amount: bm.exact,
+        source: row.source_name,
+        sourceUrl: row.source_url,
+        note: row.exemption_note || null,
+      });
+    }
+    return { total: round2(total), components, evidence: rows[0].evidence };
+  };
+
+  return getBenchmark;
 }
 
 // ---------------------------------------------------------------------------
