@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const {
   runClosingAudit, buildScorecard, normalizeProviderListAnswer, CONF_THRESHOLD,
 } = require('../api/_lib/closing-extract');
-const { Severity } = require('../api/_lib/closing-audit');
+const { Severity, checkCashToClose } = require('../api/_lib/closing-audit');
 
 const HI = 0.98; // confident read
 const LO = 0.40; // unreadable
@@ -683,4 +683,116 @@ test('tier prices are the two agreed numbers and nothing else', () => {
   assert.deepEqual(Object.keys(TIERS), ['basic', 'full']);
   assert.equal(TIERS.basic.price_cents, 2900);
   assert.equal(TIERS.full.price_cents, 5900);
+});
+
+// --- regression: 4324 Parkside Dr refinance ----------------------------------
+// A real customer document that produced two confident false positives in a
+// PAID report: a $95,155.17 "confirmed mathematical error" in Cash to Close and
+// a $1,024.48 escrow cushion "overcharge". The document was correct in both
+// cases. These are the highest-severity labels the system can apply, so getting
+// them wrong discredits every other finding.
+
+const parksideCTC = {
+  transactionType: 'refinance',
+  loanAmount: 183750,
+  totalClosingCostsJ: 10056.36,
+  closingCostsPaidBeforeClosing: 0,
+  totalPayoffsAndPayments: 68482.11,
+  statedCashToClose: 105211.53,
+};
+
+test('a refinance uses the alternative Cash to Close table', () => {
+  // 183,750.00 − 10,056.36 − 68,482.11 = 105,211.53, exactly as printed.
+  const f = checkCashToClose(parksideCTC);
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+  assert.equal(f.expected, 105211.53);
+  assert.equal(f.variance, 0);
+  assert.equal(f.detail.table, 'alternative');
+});
+
+test('the purchase formula is never applied to a refinance', () => {
+  // Without the fix this returned a $95,155.17 confirmed mathematical error.
+  const f = checkCashToClose(parksideCTC);
+  assert.notEqual(f.severity, Severity.CONFIRMED_MATH_ERROR);
+  assert.equal(f.dollarImpact, null);
+});
+
+test('the alternative table is detected from payoffs when type is unknown', () => {
+  const f = checkCashToClose({ ...parksideCTC, transactionType: undefined });
+  assert.equal(f.detail.table, 'alternative');
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
+test('a genuine refinance error is still caught', () => {
+  const f = checkCashToClose({ ...parksideCTC, statedCashToClose: 106211.53 });
+  assert.equal(f.severity, Severity.CONFIRMED_MATH_ERROR);
+  assert.equal(f.dollarImpact, 1000);
+});
+
+test('purchases still use the standard table', () => {
+  const f = checkCashToClose({
+    transactionType: 'purchase',
+    totalClosingCostsJ: 13365, downPaymentFundsFromBorrower: 80000,
+    deposit: 15000, sellerCredits: 6000, adjustmentsAndOtherCredits: 1200,
+    statedCashToClose: 71165,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+  assert.notEqual(f.detail.table, 'alternative');
+});
+
+test('Section G is never tested against the RESPA cushion cap', () => {
+  // Parkside: annual escrowed costs 3,073.44 (cap 512.24); Section G 1,536.72 —
+  // 11 months of hazard insurance plus 6 months of taxes less a 380.85 aggregate
+  // adjustment. Reporting that as a 1,024.48 overcharge was the bug.
+  const e = cleanExtraction({
+    transaction_type: 'refinance',
+    escrow: {
+      annual_disbursements: [{ item: 'Property taxes and insurance', annual_amount: 3073.44, confidence: HI }],
+      section_g_total: 1536.72,
+      aggregate_adjustment: -380.85,
+      // no cushion_amount: the document does not state one
+    },
+  });
+  const { findings, skipped } = runClosingAudit(e);
+  const f = byCheck(findings, 'ESCROW_CUSHION')[0];
+  assert.equal(f.severity, Severity.INFORMATIONAL);
+  assert.notEqual(f.severity, Severity.POTENTIAL_OVERCHARGE);
+  assert.equal(f.dollarImpact, null);
+  assert.match(f.basis, /not the cushion itself/);
+  assert.ok(skipped.some((s) => /escrow cushion/.test(s)));
+});
+
+test('a separately stated cushion over the cap is still flagged', () => {
+  const e = cleanExtraction({
+    escrow: {
+      annual_disbursements: [{ item: 'taxes', annual_amount: 3073.44, confidence: HI }],
+      cushion_amount: 900,
+    },
+  });
+  const f = byCheck(runClosingAudit(e).findings, 'ESCROW_CUSHION')[0];
+  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
+  assert.equal(f.expected, 512.24);
+});
+
+test('a Closing Protection Letter is not a duplicate settlement fee', () => {
+  // 'closing' matched "Closing Protection Letter" — a distinct standard title
+  // product — against the settlement/closing cluster.
+  const e = altaExtraction({
+    line_items: [
+      { section: 'C', label: 'Title - Closing Protection Letter', amount: 25, payee: 'Boston National Title Agency LLC', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+      { section: 'C', label: 'Title - Settlement Fee', amount: 425, payee: 'Boston National Title Agency LLC', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+      { section: 'C', label: "Title - Lender's Title Insurance", amount: 349.13, payee: 'Boston National Title Agency LLC', paid_by: 'borrower', category: 'title_insurance_lenders', confidence: HI, page: 2 },
+    ],
+  });
+  assert.equal(byCheck(runClosingAudit(e).findings, 'DUPLICATE_CANDIDATE').length, 0);
+});
+
+test('a real settlement-plus-closing-fee pair is still caught', () => {
+  const e = altaExtraction({
+    line_items: [
+      { section: 'C', label: 'Settlement Fee', amount: 695, payee: 'Acme Title', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+      { section: 'C', label: 'Closing Fee', amount: 450, payee: 'Acme Title', paid_by: 'borrower', category: 'settlement_service', confidence: HI, page: 2 },
+    ],
+  });
+  assert.equal(byCheck(runClosingAudit(e).findings, 'DUPLICATE_CANDIDATE').length, 1);
 });
