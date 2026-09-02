@@ -323,13 +323,15 @@ async function callAnthropic({ apiKey, system, tools, contentBlocks, maxTokens =
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: maxTokens,
-      // Extraction is transcription, not writing: there is one right answer on
-      // the page. At the default temperature the same Closing Disclosure
-      // produced "Baltimore, MD" on one run and "Baltimore City, MD" on the
-      // next — different jurisdictions in Maryland, with different recording
-      // fees and transfer taxes — and a flag count that moved between runs. A
-      // customer who re-uploads the same document must get the same answer.
-      temperature: 0,
+      // DO NOT ADD temperature, top_p OR top_k HERE.
+      // claude-sonnet-5 returns 400 invalid_request_error ("`temperature` is
+      // deprecated for this model") if any sampling parameter is set to a
+      // non-default value. Setting temperature: 0 — a reasonable instinct for a
+      // transcription task — made every extraction call fail, and the customer
+      // saw "We could not read that document automatically."
+      // https://platform.claude.com/docs/en/models/sonnet-5/overview
+      // Run-to-run variation must therefore be handled after extraction, in
+      // deterministic code, not by asking the model to be deterministic.
       system,
       tools,
       tool_choice: { type: 'tool', name: tools[0].name },
