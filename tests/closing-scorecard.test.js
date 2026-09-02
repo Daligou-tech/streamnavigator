@@ -1275,3 +1275,60 @@ test('a numbered line is a charge; an unnumbered one is a subtotal', () => {
   assert.equal(isSubtotalLine({ label: 'D. TOTAL LOAN COSTS (Borrower-Paid)' }), true);
   assert.equal(isSubtotalLine({ label: 'Taxes and Other Government Fees' }), true);
 });
+
+test('a transaction mismatch is not counted as tolerance having been tested', () => {
+  // The refusal was recorded in checks_skipped but tolerance_tested stayed true,
+  // so the page said tolerance testing "has already run against the correct
+  // baseline" on a comparison that was deliberately refused.
+  const le = toLoanEstimateRecord(rawLE({ lender_name: 'Ficus Bank' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Fir Bank', closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [
+      { section: 'A', line_number: '01', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 },
+    ],
+  });
+  const { skipped } = runClosingAudit(cd, { loanEstimates: [le] });
+
+  const transactionMismatch = skipped.some((x) => /different loan/.test(x));
+  assert.equal(transactionMismatch, true);
+
+  // the endpoint's guard: a refused comparison is not a tested one
+  const cdChargeCount = (cd.line_items || []).length;
+  assert.equal(Boolean([le]) && cdChargeCount > 0 && !transactionMismatch, false);
+});
+
+test('skipped checks are recorded in language a customer can act on', () => {
+  const le = toLoanEstimateRecord(rawLE({ lender_name: 'Ficus Bank' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Fir Bank', closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [{ section: 'A', line_number: '01', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 }],
+  });
+  const { skipped } = runClosingAudit(cd, { loanEstimates: [le] });
+  assert.ok(skipped.some((x) => /TRID tolerance testing/.test(x)));
+  assert.ok(skipped.some((x) => /different loan/.test(x)));
+});
+
+test('the mismatch carries structured fields for the alert to render', () => {
+  // The banner names each thing that differs, with both values, so a customer
+  // comparing two different properties sees which one is wrong rather than a
+  // generic warning.
+  const le = toLoanEstimateRecord(
+    rawLE({ lender_name: 'Ficus Bank', property_address: '456 Somewhere Ave, Anytown, PA 12345' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Fir Bank',
+    property_address: '4324 Parkside Dr, Baltimore, MD 21206',
+    closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [{ section: 'A', line_number: '01', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 }],
+  });
+  const { findings } = runClosingAudit(cd, { loanEstimates: [le] });
+  const f = byCheck(findings, 'TRID_TRANSACTION_MISMATCH')[0];
+
+  const fields = (f.detail.mismatches || []).map((m) => m.field);
+  assert.ok(fields.includes('lender'));
+  assert.ok(fields.includes('property address'));
+  assert.ok(f.detail.mismatches.every((m) => m.hard));
+  // both sides present so the banner can show them side by side
+  const lender = f.detail.mismatches.find((m) => m.field === 'lender');
+  assert.equal(lender.cd, 'Fir Bank');
+  assert.equal(lender.le, 'Ficus Bank');
+});
