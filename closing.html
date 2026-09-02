@@ -459,7 +459,8 @@
               ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both apply'
               : sc.tier.has_loan_estimate
                 ? 'Loan Estimates, so TRID tolerance testing ' + (sc.tolerance_tested ? 'has already run against the correct baseline' : 'applies')
-                : 'a purchase contract, so we can check your negotiated credits against the closing figures')
+                : 'a purchase contract, so we ' + (sc.contract_reconciled ? 'have checked' : 'can check')
+                  + ' your negotiated credits against the closing figures')
           + '.</p>';
       }
     }
@@ -496,6 +497,16 @@
         + 'Page 2 of the Closing Disclosure carries the closing cost details, and it appears to be '
         + 'missing or unreadable in what you uploaded. Most of the audit needs those lines, so a '
         + 'count of zero here does not mean your closing is clean.</p>';
+    }
+
+    if (sc.contract_uploaded && !sc.contract_reconciled) {
+      html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
+        + (sc.contract_mismatch && sc.contract_mismatch.length
+            ? 'The contract you uploaded appears to be for a different property than the Closing '
+              + 'Disclosure, so we did not compare them.'
+            : 'We could not read any credits, concessions or cost allocations from the contract — '
+              + 'it may be missing pages or an addendum.')
+        + ' This is not a clean result for those checks.</p>';
     }
 
     if (sc.checks_skipped_detail && sc.checks_skipped_detail.length) {
