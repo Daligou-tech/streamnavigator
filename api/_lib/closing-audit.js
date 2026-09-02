@@ -883,16 +883,91 @@ function selectBaseline(les, consummationDate, holidays = []) {
   return { baseline, findings };
 }
 
+// Similarity on the fee name alone, payee stripped, after normalisation.
+// Token overlap rather than edit distance: "Settlement Agent Fee" and
+// "Title - Settlement Fee" share the token that matters, while a character
+// metric would score them poorly because of the "Title - " prefix.
+function nameSimilarity(a, b) {
+  const ta = new Set(norm(feeNameOnly(a)).split(' ').filter(Boolean));
+  const tb = new Set(norm(feeNameOnly(b)).split(' ').filter(Boolean));
+  if (!ta.size || !tb.size) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return shared / Math.min(ta.size, tb.size);
+}
+
+// Pairs Loan Estimate charges with Closing Disclosure charges.
+//
+// The exact-key match this replaced was the single largest source of false
+// positives: an LE saying "Settlement Agent Fee $500" and a CD saying
+// "Title - Settlement Fee $500" failed to match, so the CD charge was treated as
+// absent from the baseline and the FULL $500 was reported as a tolerance
+// increase. Same fee, same amount, different wording.
+//
+// Passes run strongest-evidence-first and each Loan Estimate charge is consumed
+// once. An identical amount in the same category is near-conclusive; a shared
+// payee is strong; name similarity is the fallback.
+function matchCharges(baselineCharges, cdCharges) {
+  const leEntries = Object.entries(baselineCharges || {});
+  const cdEntries = Object.entries(cdCharges || {});
+  const usedLe = new Set();
+  const pairs = [];
+  const unmatchedCd = [];
+
+  const take = (cdKey, cd, leKey, le, how) => {
+    usedLe.add(leKey);
+    pairs.push({ cdKey, cd, leKey, le, matchedBy: how });
+  };
+
+  const remaining = [];
+
+  // Pass 1 — exact key.
+  for (const [cdKey, cd] of cdEntries) {
+    if (baselineCharges[cdKey] && !usedLe.has(cdKey)) take(cdKey, cd, cdKey, baselineCharges[cdKey], 'exact');
+    else remaining.push([cdKey, cd]);
+  }
+
+  const passes = [
+    // same category and an identical amount
+    (cd, le) => le.category === cd.category && Math.abs(toCents(le.amount) - toCents(cd.amount)) <= 1,
+    // same category and the same provider
+    (cd, le) => le.category === cd.category && cd.payee && le.payee && norm(cd.payee) === norm(le.payee),
+    // same category and a recognisably similar fee name
+    (cd, le) => le.category === cd.category && nameSimilarity(cd.label, le.label) >= 0.5,
+    // identical amount and a similar name, for a miscategorised line
+    (cd, le) => Math.abs(toCents(le.amount) - toCents(cd.amount)) <= 1
+      && nameSimilarity(cd.label, le.label) >= 0.34,
+  ];
+  const passNames = ['category+amount', 'category+payee', 'category+name', 'amount+name'];
+
+  let pool = remaining;
+  passes.forEach((test, i) => {
+    const still = [];
+    for (const [cdKey, cd] of pool) {
+      const hit = leEntries.find(([leKey, le]) => !usedLe.has(leKey) && test(cd, le));
+      if (hit) take(cdKey, cd, hit[0], hit[1], passNames[i]);
+      else still.push([cdKey, cd]);
+    }
+    pool = still;
+  });
+
+  for (const [cdKey, cd] of pool) unmatchedCd.push({ cdKey, cd });
+  const unmatchedLe = leEntries.filter(([k]) => !usedLe.has(k)).map(([leKey, le]) => ({ leKey, le }));
+
+  return { pairs, unmatchedCd, unmatchedLe };
+}
+
 function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
   const findings = [];
+  const { pairs, unmatchedCd } = matchCharges(baseline.charges, cdCharges);
+
   let tenBase = 0;
   let tenFinal = 0;
   const tenLines = [];
 
-  for (const [key, cd] of Object.entries(cdCharges)) {
+  for (const { cd, le, matchedBy } of pairs) {
     const [bucket, rationale] = assignBucket(cd, lenderProvidedWrittenList);
-    const le = baseline.charges[key];
-    const leAmt = le ? toCents(le.amount) : 0;
+    const leAmt = toCents(le.amount);
     const cdAmt = toCents(cd.amount);
 
     if (bucket === Bucket.TEN_PCT) {
@@ -906,6 +981,9 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
     const delta = cdAmt - leAmt;
     if (delta <= 0) continue;
 
+    // Zero tolerance is tested per charge under 1026.19(e)(3)(i): a decrease in
+    // one charge does not offset an increase in another, so these are never
+    // netted against each other.
     findings.push(
       finding({
         checkId: 'TRID_ZERO_TOLERANCE',
@@ -919,7 +997,9 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
         variance: toDollars(delta),
         basis:
           `12 CFR 1026.19(e)(3)(i); ${rationale}. Baseline: ${baseline.docId} dated ` +
-          `${isoDate(baseline.dateIssued)}.`,
+          `${isoDate(baseline.dateIssued)}` +
+          (matchedBy === 'exact' ? '' :
+            `. Matched to "${le.label}" on the Loan Estimate by ${matchedBy}`) + '.',
         whyItMatters:
           'Zero-tolerance charges may not increase at all unless a documented changed circumstance ' +
           'supported a valid revised Loan Estimate.',
@@ -927,7 +1007,44 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
           `Ask the lender to either restore ${toDollars(leAmt)} or produce the changed circumstance ` +
           `documentation. Estimated cure: ${toDollars(delta)}.`,
         askLender: true,
-        detail: { bucket },
+        detail: { bucket, matchedBy },
+      })
+    );
+  }
+
+  // A charge we could not pair with anything on the Loan Estimate is AMBIGUOUS,
+  // not proven new. It may genuinely be an added fee, or it may be the same fee
+  // under a different name that four matching passes still failed to recognise.
+  // Reporting the full amount as a tolerance violation — which this used to do —
+  // manufactures a large, confident, citable accusation out of a naming
+  // difference. It is reported as needing documentation instead, and carries no
+  // dollar impact, so it can never present as money owed.
+  for (const { cd } of unmatchedCd) {
+    const [bucket] = assignBucket(cd, lenderProvidedWrittenList);
+    if (bucket === Bucket.NO_TOL) continue;
+    if (toCents(cd.amount) <= 0) continue;
+
+    findings.push(
+      finding({
+        checkId: 'TRID_UNMATCHED_CHARGE',
+        title: `${cd.label} does not appear on the Loan Estimate under a name we recognise`,
+        severity: Severity.REQUIRES_DOCUMENTATION,
+        evidence: EvidenceKind.NONE,
+        actionability: Actionability.NEEDS_DOCS,
+        dollarImpact: null,
+        charged: toDollars(toCents(cd.amount)),
+        basis:
+          `We could not pair this ${toDollars(toCents(cd.amount))} charge with any line on ` +
+          `${baseline.docId}. It may be a new charge, or the same charge worded differently. We do ` +
+          `not treat it as an increase without knowing which.`,
+        whyItMatters:
+          'If it is genuinely new and falls in a zero-tolerance category, the full amount may be ' +
+          'subject to a cure. If it is a renamed existing charge, nothing is owed.',
+        recommendedAction:
+          `Compare this line against your Loan Estimate. If there is no equivalent charge there, ` +
+          `ask the lender to explain when it was added and why.`,
+        askLender: true,
+        detail: { bucket, unmatched: true },
       })
     );
   }
@@ -949,8 +1066,8 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
           variance: toDollars(excess),
           basis:
             `12 CFR 1026.19(e)(3)(ii): baseline total ${toDollars(tenBase)} x 110% = ` +
-            `${toDollars(allowed)}; Closing Disclosure total ${toDollars(tenFinal)}. Lines: ` +
-            tenLines.join('; '),
+            `${toDollars(allowed)}; Closing Disclosure total ${toDollars(tenFinal)}. Only charges ` +
+            `matched to the Loan Estimate are included. Lines: ` + tenLines.join('; '),
           whyItMatters:
             'This bucket is tested in aggregate, so no single line has to look wrong for a cure to be owed.',
           recommendedAction: `Ask the lender for a cure of ${toDollars(excess)} and a corrected Closing Disclosure.`,
@@ -1057,6 +1174,8 @@ function gateExtraction(fields, threshold = 0.85) {
 
 module.exports = {
   feeNameOnly,
+  matchCharges,
+  nameSimilarity,
   markCustomerSourced,
   Severity, EvidenceKind, Actionability, Bucket,
   toCents, toDollars, finding, rankFindings,

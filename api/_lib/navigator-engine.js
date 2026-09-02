@@ -325,8 +325,12 @@ async function generateNavigatorReport(submissionId) {
       // downloaded above. This is the analysis the $59 tier is sold on; before
       // this ran, loanEstimates was always null and the tolerance engine — built
       // and tested — never executed on a paying customer's documents.
-      let loanEstimates = null;
-      const leIndexes = (stored.documents || [])
+      // Reuse what the free scorecard already extracted. Re-reading the same
+      // PDFs would be a second model call for an identical result.
+      let loanEstimates = Array.isArray(stored.loan_estimates) && stored.loan_estimates.length
+        ? stored.loan_estimates
+        : null;
+      const leIndexes = loanEstimates ? [] : (stored.documents || [])
         .filter((d) => d.document_type === 'loan_estimate')
         .map((d) => d.index)
         .filter((i) => typeof i === 'number' && contentBlocks[i]);
