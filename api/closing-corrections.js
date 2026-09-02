@@ -95,8 +95,34 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { findings, skipped } = runClosingAudit(merged, { answers: formData.answers || {} });
-  const scorecard = buildScorecard(merged, findings, skipped);
+  // Carry the Loan Estimates through. Re-running the audit without them silently
+  // un-runs tolerance testing — the analysis the $59 tier is sold on — because a
+  // correction to one unreadable figure has nothing to do with the Loan Estimates.
+  const { findings, skipped } = runClosingAudit(merged, {
+    answers: formData.answers || {},
+    loanEstimates: formData.loan_estimates || null,
+    contractTerms: formData.contract_terms || null,
+  });
+
+  // buildScorecard returns only the document-level fields. The scorecard endpoint
+  // adds tier, tolerance results and charge counts on top, and rebuilding from
+  // scratch here threw all of them away — leaving the page showing a $59
+  // customer the generic "add your Loan Estimates" message and no tolerance
+  // result, on a submission where both had already been processed.
+  const previousScorecard = formData.scorecard || {};
+  const cdChargeCount = (merged.line_items || []).length;
+  const loanEstimateCount = Array.isArray(formData.loan_estimates) ? formData.loan_estimates.length : 0;
+
+  const scorecard = {
+    ...previousScorecard,
+    ...buildScorecard(merged, findings, skipped),
+    tier: previousScorecard.tier || formData.tier || null,
+    tolerance_tested: loanEstimateCount > 0 && cdChargeCount > 0,
+    tolerance_blocked_reason: previousScorecard.tolerance_blocked_reason || null,
+    loan_estimates_read: loanEstimateCount,
+    loan_estimates_uploaded: previousScorecard.loan_estimates_uploaded || loanEstimateCount,
+    cd_charge_lines: cdChargeCount,
+  };
 
   // If the report has already been generated and paid for, the customer is
   // holding an audit with known holes. New figures have to produce a new report
