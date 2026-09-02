@@ -806,6 +806,7 @@ function runClosingAudit(extraction, options = {}) {
           + 'tolerance violations but mean nothing.',
         recommendedAction:
           'Upload the Loan Estimate issued for this loan by this lender, and we will run the comparison.',
+        detail: { mismatches: mismatched[0].mismatches.filter((m) => m.hard) },
       }));
       skipped.push('TRID tolerance testing (Loan Estimate is for a different loan)');
     } else {
