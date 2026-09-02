@@ -1,6 +1,46 @@
 {
   "_README": "Benchmark corpus. EVERY row must carry source_name, source_url, effective_date and verified_at, or the corpus refuses to load — see api/_lib/benchmark-corpus.js validateRow(). Do not add a row from memory or from a secondary source: open the publishing authority's own page, read the figure, and paste that URL. A wrong benchmark becomes a dollar figure in a customer's email to their lender.",
-  "_KINDS": "exact | tiered | per_unit | percent | range. Hard rules (statute, filed rate table, government fee schedule) must NOT use kind 'range'; market norms MUST use 'range' and need sample_size >= 30.",
-  "_STALENESS": "Rows stop answering 400 days after verified_at, or on superseded_date. County schedules typically change 1 January or 1 July — re-verify and bump verified_at.",
-  "rows": []
+  "_KINDS": "exact | tiered | per_unit | percent | range. Hard rules must NOT use kind 'range'; market norms MUST use 'range' and need sample_size >= 30.",
+  "_STALENESS": "Rows stop answering 400 days after verified_at, or on superseded_date. Schedules typically change 1 January or 1 July — re-verify and bump verified_at.",
+  "_STACKABLE": "Transfer and recordation taxes are levied at several levels at once and both appear on a settlement statement. Rows marked stackable:true are summed across jurisdiction levels rather than the most specific one winning. They need a component_label because the report shows the customer the breakdown.",
+  "_EXEMPTIONS": "exemption_note is displayed with any finding built on the row. Maryland has first-time-buyer and owner-occupied reductions that would make a correctly reduced charge look like an undercharge. The audit only flags a charge EXCEEDING the unexempted statutory amount; a charge below it is informational, never an error.",
+  "_ALLOCATION": "Transfer taxes are split between buyer and seller by contract, so a single settlement-statement line is one party's share, not the tax. These are tested against the SUM of all lines in the category.",
+
+  "rows": [
+    {
+      "id": "md-state-transfer-tax",
+      "fee_category": "transfer_tax",
+      "kind": "percent",
+      "rate_pct": 0.5,
+      "basis": "sale_price",
+      "jurisdiction_type": "state",
+      "state": "MD",
+      "stackable": true,
+      "component_label": "Maryland state transfer tax",
+      "evidence": "hard_rule:statute_or_regulation",
+      "source_name": "Md. Code, Tax-Property Article Title 13 - state transfer tax at 0.5% of consideration; rate table published by Gordon Feinblatt LLC, 6 October 2025",
+      "source_url": "https://www.gfrlaw.com/what-we-do/insights/recordation-and-transfer-tax-rates-maryland-explained",
+      "effective_date": "2025-10-01",
+      "verified_at": "2026-09-01",
+      "exemption_note": "Reduced to 0.25% and payable by the seller where the buyer is a first-time Maryland homebuyer occupying the property as a principal residence."
+    },
+    {
+      "id": "md-baltimore-city-transfer-tax",
+      "fee_category": "transfer_tax",
+      "kind": "percent",
+      "rate_pct": 1.5,
+      "basis": "sale_price",
+      "jurisdiction_type": "county",
+      "state": "MD",
+      "county": "Baltimore City",
+      "stackable": true,
+      "component_label": "Baltimore City transfer tax",
+      "evidence": "hard_rule:statute_or_regulation",
+      "source_name": "Baltimore City local transfer tax at 1.5% of consideration; rate table published by Gordon Feinblatt LLC, 6 October 2025",
+      "source_url": "https://www.gfrlaw.com/what-we-do/insights/recordation-and-transfer-tax-rates-maryland-explained",
+      "effective_date": "2025-10-01",
+      "verified_at": "2026-09-01",
+      "exemption_note": "The first $22,000 is exempt for owner-occupied residential property where the total payable is under $250,000 and the buyer signs the required affidavit. A yield tax surcharge applies above $1,000,000 and is not modelled here."
+    }
+  ]
 }
