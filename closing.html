@@ -432,10 +432,24 @@
 
     if (sc.loan_estimates_uploaded && !sc.tolerance_tested) {
       html += '<p class="scorecard-warn"><strong>Tolerance testing did not run.</strong> '
-        + 'We could not read your Loan Estimate'
-        + (sc.loan_estimates_uploaded === 1 ? '' : 's')
-        + ' clearly enough, or no issue date was printed — we need that to work out which one sets '
-        + 'the legal baseline. Try a clearer copy. This is not a clean result for those checks.</p>';
+        + (sc.tolerance_blocked_reason === 'no_cd_charges'
+            ? 'We read your Loan Estimate, but no individual charges could be read from your Closing '
+              + 'Disclosure — page 2 carries the closing cost details and it appears to be missing or '
+              + 'unreadable. There was nothing to compare the Loan Estimate against.'
+            : 'We could not read your Loan Estimate'
+              + (sc.loan_estimates_uploaded === 1 ? '' : 's')
+              + ' clearly enough, or no issue date was printed — we need that to work out which one '
+              + 'sets the legal baseline.')
+        + ' Upload a complete copy and we will run it. This is not a clean result for those checks.</p>';
+    }
+
+    // The same trap without a Loan Estimate: no charge lines means most of the
+    // audit could not run, and a flag count of zero would read as a clean bill.
+    if (!sc.loan_estimates_uploaded && sc.cd_charge_lines === 0) {
+      html += '<p class="scorecard-warn"><strong>No individual charges could be read.</strong> '
+        + 'Page 2 of the Closing Disclosure carries the closing cost details, and it appears to be '
+        + 'missing or unreadable in what you uploaded. Most of the audit needs those lines, so a '
+        + 'count of zero here does not mean your closing is clean.</p>';
     }
 
     if (sc.deposits_excluded && sc.total_is_derived) {
@@ -490,7 +504,11 @@
       ? '<p class="scorecard-note">The full audit shows you what each of these is, what it should be, '
         + 'the rule or schedule we measured it against, the dollar impact, and whether it can still be '
         + 'changed before you close — plus drafted emails for your lender and settlement agent.</p>'
-      : (sc.tolerance_tested
+      : (sc.cd_charge_lines === 0
+        ? '<p class="scorecard-note">We could not read the individual charges from this document, so '
+          + 'the fee-level checks did not run. This is not a clean result — upload a complete copy '
+          + 'including page 2.</p>'
+        : sc.tolerance_tested
           // Tolerance testing has already run against the Loan Estimates. Say so,
           // so the count means what the customer thinks it means.
           ? '<p class="scorecard-note">No issues surfaced. That includes tolerance testing against '
