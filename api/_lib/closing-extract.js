@@ -92,8 +92,18 @@ const EXTRACTION_TOOL = {
       line_items: {
         type: 'array',
         description:
-          'Every charge line on pages 2 and 3, in document order. One entry per printed line, ' +
-          'including lines with a zero or blank borrower amount.',
+          'Every INDIVIDUAL charge line on pages 2 and 3, in document order. One entry per printed ' +
+          'numbered line, including lines with a zero or blank borrower amount.\n\n' +
+          'Do NOT include section headings or subtotals. These are not charges and reporting them ' +
+          'as charges causes real errors: a subtotal has been benchmarked as if it were a single ' +
+          'fee, and a section total has been counted twice against the customer.\n' +
+          'Exclude, for example: "A. Origination Charges", "B. Services Borrower Did Not Shop For", ' +
+          '"C. Services Borrower Did Shop For", "D. TOTAL LOAN COSTS", "E. Taxes and Other ' +
+          'Government Fees", "F. Prepaids", "G. Initial Escrow Payment at Closing", "H. Other", ' +
+          '"I. TOTAL OTHER COSTS", "J. TOTAL CLOSING COSTS", "K. TOTAL PAYOFFS AND PAYMENTS", and ' +
+          'any "Subtotals" line. Those belong in section_totals, not here.\n' +
+          'Also exclude payoff rows from the Payoffs and Payments table — they are not closing costs.\n' +
+          'A line qualifies here only if it has its own two-digit number (01, 02, 03...) beside it.',
         items: {
           type: 'object',
           properties: {
@@ -422,6 +432,31 @@ const CD_ONLY_CHECKS = [
   'TRID tolerance testing',
 ];
 
+// The extractor is told not to return section headings and subtotals as charge
+// lines, but an instruction is not a guarantee — and on a real document it
+// returned seven of them. They must be filtered deterministically too, because
+// a subtotal treated as a fee gets benchmarked, duplicate-checked and totalled.
+const SUBTOTAL_LABELS = [
+  /^total\b/i,
+  /^subtotal/i,
+  /\bsubtotals?\b/i,
+  /^origination charges$/i,
+  /^services borrower did (not )?shop for$/i,
+  /^taxes and other government fees$/i,
+  /^prepaids$/i,
+  /^initial escrow payment at closing$/i,
+  /^other costs?$/i,
+  /^loan costs?$/i,
+  /^closing costs?$/i,
+  /^total payoffs and payments$/i,
+  /\(payoff\)\s*$/i,
+];
+
+function isSubtotalLine(li) {
+  const label = String(li.label || '').replace(/^[A-K]\.\s*/, '').trim();
+  return SUBTOTAL_LABELS.some((re) => re.test(label));
+}
+
 const CONF_THRESHOLD = 0.85;
 const confident = (o) => o && typeof o.confidence === 'number' && o.confidence >= CONF_THRESHOLD;
 const val = (o) => (confident(o) ? o.value : null);
@@ -451,7 +486,7 @@ function runClosingAudit(extraction, options = {}) {
   }));
   const { usable, warnings } = audit.gateExtraction(fields, CONF_THRESHOLD);
   findings.push(...warnings);
-  const lines = usable.map((f) => f.item);
+  const lines = usable.map((f) => f.item).filter((li) => !isSubtotalLine(li));
 
   if (e.document_type === 'alta_settlement_statement') {
     findings.push(audit.finding({
@@ -915,7 +950,8 @@ function buildScorecard(extraction, findings, skipped = []) {
   const NOT_A_CHARGE = new Set(['escrow_deposit', 'property_insurance', 'hoa_dues']);
 
   const allBorrowerLines = (e.line_items || []).filter(
-    (li) => li.category && (li.paid_by || 'borrower') === 'borrower' && typeof li.amount === 'number'
+    (li) => li.category && (li.paid_by || 'borrower') === 'borrower'
+      && typeof li.amount === 'number' && !isSubtotalLine(li)
   );
   const chargeLines = allBorrowerLines.filter((li) => !NOT_A_CHARGE.has(li.category));
   const depositLines = allBorrowerLines.filter((li) => NOT_A_CHARGE.has(li.category));
@@ -964,6 +1000,7 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  isSubtotalLine,
   classifyDocuments,
   determineTier,
   TIERS,
