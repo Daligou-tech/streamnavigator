@@ -323,6 +323,13 @@ async function callAnthropic({ apiKey, system, tools, contentBlocks, maxTokens =
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
       max_tokens: maxTokens,
+      // Extraction is transcription, not writing: there is one right answer on
+      // the page. At the default temperature the same Closing Disclosure
+      // produced "Baltimore, MD" on one run and "Baltimore City, MD" on the
+      // next — different jurisdictions in Maryland, with different recording
+      // fees and transfer taxes — and a flag count that moved between runs. A
+      // customer who re-uploads the same document must get the same answer.
+      temperature: 0,
       system,
       tools,
       tool_choice: { type: 'tool', name: tools[0].name },
@@ -1274,17 +1281,99 @@ const isCustomer = (o) => Boolean(o && o.value_source === 'customer');
 // the Closing Disclosure is Fir Bank and the Loan Estimate is Ficus Bank. The
 // classifier had recorded both lender names; the audit never looked.
 
-const normName = (v) => String(v || '')
+// Previously a single normName() compared lenders, people and street
+// addresses. That is three different problems. Comparing "Tarik M Nabi"
+// against "Tarik Nabi" produced a HARD mismatch and blocked the whole
+// comparison over a middle initial, and "123 Main Street" vs "123 Main St"
+// did the same to a purchase contract for the correct property.
+
+const normOrg = (v) => String(v || '')
   .toLowerCase()
   .replace(/\b(llc|l\.l\.c|inc|incorporated|corp|corporation|company|co|na|n\.a|bank|savings|mortgage|lending|financial|group|the)\b/g, ' ')
   .replace(/[^a-z0-9 ]/g, ' ')
   .split(/\s+/).filter(Boolean).join(' ');
 
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v', 'md', 'phd', 'esq']);
+
+// A person is identified by first and last name. Middle names, initials,
+// generational suffixes and punctuation vary constantly between a Loan
+// Estimate, a Closing Disclosure and a purchase contract for the same human.
+const normPerson = (v) => {
+  const parts = String(v || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .split(/\s+/).filter(Boolean)
+    .filter((t) => !NAME_SUFFIXES.has(t));
+  if (!parts.length) return '';
+  if (parts.length === 1) return parts[0];
+  return parts[0] + ' ' + parts[parts.length - 1];
+};
+
+const STREET_WORDS = {
+  street: 'st', str: 'st', st: 'st',
+  avenue: 'ave', av: 'ave', ave: 'ave',
+  road: 'rd', rd: 'rd',
+  drive: 'dr', dr: 'dr',
+  lane: 'ln', ln: 'ln',
+  court: 'ct', ct: 'ct',
+  place: 'pl', pl: 'pl',
+  boulevard: 'blvd', blvd: 'blvd',
+  circle: 'cir', cir: 'cir',
+  terrace: 'ter', ter: 'ter',
+  parkway: 'pkwy', pkwy: 'pkwy',
+  highway: 'hwy', hwy: 'hwy',
+  north: 'n', south: 's', east: 'e', west: 'w',
+  northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw',
+  apartment: 'apt', apt: 'apt', unit: 'apt', suite: 'apt', ste: 'apt', '#': 'apt',
+};
+
+// Addresses are compared on house number + street name only, plus a unit
+// number when both documents carry one. City, state and ZIP are dropped
+// deliberately: they are the parts most often abbreviated, dropped, or written
+// differently ("Baltimore" vs "Baltimore City") on two documents describing
+// the same house, and none of them add identifying power once the street line
+// already matches.
+const STREET_TYPES = new Set(['st','ave','rd','dr','ln','ct','pl','blvd','cir','ter','pkwy','hwy','way','trl','loop','sq']);
+
+const normAddress = (v) => {
+  const tokens = String(v || '')
+    .toLowerCase()
+    .replace(/[.,]/g, ' ')
+    .replace(/#/g, ' apt ')
+    .split(/\s+/).filter(Boolean)
+    .map((t) => STREET_WORDS[t] || t);
+
+  const typeAt = tokens.findIndex((t) => STREET_TYPES.has(t));
+  const street = typeAt >= 0
+    ? tokens.slice(0, typeAt + 1)
+    : tokens.slice(0, 3); // no recognised street type — fall back to the first tokens
+
+  const aptAt = tokens.indexOf('apt');
+  const unit = aptAt >= 0 && tokens[aptAt + 1] ? tokens[aptAt + 1] : null;
+
+  return { street: street.join(' ').trim(), unit };
+};
+
+// Same street, and units that do not actively contradict. A unit present on
+// only one document is not evidence of a different property; two different
+// units in the same building are.
+const sameAddress = (a, b) => {
+  const x = normAddress(a);
+  const y = normAddress(b);
+  if (!x.street || !y.street) return true;
+  if (x.street !== y.street) return false;
+  if (x.unit && y.unit && x.unit !== y.unit) return false;
+  return true;
+};
+
+// Kept so any other caller keeps working.
+const normName = normOrg;
+
 function checkTransactionMatch(cd, le) {
   const mismatches = [];
 
-  const cdLender = normName(cd.lender_name);
-  const leLender = normName(le.lenderName);
+  const cdLender = normOrg(cd.lender_name);
+  const leLender = normOrg(le.lenderName);
   if (cdLender && leLender && cdLender !== leLender) {
     mismatches.push({
       field: 'lender', hard: true,
@@ -1292,20 +1381,25 @@ function checkTransactionMatch(cd, le) {
     });
   }
 
-  const cdAddr = normName(cd.property_address);
-  const leAddr = normName(le.propertyAddress);
-  if (cdAddr && leAddr && cdAddr !== leAddr) {
+  if (cd.property_address && le.propertyAddress
+      && !sameAddress(cd.property_address, le.propertyAddress)) {
     mismatches.push({
       field: 'property address', hard: true,
       cd: cd.property_address, le: le.propertyAddress,
     });
   }
 
-  const cdNames = (cd.borrower_names || []).map(normName).filter(Boolean).sort().join('; ');
-  const leNames = (le.borrowerNames || []).map(normName).filter(Boolean).sort().join('; ');
-  if (cdNames && leNames && cdNames !== leNames) {
+  // Soft, not hard. Two documents for the same sale routinely list the buyer
+  // differently — one borrower named on the note but both on the contract, a
+  // maiden name, a middle initial. A name difference on its own is not enough
+  // to refuse the comparison; a different lender or a different house is.
+  // Overlap is enough: if any person appears on both, treat it as the same party.
+  const cdNames = (cd.borrower_names || []).map(normPerson).filter(Boolean);
+  const leNames = (le.borrowerNames || []).map(normPerson).filter(Boolean);
+  const shareAName = cdNames.some((n) => leNames.includes(n));
+  if (cdNames.length && leNames.length && !shareAName) {
     mismatches.push({
-      field: 'borrower', hard: true,
+      field: 'borrower', hard: false,
       cd: (cd.borrower_names || []).join(', '), le: (le.borrowerNames || []).join(', '),
     });
   }
