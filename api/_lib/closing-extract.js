@@ -785,6 +785,99 @@ function normalizeProviderListAnswer(a) {
 }
 
 // ---------------------------------------------------------------------------
+// Loan Estimate extraction
+// ---------------------------------------------------------------------------
+//
+// This is what the $59 tier is sold on. Without it, runClosingAudit receives
+// loanEstimates: null and the tolerance engine — fully built and tested — never
+// executes. A customer would be charged double for an analysis that cannot run.
+
+const LE_EXTRACTION_TOOL = {
+  name: 'submit_le_extraction',
+  description:
+    'Report the charges printed on this Loan Estimate. Report only what is on the document; '
+    + 'never compute a missing value and never carry a figure over from another document.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      is_loan_estimate: { type: 'boolean', description: 'False if this is not actually a Loan Estimate.' },
+      date_issued: { type: 'string', description: 'Date issued, YYYY-MM-DD.' },
+      date_received: { type: 'string', description: 'Date received by the consumer if printed, YYYY-MM-DD.' },
+      is_revised: { type: 'boolean', description: 'True if this appears to be a revised Loan Estimate rather than the initial one.' },
+      changed_circumstance_documented: {
+        type: 'boolean',
+        description: 'True ONLY if the document itself states a changed circumstance justifying a revision. '
+          + 'Absence of a statement is false, not unknown — a revision without documentation cannot reset the baseline.',
+      },
+      loan_amount: { type: 'number' },
+      charges: {
+        type: 'array',
+        description: 'Every individual charge line in sections A through H. Exclude section headings and subtotals.',
+        items: {
+          type: 'object',
+          properties: {
+            section: { type: 'string', enum: ['A', 'B', 'C', 'E', 'F', 'G', 'H'] },
+            label: { type: 'string', description: 'The fee name exactly as printed.' },
+            amount: { type: 'number' },
+            category: {
+              type: 'string',
+              enum: [
+                'origination', 'lender_fee', 'credit_report', 'rate_lock_fee', 'appraisal',
+                'settlement_service', 'title_insurance_owners', 'title_insurance_lenders',
+                'survey', 'attorney', 'recording_fee', 'transfer_tax', 'prepaid_interest',
+                'property_insurance', 'property_tax', 'escrow_deposit', 'hoa_dues',
+                'optional_product', 'non_required_service', 'affiliate_service',
+                'unshoppable_service', 'other',
+              ],
+              description: 'Classify by what the charge IS, using the same scheme as the Closing '
+                + 'Disclosure, so the two documents can be matched line for line.',
+            },
+            shoppable: { type: 'boolean', description: 'True if the line sits under section C, "Services You Can Shop For".' },
+            confidence: { type: 'number', description: CONFIDENCE_DESC },
+          },
+          required: ['section', 'label', 'amount', 'confidence'],
+        },
+      },
+    },
+    required: ['is_loan_estimate', 'charges'],
+  },
+};
+
+async function extractLoanEstimate(apiKey, contentBlock) {
+  return callAnthropic({
+    apiKey,
+    system: EXTRACTION_SYSTEM,
+    tools: [LE_EXTRACTION_TOOL],
+    contentBlocks: [contentBlock, { type: 'text', text: 'Extract the charges printed on this Loan Estimate.' }],
+  });
+}
+
+// Converts an extracted Loan Estimate into the shape selectBaseline and
+// analyzeTolerances expect. Keys are built with the same chargeKey() the
+// Closing Disclosure side uses, so the two match.
+function toLoanEstimateRecord(raw, docId) {
+  const charges = {};
+  for (const c of raw.charges || []) {
+    if (typeof c.confidence === 'number' && c.confidence < CONF_THRESHOLD) continue;
+    charges[chargeKey(c)] = {
+      label: c.label,
+      amount: c.amount,
+      category: c.category || 'other',
+      shoppable: Boolean(c.shoppable) || c.section === 'C',
+    };
+  }
+  return {
+    docId,
+    dateIssued: raw.date_issued || null,
+    dateReceived: raw.date_received || raw.date_issued || null,
+    // Only an explicit statement counts. Treating "not mentioned" as documented
+    // would let any revision reset the tolerance baseline.
+    changedCircumstanceDocumented: raw.changed_circumstance_documented === true,
+    charges,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // customer-supplied corrections
 // ---------------------------------------------------------------------------
 
@@ -1006,6 +1099,9 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  LE_EXTRACTION_TOOL,
+  extractLoanEstimate,
+  toLoanEstimateRecord,
   isSubtotalLine,
   classifyDocuments,
   determineTier,

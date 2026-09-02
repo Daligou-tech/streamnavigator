@@ -23,7 +23,9 @@
 // browser.
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
-const { runClosingAudit } = require('./closing-extract');
+const {
+  runClosingAudit, extractLoanEstimate, toLoanEstimateRecord,
+} = require('./closing-extract');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -319,11 +321,55 @@ async function generateNavigatorReport(submissionId) {
       if (!stored.extraction) {
         throw new Error('This closing submission has no stored extraction — the free scorecard step did not complete.');
       }
+      // Extract the Loan Estimates now, at report time, from the files already
+      // downloaded above. This is the analysis the $59 tier is sold on; before
+      // this ran, loanEstimates was always null and the tolerance engine — built
+      // and tested — never executed on a paying customer's documents.
+      let loanEstimates = null;
+      const leIndexes = (stored.documents || [])
+        .filter((d) => d.document_type === 'loan_estimate')
+        .map((d) => d.index)
+        .filter((i) => typeof i === 'number' && contentBlocks[i]);
+
+      if (leIndexes.length) {
+        const records = [];
+        for (const i of leIndexes) {
+          try {
+            const raw = await extractLoanEstimate(ANTHROPIC_API_KEY, contentBlocks[i]);
+            if (raw && raw.is_loan_estimate !== false && (raw.charges || []).length) {
+              records.push(toLoanEstimateRecord(raw, `LE${records.length + 1}`));
+            }
+          } catch (err) {
+            // One unreadable Loan Estimate must not take down the whole report.
+            console.error('[closing] loan estimate extraction failed:', err.message);
+          }
+        }
+        // selectBaseline needs an issue date to order revisions. Without one we
+        // cannot establish which LE governs, and guessing the baseline is worse
+        // than declining to test tolerances.
+        const dated = records.filter((r) => r.dateIssued);
+        if (dated.length) loanEstimates = dated;
+      }
+
       const { findings, skipped, cureNote } = runClosingAudit(stored.extraction, {
         answers: stored.answers || {},
-        loanEstimates: stored.loan_estimates || null,
+        loanEstimates,
         contractTerms: stored.contract_terms || null,
       });
+
+      if (leIndexes.length && !loanEstimates) {
+        findings.unshift({
+          checkId: 'TRID_NOT_RUN',
+          title: 'Tolerance testing could not be run on the Loan Estimates provided',
+          severity: 'requires_documentation',
+          evidence: 'no_evidence_available',
+          actionability: 'requires_additional_documentation',
+          basis: 'The Loan Estimates could not be read clearly enough, or carried no issue date, '
+            + 'which is needed to establish which one governs the tolerance baseline.',
+          recommendedAction: 'Upload a clearer copy of each Loan Estimate, including the date issued.',
+          detail: {},
+        });
+      }
       auditBlock = [
         '',
         'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
