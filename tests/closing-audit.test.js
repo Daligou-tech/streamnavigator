@@ -486,3 +486,52 @@ test('name similarity scores the case that broke it', () => {
   assert.ok(nameSimilarity('Settlement Agent Fee', 'Title - Settlement Fee') >= 0.5);
   assert.ok(nameSimilarity('Appraisal Fee', 'Recording Fees') < 0.34);
 });
+
+// --- tolerance buckets from the printed section ------------------------------
+// The bucket used to be decided by a category the model inferred. The section
+// letter is printed on the form and prescribed by regulation, so it is both more
+// reliable and citable.
+
+test('Section A and B are zero tolerance whatever the label says', () => {
+  assert.equal(assignBucket({ section: 'A', label: 'Points', category: 'other' }, true)[0], Bucket.ZERO);
+  assert.equal(assignBucket({ section: 'B', label: 'Appraisal Fee', category: 'other' }, true)[0], Bucket.ZERO);
+  assert.match(assignBucket({ section: 'B', label: 'Appraisal Fee' }, true)[1], /Did Not Shop For/);
+});
+
+test('Section C follows the written provider list, not the category', () => {
+  assert.equal(assignBucket({ section: 'C', label: 'Title - Settlement Fee' }, true)[0], Bucket.TEN_PCT);
+  assert.equal(assignBucket({ section: 'C', label: 'Title - Settlement Fee' }, false)[0], Bucket.ZERO);
+  assert.equal(
+    assignBucket({ section: 'C', label: 'Title - Settlement Fee', providerOnLenderList: false }, true)[0],
+    Bucket.NO_TOL
+  );
+});
+
+test('Section E splits taxes from recording fees', () => {
+  // Both sit in the same section but fall in different buckets.
+  assert.equal(assignBucket({ section: 'E', label: 'City/County Tax/Stamps' }, true)[0], Bucket.ZERO);
+  assert.equal(assignBucket({ section: 'E', label: 'Transfer Taxes' }, true)[0], Bucket.ZERO);
+  assert.equal(assignBucket({ section: 'E', label: 'Recording Fees' }, true)[0], Bucket.TEN_PCT);
+});
+
+test('Sections F, G and H carry no tolerance', () => {
+  assert.equal(assignBucket({ section: 'F', label: 'Prepaid Interest' }, true)[0], Bucket.NO_TOL);
+  assert.equal(assignBucket({ section: 'G', label: 'Property Taxes' }, true)[0], Bucket.NO_TOL);
+  assert.equal(assignBucket({ section: 'H', label: "Owner's Title Insurance (optional)" }, true)[0], Bucket.NO_TOL);
+});
+
+test('the printed section overrides a miscategorised charge', () => {
+  // The model calling a Section B appraisal "prepaid_interest" would previously
+  // have moved it into the no-tolerance bucket and hidden a real violation.
+  const [bucket] = assignBucket(
+    { section: 'B', label: 'Appraisal Fee', category: 'prepaid_interest' }, true
+  );
+  assert.equal(bucket, Bucket.ZERO);
+});
+
+test('the category still decides when no section was printed', () => {
+  // ALTA settlement statements have no lettered sections.
+  assert.equal(assignBucket({ section: 'none', category: 'lender_fee' }, true)[0], Bucket.ZERO);
+  assert.equal(assignBucket({ category: 'prepaid_interest' }, true)[0], Bucket.NO_TOL);
+  assert.equal(assignBucket({ category: 'recording_fee' }, true)[0], Bucket.TEN_PCT);
+});

@@ -1165,3 +1165,113 @@ test('null and non-objects pass through safely', () => {
   assert.equal(unwrapToolInput(undefined, ['x']), undefined);
   assert.equal(unwrapToolInput('text', ['x']), 'text');
 });
+
+// --- regression: the Loan Estimate must be for the same loan -----------------
+// CFPB H-25(G) paired with H-24(D): same borrowers, same $150,000, but the
+// Closing Disclosure is Fir Bank and the Loan Estimate is Ficus Bank. Two
+// different transactions. The system produced FIVE confident tolerance findings
+// by comparing one lender's fees against another's. The classifier had recorded
+// both lender names; the audit never looked at them.
+
+const { checkTransactionMatch } = require('../api/_lib/closing-extract');
+
+test('a different lender is a hard mismatch', () => {
+  const r = checkTransactionMatch(
+    { lender_name: 'Fir Bank', loan_amount: 150000 },
+    { lenderName: 'Ficus Bank', loanAmount: 150000 }
+  );
+  assert.equal(r.sameTransaction, false);
+  assert.equal(r.mismatches[0].field, 'lender');
+});
+
+test('the same lender written differently still matches', () => {
+  // Corporate suffixes must not create false mismatches.
+  const r = checkTransactionMatch(
+    { lender_name: 'Atlantic Coast Mortgage, LLC' },
+    { lenderName: 'Atlantic Coast Mortgage LLC' }
+  );
+  assert.equal(r.sameTransaction, true);
+  assert.deepEqual(r.mismatches, []);
+});
+
+test('a different property is a hard mismatch', () => {
+  const r = checkTransactionMatch(
+    { property_address: '4324 Parkside Dr, Baltimore, MD 21206' },
+    { propertyAddress: '456 Somewhere Ave, Anytown, PA 12345' }
+  );
+  assert.equal(r.sameTransaction, false);
+});
+
+test('different borrowers are a hard mismatch', () => {
+  const r = checkTransactionMatch(
+    { borrower_names: ['Michael Jones', 'Mary Stone'] },
+    { borrowerNames: ['Tarik M Nabi'] }
+  );
+  assert.equal(r.sameTransaction, false);
+});
+
+test('a changed loan amount alone does not block the comparison', () => {
+  // Loan amounts legitimately move between estimate and closing.
+  const r = checkTransactionMatch(
+    { lender_name: 'Ficus Bank', loan_amount: 162000 },
+    { lenderName: 'Ficus Bank', loanAmount: 150000 }
+  );
+  assert.equal(r.sameTransaction, true);
+  assert.equal(r.mismatches[0].field, 'loan amount');
+  assert.equal(r.mismatches[0].hard, false);
+});
+
+test('missing identity fields do not manufacture a mismatch', () => {
+  // An older or partial document may not state a lender we can read. Absence is
+  // not evidence of a different loan.
+  assert.equal(checkTransactionMatch({}, {}).sameTransaction, true);
+  assert.equal(checkTransactionMatch({ lender_name: 'Ficus Bank' }, {}).sameTransaction, true);
+});
+
+test('tolerance testing is refused when the documents are different loans', () => {
+  const le = toLoanEstimateRecord(rawLE({ lender_name: 'Ficus Bank' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Fir Bank', closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [
+      { section: 'A', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 },
+    ],
+  });
+  const { findings, skipped } = runClosingAudit(cd, { loanEstimates: [le] });
+
+  assert.equal(byCheck(findings, 'TRID_ZERO_TOLERANCE').length, 0);
+  assert.equal(byCheck(findings, 'TRID_UNMATCHED_CHARGE').length, 0);
+  const mismatch = byCheck(findings, 'TRID_TRANSACTION_MISMATCH')[0];
+  assert.equal(mismatch.severity, Severity.REQUIRES_DOCUMENTATION);
+  assert.equal(mismatch.dollarImpact, null);
+  assert.match(mismatch.basis, /Fir Bank/);
+  assert.match(mismatch.basis, /Ficus Bank/);
+  assert.ok(skipped.some((x) => /different loan/.test(x)));
+});
+
+test('a matching Loan Estimate still produces tolerance findings', () => {
+  const le = toLoanEstimateRecord(rawLE({ lender_name: 'Ficus Bank' }), 'LE1');
+  const cd = cleanExtraction({
+    lender_name: 'Ficus Bank', closing_date: '2013-04-15', prepaid_interest: undefined,
+    line_items: [
+      { section: 'A', label: 'Origination Fee', amount: 2102, category: 'origination', confidence: HI, page: 2 },
+    ],
+  });
+  const { findings } = runClosingAudit(cd, { loanEstimates: [le] });
+  assert.equal(byCheck(findings, 'TRID_TRANSACTION_MISMATCH').length, 0);
+  assert.equal(byCheck(findings, 'TRID_ZERO_TOLERANCE')[0].dollarImpact, 300);
+});
+
+test('a numbered line is a charge; an unnumbered one is a subtotal', () => {
+  // The form numbers individual charges 01, 02, 03 and leaves headings and
+  // totals unnumbered, so the printed number settles it without phrase matching.
+  assert.equal(isSubtotalLine({ line_number: '01', label: 'Appraisal Fee' }), false);
+  assert.equal(isSubtotalLine({ line_number: '08', label: 'Aggregate Adjustment' }), false);
+
+  // A number beats the label: a real charge legitimately called "Total Loan
+  // Amount Adjustment Fee" is no longer swallowed by the /^total/ rule.
+  assert.equal(isSubtotalLine({ line_number: '04', label: 'Total Loan Amount Adjustment Fee' }), false);
+
+  // No number, so the label fallback applies.
+  assert.equal(isSubtotalLine({ label: 'D. TOTAL LOAN COSTS (Borrower-Paid)' }), true);
+  assert.equal(isSubtotalLine({ label: 'Taxes and Other Government Fees' }), true);
+});
