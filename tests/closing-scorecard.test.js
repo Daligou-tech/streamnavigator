@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const {
   runClosingAudit, buildScorecard, normalizeProviderListAnswer, CONF_THRESHOLD,
 } = require('../api/_lib/closing-extract');
-const { Severity, checkCashToClose } = require('../api/_lib/closing-audit');
+const { Severity, checkCashToClose, reconcileContract } = require('../api/_lib/closing-audit');
 
 const HI = 0.98; // confident read
 const LO = 0.40; // unreadable
@@ -1331,4 +1331,75 @@ test('the mismatch carries structured fields for the alert to render', () => {
   const lender = f.detail.mismatches.find((m) => m.field === 'lender');
   assert.equal(lender.cd, 'Fir Bank');
   assert.equal(lender.le, 'Ficus Bank');
+});
+
+// --- purchase contract reconciliation ----------------------------------------
+// contract_terms was read in three places and written in none — the same shape
+// as the Loan Estimate bug, charging $59 for an analysis that could not run.
+
+const { toContractTerms } = require('../api/_lib/closing-extract');
+
+const rawContract = (over = {}) => Object.assign({
+  is_purchase_contract: true,
+  property_address: '456 Somewhere Ave, Anytown, PA 12345',
+  buyer_names: ['Michael Jones', 'Mary Stone'],
+  sale_price: 180000,
+  terms: [
+    { label: 'Seller credit toward buyer closing costs', amount: 10000, kind: 'seller_credit', provision: 'Paragraph 12(b)', confidence: HI },
+    { label: 'Repair credit for roof', amount: 2500, kind: 'repair_credit', provision: 'Addendum A', confidence: HI },
+    { label: 'Seller pays transfer tax', amount: 900, kind: 'cost_allocation', provision: 'Paragraph 7', confidence: HI },
+  ],
+}, over);
+
+test('only credits to the buyer are reconciled', () => {
+  // A cost allocation says who pays for something. It is not a credit and has no
+  // single figure to compare, so reporting it as a shortfall would be wrong.
+  const terms = toContractTerms(rawContract());
+  assert.equal(terms.length, 2);
+  assert.deepEqual(terms.map((t) => t.kind).sort(), ['repair_credit', 'seller_credit']);
+});
+
+test('low-confidence contract terms are dropped', () => {
+  const raw = rawContract();
+  raw.terms[0].confidence = 0.4;
+  assert.equal(toContractTerms(raw).length, 1);
+});
+
+test('a shortfall across several credits is totalled, not matched by label', () => {
+  // Label matching is what produced phantom violations between the LE and CD.
+  // The contract says "Seller credit toward buyer closing costs"; the Closing
+  // Disclosure says "Seller Credit". Same money.
+  const terms = toContractTerms(rawContract());   // 10,000 + 2,500 = 12,500
+  const out = reconcileContract(terms, { 'Seller Credit': 9000 });
+  assert.equal(out.length, 1);
+  assert.equal(out[0].severity, Severity.POTENTIAL_OVERCHARGE);
+  assert.equal(out[0].dollarImpact, 3500);
+  assert.match(out[0].basis, /Paragraph 12\(b\)/);
+  assert.match(out[0].basis, /Addendum A/);
+});
+
+test('credits split across several closing lines still reconcile', () => {
+  const terms = toContractTerms(rawContract());
+  const out = reconcileContract(terms, { 'Seller Credit': 10000, 'Repair credit': 2500 });
+  assert.equal(out[0].severity, Severity.WITHIN_NORMS);
+  assert.equal(out[0].dollarImpact, null);
+});
+
+test('a contract for a different property is not reconciled', () => {
+  const match = checkTransactionMatch(
+    { property_address: '4324 Parkside Dr, Baltimore, MD 21206' },
+    { propertyAddress: '456 Somewhere Ave, Anytown, PA 12345' }
+  );
+  assert.equal(match.sameTransaction, false);
+});
+
+test('the audit produces a contract finding when terms are supplied', () => {
+  const e = cleanExtraction({
+    prepaid_interest: undefined,
+    seller_credits_on_cd: [{ label: 'Seller Credit', amount: 7500, confidence: HI }],
+  });
+  const { findings } = runClosingAudit(e, { contractTerms: toContractTerms(rawContract()) });
+  const f = byCheck(findings, 'CONTRACT_RECON')[0];
+  assert.equal(f.dollarImpact, 5000);   // 12,500 agreed vs 7,500 shown
+  assert.equal(f.askSettlement, true);
 });
