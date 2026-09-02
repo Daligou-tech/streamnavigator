@@ -777,15 +777,46 @@ const NO_TOL_CATEGORIES = new Set([
 // 1026.19(e)(1)(vi) provides that if it did not, good faith is measured under
 // (e)(3)(i) — zero tolerance. Answering "no" moves money into the bucket where
 // any increase is a cure.
-function assignBucket(charge, lenderProvidedWrittenList) {
-  if (ZERO_CATEGORIES.has(charge.category))
-    return [Bucket.ZERO, `${charge.category} is a zero-tolerance charge under 1026.19(e)(3)(i)`];
-  if (NO_TOL_CATEGORIES.has(charge.category))
-    return [Bucket.NO_TOL, `${charge.category} is not subject to a tolerance under 1026.19(e)(3)(iii)`];
-  if (TEN_PCT_CATEGORIES.has(charge.category))
-    return [Bucket.TEN_PCT, 'recording fees are in the 10% cumulative bucket under 1026.19(e)(3)(ii)'];
+// Sections are printed on the form and prescribed by regulation, so they decide
+// the tolerance bucket far more reliably than a category a model inferred:
+//
+//   A  Origination Charges ............... zero tolerance, 1026.19(e)(3)(i)
+//   B  Services Borrower Did Not Shop For  zero tolerance — unshoppable by definition
+//   C  Services Borrower Did Shop For .... depends on the written provider list
+//   E  Taxes and Other Government Fees ... split: taxes zero, recording fees 10%
+//   F  Prepaids .......................... no tolerance, 1026.19(e)(3)(iii)
+//   G  Initial Escrow Payment ............ no tolerance
+//   H  Other ............................. no tolerance, not creditor-required
+//
+// Section E is the one that genuinely needs the label: it holds both transfer
+// and recordation taxes (zero tolerance) and recording fees (10% cumulative).
+const SECTION_BUCKETS = {
+  A: [Bucket.ZERO, 'Section A, Origination Charges — zero tolerance under 1026.19(e)(3)(i)'],
+  B: [Bucket.ZERO, 'Section B, Services Borrower Did Not Shop For — zero tolerance under 1026.19(e)(3)(i)'],
+  F: [Bucket.NO_TOL, 'Section F, Prepaids — not subject to a tolerance under 1026.19(e)(3)(iii)'],
+  G: [Bucket.NO_TOL, 'Section G, Initial Escrow Payment — not subject to a tolerance under 1026.19(e)(3)(iii)'],
+  H: [Bucket.NO_TOL, 'Section H, Other — not required by the creditor, so no tolerance applies'],
+};
 
-  if (charge.shoppable) {
+const TAX_LABEL = /\b(tax|taxes|stamp|stamps|recordation)\b/i;
+
+function assignBucket(charge, lenderProvidedWrittenList) {
+  const section = charge.section;
+
+  // Section C is shoppable regardless of what the label says, so it routes into
+  // the same written-list logic below.
+  if (section && section !== 'none' && section !== 'C' && section !== 'D') {
+    if (SECTION_BUCKETS[section]) return SECTION_BUCKETS[section];
+
+    if (section === 'E') {
+      return TAX_LABEL.test(feeNameOnly(charge.label || '')) || charge.category === 'transfer_tax'
+        ? [Bucket.ZERO, 'Section E, a government transfer or recordation tax — zero tolerance under 1026.19(e)(3)(i)']
+        : [Bucket.TEN_PCT, 'Section E, a recording fee — 10% cumulative bucket under 1026.19(e)(3)(ii)'];
+    }
+  }
+
+  const shoppable = charge.shoppable || section === 'C';
+  if (shoppable) {
     if (lenderProvidedWrittenList === false)
       return [Bucket.ZERO, 'no written list of providers was given, so the shopping exception is unavailable and this is tested at zero tolerance'];
     if (lenderProvidedWrittenList === null || lenderProvidedWrittenList === undefined)
@@ -794,6 +825,15 @@ function assignBucket(charge, lenderProvidedWrittenList) {
       return [Bucket.NO_TOL, "consumer selected a provider not on the lender's written list"];
     return [Bucket.TEN_PCT, "shoppable service taken from the lender's written list"];
   }
+
+  // Fall back to the category only where no usable section was printed — an ALTA
+  // settlement statement has no lettered sections at all.
+  if (ZERO_CATEGORIES.has(charge.category))
+    return [Bucket.ZERO, `${charge.category} is a zero-tolerance charge under 1026.19(e)(3)(i)`];
+  if (NO_TOL_CATEGORIES.has(charge.category))
+    return [Bucket.NO_TOL, `${charge.category} is not subject to a tolerance under 1026.19(e)(3)(iii)`];
+  if (TEN_PCT_CATEGORIES.has(charge.category))
+    return [Bucket.TEN_PCT, 'recording fees are in the 10% cumulative bucket under 1026.19(e)(3)(ii)'];
   return [Bucket.ZERO, 'service the consumer could not shop for'];
 }
 

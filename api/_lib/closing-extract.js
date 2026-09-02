@@ -76,6 +76,11 @@ const EXTRACTION_TOOL = {
         description: 'True if this appears to be the final Closing Disclosure rather than a preliminary or corrected one.',
       },
       property_address: { type: 'string' },
+      lender_name: { type: 'string', description: 'The lender named on the document.' },
+      borrower_names: {
+        type: 'array', items: { type: 'string' },
+        description: 'Borrower name(s) exactly as printed.',
+      },
       property_state: { type: 'string', description: 'Two-letter state code from the property address.' },
       property_county: { type: 'string' },
       transaction_type: { type: 'string', enum: ['purchase', 'refinance', 'other'] },
@@ -107,6 +112,12 @@ const EXTRACTION_TOOL = {
         items: {
           type: 'object',
           properties: {
+            line_number: {
+              type: 'string',
+              description: 'The two-digit number printed beside this line (01, 02, 03...). '
+                + 'Individual charges have one; section headings and subtotals do not. Omit it if '
+                + 'the line carries no number.',
+            },
             section: {
               type: 'string',
               enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'none'],
@@ -475,7 +486,15 @@ const SUBTOTAL_LABELS = [
 ];
 
 function isSubtotalLine(li) {
-  const label = String(li.label || '').replace(/^[A-K]\.\s*/, '').trim();
+  // Structural test first. The form numbers every individual charge 01, 02, 03
+  // and leaves headings and subtotals unnumbered, so the printed number settles
+  // it without needing to recognise a phrase.
+  if (li && typeof li.line_number === 'string' && /^\d{1,2}$/.test(li.line_number.trim())) {
+    return false;
+  }
+  // Label matching remains as the fallback for documents where the number was
+  // not captured, and for settlement statements, which have no numbering at all.
+  const label = String((li && li.label) || '').replace(/^[A-K]\.\s*/, '').trim();
   return SUBTOTAL_LABELS.some((re) => re.test(label));
 }
 
@@ -762,11 +781,54 @@ function runClosingAudit(extraction, options = {}) {
   // --- TRID tolerances, only if Loan Estimates were supplied ----------------
   let cureNote = null;
   if (loanEstimates && loanEstimates.length && e.closing_date) {
-    const { baseline, findings: baselineFindings } =
-      audit.selectBaseline(loanEstimates, e.closing_date);
-    findings.push(...baselineFindings);
+    // Refuse to compare documents that describe different loans. Producing
+    // tolerance findings from one lender's fees against another's is worse than
+    // producing none: they look exactly like real violations, carry dollar
+    // figures, and a customer would send them to their lender.
+    const mismatched = loanEstimates
+      .map((le) => ({ le, ...checkTransactionMatch(e, le) }))
+      .filter((r) => !r.sameTransaction);
 
-    const cdCharges = {};
+    if (mismatched.length === loanEstimates.length) {
+      const detail = mismatched[0].mismatches
+        .filter((m) => m.hard)
+        .map((m) => `${m.field}: "${m.cd}" on the Closing Disclosure vs "${m.le}" on the Loan Estimate`)
+        .join('; ');
+      findings.push(audit.finding({
+        checkId: 'TRID_TRANSACTION_MISMATCH',
+        title: 'The Loan Estimate does not appear to be for this loan',
+        severity: audit.Severity.REQUIRES_DOCUMENTATION,
+        evidence: audit.EvidenceKind.NONE,
+        actionability: audit.Actionability.NEEDS_DOCS,
+        basis: `Tolerance testing was not run because the two documents do not match on ${detail}.`,
+        whyItMatters:
+          'Comparing fees across two different loans would produce findings that look like real '
+          + 'tolerance violations but mean nothing.',
+        recommendedAction:
+          'Upload the Loan Estimate issued for this loan by this lender, and we will run the comparison.',
+      }));
+      skipped.push('TRID tolerance testing (Loan Estimate is for a different loan)');
+    } else {
+      const usable = loanEstimates.filter(
+        (le) => checkTransactionMatch(e, le).sameTransaction
+      );
+      for (const r of mismatched) {
+        findings.push(audit.finding({
+          checkId: 'TRID_TRANSACTION_MISMATCH',
+          title: `Loan Estimate ${r.le.docId} appears to be for a different loan and was excluded`,
+          severity: audit.Severity.REQUIRES_DOCUMENTATION,
+          evidence: audit.EvidenceKind.NONE,
+          actionability: audit.Actionability.NEEDS_DOCS,
+          basis: r.mismatches.filter((m) => m.hard)
+            .map((m) => `${m.field}: "${m.cd}" vs "${m.le}"`).join('; '),
+          recommendedAction: 'Check that you uploaded the Loan Estimates for this loan.',
+        }));
+      }
+      const { baseline, findings: baselineFindings } =
+        audit.selectBaseline(usable, e.closing_date);
+      findings.push(...baselineFindings);
+
+      const cdCharges = {};
     for (const li of lines) {
       cdCharges[chargeKey(li)] = {
         label: li.label,
@@ -776,10 +838,11 @@ function runClosingAudit(extraction, options = {}) {
         providerOnLenderList: answers.provider_on_lender_list ?? null,
       };
     }
-    findings.push(...audit.analyzeTolerances(
-      baseline, cdCharges, normalizeProviderListAnswer(answers.provider_list)
-    ));
-    cureNote = audit.cureDeadlineNote(e.closing_date);
+      findings.push(...audit.analyzeTolerances(
+        baseline, cdCharges, normalizeProviderListAnswer(answers.provider_list)
+      ));
+      cureNote = audit.cureDeadlineNote(e.closing_date);
+    }
   }
 
   // --- purchase contract ----------------------------------------------------
@@ -832,6 +895,12 @@ const LE_EXTRACTION_TOOL = {
           + 'Absence of a statement is false, not unknown — a revision without documentation cannot reset the baseline.',
       },
       loan_amount: { type: 'number' },
+      lender_name: { type: 'string', description: 'The lender named on the document.' },
+      borrower_names: {
+        type: 'array', items: { type: 'string' },
+        description: 'Applicant name(s) exactly as printed.',
+      },
+      property_address: { type: 'string' },
       charges: {
         type: 'array',
         description: 'Every individual charge line in sections A through H. Exclude section headings and subtotals.',
@@ -891,6 +960,10 @@ function toLoanEstimateRecord(raw, docId) {
   }
   return {
     docId,
+    lenderName: raw.lender_name || null,
+    borrowerNames: raw.borrower_names || null,
+    propertyAddress: raw.property_address || null,
+    loanAmount: typeof raw.loan_amount === 'number' ? raw.loan_amount : null,
     dateIssued: raw.date_issued || null,
     dateReceived: raw.date_received || raw.date_issued || null,
     // Only an explicit statement counts. Treating "not mentioned" as documented
@@ -1020,6 +1093,68 @@ function mergeCustomerValues(extraction, values) {
 const isCustomer = (o) => Boolean(o && o.value_source === 'customer');
 
 // ---------------------------------------------------------------------------
+// transaction identity
+// ---------------------------------------------------------------------------
+//
+// Nothing previously checked that the Loan Estimate and the Closing Disclosure
+// describe the SAME loan. Uploading a Loan Estimate from a different deal — or
+// someone else's — produced five confident tolerance findings built by comparing
+// one lender's fees against another's.
+//
+// Caught on CFPB samples H-25(G) and H-24(D): same borrowers, same $150,000, but
+// the Closing Disclosure is Fir Bank and the Loan Estimate is Ficus Bank. The
+// classifier had recorded both lender names; the audit never looked.
+
+const normName = (v) => String(v || '')
+  .toLowerCase()
+  .replace(/\b(llc|l\.l\.c|inc|incorporated|corp|corporation|company|co|na|n\.a|bank|savings|mortgage|lending|financial|group|the)\b/g, ' ')
+  .replace(/[^a-z0-9 ]/g, ' ')
+  .split(/\s+/).filter(Boolean).join(' ');
+
+function checkTransactionMatch(cd, le) {
+  const mismatches = [];
+
+  const cdLender = normName(cd.lender_name);
+  const leLender = normName(le.lenderName);
+  if (cdLender && leLender && cdLender !== leLender) {
+    mismatches.push({
+      field: 'lender', hard: true,
+      cd: cd.lender_name, le: le.lenderName,
+    });
+  }
+
+  const cdAddr = normName(cd.property_address);
+  const leAddr = normName(le.propertyAddress);
+  if (cdAddr && leAddr && cdAddr !== leAddr) {
+    mismatches.push({
+      field: 'property address', hard: true,
+      cd: cd.property_address, le: le.propertyAddress,
+    });
+  }
+
+  const cdNames = (cd.borrower_names || []).map(normName).filter(Boolean).sort().join('; ');
+  const leNames = (le.borrowerNames || []).map(normName).filter(Boolean).sort().join('; ');
+  if (cdNames && leNames && cdNames !== leNames) {
+    mismatches.push({
+      field: 'borrower', hard: true,
+      cd: (cd.borrower_names || []).join(', '), le: (le.borrowerNames || []).join(', '),
+    });
+  }
+
+  // A loan amount can legitimately change between estimate and closing, so this
+  // is reported but does not on its own block the comparison.
+  if (typeof cd.loan_amount === 'number' && typeof le.loanAmount === 'number'
+      && Math.abs(cd.loan_amount - le.loanAmount) > 1) {
+    mismatches.push({
+      field: 'loan amount', hard: false,
+      cd: cd.loan_amount, le: le.loanAmount,
+    });
+  }
+
+  return { mismatches, sameTransaction: !mismatches.some((m) => m.hard) };
+}
+
+// ---------------------------------------------------------------------------
 // free scorecard
 // ---------------------------------------------------------------------------
 
@@ -1122,6 +1257,7 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  checkTransactionMatch,
   unwrapToolInput,
   LE_EXTRACTION_TOOL,
   extractLoanEstimate,
