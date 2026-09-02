@@ -66,7 +66,23 @@ function fileToBase64(file) {
 }
 
 const MAX_FILES = 12;
-const MAX_FILE_MB = 6;
+
+// Uploads are base64-encoded into a JSON body and POSTed to a Vercel function.
+// Vercel caps a function request body at 4.5MB and returns a raw 413
+// (FUNCTION_PAYLOAD_TOO_LARGE) above it — before the handler runs, so no
+// friendly error is possible at that point. base64 inflates bytes by 4/3, so
+// the real ceiling on raw file bytes is ~3.2MB, not the 6MB/9MB previously
+// advertised. Anything above that failed with a generic "something went wrong"
+// and could never succeed on retry. Keep these in step with the identical
+// constants in api/closing-scorecard.js and api/navigator-intake.js.
+const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
+const BASE64_INFLATION = 4 / 3;
+const JSON_ENVELOPE_MARGIN = 0.94; // filenames, mime types, JSON punctuation
+const MAX_TOTAL_BYTES = Math.floor(
+  (VERCEL_BODY_LIMIT_BYTES / BASE64_INFLATION) * JSON_ENVELOPE_MARGIN
+); // ~3.17MB
+const MAX_FILE_BYTES = MAX_TOTAL_BYTES; // one document may use the whole budget
+const asMB = (b) => Math.round((b / (1024 * 1024)) * 10) / 10;
 
 function wireUploadZone(zoneEl, inputEl, listEl) {
   const selected = [];
@@ -89,7 +105,18 @@ function wireUploadZone(zoneEl, inputEl, listEl) {
   function addFiles(fileList) {
     for (const f of fileList) {
       if (selected.length >= MAX_FILES) { showToast(`You can attach up to ${MAX_FILES} files.`); break; }
-      if (f.size > MAX_FILE_MB * 1024 * 1024) { showToast(`${f.name} is over ${MAX_FILE_MB}MB — try a smaller scan or photo.`); continue; }
+      if (f.size > MAX_FILE_BYTES) {
+        showToast(`${f.name} is ${asMB(f.size)}MB — the limit is ${asMB(MAX_FILE_BYTES)}MB. Try the original PDF from your lender rather than a photo, or scan in black and white.`);
+        continue;
+      }
+      // Checked against the running total, not just per file. Without this the
+      // browser accepts the files, spends time base64-encoding them, and the
+      // request dies at the edge with an error the customer cannot act on.
+      const used = selected.reduce((n, x) => n + x.size, 0);
+      if (used + f.size > MAX_TOTAL_BYTES) {
+        showToast(`Adding ${f.name} would take you over the ${asMB(MAX_TOTAL_BYTES)}MB total. Remove a file, or upload the Closing Disclosure now and add the rest afterwards.`);
+        continue;
+      }
       selected.push(f);
     }
     render();

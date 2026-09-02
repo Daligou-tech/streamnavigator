@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Closing Disclosure Audit — StreamNavigator AI</title>
-<meta name="description" content="Upload your Closing Disclosure. We audit every charge against state and county rate schedules, escrow and per-diem rules, and the arithmetic on the document itself — and find errors, overcharges, and fees your lender may need to correct before you close. $59." />
+<meta name="description" content="Upload your Closing Disclosure. We audit every charge against state and county rate schedules, escrow and per-diem rules, and the arithmetic on the document itself — and find errors, overcharges, and fees your lender may need to correct before you close. $29–$59." />
 <link rel="canonical" href="https://streamnavigator.ai/closing" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -177,7 +177,7 @@
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 6MB each, 9MB total</div>
+            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 3MB total across all files</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
@@ -189,7 +189,7 @@
         </div>
         <ul class="price-feats">
           <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> <strong>$29</strong> — arithmetic, escrow, prorations, duplicate and stacked fees, drafted emails</li>
+          <li><span class="tick">✓</span> <strong>$29</strong> — benchmark checks against county and state schedules, arithmetic, escrow, prorations, duplicate and stacked fees, drafted emails</li>
           <li><span class="tick">✓</span> <strong>$59</strong> — adds TRID tolerance testing and purchase-contract reconciliation, the two checks that can conclude money is owed back</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
@@ -260,7 +260,7 @@
   <section style="padding-top:0; padding-bottom:90px;">
     <div class="cta-final reveal">
       <h2>You have three business days. Use them.</h2>
-      <p>Upload your Closing Disclosure and see your free scorecard in about five minutes.</p>
+      <p>Upload your Closing Disclosure and see your free scorecard. Reports are usually ready within 5 minutes.</p>
       <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Get My Free Scorecard</a>
     </div>
   </section>
@@ -334,6 +334,23 @@
     const box = document.getElementById(slot || 'scorecard-error');
     box.style.display = 'none';
     box.textContent = '';
+  }
+
+  // Vercel rejects an oversized request body at the edge with a 413 and a
+  // non-JSON payload, so resp.json() throws and the customer previously saw
+  // "Something went wrong — please try again", which is both unhelpful and
+  // untrue: retrying an oversized upload can never work. The client now blocks
+  // this case before upload, but a slow-growing payload could still hit it.
+  async function readJson(resp) {
+    if (resp.status === 413) {
+      throw new Error('Those files are too large to send in one go. Upload your Closing Disclosure on its own first — you can add the Loan Estimate and contract straight afterwards.');
+    }
+    const text = await resp.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('The server sent back a response we could not read. Please try again in a moment.');
+    }
   }
 
   const money = (n) => n === null || n === undefined
@@ -445,8 +462,9 @@
       applyTier(sc.tier);
       if (sc.tier.id === 'basic') {
         html += '<p class="scorecard-note"><strong>Your audit is $29.</strong> That covers the '
-          + 'arithmetic, escrow and proration checks, duplicate and stacked-fee detection, and your '
-          + 'drafted emails &mdash; everything a Closing Disclosure alone can support.'
+          + 'benchmark checks against your county and state schedules, the arithmetic, escrow and '
+          + 'proration checks, duplicate and stacked-fee detection, and your drafted emails '
+          + '&mdash; everything a Closing Disclosure alone can support.'
           + '<br><br>Add your <strong>Loan Estimates</strong> and we can test whether a fee rose beyond '
           + 'what the lending rules permit, which can mean your lender owes you a refund. Add your '
           + '<strong>purchase contract</strong> and we can check that every credit you negotiated '
@@ -586,9 +604,9 @@
             + 'The full audit shows you every charge we examined, what we measured it against, and '
             + 'the drafted emails.</p>'
           : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
-            + 'goes further: benchmark checks against your county and state schedules, and — if you add your '
-            + 'Loan Estimates or purchase contract — tolerance testing and credit reconciliation, which are '
-            + 'where most recoverable money turns up.</p>');
+            + 'goes further: every charge measured against your county and state schedules, with the basis '
+            + 'shown. Add your Loan Estimates or purchase contract and it also runs tolerance testing and '
+            + 'credit reconciliation, which are where most recoverable money turns up.</p>');
 
     panel.innerHTML = html;
 
@@ -618,7 +636,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ id: submissionRef.id, token: submissionRef.token, values: values }),
       });
-      const data = await resp.json();
+      const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not apply those figures.');
       renderScorecard(data.scorecard);
       // Refresh what travels through checkout. Without this the paid report page
@@ -662,7 +680,7 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email: email, description: descEl.value.trim(), files: encoded }),
       });
-      const data = await resp.json();
+      const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');
 
       // A document we could not read, or one that is not a CD, is caught here —
@@ -733,7 +751,7 @@
           property_type: propertyType, provider_list: providerList,
         }),
       });
-      const data = await resp.json();
+      const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not save your answers.');
       goToStripe(btn.getAttribute('href'), submissionRef, document.getElementById('intake-email').value.trim());
     } catch (err) {
