@@ -25,6 +25,9 @@ const {
   PRIMARY_TYPES,
   extractLoanEstimate,
   toLoanEstimateRecord,
+  extractPurchaseContract,
+  toContractTerms,
+  checkTransactionMatch,
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 
@@ -257,7 +260,41 @@ module.exports = async (req, res) => {
     if (dated.length) loanEstimates = dated;
   }
 
-  const { findings, skipped } = runClosingAudit(extraction, { loanEstimates });
+  // The purchase contract, extracted here for the same reason the Loan Estimates
+  // are: the flag count must include the analysis the $59 tier is sold on.
+  // Before this, contract_terms was read in three places and written in none.
+  let contractTerms = null;
+  let contractMismatch = null;
+  const contractIndexes = classified
+    .filter((d) => d.document_type === 'purchase_contract')
+    .map((d) => d.index)
+    .filter((i) => typeof i === 'number' && contentBlocks[i]);
+
+  for (const i of contractIndexes) {
+    try {
+      const raw = await extractPurchaseContract(ANTHROPIC_API_KEY, contentBlocks[i]);
+      if (!raw || raw.is_purchase_contract === false) continue;
+
+      // Same identity guard as the Loan Estimates. A contract for a different
+      // property would report every negotiated credit as missing.
+      const match = checkTransactionMatch(extraction, {
+        propertyAddress: raw.property_address || null,
+        lenderName: null,
+        borrowerNames: raw.buyer_names || null,
+      });
+      if (!match.sameTransaction) {
+        contractMismatch = match.mismatches.filter((m) => m.hard);
+        continue;
+      }
+
+      const terms = toContractTerms(raw);
+      if (terms.length) contractTerms = [...(contractTerms || []), ...terms];
+    } catch (err) {
+      console.error('[closing-scorecard] purchase contract extraction failed:', err.message);
+    }
+  }
+
+  const { findings, skipped } = runClosingAudit(extraction, { loanEstimates, contractTerms });
 
   // Tolerance testing needs charges on BOTH sides. Reading the Loan Estimates is
   // only half of it — if the Closing Disclosure has no charge lines (a page-1
@@ -286,6 +323,10 @@ module.exports = async (req, res) => {
     // Surfaced so the page can tell the customer which checks did not run and
     // why, rather than leaving it to a silent count.
     checks_skipped_detail: skipped,
+    contract_reconciled: Boolean(contractTerms && contractTerms.length),
+    contract_terms_read: contractTerms ? contractTerms.length : 0,
+    contract_uploaded: contractIndexes.length,
+    contract_mismatch: contractMismatch,
     transaction_mismatch: transactionMismatch
       ? {
           fields: ((findings.find((f) => f.checkId === 'TRID_TRANSACTION_MISMATCH') || {}).detail || {}).mismatches || [],
@@ -310,6 +351,7 @@ module.exports = async (req, res) => {
         documents: classified,
         tier,
         loan_estimates: loanEstimates,
+        contract_terms: contractTerms,
       },
       updated_at: new Date().toISOString(),
     })
