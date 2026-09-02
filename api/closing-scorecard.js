@@ -201,10 +201,16 @@ module.exports = async (req, res) => {
       token: submission.access_token,
       scorecard: null,
       error_message:
-        `That looks like a ${DOCUMENT_LABELS[extraction.document_type] || 'document'}, which we cannot ` +
-        'audit on its own. We need either your Closing Disclosure — the five-page form headed ' +
-        '"Closing Disclosure" that your lender sends at least three business days before closing — or ' +
-        'your settlement agent\'s ALTA Settlement Statement. Upload either and we will take another look.',
+        (DOCUMENT_LABELS[extraction.document_type]
+          // Named type: tell them what we think it is.
+          ? `That looks like a ${DOCUMENT_LABELS[extraction.document_type]}, which we cannot audit on its own. `
+          // Unrecognised: say we could not identify it, rather than the previous
+          // "That looks like a document, which we cannot audit" — which was both
+          // broken English and unhelpful.
+          : 'We could not identify that document. ') +
+        'We need either your Closing Disclosure — the five-page form headed "Closing Disclosure" that ' +
+        'your lender sends at least three business days before closing — or your settlement agent\'s ' +
+        'ALTA Settlement Statement. Upload either and we will take another look.',
     });
     return;
   }
