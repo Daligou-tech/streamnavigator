@@ -442,9 +442,18 @@ function checkCashToClose(c, toleranceDollars = 1.0) {
           + 'The loan amount could not be read, so the calculation could not be reproduced.',
       });
     }
+    // Closing costs paid before closing is ADDED here, not subtracted.
+    //
+    // Total Closing Costs (J) already includes amounts the borrower has already
+    // paid. On the standard purchase table J is added, so the paid portion is
+    // subtracted back out. On this table J is SUBTRACTED, so the paid portion
+    // must be added back. Subtracting it double-counts.
+    //
+    // Caught by CFPB sample H-25F1: $655 paid before closing produced a phantom
+    // $1,310.00 "confirmed mathematical error" — exactly twice the figure.
     const expectedAlt =
       toCents(c.loanAmount) -
-      g('totalClosingCostsJ') -
+      g('totalClosingCostsJ') +
       g('closingCostsPaidBeforeClosing') -
       g('totalPayoffsAndPayments');
     const statedAlt = g('statedCashToClose');
@@ -463,8 +472,11 @@ function checkCashToClose(c, toleranceDollars = 1.0) {
       variance: toDollars(varAlt),
       basis: `Alternative Cash to Close table (refinance): loan amount `
         + `${toDollars(toCents(c.loanAmount))} less total closing costs `
-        + `${toDollars(g('totalClosingCostsJ'))} less total payoffs and payments `
-        + `${toDollars(g('totalPayoffsAndPayments'))}.`,
+        + `${toDollars(g('totalClosingCostsJ'))}`
+        + (g('closingCostsPaidBeforeClosing')
+            ? ` plus ${toDollars(g('closingCostsPaidBeforeClosing'))} already paid before closing`
+            : '')
+        + ` less total payoffs and payments ${toDollars(g('totalPayoffsAndPayments'))}.`,
       whyItMatters: okAlt ? '' : 'This is the number you receive or wire.',
       recommendedAction: okAlt ? ''
         : 'Ask the settlement agent to reconcile the Cash to Close table line by line.',

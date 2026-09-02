@@ -929,7 +929,13 @@ const NEEDS_DOCS_SEVERITIES = new Set([
 function buildScorecard(extraction, findings, skipped = []) {
   const e = extraction || {};
   const st = e.section_totals || {};
-  const totalClosingCosts = confident(st.J) ? val(st.J) : null;
+  // J appears in two places. On a partial upload (a page-3 excerpt, or a scan
+  // missing page 2) the section subtotal is absent but the Cash to Close table
+  // still carries it. Fall back rather than showing the customer a blank where
+  // the headline number should be.
+  const ctcJ = (e.cash_to_close || {}).total_closing_costs_j;
+  const totalClosingCosts = confident(st.J) ? val(st.J)
+    : (confident(ctcJ) ? val(ctcJ) : null);
   const loanAmount = typeof e.loan_amount === 'number' ? e.loan_amount : null;
 
   const flags = findings.filter((f) => FLAG_SEVERITIES.has(f.severity));
