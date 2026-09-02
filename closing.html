@@ -137,15 +137,15 @@
     <div class="section-head reveal">
       <div class="eyebrow">Get started</div>
       <h2>See what we found first. Then decide.</h2>
-      <p>Upload your Closing Disclosure and get a free scorecard. Pay only if it turns something up.</p>
+      <p>Upload your Closing Disclosure and see the free scorecard before you decide. $29 for the audit; $59 if you add the documents that unlock the two checks which can put money back.</p>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
         <span class="price-badge">Free scorecard first</span>
         <h3>Closing Disclosure Audit</h3>
-        <p class="desc">An independent audit of your Closing Disclosure against rate schedules, lending rules, and its own arithmetic — before you sign.</p>
-        <div class="price-amount">$59</div>
-        <div class="price-period">after your free scorecard — one-time, per closing</div>
+        <p class="desc">An independent audit of your Closing Disclosure against lending rules, its own arithmetic, and published rate schedules where we hold them — before you sign.</p>
+        <div class="price-amount">$29<span style="font-size:.5em; font-weight:400;"> &ndash; $59</span></div>
+        <div class="price-period">$29 for the Closing Disclosure audit &middot; $59 when you add Loan Estimates or your purchase contract</div>
 
         <div id="stage-1">
         <div class="field-block">
@@ -161,7 +161,7 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Add the latest Loan Estimate if you have one, for a sharper comparison. Do not add an older Loan Estimate. Your purchase contract is highly useful too — it is how we catch a seller credit that shrank. If you have the full Loan Estimate sequence including revisions, upload it all; more history lets us establish the correct legal baseline instead of assuming one.</p>
+          <p class="field-hint">The Closing Disclosure alone is a $29 audit. Add the latest Loan Estimate — do not add an older one — or your purchase contract, and it becomes $59, because two further analyses become possible: whether a fee rose beyond what the lending rules permit, and whether every credit you negotiated actually landed. If you have the full Loan Estimate sequence including revisions, upload it all; more history lets us establish the correct legal baseline instead of assuming one.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
@@ -169,7 +169,8 @@
         </div>
         <ul class="price-feats">
           <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> Every material finding ranked by dollar impact</li>
+          <li><span class="tick">✓</span> <strong>$29</strong> — arithmetic, escrow, prorations, duplicate and stacked fees, drafted emails</li>
+          <li><span class="tick">✓</span> <strong>$59</strong> — adds TRID tolerance testing and purchase-contract reconciliation, the two checks that can conclude money is owed back</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
         <div class="inline-error" id="scorecard-error" style="display:none;" role="alert" aria-live="assertive"></div>
@@ -204,7 +205,7 @@
               <p class="field-hint">This decides which tolerance rule applies to several of your charges. If no written list was given, fees you might assume were flexible are often held to a stricter standard.</p>
             </div>
             <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
-            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" class="btn btn-primary" id="pay-btn">Unlock the Full Audit — $59 →</a>
+            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="REPLACE_WITH_29_DOLLAR_PAYMENT_LINK" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
             <p class="price-secure">🔒 Secured by Stripe</p>
           </div>
         </div>
@@ -322,6 +323,13 @@
   // The scorecard shows counts and headline figures only. It deliberately never
   // names a flagged fee or its dollar impact — that is the paid report. It has to
   // be worth reading on its own without being a substitute for what it sells.
+  function applyTier(tier) {
+    const btn = document.getElementById('pay-btn');
+    const link = btn.getAttribute(tier.id === 'full' ? 'data-link-full' : 'data-link-basic');
+    if (link && link.indexOf('REPLACE_WITH_') === -1) btn.setAttribute('href', link);
+    btn.textContent = 'Unlock the Full Audit — ' + tier.price_label + ' →';
+  }
+
   function renderScorecard(sc) {
     unreadableRemaining = (sc.unreadable_fields || []).length;
     acknowledgedGaps = false;   // a fresh scorecard means a fresh decision
@@ -367,6 +375,29 @@
     // Disclosure prints Total Closing Costs (J), and J already includes the
     // initial escrow payment in section G — telling the customer those were
     // "not counted above" would be flatly untrue.
+    // Tier is decided by what the customer actually uploaded, and the upsell is
+    // shown only when it would genuinely buy them a different analysis.
+    if (sc.tier) {
+      applyTier(sc.tier);
+      if (sc.tier.id === 'basic') {
+        html += '<p class="scorecard-note"><strong>Your audit is $29.</strong> That covers the '
+          + 'arithmetic, escrow and proration checks, duplicate and stacked-fee detection, and your '
+          + 'drafted emails &mdash; everything a Closing Disclosure alone can support.'
+          + '<br><br>Add your <strong>Loan Estimates</strong> and we can test whether a fee rose beyond '
+          + 'what the lending rules permit, which can mean your lender owes you a refund. Add your '
+          + '<strong>purchase contract</strong> and we can check that every credit you negotiated '
+          + 'actually landed. Either one makes it $59. Upload them above and run the scorecard again.</p>';
+      } else {
+        html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
+          + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
+              ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both run'
+              : sc.tier.has_loan_estimate
+                ? 'Loan Estimates, so TRID tolerance testing runs against the correct baseline'
+                : 'a purchase contract, so we can check your negotiated credits against the closing figures')
+          + '.</p>';
+      }
+    }
+
     if (sc.deposits_excluded && sc.total_is_derived) {
       html += '<p class="scorecard-note">Not counted above: ' + money(sc.deposits_excluded.total)
         + ' in deposits or holdbacks across ' + sc.deposits_excluded.count + ' line'
