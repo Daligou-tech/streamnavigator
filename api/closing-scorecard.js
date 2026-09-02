@@ -252,12 +252,26 @@ module.exports = async (req, res) => {
   }
 
   const { findings, skipped } = runClosingAudit(extraction, { loanEstimates });
+
+  // Tolerance testing needs charges on BOTH sides. Reading the Loan Estimates is
+  // only half of it — if the Closing Disclosure has no charge lines (a page-1
+  // excerpt, a scan missing page 2), 22 Loan Estimate charges get compared to an
+  // empty list and produce nothing. Reporting that as "no fee rose beyond what
+  // the rules permit" is a silent pass on a test that never ran, which is worse
+  // than reporting nothing at all.
+  const cdChargeCount = (extraction.line_items || []).length;
+  const toleranceTested = Boolean(loanEstimates) && cdChargeCount > 0;
+
   const scorecard = {
     ...buildScorecard(extraction, findings, skipped),
     tier,
-    tolerance_tested: Boolean(loanEstimates),
+    tolerance_tested: toleranceTested,
+    tolerance_blocked_reason: (loanEstimates && !cdChargeCount)
+      ? 'no_cd_charges'
+      : (leIndexes.length && !loanEstimates ? 'le_unreadable' : null),
     loan_estimates_read: loanEstimates ? loanEstimates.length : 0,
     loan_estimates_uploaded: leIndexes.length,
+    cd_charge_lines: cdChargeCount,
   };
 
   await admin
