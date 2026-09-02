@@ -1,0 +1,38 @@
+{
+ "name": "cfpb-h25f1-excerpt",
+ "note": "CFPB H-25(F1), a two-page excerpt with no charge lines. Exposed the sign on costs paid before closing, and a check reporting a pass when it had nothing to test.",
+ "extraction": {
+  "document_type": "closing_disclosure",
+  "transaction_type": "refinance",
+  "lender_name": "Ficus Bank",
+  "loan_amount": 150000,
+  "pages_present": 2,
+  "line_items": [],
+  "section_totals": {},
+  "cash_to_close": {
+   "total_closing_costs_j": {
+    "value": 5977.57,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "closing_costs_paid_before_closing": {
+    "value": 655,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "total_payoffs_and_payments": {
+    "value": 115000,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "stated_cash_to_close": {
+    "value": 29677.43,
+    "confidence": 0.97,
+    "page": 2
+   }
+  },
+  "prorations": [],
+  "seller_credits_on_cd": [],
+  "document_problems": []
+ }
+}

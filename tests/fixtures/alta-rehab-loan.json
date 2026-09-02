@@ -1,0 +1,97 @@
+{
+ "name": "alta-rehab-loan",
+ "note": "real ALTA settlement statement, hard-money rehab loan. Exposed payee-in-label duplicate matching, a $24k holdback counted as a fee, and needs-a-document vs no-rate-data.",
+ "extraction": {
+  "document_type": "alta_settlement_statement",
+  "property_state": "MD",
+  "property_county": "Baltimore City",
+  "sale_price": 90000,
+  "loan_amount": 96000,
+  "pages_present": 3,
+  "line_items": [
+   {
+    "section": "none",
+    "label": "Credit Report to Superior Settlement Services, LLC",
+    "amount": 50,
+    "payee": "Superior Settlement Services, LLC",
+    "paid_by": "borrower",
+    "category": "credit_report",
+    "confidence": 0.97,
+    "page": 1
+   },
+   {
+    "section": "none",
+    "label": "Lender Discount Fee to Superior Settlement Services, LLC",
+    "amount": 3000,
+    "payee": "Superior Settlement Services, LLC",
+    "paid_by": "borrower",
+    "category": "origination",
+    "confidence": 0.97,
+    "page": 1
+   },
+   {
+    "section": "none",
+    "label": "Rehab Escrow to Superior Settlement Services, LLC",
+    "amount": 24000,
+    "payee": "Superior Settlement Services, LLC",
+    "paid_by": "borrower",
+    "category": "escrow_deposit",
+    "confidence": 0.97,
+    "page": 2
+   },
+   {
+    "section": "none",
+    "label": "Wire Fee to Superior Settlement Services, LLC",
+    "amount": 35,
+    "payee": "Superior Settlement Services, LLC",
+    "paid_by": "borrower",
+    "category": "other",
+    "confidence": 0.97,
+    "page": 2
+   },
+   {
+    "section": "none",
+    "label": "Title - Settlement Fee to Home First Title Group, LLC",
+    "amount": 250,
+    "payee": "Home First Title Group, LLC",
+    "paid_by": "borrower",
+    "category": "settlement_service",
+    "confidence": 0.97,
+    "page": 2
+   },
+   {
+    "section": "none",
+    "label": "Title - Title Examination to Home First Title Group, LLC",
+    "amount": 395,
+    "payee": "Home First Title Group, LLC",
+    "paid_by": "borrower",
+    "category": "title_insurance_owners",
+    "confidence": 0.97,
+    "page": 2
+   },
+   {
+    "section": "none",
+    "label": "State Transfer Tax",
+    "amount": 225,
+    "payee": "Circuit Court",
+    "paid_by": "seller",
+    "category": "transfer_tax",
+    "confidence": 0.97,
+    "page": 2
+   },
+   {
+    "section": "none",
+    "label": "City Transfer Tax",
+    "amount": 675,
+    "payee": "Director of Finance",
+    "paid_by": "seller",
+    "category": "transfer_tax",
+    "confidence": 0.97,
+    "page": 2
+   }
+  ],
+  "prorations": [],
+  "seller_credits_on_cd": [],
+  "document_problems": []
+ }
+}

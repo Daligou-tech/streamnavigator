@@ -1,0 +1,126 @@
+{
+ "name": "mismatched-lender",
+ "note": "CFPB H-25(G) with H-24(D): same borrowers and loan amount, Fir Bank vs Ficus Bank. Tolerance testing must refuse, not produce findings.",
+ "extraction": {
+  "document_type": "closing_disclosure",
+  "transaction_type": "refinance",
+  "lender_name": "Fir Bank",
+  "loan_amount": 150000,
+  "pages_present": 2,
+  "line_items": [
+   {
+    "section": "A",
+    "label": "Origination Fee",
+    "amount": 2102,
+    "category": "origination",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01"
+   }
+  ],
+  "section_totals": {
+   "A": {
+    "value": 2102,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "B": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "C": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "D": {
+    "value": 2102,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "E": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "F": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "G": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "H": {
+    "value": 0,
+    "confidence": 0.2,
+    "page": 2
+   },
+   "I": {
+    "value": 0,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "J": {
+    "value": 2102,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "lender_credits": {
+    "value": 0,
+    "confidence": 0.97,
+    "page": 2
+   }
+  },
+  "cash_to_close": {
+   "total_closing_costs_j": {
+    "value": 5977.57,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "closing_costs_paid_before_closing": {
+    "value": 655,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "total_payoffs_and_payments": {
+    "value": 115000,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "stated_cash_to_close": {
+    "value": 29677.43,
+    "confidence": 0.97,
+    "page": 2
+   }
+  },
+  "prorations": [],
+  "seller_credits_on_cd": [],
+  "document_problems": [],
+  "closing_date": "2013-04-15"
+ },
+ "loanEstimates": [
+  {
+   "docId": "LE1",
+   "lenderName": "Ficus Bank",
+   "dateIssued": "2013-02-15",
+   "dateReceived": "2013-02-15",
+   "changedCircumstanceDocumented": false,
+   "loanAmount": 150000,
+   "borrowerNames": [
+    "Michael Jones",
+    "Mary Stone"
+   ],
+   "charges": {
+    "origination:origination_fee": {
+     "label": "Origination Fee",
+     "amount": 1802,
+     "category": "origination"
+    }
+   }
+  }
+ ]
+}
