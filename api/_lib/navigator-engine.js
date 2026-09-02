@@ -420,7 +420,11 @@ async function generateNavigatorReport(submissionId) {
         },
         body: JSON.stringify({
           model: ANTHROPIC_MODEL,
-          max_tokens: 4096,
+          // Raised from 4096. A closing audit with twenty findings plus two
+          // drafted emails runs close to that ceiling, and nothing below checks
+          // stop_reason — a truncated tool call would have been saved and billed
+          // as a finished report.
+          max_tokens: 8000,
           system: systemPrompt,
           tools: [REPORT_TOOL],
           tool_choice: { type: 'tool', name: 'submit_navigator_report' },
@@ -434,6 +438,16 @@ async function generateNavigatorReport(submissionId) {
       }
 
       const data = await response.json();
+
+      // A truncated response still parses. Without this, a report cut off
+
+      // mid-sentence is stored and emailed as though it were complete.
+
+      if (data.stop_reason === 'max_tokens') {
+
+        throw new Error('Report generation hit the output limit and was truncated — not saved.');
+
+      }
       const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_navigator_report');
       if (!toolUse) {
         lastError = new Error('Model did not return a structured report');
