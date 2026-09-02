@@ -1054,3 +1054,34 @@ test('a Loan Estimate with no issue date does not silently pass', () => {
   const dated = [undated].filter((r) => r.dateIssued);
   assert.equal(dated.length, 0);
 });
+
+test('22 Loan Estimate charges against an empty CD is not a pass', () => {
+  // CFPB sample H-25F1 is a two-page excerpt with no closing cost details. The
+  // Loan Estimate extracted 22 charges perfectly; the Closing Disclosure had
+  // none. The matcher produced nothing, and the scorecard reported "we checked
+  // whether any fee rose beyond what the lending rules permit, and none did".
+  // Nothing was checked. A silent pass is worse than no answer.
+  const le = toLoanEstimateRecord(rawLE(), 'LE1');
+  const cd = cleanExtraction({ line_items: [], prepaid_interest: undefined, closing_date: '2013-03-15' });
+
+  const { findings } = runClosingAudit(cd, { loanEstimates: [le] });
+  assert.equal(byCheck(findings, 'TRID_ZERO_TOLERANCE').length, 0);
+  assert.equal(byCheck(findings, 'TRID_UNMATCHED_CHARGE').length, 0);
+
+  // The endpoint's guard: tolerance is only "tested" with charges on both sides.
+  const cdChargeCount = (cd.line_items || []).length;
+  assert.equal(cdChargeCount, 0);
+  assert.equal(Boolean([le]) && cdChargeCount > 0, false);
+});
+
+test('tolerance counts as tested only when both documents have charges', () => {
+  const le = toLoanEstimateRecord(rawLE(), 'LE1');
+  const cd = cleanExtraction({
+    prepaid_interest: undefined, closing_date: '2013-03-15',
+    line_items: [{ section: 'A', label: 'Origination Fee', amount: 1802, category: 'origination', confidence: HI, page: 2 }],
+  });
+  const cdChargeCount = (cd.line_items || []).length;
+  assert.equal(Boolean([le]) && cdChargeCount > 0, true);
+  // matched at the same amount, so no violation
+  assert.equal(byCheck(runClosingAudit(cd, { loanEstimates: [le] }).findings, 'TRID_ZERO_TOLERANCE').length, 0);
+});
