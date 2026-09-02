@@ -16,6 +16,7 @@
 // is rejected, so this cannot be used to rewrite figures we read correctly.
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
+const { mergeFormData, mergeScorecard } = require('./_lib/submission-store');
 const {
   listUnreadableFields,
   mergeCustomerValues,
@@ -113,16 +114,21 @@ module.exports = async (req, res) => {
   const cdChargeCount = (merged.line_items || []).length;
   const loanEstimateCount = Array.isArray(formData.loan_estimates) ? formData.loan_estimates.length : 0;
 
-  const scorecard = {
-    ...previousScorecard,
-    ...buildScorecard(merged, findings, skipped),
+  // A refused comparison stays refused. Deriving tolerance_tested from counts
+  // alone would flip a mismatched pair back to "already run against the correct
+  // baseline" the moment a customer corrected one unrelated figure — reviving
+  // the false all-clear this check exists to prevent.
+  const transactionMismatch = skipped.some((x) => /different loan/.test(x));
+
+  const scorecard = mergeScorecard(previousScorecard, buildScorecard(merged, findings, skipped), {
     tier: previousScorecard.tier || formData.tier || null,
-    tolerance_tested: loanEstimateCount > 0 && cdChargeCount > 0,
+    tolerance_tested: loanEstimateCount > 0 && cdChargeCount > 0 && !transactionMismatch,
+    checks_skipped_detail: skipped,
     tolerance_blocked_reason: previousScorecard.tolerance_blocked_reason || null,
     loan_estimates_read: loanEstimateCount,
     loan_estimates_uploaded: previousScorecard.loan_estimates_uploaded || loanEstimateCount,
     cd_charge_lines: cdChargeCount,
-  };
+  });
 
   // If the report has already been generated and paid for, the customer is
   // holding an audit with known holes. New figures have to produce a new report
@@ -134,15 +140,17 @@ module.exports = async (req, res) => {
   const willRegenerate = alreadyReported && regenCount < MAX_REGENERATIONS;
 
   const update = {
-    form_data: {
-      ...formData,
+    // Merged, never rebuilt. Constructing this object by hand is how tier,
+    // tolerance results and the Loan Estimates were discarded by a customer
+    // correcting one unreadable figure.
+    form_data: mergeFormData(formData, {
       // Keep the untouched reading so corrections stay reversible and auditable.
       original_extraction: baseExtraction,
       extraction: merged,
       customer_values: combined,
       scorecard,
       regeneration_count: willRegenerate ? regenCount + 1 : regenCount,
-    },
+    }),
     updated_at: new Date().toISOString(),
   };
   if (willRegenerate) {

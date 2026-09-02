@@ -15,6 +15,7 @@
 // anyone alter someone else's answers.
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
+const { mergeFormData } = require('./_lib/submission-store');
 
 const PROPERTY_TYPES = [
   'single_family', 'condo', 'other_attached', 'investment', 'other',
@@ -68,11 +69,10 @@ module.exports = async (req, res) => {
   const { error: updateError } = await admin
     .from('navigator_submissions')
     .update({
-      form_data: {
-        ...formData,
+      form_data: mergeFormData(formData, {
         stage: 'answered',
         answers: { property_type: propertyType, provider_list: providerList },
-      },
+      }),
       updated_at: new Date().toISOString(),
     })
     .eq('id', id);
