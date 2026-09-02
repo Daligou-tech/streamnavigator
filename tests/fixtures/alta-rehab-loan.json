@@ -11,9 +11,9 @@
   "line_items": [
    {
     "section": "none",
-    "label": "Credit Report to Superior Settlement Services, LLC",
+    "label": "Credit Report to Lender Services Co",
     "amount": 50,
-    "payee": "Superior Settlement Services, LLC",
+    "payee": "Lender Services Co",
     "paid_by": "borrower",
     "category": "credit_report",
     "confidence": 0.97,
@@ -21,9 +21,9 @@
    },
    {
     "section": "none",
-    "label": "Lender Discount Fee to Superior Settlement Services, LLC",
+    "label": "Lender Discount Fee to Lender Services Co",
     "amount": 3000,
-    "payee": "Superior Settlement Services, LLC",
+    "payee": "Lender Services Co",
     "paid_by": "borrower",
     "category": "origination",
     "confidence": 0.97,
@@ -31,9 +31,9 @@
    },
    {
     "section": "none",
-    "label": "Rehab Escrow to Superior Settlement Services, LLC",
+    "label": "Rehab Escrow to Lender Services Co",
     "amount": 24000,
-    "payee": "Superior Settlement Services, LLC",
+    "payee": "Lender Services Co",
     "paid_by": "borrower",
     "category": "escrow_deposit",
     "confidence": 0.97,
@@ -41,9 +41,9 @@
    },
    {
     "section": "none",
-    "label": "Wire Fee to Superior Settlement Services, LLC",
+    "label": "Wire Fee to Lender Services Co",
     "amount": 35,
-    "payee": "Superior Settlement Services, LLC",
+    "payee": "Lender Services Co",
     "paid_by": "borrower",
     "category": "other",
     "confidence": 0.97,
@@ -51,9 +51,9 @@
    },
    {
     "section": "none",
-    "label": "Title - Settlement Fee to Home First Title Group, LLC",
+    "label": "Title - Settlement Fee to Example Title Group",
     "amount": 250,
-    "payee": "Home First Title Group, LLC",
+    "payee": "Example Title Group",
     "paid_by": "borrower",
     "category": "settlement_service",
     "confidence": 0.97,
@@ -61,9 +61,9 @@
    },
    {
     "section": "none",
-    "label": "Title - Title Examination to Home First Title Group, LLC",
+    "label": "Title - Title Examination to Example Title Group",
     "amount": 395,
-    "payee": "Home First Title Group, LLC",
+    "payee": "Example Title Group",
     "paid_by": "borrower",
     "category": "title_insurance_owners",
     "confidence": 0.97,
@@ -73,7 +73,7 @@
     "section": "none",
     "label": "State Transfer Tax",
     "amount": 225,
-    "payee": "Circuit Court",
+    "payee": "County Circuit Court",
     "paid_by": "seller",
     "category": "transfer_tax",
     "confidence": 0.97,
@@ -83,7 +83,7 @@
     "section": "none",
     "label": "City Transfer Tax",
     "amount": 675,
-    "payee": "Director of Finance",
+    "payee": "City Director of Finance",
     "paid_by": "seller",
     "category": "transfer_tax",
     "confidence": 0.97,
@@ -93,5 +93,6 @@
   "prorations": [],
   "seller_credits_on_cd": [],
   "document_problems": []
- }
+ },
+ "_privacy": "Fixtures live in a public repository. Company payees replaced; figures preserved."
 }

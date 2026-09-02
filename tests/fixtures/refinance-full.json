@@ -1,0 +1,268 @@
+{
+ "name": "refinance-full",
+ "note": "Anonymised from a real refinance. Identity replaced; every figure and relationship preserved. Exposed the alternative Cash to Close table, Section G vs the RESPA cushion, and section subtotals extracted as charges.",
+ "extraction": {
+  "document_type": "closing_disclosure",
+  "transaction_type": "refinance",
+  "is_final": true,
+  "lender_name": "Example Mortgage, LLC",
+  "borrower_names": [
+   "Sample Borrower"
+  ],
+  "property_address": "100 Example St, Baltimore, MD 21206",
+  "property_state": "MD",
+  "property_county": "Baltimore City",
+  "closing_date": "2022-12-23",
+  "loan_amount": 183750,
+  "interest_rate_pct": 7.125,
+  "pages_present": 6,
+  "line_items": [
+   {
+    "section": "A",
+    "label": "2.125 % of Loan Amount (Points)",
+    "amount": 3904.69,
+    "category": "origination",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01"
+   },
+   {
+    "section": "A",
+    "label": "Processing Fees",
+    "amount": 670,
+    "category": "lender_fee",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "02"
+   },
+   {
+    "section": "A",
+    "label": "Underwriting Fees",
+    "amount": 675,
+    "category": "lender_fee",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "03"
+   },
+   {
+    "section": "B",
+    "label": "Appraisal Fee",
+    "amount": 770,
+    "category": "appraisal",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01",
+    "payee": "JGF Appraisals"
+   },
+   {
+    "section": "B",
+    "label": "Credit Report",
+    "amount": 44,
+    "category": "credit_report",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "02",
+    "payee": "CREDIT PLUS"
+   },
+   {
+    "section": "B",
+    "label": "Flood Certification",
+    "amount": 14,
+    "category": "unshoppable_service",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "03",
+    "payee": "CoreLogic Flood Services"
+   },
+   {
+    "section": "C",
+    "label": "Title - Closing Protection Letter",
+    "amount": 25,
+    "category": "title_insurance_lenders",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01",
+    "payee": "Boston National Title Agency LLC",
+    "shoppable": true
+   },
+   {
+    "section": "C",
+    "label": "Title - Lender's Title Insurance",
+    "amount": 349.13,
+    "category": "title_insurance_lenders",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "02",
+    "payee": "Boston National Title Agency LLC",
+    "shoppable": true
+   },
+   {
+    "section": "C",
+    "label": "Title - Settlement Fee",
+    "amount": 425,
+    "category": "settlement_service",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "03",
+    "payee": "Boston National Title Agency LLC",
+    "shoppable": true
+   },
+   {
+    "section": "E",
+    "label": "Recording Fees",
+    "amount": 165,
+    "category": "recording_fee",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01"
+   },
+   {
+    "section": "E",
+    "label": "City/County Tax/Stamps",
+    "amount": 1155,
+    "category": "transfer_tax",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "02",
+    "payee": "Clerk of the Court"
+   },
+   {
+    "section": "F",
+    "label": "Prepaid Interest ( $35.869 per day from 12/23/22 to 1/1/23 )",
+    "amount": 322.82,
+    "category": "prepaid_interest",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "03"
+   },
+   {
+    "section": "G",
+    "label": "Homeowner's Insurance $76.17 per month for 11 mo.",
+    "amount": 837.87,
+    "category": "escrow_deposit",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "01"
+   },
+   {
+    "section": "G",
+    "label": "Property Taxes $179.95 per month for 6 mo.",
+    "amount": 1079.7,
+    "category": "escrow_deposit",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "03"
+   },
+   {
+    "section": "G",
+    "label": "Aggregate Adjustment",
+    "amount": -380.85,
+    "category": "escrow_deposit",
+    "confidence": 0.97,
+    "page": 2,
+    "line_number": "08"
+   }
+  ],
+  "section_totals": {
+   "A": {
+    "value": 5249.69,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "B": {
+    "value": 828,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "C": {
+    "value": 799.13,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "D": {
+    "value": 6876.82,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "E": {
+    "value": 1320,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "F": {
+    "value": 322.82,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "G": {
+    "value": 1536.72,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "H": {
+    "value": 0,
+    "confidence": 0.3,
+    "page": 2
+   },
+   "I": {
+    "value": 3179.54,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "J": {
+    "value": 10056.36,
+    "confidence": 0.97,
+    "page": 2
+   },
+   "lender_credits": {
+    "value": 0,
+    "confidence": 0.97,
+    "page": 2
+   }
+  },
+  "cash_to_close": {
+   "total_closing_costs_j": {
+    "value": 10056.36,
+    "confidence": 0.97,
+    "page": 3
+   },
+   "closing_costs_paid_before_closing": {
+    "value": 0,
+    "confidence": 0.97,
+    "page": 3
+   },
+   "total_payoffs_and_payments": {
+    "value": 68482.11,
+    "confidence": 0.97,
+    "page": 3
+   },
+   "stated_cash_to_close": {
+    "value": 105211.53,
+    "confidence": 0.97,
+    "page": 3
+   }
+  },
+  "prepaid_interest": {
+   "amount": 322.82,
+   "days": 9,
+   "per_diem": 35.869,
+   "confidence": 0.97,
+   "page": 2
+  },
+  "escrow": {
+   "annual_disbursements": [
+    {
+     "item": "Property Taxes, Homeowner's Insurance",
+     "annual_amount": 3073.44,
+     "confidence": 0.97
+    }
+   ],
+   "section_g_total": 1536.72,
+   "aggregate_adjustment": -380.85
+  },
+  "prorations": [],
+  "seller_credits_on_cd": [],
+  "document_problems": []
+ },
+ "_privacy": "Fixtures live in a public repository. Never commit a real name, address, account number or loan ID. Replace identity fields and keep the numbers \u2014 the numbers are what the tests exercise."
+}
