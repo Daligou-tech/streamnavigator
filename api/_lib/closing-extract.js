@@ -280,6 +280,27 @@ Absolute rules:
 
 Respond ONLY by calling the submit_cd_extraction tool.`;
 
+// Tool output occasionally arrives wrapped in an extra object — a real run came
+// back as { cd_extraction: { ...everything... } } instead of the fields at the
+// top level. The extraction itself was flawless, but document_type was then
+// undefined, so a perfectly readable Closing Disclosure was rejected as "a
+// document we cannot audit". Unwrap a single redundant layer rather than trust
+// the shape.
+function unwrapToolInput(input, expectedKeys) {
+  if (!input || typeof input !== 'object') return input;
+  if (expectedKeys.some((k) => k in input)) return input;
+
+  const keys = Object.keys(input);
+  if (keys.length === 1) {
+    const inner = input[keys[0]];
+    if (inner && typeof inner === 'object' && expectedKeys.some((k) => k in inner)) {
+      console.warn(`[extraction] unwrapped nested tool output under "${keys[0]}"`);
+      return inner;
+    }
+  }
+  return input;
+}
+
 async function callAnthropic({ apiKey, system, tools, contentBlocks, maxTokens = 8000 }) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -356,13 +377,13 @@ async function classifyDocuments(apiKey, perFileBlocks) {
   });
   content.push({ type: 'text', text: 'Identify each document.' });
 
-  const result = await callAnthropic({
+  const result = unwrapToolInput(await callAnthropic({
     apiKey,
     system: 'You identify mortgage closing documents. Report what each one is. Do not analyse them.',
     tools: [CLASSIFY_TOOL],
     contentBlocks: content,
     maxTokens: 1000,
-  });
+  }), ['documents']);
   return result.documents || [];
 }
 
@@ -393,7 +414,7 @@ function determineTier(documents) {
 }
 
 async function extractClosingDisclosure(apiKey, contentBlocks) {
-  return callAnthropic({
+  const raw = await callAnthropic({
     apiKey,
     system: EXTRACTION_SYSTEM,
     tools: [EXTRACTION_TOOL],
@@ -402,6 +423,7 @@ async function extractClosingDisclosure(apiKey, contentBlocks) {
       { type: 'text', text: 'Extract everything printed on this document.' },
     ],
   });
+  return unwrapToolInput(raw, ['document_type', 'line_items', 'pages_present']);
 }
 
 // ---------------------------------------------------------------------------
@@ -844,12 +866,13 @@ const LE_EXTRACTION_TOOL = {
 };
 
 async function extractLoanEstimate(apiKey, contentBlock) {
-  return callAnthropic({
+  const raw = await callAnthropic({
     apiKey,
     system: EXTRACTION_SYSTEM,
     tools: [LE_EXTRACTION_TOOL],
     contentBlocks: [contentBlock, { type: 'text', text: 'Extract the charges printed on this Loan Estimate.' }],
   });
+  return unwrapToolInput(raw, ['is_loan_estimate', 'charges']);
 }
 
 // Converts an extracted Loan Estimate into the shape selectBaseline and
@@ -1099,6 +1122,7 @@ function buildScorecard(extraction, findings, skipped = []) {
 
 module.exports = {
   ANTHROPIC_MODEL,
+  unwrapToolInput,
   LE_EXTRACTION_TOOL,
   extractLoanEstimate,
   toLoanEstimateRecord,
