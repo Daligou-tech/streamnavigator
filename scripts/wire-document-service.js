@@ -244,7 +244,7 @@ function main() {
     console.log(`${r.edit.file}: patched (${r.edit.replacements.length} edits). Backup at ${r.edit.file}.bak`);
   }
 
-  if (!DRY) console.log('\nNext: node test/run-all.js');
+  if (!DRY) console.log('\nNext: node tests/run-all.js');
 }
 
 function fail(msg) {
