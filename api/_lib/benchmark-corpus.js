@@ -149,6 +149,27 @@ function isStale(row, now = new Date(), staleAfterDays = DEFAULT_STALE_AFTER_DAY
 // computing a benchmark from a row
 // ---------------------------------------------------------------------------
 
+// A distribution row is only comparable within its loan-size band. Without
+// this, a $200,000 loan would be measured against the $300k-$500k spread and
+// look cheap, or the reverse. A row with a band and no loanAmount in context
+// does not answer at all.
+const LOAN_BANDS = {
+  lt150k: [0, 150000],
+  '150k-300k': [150000, 300000],
+  '300k-500k': [300000, 500000],
+  '500k-750k': [500000, 750000],
+  gte750k: [750000, Infinity],
+};
+
+function bandMatches(row, ctx) {
+  if (!row.loan_band) return true;
+  const band = LOAN_BANDS[row.loan_band];
+  if (!band) return false;
+  const basis = row.basis === 'sale_price' ? ctx.salePrice : ctx.loanAmount;
+  if (typeof basis !== 'number') return false;
+  return basis >= band[0] && basis < band[1];
+}
+
 const norm = (s) => String(s || '').toLowerCase().replace(/\s+county$|\s+parish$/, '').trim();
 
 function amountFor(row, ctx) {
@@ -210,6 +231,9 @@ function toBenchmark(row, ctx) {
     sourceUrl: row.source_url,
     effectiveDate: row.effective_date,
     jurisdiction: row.county ? `${row.county}, ${row.state}` : (row.state || 'US'),
+    sampleSize: typeof row.sample_size === 'number' ? row.sample_size : null,
+    loanBandLabel: row.loan_band_label || null,
+    caveat: row.exemption_note || null,
   };
 }
 
@@ -263,6 +287,7 @@ function makeGetBenchmark(rows, options = {}) {
     const when = now();
     const candidates = loaded.filter((r) => {
       if (r.fee_category !== category) return false;
+      if (!bandMatches(r, ctx)) return false;
       if (isStale(r, when, staleAfterDays)) return false;
       if (r.effective_date && new Date(r.effective_date) > when) return false;
       if (r.jurisdiction_type === 'national') return true;
@@ -308,6 +333,7 @@ function makeGetBenchmark(rows, options = {}) {
     const when = now();
     const rows = loaded.filter((r) => {
       if (r.fee_category !== category || !r.stackable) return false;
+      if (!bandMatches(r, ctx)) return false;
       if (isStale(r, when, staleAfterDays)) return false;
       if (r.effective_date && new Date(r.effective_date) > when) return false;
       if (r.jurisdiction_type === 'national') return true;
@@ -392,6 +418,8 @@ function coverageFor(getBenchmark, ctx) {
 }
 
 module.exports = {
+  LOAN_BANDS,
+  bandMatches,
   DEFAULT_STALE_AFTER_DAYS,
   MIN_RANGE_SAMPLE,
   BENCHMARKABLE_CATEGORIES,

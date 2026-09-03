@@ -28,11 +28,36 @@
 const audit = require('./closing-audit');
 const { runClosingAudit, buildScorecard } = require('./closing-extract');
 const loanMath = require('./closing-math');
+const { checkSectionTotals } = require('./section-benchmark');
+const { describeCoverage } = require('./benchmark-coverage');
 
-// Benchmarking is off. Not configured off -- absent. compareToBenchmark()
-// already returns CANNOT_BENCHMARK on a null benchmark, and those findings are
-// dropped below so the customer is never shown a gap in a capability we are
-// not selling.
+// Benchmarking is ON, but its gaps are disclosed by NAME rather than by count.
+//
+// The corpus is loaded where we hold data and returns null where we do not.
+// CANNOT_BENCHMARK findings are still dropped from the customer's finding list,
+// because "we have no rate data for your appraisal fee" is not a finding about
+// her loan -- it is a fact about our corpus. That fact belongs in the coverage
+// disclosure she reads BEFORE paying, naming the exact categories, not buried
+// in the report she paid for.
+//
+// NO_BENCHMARKS remains exported for tests and for running the audit with
+// benchmarking deliberately absent.
+// The corpus is loaded once. If it is malformed it refuses to load entirely
+// rather than serve part of itself, and every category falls back to unpriced.
+let cachedGetBenchmark = null;
+function defaultGetBenchmark() {
+  if (cachedGetBenchmark) return cachedGetBenchmark;
+  try {
+    const { makeGetBenchmark } = require('./benchmark-corpus');
+    const corpus = require('../../data/benchmarks.json');
+    cachedGetBenchmark = makeGetBenchmark(corpus.rows || []);
+  } catch (err) {
+    console.error('[closing-service] benchmark corpus unavailable:', err.message);
+    cachedGetBenchmark = NO_BENCHMARKS;
+  }
+  return cachedGetBenchmark;
+}
+
 const NO_BENCHMARKS = () => null;
 NO_BENCHMARKS.stacked = () => ({ total: null, components: [] });
 
@@ -162,16 +187,14 @@ function runDocumentAudit(input = {}) {
     contractTerms = null,
     answers = {},
     unusableDocuments = [],
+    getBenchmark = defaultGetBenchmark(),
   } = input;
 
   if (!extraction) throw new Error('runDocumentAudit requires an extraction');
 
   // --- run the engine, benchmarks absent ------------------------------------
   const engine = runClosingAudit(extraction, {
-    answers,
-    loanEstimates,
-    contractTerms,
-    getBenchmark: NO_BENCHMARKS,
+    answers, loanEstimates, contractTerms, getBenchmark,
   });
 
   const engineFindings = (engine.findings || engine || [])
@@ -202,8 +225,32 @@ function runDocumentAudit(input = {}) {
     terms: extraction.loan_terms_features || {},
   });
 
-  const findings = [...engineFindings, ...math.findings];
-  const skipped = [...engineSkipped, ...math.skipped];
+  // Section totals against what comparable loans actually paid. This is the
+  // only check resting on other people's transactions, and section-benchmark.js
+  // caps its severity so it can never read as an established overcharge.
+  const st = extraction.section_totals || {};
+  const sectionCtx = {
+    state: extraction.property_state,
+    county: extraction.property_county,
+    propertyAddress: extraction.property_address,
+    loanAmount: extraction.loan_amount,
+    salePrice: extraction.sale_price,
+  };
+  const sections = checkSectionTotals({
+    sectionTotals: { A: v(st.A), D: v(st.D) },
+    getBenchmark,
+    ctx: sectionCtx,
+  });
+
+  const findings = [...engineFindings, ...math.findings, ...sections.findings];
+  const skipped = [...engineSkipped, ...math.skipped, ...sections.skipped];
+
+  // Which named charge categories we can price for THIS property. Read before
+  // payment, so nobody buys a report to discover what is not in it.
+  const presentCategories = [...new Set(
+    (extraction.line_items || []).map((li) => li.category).filter(Boolean)
+  )];
+  const benchmarkCoverage = describeCoverage(getBenchmark, sectionCtx, presentCategories);
 
   // --- what documents do we actually have, usably? -------------------------
   const have = {
@@ -274,8 +321,11 @@ function runDocumentAudit(input = {}) {
       : `${ran.length} of ${CATALOG.length} checks ran. `
         + `${blocked.length} need ${describeBlockers(blocked)}.`,
     unlocks: buildUnlocks(blocked),
-    evidence_basis: 'Every finding is arithmetic or a regulatory rule applied to the documents '
-      + 'you uploaded. Nothing here is compared against market averages or a fee database.',
+    benchmark_coverage: benchmarkCoverage,
+    evidence_basis:
+      'Every finding is arithmetic on your own documents, a lending rule applied to them, '
+      + 'or a published rate or statute for your county. Where we hold neither a rate nor '
+      + 'comparison data for a charge, we name that charge rather than guessing at it.',
   };
 
   return {
