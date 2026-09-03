@@ -106,15 +106,22 @@ rows.push({
 });
 
 // --- county recordation tax --------------------------------------------------
-// Carried in the transfer_tax category on purpose: the audit tests the SUM of
-// government transfer charges against the statutory total, and on a Maryland
-// deed the state transfer tax, the local transfer tax and the recordation tax
-// are all due on the same instrument.
+// Its OWN category, not folded into transfer_tax.
+//
+// A Maryland deed does carry all three taxes, and stacking them was tempting.
+// But the extraction schema has no recordation_tax category, so a "State
+// Recordation Tax" line lands in transfer_tax on one document and recording_fee
+// on the next. Adding recordation to the statutory DENOMINATOR while the
+// NUMERATOR only sometimes contains it invents a shortfall on one document and
+// hides an overcharge on another. tests/closing-scorecard.test.js caught this.
+//
+// These rows stack among themselves and stay dormant until the extractor can
+// identify a recordation line reliably. The data is verified and ready.
 for (const [county, [rec]] of Object.entries(FY2026)) {
   if (rec === null) continue;
   rows.push({
     id: `md-${slug(county)}-recordation-tax`,
-    fee_category: 'transfer_tax',
+    fee_category: 'recordation_tax',
     kind: 'per_unit',
     unit_amount: rec,
     unit_size: 500,
@@ -153,10 +160,13 @@ for (const [county, [, pct]] of Object.entries(FY2026)) {
     state: 'MD',
     county,
     stackable: true,
+    // Keeps the substring "<County> transfer tax" intact -- the report copy and
+    // tests/closing-scorecard.test.js both match on it -- while still showing
+    // the customer the rate the figure came from.
     component_label:
       pct === 0
-        ? `${county} local transfer tax (none imposed)`
-        : `${county} local transfer tax (${pct}%)`,
+        ? `${county} transfer tax (none imposed)`
+        : `${county} transfer tax (${pct}%)`,
     evidence: 'hard_rule:statute_or_regulation',
     source_name: DLS_NAME,
     source_url: DLS_URL,
@@ -184,7 +194,7 @@ rows.push({
   state: 'MD',
   county: 'Anne Arundel',
   stackable: true,
-  component_label: 'Anne Arundel local transfer tax (1.0%)',
+  component_label: 'Anne Arundel transfer tax (1.0%)',
   evidence: 'hard_rule:statute_or_regulation',
   source_name: DLS_NAME + ' — 1.0% with a 0.5% surcharge at $1,000,000 and above (footnote 3)',
   source_url: DLS_URL,
@@ -243,12 +253,15 @@ const out = {
     + "findings, spot-check each county's adopted FY 2027 budget ordinance. Charles "
     + 'moved $5.00 -> $7.00 at the FY 2026 boundary, so movement is not rare.',
   _STACKABLE:
-    'Transfer and recordation taxes are levied at several levels at once and all appear '
+    'A transfer tax is levied at two levels at once — state and county — and both appear '
     + 'on a settlement statement. Rows marked stackable:true are summed across '
-    + 'jurisdiction levels rather than the most specific one winning. Maryland '
-    + 'recordation tax is carried in the transfer_tax category for this reason: on a '
-    + 'Maryland deed the state transfer tax, the local transfer tax and the recordation '
-    + 'tax are three separate taxes on one instrument, and the audit tests their sum.',
+    + 'jurisdiction levels rather than the most specific one winning.',
+  _RECORDATION_IS_SEPARATE:
+    'Maryland recordation tax is a THIRD tax on the same deed, kept in its own '
+    + 'fee_category and deliberately dormant. The extraction schema has no '
+    + 'recordation_tax category, so a recordation line is classified as transfer_tax on '
+    + 'one document and recording_fee on the next. Give the extractor a recordation_tax '
+    + 'category first, then wire these rows in.',
   _EXEMPTIONS:
     'exemption_note is displayed with any finding built on the row. Maryland has '
     + 'first-time-buyer and owner-occupied reductions that would make a correctly '
