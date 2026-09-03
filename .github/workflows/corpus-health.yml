@@ -1,0 +1,46 @@
+name: corpus health
+
+# The benchmark corpus is the product's scarcest asset and the only part that
+# degrades on a calendar rather than on a commit. A stale row is handled
+# gracefully by design: it simply stops answering, and the customer is told the
+# charge could not be priced. Nothing goes red. Graceful degradation with no
+# alarm on it is how a product quietly stops working.
+#
+# The Maryland rows expire 2026-12-31. This gives ~30 days of warning before
+# that happens, by email, without anyone having to remember.
+
+on:
+  schedule:
+    # 07:00 UTC every Monday.
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+  # Also on changes to the corpus itself or the code that reads it, so a bad
+  # edit is caught on the commit rather than the following Monday.
+  push:
+    paths:
+      - 'data/benchmarks.json'
+      - 'api/_lib/benchmark-corpus.js'
+      - 'scripts/check-corpus-freshness.js'
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Fails when a row is already stale, when one falls inside the 30-day
+      # horizon, or when usable coverage drops below the floor. "Usable"
+      # excludes categories the extractor cannot produce, so the number is what
+      # a customer can actually receive rather than what is in the file.
+      - name: benchmark corpus freshness and coverage
+        run: node scripts/check-corpus-freshness.js --warn-days 30
+
+      # Printed on every run whether it passes or fails, so the trend is
+      # visible in the Actions log without opening the corpus.
+      - name: coverage snapshot
+        if: always()
+        run: node scripts/check-corpus-freshness.js --warn-days 0 --json || true
