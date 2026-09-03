@@ -17,7 +17,6 @@
 'use strict';
 
 const { EvidenceKind } = require('./closing-audit');
-const { canonicalizeMdCounty, cityFromAddress, isMaryland } = require('./md-jurisdiction');
 
 const HARD_EVIDENCE = new Set([
   EvidenceKind.HARD_RATE_TABLE,
@@ -31,7 +30,15 @@ const SOFT_EVIDENCE = new Set([EvidenceKind.MARKET_RANGE, EvidenceKind.COMPARABL
 const DEFAULT_STALE_AFTER_DAYS = 400;
 const MIN_RANGE_SAMPLE = 30;
 
-const ROW_KINDS = new Set(['exact', 'tiered', 'per_unit', 'per_instrument', 'percent', 'range']);
+// 'unavailable' is a deliberate hole. Montgomery County's transfer tax varies
+// by property value and Anne Arundel's carries a surcharge over $1m; neither is
+// a single rate we can quote. Without a marker for that, stacked() cannot tell
+// "this county levies no local transfer tax" from "we have not entered it yet",
+// and would quote a state-only total as though it were the whole statutory
+// charge — turning a correct settlement statement into a false overcharge
+// finding in the two counties with the highest prices in the state. An
+// unavailable row never answers a lookup and always blocks a stacked total.
+const ROW_KINDS = new Set(['exact', 'tiered', 'per_unit', 'percent', 'range', 'unavailable']);
 
 // ---------------------------------------------------------------------------
 // validation
@@ -72,8 +79,14 @@ function validateRow(row, index = 0) {
   if (isRange && HARD_EVIDENCE.has(row.evidence)) {
     at('a range cannot be a hard rule — ranges are market norms');
   }
-  if (!isRange && SOFT_EVIDENCE.has(row.evidence)) {
+  if (!isRange && row.kind !== 'unavailable' && SOFT_EVIDENCE.has(row.evidence)) {
     at('a market norm must be expressed as a range, not as an exact or computed value');
+  }
+
+  // An admitted hole still has to say why, because the reason is shown to the
+  // customer in place of a number.
+  if (row.kind === 'unavailable' && !row.unavailable_reason) {
+    at('unavailable rows need an unavailable_reason — it is displayed instead of a figure');
   }
 
   switch (row.kind) {
@@ -92,12 +105,6 @@ function validateRow(row, index = 0) {
       if (typeof row.rate_pct !== 'number') at('percent rows need rate_pct');
       if (!['loan_amount', 'sale_price'].includes(row.basis)) at('percent rows need basis of loan_amount or sale_price');
       break;
-    case 'per_instrument':
-      // A statutory fee charged once per recorded instrument. No basis: it does
-      // not scale with the loan or the price.
-      if (typeof row.unit_amount !== 'number') at('per_instrument rows need unit_amount');
-      break;
-
     case 'per_unit':
       if (typeof row.unit_amount !== 'number') at('per_unit rows need unit_amount');
       if (typeof row.unit_size !== 'number' || row.unit_size <= 0) at('per_unit rows need a positive unit_size');
@@ -111,11 +118,61 @@ function validateRow(row, index = 0) {
           if (typeof t.base !== 'number') at(`tier ${i}: missing numeric base`);
           if (typeof t.rate_per_unit !== 'number') at(`tier ${i}: missing numeric rate_per_unit`);
           if (typeof t.unit_size !== 'number' || t.unit_size <= 0) at(`tier ${i}: unit_size must be positive`);
+          // `from` is the bracket floor the marginal rate is charged above. It
+          // used to be optional and defaulted to 0, which silently charged the
+          // marginal rate on the WHOLE basis instead of the excess: a Texas
+          // $268,500 policy came out at $2,106 instead of $1,612, presented to
+          // the customer as a promulgated rate. A missing floor is now a load
+          // failure, not a 30% overstatement.
+          if (typeof t.from !== 'number' || t.from < 0) at(`tier ${i}: missing numeric from (the bracket floor the marginal rate applies above)`);
+          if (i > 0 && row.tiers[i - 1] && row.tiers[i - 1].up_to === null) {
+            at(`tier ${i}: follows an open-ended tier — the null up_to tier must be last`);
+          }
+          // A tier with no marginal rate is a flat lookup — Texas prices every
+          // policy under $100,000 straight off a table — so its floor is not
+          // used and need not line up with the bracket below it. A tier that
+          // DOES charge a marginal rate must start where the last one ended, or
+          // the excess is measured from the wrong place.
+          if (i > 0 && t.rate_per_unit !== 0) {
+            const prev = row.tiers[i - 1];
+            const prevMarginal = [...row.tiers.slice(0, i)].reverse().find((p) => p.rate_per_unit !== 0);
+            const floor = prevMarginal && typeof prevMarginal.up_to === 'number' ? prevMarginal.up_to : null;
+            if (floor !== null && t.from !== floor) {
+              at(`tier ${i}: from ${t.from} does not meet the previous rated bracket ending at ${floor}`);
+            }
+            if (prev && typeof prev.up_to === 'number' && typeof t.up_to === 'number' && t.up_to < prev.up_to) {
+              at(`tier ${i}: up_to ${t.up_to} is below the previous tier — tiers must ascend`);
+            }
+          }
         });
       }
       break;
     default:
       break;
+  }
+
+  // Rounding conventions. Every promulgated schedule rounds, and they do not
+  // round the same way: Texas rounds the product to the nearest dollar before
+  // adding the bracket base, Florida rounds the liability up to the next $100
+  // and then charges an exact fraction of a thousand, Maryland charges a whole
+  // unit for each part of $500. Left unmodelled these produce small, permanent
+  // disagreements with the settlement statement, which is worse than no
+  // benchmark: it makes every correct charge look off by a few dollars.
+  if (row.basis_round_up_to !== undefined
+      && (typeof row.basis_round_up_to !== 'number' || row.basis_round_up_to <= 0)) {
+    at('basis_round_up_to must be a positive number when present');
+  }
+  if (row.unit_rounding !== undefined && !['ceil', 'exact'].includes(row.unit_rounding)) {
+    at("unit_rounding must be 'ceil' (default: a part unit is charged as a whole one) or 'exact'");
+  }
+  if (row.product_rounding !== undefined && !['none', 'nearest_dollar'].includes(row.product_rounding)) {
+    at("product_rounding must be 'none' (default) or 'nearest_dollar'");
+  }
+  if (row.minimum !== undefined && (typeof row.minimum !== 'number' || row.minimum < 0)) {
+    at('minimum must be a non-negative number when present');
+  }
+  if (row.minimum !== undefined && row.kind === 'range') {
+    at('a range cannot carry a minimum — it is a market norm, not a schedule');
   }
 
   return errors;
@@ -149,31 +206,69 @@ function isStale(row, now = new Date(), staleAfterDays = DEFAULT_STALE_AFTER_DAY
 // computing a benchmark from a row
 // ---------------------------------------------------------------------------
 
-// A distribution row is only comparable within its loan-size band. Without
-// this, a $200,000 loan would be measured against the $300k-$500k spread and
-// look cheap, or the reverse. A row with a band and no loanAmount in context
-// does not answer at all.
-const LOAN_BANDS = {
-  lt150k: [0, 150000],
-  '150k-300k': [150000, 300000],
-  '300k-500k': [300000, 500000],
-  '500k-750k': [500000, 750000],
-  gte750k: [750000, Infinity],
-};
+const { canonicaliseState, canonicaliseCounty, normaliseCountyToken } = require('./jurisdiction');
 
-function bandMatches(row, ctx) {
-  if (!row.loan_band) return true;
-  const band = LOAN_BANDS[row.loan_band];
-  if (!band) return false;
-  const basis = row.basis === 'sale_price' ? ctx.salePrice : ctx.loanAmount;
-  if (typeof basis !== 'number') return false;
-  return basis >= band[0] && basis < band[1];
+const norm = normaliseCountyToken;
+
+// A lookup context is only allowed to name a county the canonicaliser can
+// resolve to exactly one jurisdiction. An ambiguous name — "Baltimore" in
+// Maryland, which is both a county and an independent city at different
+// recordation rates — is dropped, so county rows stop matching and the state
+// row answers instead. Quoting a state rate is a smaller error than quoting
+// the wrong county's; quoting the wrong county's is a wrong dollar figure with
+// a citation attached.
+//
+// But "Baltimore" is ALSO the canonical name of Baltimore County, and the name
+// this corpus files its rows under. So the same string is a guess when the
+// extractor infers it from a postal address and an answer when
+// resolveJurisdiction() reads it off a line paid to the County Director of
+// Finance. The string cannot tell those apart; only provenance can. A caller
+// that has resolved the jurisdiction passes countySource along with it, and a
+// resolved county is taken as given — resolveJurisdiction never returns a
+// county it could not pin down, so there is nothing left to second-guess.
+//
+// Without this, the level_marker path is dead: the resolver identifies the
+// county correctly off the document and the lookup discards it, silently, as
+// a state-rate fallback that looks like ordinary missing coverage.
+const RESOLVED_COUNTY_SOURCES = new Set(['named', 'named_and_agreed', 'level_marker', 'stated']);
+
+function resolveLookupContext(ctx) {
+  const state = canonicaliseState(ctx.state) || ctx.state;
+  if (!ctx.county) return { ...ctx, state };
+  if (ctx.countySource && RESOLVED_COUNTY_SOURCES.has(ctx.countySource)) {
+    return { ...ctx, state };
+  }
+  const { county } = canonicaliseCounty(state, ctx.county);
+  return { ...ctx, state, county: county || undefined };
 }
 
-const norm = (s) => String(s || '').toLowerCase().replace(/\s+county$|\s+parish$/, '').trim();
+// Some schedules round the insured amount up before any rate is applied.
+// Florida: "considering any fraction of $100.00 as a full $100.00".
+function roundBasis(value, row) {
+  const step = row.basis_round_up_to;
+  if (typeof step !== 'number' || step <= 0) return value;
+  return Math.ceil(value / step) * step;
+}
+
+// Whether a part unit is charged as a whole one. Maryland charges a full $500
+// unit for each part of $500; Florida charges an exact fraction of a thousand.
+function unitsFor(value, unitSize, row) {
+  return row.unit_rounding === 'exact' ? value / unitSize : Math.ceil(value / unitSize);
+}
+
+// Texas rounds the multiplication to the nearest dollar BEFORE adding the
+// bracket base. Rounding the total instead leaves every Texas premium a few
+// cents adrift of the published figure.
+function applyProductRounding(product, row) {
+  return row.product_rounding === 'nearest_dollar' ? Math.round(product) : product;
+}
+
+function applyMinimum(amount, row) {
+  return typeof row.minimum === 'number' ? Math.max(amount, row.minimum) : amount;
+}
 
 function amountFor(row, ctx) {
-  const basisValue = row.basis === 'sale_price' ? ctx.salePrice : ctx.loanAmount;
+  const rawBasis = row.basis === 'sale_price' ? ctx.salePrice : ctx.loanAmount;
 
   switch (row.kind) {
     case 'exact':
@@ -183,33 +278,26 @@ function amountFor(row, ctx) {
       return { low: row.low, high: row.high };
 
     case 'percent':
-      if (typeof basisValue !== 'number') return null;
-      return { exact: round2((basisValue * row.rate_pct) / 100) };
-
-    case 'per_instrument': {
-      // Returns nothing unless the caller knows how many instruments were
-      // recorded. Guessing two because most purchases record a deed and a deed
-      // of trust would silently misprice every cash sale and every closing with
-      // a subordinate lien.
-      const n = ctx.instrumentCount;
-      if (!Number.isInteger(n) || n < 1) return null;
-      return { exact: round2(n * row.unit_amount) };
-    }
+      if (typeof rawBasis !== 'number') return null;
+      return { exact: applyMinimum(round2((rawBasis * row.rate_pct) / 100), row) };
 
     case 'per_unit': {
       // Transfer taxes are typically "$X per $500 of consideration, rounded up".
-      if (typeof basisValue !== 'number') return null;
-      const units = Math.ceil(basisValue / row.unit_size);
-      return { exact: round2(units * row.unit_amount) };
+      if (typeof rawBasis !== 'number') return null;
+      const basisValue = roundBasis(rawBasis, row);
+      const units = unitsFor(basisValue, row.unit_size, row);
+      return { exact: applyMinimum(round2(applyProductRounding(units * row.unit_amount, row)), row) };
     }
 
     case 'tiered': {
-      if (typeof basisValue !== 'number') return null;
+      if (typeof rawBasis !== 'number') return null;
+      const basisValue = roundBasis(rawBasis, row);
       const tier = row.tiers.find((t) => t.up_to === null || basisValue <= t.up_to);
       if (!tier) return null;
-      const over = Math.max(0, basisValue - (tier.from || 0));
-      const units = Math.ceil(over / tier.unit_size);
-      return { exact: round2(tier.base + units * tier.rate_per_unit) };
+      const over = Math.max(0, basisValue - tier.from);
+      const units = unitsFor(over, tier.unit_size, row);
+      const product = applyProductRounding(units * tier.rate_per_unit, row);
+      return { exact: applyMinimum(round2(tier.base + product), row) };
     }
 
     default:
@@ -231,9 +319,6 @@ function toBenchmark(row, ctx) {
     sourceUrl: row.source_url,
     effectiveDate: row.effective_date,
     jurisdiction: row.county ? `${row.county}, ${row.state}` : (row.state || 'US'),
-    sampleSize: typeof row.sample_size === 'number' ? row.sample_size : null,
-    loanBandLabel: row.loan_band_label || null,
-    caveat: row.exemption_note || null,
   };
 }
 
@@ -244,24 +329,6 @@ function toBenchmark(row, ctx) {
 // Most specific jurisdiction wins: municipality, then county, then state, then
 // national. A county schedule is always a better answer than a state average.
 const SPECIFICITY = { municipality: 3, county: 2, state: 1, national: 0 };
-
-// ---------------------------------------------------------------------------
-// jurisdiction resolution
-// ---------------------------------------------------------------------------
-
-// Open issue #2: extraction returns "Baltimore" on one run and "Baltimore City"
-// on the next, and those are different tax tables. norm() below only lowercases
-// and strips a "county" suffix, so bare "Baltimore" quietly matched Baltimore
-// COUNTY -- half the recordation rate of Baltimore City. Canonicalising here
-// makes the lookup deterministic regardless of which spelling arrived, and an
-// unresolvable name yields no benchmark instead of the wrong one.
-function resolveCounty(ctx) {
-  if (!ctx.county || !isMaryland(ctx.state)) return { county: ctx.county, blocked: false };
-  const city = ctx.city || cityFromAddress(ctx.propertyAddress);
-  const r = canonicalizeMdCounty(ctx.county, { city });
-  if (r.ok) return { county: r.county, blocked: false };
-  return { county: null, blocked: true, reason: r.reason, ambiguous: r.ambiguous };
-}
 
 function makeGetBenchmark(rows, options = {}) {
   const { now = () => new Date(), staleAfterDays = DEFAULT_STALE_AFTER_DAYS } = options;
@@ -276,18 +343,14 @@ function makeGetBenchmark(rows, options = {}) {
 
   const loaded = rows.slice();
 
-  function getBenchmark(ctx = {}) {
-    const { category, state, municipality } = ctx;
+  function getBenchmark(rawCtx = {}) {
+    const ctx = resolveLookupContext(rawCtx);
+    const { category, state, county, municipality } = ctx;
     if (!category) return null;
-
-    const resolved = resolveCounty(ctx);
-    if (resolved.blocked) return null;
-    const county = resolved.county;
 
     const when = now();
     const candidates = loaded.filter((r) => {
       if (r.fee_category !== category) return false;
-      if (!bandMatches(r, ctx)) return false;
       if (isStale(r, when, staleAfterDays)) return false;
       if (r.effective_date && new Date(r.effective_date) > when) return false;
       if (r.jurisdiction_type === 'national') return true;
@@ -320,20 +383,14 @@ function makeGetBenchmark(rows, options = {}) {
   // on the settlement statement. The normal lookup returns the most specific
   // single row, which would understate the true statutory figure. Rows marked
   // stackable are added together across jurisdiction levels instead.
-  getBenchmark.stacked = function stacked(ctx = {}) {
-    const { category, state, municipality } = ctx;
+  getBenchmark.stacked = function stacked(rawCtx = {}) {
+    const ctx = resolveLookupContext(rawCtx);
+    const { category, state, county, municipality } = ctx;
     if (!category) return { total: null, components: [] };
-
-    const resolved = resolveCounty(ctx);
-    if (resolved.blocked) {
-      return { total: null, components: [], unresolvedJurisdiction: resolved.reason };
-    }
-    const county = resolved.county;
 
     const when = now();
     const rows = loaded.filter((r) => {
       if (r.fee_category !== category || !r.stackable) return false;
-      if (!bandMatches(r, ctx)) return false;
       if (isStale(r, when, staleAfterDays)) return false;
       if (r.effective_date && new Date(r.effective_date) > when) return false;
       if (r.jurisdiction_type === 'national') return true;
@@ -345,31 +402,11 @@ function makeGetBenchmark(rows, options = {}) {
 
     if (!rows.length) return { total: null, components: [] };
 
-    // Completeness guard. Without this, a county the corpus does not model
-    // still matches the STATE-level rows and returns a partial total -- e.g.
-    // Maryland's 0.5% state transfer tax alone, with the county transfer and
-    // recordation taxes silently missing. Every real charge would then exceed
-    // that total and be reported as an overcharge. If the corpus models county
-    // rows for this category anywhere in this state, the requested county must
-    // be among them or the whole stack refuses.
-    if (county) {
-      const modelsCounties = loaded.some(
-        (r) => r.fee_category === category && r.stackable
-          && r.jurisdiction_type === 'county' && norm(r.state) === norm(state)
-      );
-      const haveThisCounty = rows.some(
-        (r) => r.jurisdiction_type === 'county' && norm(r.county) === norm(county)
-      );
-      if (modelsCounties && !haveThisCounty) {
-        return {
-          total: null,
-          components: [],
-          unresolvedJurisdiction:
-            `No county-level rates are on file for ${county}, ${state}. `
-            + 'Returning the state portion alone would understate the statutory total '
-            + 'and report a correct charge as an overcharge.',
-        };
-      }
+    // A jurisdiction we know levies something we cannot compute must not be
+    // summed from its remaining parts.
+    const hole = rows.find((r) => r.kind === 'unavailable');
+    if (hole) {
+      return { total: null, components: [], unavailableReason: hole.unavailable_reason };
     }
 
     const components = [];
@@ -418,8 +455,6 @@ function coverageFor(getBenchmark, ctx) {
 }
 
 module.exports = {
-  LOAN_BANDS,
-  bandMatches,
   DEFAULT_STALE_AFTER_DAYS,
   MIN_RANGE_SAMPLE,
   BENCHMARKABLE_CATEGORIES,
