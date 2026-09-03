@@ -49,7 +49,13 @@ module.exports = async (req, res) => {
     res.status(400).json({ ok: false, error: 'Please choose a property type.' });
     return;
   }
-  if (!PROVIDER_LIST_ANSWERS.includes(providerList)) {
+  // Optional, because it is only ASKED when a Loan Estimate is present: the
+  // answer feeds analyzeTolerances() and the zero-tolerance bucket assignment,
+  // and neither can run without an LE baseline. Requiring it here rejected
+  // every CD-only checkout with 400 "Please answer the service provider list
+  // question" — a question the page had deliberately not shown. Absent is a
+  // valid state; only a value that is present and unrecognised is an error.
+  if (providerList && !PROVIDER_LIST_ANSWERS.includes(providerList)) {
     res.status(400).json({ ok: false, error: 'Please answer the service provider list question.' });
     return;
   }
@@ -68,7 +74,14 @@ module.exports = async (req, res) => {
   }
 
   const formData = submission.form_data || {};
-  const answers = { property_type: propertyType, provider_list: providerList };
+  // Merge rather than replace. A CD-only checkout sends no provider_list, and
+  // overwriting a previously stored one with an empty string would silently
+  // retire a tolerance answer the customer had already given.
+  const answers = {
+    ...(formData.answers || {}),
+    property_type: propertyType,
+    ...(providerList ? { provider_list: providerList } : {}),
+  };
 
   // Storing the answers was never the point. Until now they were written here
   // and read by nothing: the audit had already run at upload time, before the
