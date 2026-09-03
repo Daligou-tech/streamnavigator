@@ -126,14 +126,15 @@ function describeCoverage(getBenchmark, ctx = {}, presentCategories = []) {
       : (ctx.state || null),
     // Named, not counted. This is the sentence Sarah reads before paying.
     not_priced_sentence: unpriced.length
-      ? 'We do not hold a published rate for these charges in your county, so we do '
-        + 'not tell you whether they are high: '
+      // Short on purpose. This is the sentence Sarah reads before paying, and a
+      // paragraph in small type is a paragraph she skips — which turns an
+      // honest disclosure into one that was technically made and never read.
+      ? 'No published rate in your county for: '
         + joinNames(unpriced.map((u) => u.label)) + '. '
-        + 'They are still checked for arithmetic, duplication, and — if you upload your '
-        + 'Loan Estimate — whether they were allowed to increase.'
+        + 'Still checked for arithmetic and duplication.'
       : null,
     priced_sentence: priced.length
-      ? 'We compare these against the published rate or statute for your county: '
+      ? 'Compared against the published rate for your county: '
         + joinNames(priced.map((p) => p.label)) + '.'
       : null,
     distribution_sentence: distribution.length

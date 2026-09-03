@@ -383,8 +383,12 @@ function buildUnlocks(blocked) {
       accepts: 'purchase_contract',
     },
     [Needs.ANSWERS]: {
-      title: 'Answer two questions',
-      why: 'They cannot be read off the Closing Disclosure, and each one changes a check.',
+      // The count is wrong the moment a question is added or made conditional,
+      // and it was: the provider-list question is now only asked when a Loan
+      // Estimate is present, so "two questions" overstated it on a CD-only
+      // audit. Say what it is for instead of how many there are.
+      title: 'Answer the property type question',
+      why: 'It cannot be read off the Closing Disclosure.',
       accepts: 'answers',
     },
   };
