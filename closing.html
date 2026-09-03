@@ -367,25 +367,17 @@
     }
   });
 
-  // Push already-given answers onto the current submission. Silent by design:
-  // this runs behind a re-upload the customer initiated for another reason, and
-  // a failure here costs them nothing they had a moment ago.
-  async function replayAnswers() {
-    if (!submissionRef || !savedAnswers.property_type) return;
-    try {
-      const resp = await fetch('/api/closing-answers', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          id: submissionRef.id, token: submissionRef.token,
-          property_type: savedAnswers.property_type,
-          ...(savedAnswers.provider_list ? { provider_list: savedAnswers.provider_list } : {}),
-        }),
-      });
-      const data = await readJson(resp);
-      if (resp.ok && data.ok && data.scorecard) renderScorecard(data.scorecard);
-    } catch (err) { /* keep the scorecard we already have */ }
+  // What the customer has already told us, ready to travel with any request.
+  // Answers belong to the property, not to a submission id, so they are sent
+  // with every upload rather than posted separately afterwards.
+  function answerPayload() {
+    rememberAnswers();
+    const out = {};
+    if (savedAnswers.property_type) out.property_type = savedAnswers.property_type;
+    if (savedAnswers.provider_list) out.provider_list = savedAnswers.provider_list;
+    return out;
   }
+
   let unreadableRemaining = 0;
   let acknowledgedGaps = false;
   function showError(title, detail, slot) {
@@ -904,7 +896,7 @@
       const resp = await fetch('/api/closing-scorecard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email, files: encoded }),
+        body: JSON.stringify(Object.assign({ email: email, files: encoded }, answerPayload())),
       });
       const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');
@@ -928,13 +920,9 @@
         id: data.id, token: data.token, product: 'closing',
         unreadable_fields: data.scorecard.unreadable_fields || [],
       };
+      // The answers travelled with the upload, so this scorecard already
+      // reflects them. Nothing to replay.
       renderScorecard(data.scorecard);
-      // Adding a Loan Estimate starts a NEW submission, and the answers were
-      // saved against the old one. Restoring them into the selects is not
-      // enough: the scorecard is computed server-side, so without replaying
-      // them the customer is told two checks are still blocked on questions
-      // they already answered. Replay, then re-render with the real result.
-      await replayAnswers();
       document.getElementById('stage-1').style.display = 'none';
       document.getElementById('stage-2').style.display = 'block';
       document.getElementById('stage-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
