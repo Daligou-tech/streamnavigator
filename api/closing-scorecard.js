@@ -69,6 +69,12 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Mirrors the whitelist in api/closing-answers.js. Anything not on it is
+  // ignored rather than stored, so a hand-crafted request cannot inject a
+  // property type the audit does not understand.
+  const PROPERTY_TYPES = ['single_family', 'condo', 'other_attached', 'investment', 'other'];
+  const PROVIDER_LIST_ANSWERS = ['yes', 'no', 'dont_know'];
+
   let body = req.body;
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch { body = {}; }
@@ -321,9 +327,19 @@ module.exports = async (req, res) => {
     }
   }
 
-  // The two questions are asked after this runs, so answers are empty here;
-  // /api/closing-answers re-runs the audit once they arrive.
-  const answers = (submission.form_data || {}).answers || {};
+  // Answers the customer has ALREADY given travel with the upload.
+  //
+  // They used to be read only from stored form_data, which is empty on every
+  // new submission — and adding a Loan Estimate creates a new submission. So a
+  // customer who answered the property-type question, then uploaded their LE,
+  // was told the question was still unanswered and two checks were still
+  // blocked on it. Re-posting the answers afterwards patched the symptom and
+  // left the race; accepting them here means the first scorecard rendered is
+  // already correct.
+  const stored = (submission.form_data || {}).answers || {};
+  const answers = { ...stored };
+  if (PROPERTY_TYPES.includes(body.property_type)) answers.property_type = body.property_type;
+  if (PROVIDER_LIST_ANSWERS.includes(body.provider_list)) answers.provider_list = body.provider_list;
   // The document-only service. It runs the same engine with benchmarking
   // absent rather than merely disabled, adds the page 5 loan-math checks, and
   // returns a scorecard whose denominator is CHECKS rather than fees with rate
@@ -418,6 +434,7 @@ module.exports = async (req, res) => {
         tier,
         loan_estimates: loanEstimates,
         contract_terms: contractTerms,
+        answers,
       },
       updated_at: new Date().toISOString(),
     })
