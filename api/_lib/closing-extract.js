@@ -545,6 +545,64 @@ const val = (o) => (confident(o) ? o.value : null);
 // getBenchmark is injected. Until a benchmark corpus exists it returns null for
 // everything, and every benchmarkable fee comes back "cannot benchmark" — which
 // is the honest answer, not a gap to paper over.
+// The property-type answer was collected and never used. It earns its place
+// here or not at all: HOA, condo-questionnaire and capital-contribution charges
+// are expected on attached housing and unexplained on a detached single-family
+// home. Nothing else on the Closing Disclosure states which one you bought.
+const HOA_LABEL_RE = /\b(hoa|h\.o\.a|homeowner'?s? ?association|condo(minium)?|questionnaire|capital contribution|master (policy|insurance)|management (co|company) fee|resale (package|certificate)|estoppel)\b/i;
+
+function analyzePropertyType(e, propertyType) {
+  if (!propertyType) return [];
+  const lines = (e.line_items || []).filter(
+    (li) => li.category === 'hoa_dues' || HOA_LABEL_RE.test(li.label || '')
+  );
+  const total = lines.reduce((a, li) => a + (typeof li.amount === 'number' ? li.amount : 0), 0);
+  const detached = propertyType === 'single_family';
+
+  if (detached && lines.length) {
+    return [audit.finding({
+      checkId: 'PROPERTY_TYPE_HOA_MISMATCH',
+      title: lines.length === 1
+        ? 'An association charge appears on a single-family property'
+        : lines.length + ' association charges appear on a single-family property',
+      severity: audit.Severity.REQUIRES_DOCUMENTATION,
+      evidence: audit.EvidenceKind.NONE,
+      actionability: audit.Actionability.NEEDS_DOCS,
+      dollarImpact: total > 0 ? total : null,
+      charged: total > 0 ? total : null,
+      basis: 'You told us this is a single-family residence. These charges are normally '
+        + 'associated with a condominium or an HOA community: '
+        + lines.map((li) => li.label).filter(Boolean).join('; ') + '.',
+      whyItMatters: 'If this property is not in an association, these charges may not apply '
+        + 'to your purchase at all. If it is, the charge is probably legitimate and the '
+        + 'property type is simply recorded differently.',
+      recommendedAction: 'Ask your settlement agent which association these charges are paid '
+        + 'to, and for the invoice or resale package they came from.',
+      askSettlement: true,
+      basedOnCustomerInput: true,
+    })];
+  }
+
+  if (!detached && propertyType !== 'other' && !lines.length) {
+    return [audit.finding({
+      checkId: 'PROPERTY_TYPE_NO_HOA',
+      title: 'No association charges appear on an attached property',
+      severity: audit.Severity.INFORMATIONAL,
+      evidence: audit.EvidenceKind.NONE,
+      actionability: audit.Actionability.LIKELY_LOCKED,
+      basis: 'You told us this is a condo or other attached housing, and no HOA, condo '
+        + 'questionnaire or capital contribution charge was found on the form.',
+      whyItMatters: 'That can be correct if the seller paid them or dues start after closing. '
+        + 'It can also mean a charge is due later that you have not budgeted for.',
+      recommendedAction: 'Confirm with your settlement agent what association dues or '
+        + 'contributions fall due after closing, and who is paying them.',
+      askSettlement: true,
+      basedOnCustomerInput: true,
+    })];
+  }
+  return [];
+}
+
 function runClosingAudit(extraction, options = {}) {
   const {
     answers = {},
@@ -889,6 +947,9 @@ function runClosingAudit(extraction, options = {}) {
       cureNote = audit.cureDeadlineNote(e.closing_date);
     }
   }
+
+  // --- property type (from the two questions) --------------------------------
+  findings.push(...analyzePropertyType(e, answers.property_type || null));
 
   // --- purchase contract ----------------------------------------------------
   if (contractTerms && contractTerms.length) {
@@ -1484,9 +1545,49 @@ function buildScorecard(extraction, findings, skipped = []) {
 
   const isAlta = e.document_type === 'alta_settlement_statement';
 
+  // A bare percentage means nothing to a first-time buyer. Published guidance
+  // puts purchase closing costs at roughly 2-5% of the loan amount, and the
+  // same sources note the percentage runs HIGHER on small loans because many
+  // fees are flat dollars regardless of loan size. Both halves have to be said,
+  // or a $60k loan at 13% looks like theft when it may be arithmetic.
+  const pct = (totalClosingCosts !== null && loanAmount)
+    ? Math.round((totalClosingCosts / loanAmount) * 1000) / 10
+    : null;
+  const smallLoan = Boolean(loanAmount && loanAmount < 150000);
+  const costContext = pct === null ? null : {
+    typical_low: 2,
+    typical_high: 5,
+    band: pct < 2 ? 'below' : pct <= 5 ? 'within' : 'above',
+    small_loan: smallLoan,
+    source: 'Published industry guidance places purchase closing costs at about 2-5% of the loan amount.',
+  };
+
+  // Cannot-benchmark without a denominator is unreadable: 10 of 12 is a broken
+  // product, 10 of 40 is an ordinary corpus gap.
+  const benchmarkableCount = (e.line_items || []).filter(
+    (li) => li.category && !NOT_A_CHARGE.has(li.category) && !isSubtotalLine(li)
+  ).length;
+
+  // Three flags could be $50 or $5,000. Without magnitude the $29 decision is
+  // a coin flip, so total whatever dollar impact the findings established.
+  const flagDollars = flags.reduce(
+    (a, f) => a + (typeof f.dollarImpact === 'number' ? f.dollarImpact : 0), 0);
+  const flagsWithDollars = flags.filter((f) => typeof f.dollarImpact === 'number').length;
+  const severityCounts = flags.reduce((acc, f) => {
+    const k = f.severity === audit.Severity.CONFIRMED_MATH_ERROR
+      || f.severity === audit.Severity.POTENTIAL_TRID_VIOLATION ? 'high' : 'medium';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, { high: 0, medium: 0 });
+
   return {
     document_type: e.document_type || 'other',
     document_label: DOCUMENT_LABELS[e.document_type] || 'document',
+    cost_context: costContext,
+    benchmarkable_count: benchmarkableCount,
+    flag_dollars: flagDollars > 0 ? Math.round(flagDollars) : null,
+    flags_with_dollars: flagsWithDollars,
+    flag_severity: severityCounts,
     is_closing_disclosure: e.document_type === 'closing_disclosure',
     checks_unavailable: isAlta ? CD_ONLY_CHECKS : [],
     property_state: e.property_state || null,
