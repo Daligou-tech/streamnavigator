@@ -30,9 +30,25 @@
 //   1. https://ffiec.cfpb.gov/data-browser/data/2025?category=states
 //   2. Filter to a state, action taken = "Loan originated".
 //   3. Download the CSV.
-//   4. node scripts/build-hmda-benchmarks.js --in md-2025.csv --state MD --year 2025
+//   4. node scripts/build-county-fips.js --in county_fips_master.csv    (once)
+//   5. node scripts/build-hmda-benchmarks.js --in md-2025.csv --state MD --year 2025 \
+//        --counties data/county-fips.json
 //
-// Repeat per state. Append the output rows into data/benchmarks.json.
+// Repeat per state.
+//
+// DO NOT MERGE THE OUTPUT INTO data/benchmarks.json YET
+//
+// Every row carries `loan_purpose`, because a refinance has no owner's title
+// policy and no survey and so has a structurally lower Section D total than a
+// purchase. Nothing in benchmark-corpus.js reads that field yet, so merging
+// these rows today would let a refinance Closing Disclosure be scored against
+// purchase-money distributions and flagged as above benchmark for a fee it was
+// never going to carry.
+//
+// The gate to lift before merging: make the lookup match on loan_purpose the
+// same way it matches on loan_band, and decline rather than fall back when the
+// extraction has no transaction_type. Until then this script is a generator
+// whose output goes in a file nobody loads.
 //
 // CAVEATS THE OUTPUT CARRIES INTO EVERY ROW
 //
@@ -68,6 +84,15 @@ const FIELDS = [
   { hmda: 'total_loan_costs', category: 'total_loan_costs',
     label: 'Total loan costs (Section D total)' },
 ];
+
+// HMDA loan_purpose -> the population a benchmark row describes. Anything not
+// listed (home improvement, "other", not applicable) is dropped rather than
+// folded into a purchase or refinance distribution.
+const PURPOSES = {
+  '1':  { id: 'purchase',   label: 'home purchase' },
+  '31': { id: 'refinance',  label: 'refinance' },
+  '32': { id: 'refinance',  label: 'refinance' },
+};
 
 // Percentiles. low = median, high = 90th. A charge is only ever flagged for
 // being ABOVE the 90th, so the median is context rather than a threshold.
@@ -160,7 +185,13 @@ async function main() {
     if (!header) {
       header = cells.map((c) => c.trim().toLowerCase());
       idx = Object.fromEntries(header.map((h, i) => [h, i]));
+      // Every column the population filters depend on is required. If FFIEC
+      // renames one, this exits rather than quietly building a corpus with
+      // that filter switched off.
       const required = ['county_code', 'loan_amount', 'action_taken',
+        'lien_status', 'occupancy_type', 'business_or_commercial_purpose',
+        'reverse_mortgage', 'open-end_line_of_credit',
+        'derived_dwelling_category', 'loan_purpose',
         ...FIELDS.map((f) => f.hmda)];
       const missing = required.filter((r) => !(r in idx));
       if (missing.length) {
@@ -174,6 +205,42 @@ async function main() {
 
     // Originations only. An application that never closed has no closing costs.
     if (String(cells[idx.action_taken]).trim() !== '1') continue;
+
+    // POPULATION FILTERS — the difference between a benchmark and a libel.
+    //
+    // Without these the bucket mixes loans that are not comparable to the
+    // customer's, and every one of them mixes DOWNWARD. A subordinate-lien
+    // HELOC carries near-zero origination charges; a business-purpose loan and
+    // an investment property sit on a different fee schedule entirely. Blend
+    // them into one distribution and the median and the 90th percentile both
+    // fall, so an ordinary first-lien owner-occupied purchase reads as ABOVE
+    // the spread. That is a false accusation about a real person's mortgage,
+    // generated at scale, and it is the worst thing this product can do.
+    //
+    // Every field below is presence-checked in the header block, so an FFIEC
+    // schema change fails loudly instead of silently dropping a filter.
+    const isOne = (f) => String(cells[idx[f]] || '').trim() === '1';
+    const isTwo = (f) => String(cells[idx[f]] || '').trim() === '2';
+
+    if (!isOne('lien_status')) continue;              // first lien only
+    if (!isOne('occupancy_type')) continue;           // principal residence
+    if (!isTwo('business_or_commercial_purpose')) continue;
+    if (!isTwo('reverse_mortgage')) continue;
+    if (!isTwo('open-end_line_of_credit')) continue;  // excludes HELOCs
+
+    // Site-built single family (1-4 units). Manufactured housing and 5+ unit
+    // multifamily are different fee worlds; a Closing Disclosure audit is aimed
+    // at the first.
+    if (String(cells[idx['derived_dwelling_category']] || '').trim()
+        !== 'Single Family (1-4 Units):Site-Built') continue;
+
+    // Purchase and refinance are not interchangeable. A refinance usually has
+    // no owner's title policy and no survey, so its Section D total is
+    // structurally lower. Buckets are keyed by purpose and each row records
+    // which population it describes, so a refinance can never be scored against
+    // purchase money. There is deliberately no "all purposes" option.
+    const purpose = PURPOSES[String(cells[idx.loan_purpose] || '').trim()];
+    if (!purpose) continue;
 
     const loanAmount = Number(cells[idx.loan_amount]);
     if (!Number.isFinite(loanAmount) || loanAmount <= 0) continue;
@@ -193,7 +260,7 @@ async function main() {
       // A charge above 20% of the loan is a data error, not a fee.
       if (v > loanAmount * 0.2) continue;
 
-      const key = `${county}|${band.id}|${f.hmda}`;
+      const key = `${county}|${purpose.id}|${band.id}|${f.hmda}`;
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(v);
       used = true;
@@ -205,9 +272,10 @@ async function main() {
   const out = [];
   let dropped = 0;
   const unmappedFips = new Set();
+  const crossState = new Set();
 
   for (const [key, values] of buckets) {
-    const [county, bandId, hmdaField] = key.split('|');
+    const [county, purposeId, bandId, hmdaField] = key.split('|');
     if (values.length < MIN_SAMPLE) { dropped += 1; continue; }
 
     const sorted = values.slice().sort((a, b) => a - b);
@@ -217,11 +285,21 @@ async function main() {
 
     const field = FIELDS.find((f) => f.hmda === hmdaField);
     const band = LOAN_BANDS.find((b) => b.id === bandId);
-    const countyName = fipsToName[county];
+    const entry = fipsToName[county];
+    // Accept both the { name, state } map this repo generates and a plain
+    // FIPS -> "Name" map, so a hand-written map still works.
+    const countyName = entry && typeof entry === 'object' ? entry.name : entry;
     if (!countyName) { unmappedFips.add(county); dropped += 1; continue; }
+    // A FIPS code from another state means the wrong file was passed for
+    // --state, which would file one state's fees under another's county name.
+    if (entry && entry.state && entry.state !== state.toUpperCase()) {
+      crossState.add(`${county} (${entry.state})`);
+      dropped += 1;
+      continue;
+    }
 
     out.push({
-      id: `hmda-${year}-${state.toLowerCase()}-${county}-${bandId}-${hmdaField}`,
+      id: `hmda-${year}-${state.toLowerCase()}-${county}-${purposeId}-${bandId}-${hmdaField}`,
       fee_category: field.category,
       kind: 'range',
       low,
@@ -229,6 +307,9 @@ async function main() {
       sample_size: values.length,
       loan_band: bandId,
       loan_band_label: band.label,
+      // Read by nothing yet. Until the lookup filters on it, these rows must
+      // NOT be merged into data/benchmarks.json — see the gate in the header.
+      loan_purpose: purposeId,
       jurisdiction_type: 'county',
       state: state.toUpperCase(),
       county: countyName,
@@ -236,8 +317,10 @@ async function main() {
       evidence: 'market_norm:comparable_transactions',
       source_name:
         `Home Mortgage Disclosure Act loan-level data, ${year}, ${field.label}. `
-        + `Median and 90th percentile of ${values.length} originations in this county `
-        + `for loans of ${band.label}.`,
+        + `Median and 90th percentile of ${values.length} ${purposeId} originations in `
+        + `this county for loans of ${band.label}. Population: first-lien, `
+        + `owner-occupied, site-built single family (1-4 units), not a HELOC, `
+        + `reverse mortgage or business-purpose loan.`,
       source_url: 'https://ffiec.cfpb.gov/data-browser/',
       effective_date: `${year}-01-01`,
       verified_at: today,
@@ -266,6 +349,11 @@ async function main() {
     console.log(`\n${unmappedFips.size} FIPS code(s) had no name in your map and were skipped:`);
     console.log('  ' + [...unmappedFips].sort().join(', '));
     console.log('  Add them to the map and re-run, or those counties get no benchmark.');
+  }
+  if (crossState.size) {
+    console.log(`\n${crossState.size} FIPS code(s) belonged to a different state and were skipped:`);
+    console.log('  ' + [...crossState].sort().join(', '));
+    console.log(`  That usually means the CSV is not the --state ${state.toUpperCase()} file.`);
   }
   if (!out.length) {
     console.log('\nNo rows met the sample minimum. Either the file is small, or the '
