@@ -163,10 +163,6 @@
 
         <div id="stage-1">
         <div class="field-block">
-          <label>Anything we should know? (optional)</label>
-          <textarea id="intake-description" placeholder="e.g. Rate locked 30 days ago, seller offered a credit..."></textarea>
-        </div>
-        <div class="field-block">
           <label>Upload your documents</label>
           <ul class="upload-checklist">
             <li><strong>Closing Disclosure</strong> — required. This alone is a $29 audit.</li>
@@ -396,6 +392,12 @@
     if (sc.total_closing_costs !== null && sc.total_closing_costs !== undefined) {
       rows.push(['Total closing costs', money(sc.total_closing_costs)]);
       rows.push(['As a share of your loan', pct === null ? '—' : pct + '%']);
+      // A bare percentage tells a first-time buyer nothing. Say what normal is,
+      // and say why a small loan reads high — many fees are flat dollars.
+      if (sc.cost_context) {
+        var cc = sc.cost_context;
+        rows.push(['Typical range', cc.typical_low + '–' + cc.typical_high + '% of loan']);
+      }
     } else if (sc.total_borrower_charges) {
       // A settlement statement prints no Total Closing Costs line, so this is
       // added up from the charge lines. Labelled as calculated so it is never
@@ -413,11 +415,23 @@
     }
 
     rows.push(['Potential issues found', String(sc.flag_count)]);
+    // Three issues could be $50 or $5,000. Without magnitude the decision to
+    // pay is a coin flip.
+    if (sc.flag_dollars) {
+      rows.push(['Dollars in question', money(sc.flag_dollars)
+        + (sc.flags_with_dollars < sc.flag_count ? ' (' + sc.flags_with_dollars + ' of ' + sc.flag_count + ' priced)' : '')]);
+    }
+    if (sc.flag_severity && sc.flag_severity.high) {
+      rows.push(['Of those, high priority', String(sc.flag_severity.high)]);
+    }
     if (sc.needs_more_documents_count) {
       rows.push(['Items needing another document', String(sc.needs_more_documents_count)]);
     }
     if (sc.cannot_benchmark_count) {
-      rows.push(['Fees we have no rate data for', String(sc.cannot_benchmark_count)]);
+      rows.push(['Fees we have no rate data for',
+        sc.benchmarkable_count
+          ? sc.cannot_benchmark_count + ' of ' + sc.benchmarkable_count
+          : String(sc.cannot_benchmark_count)]);
     }
 
     // Shown ABOVE the figures and at a size that cannot be skimmed past. Someone
@@ -533,6 +547,14 @@
         + 'count of zero here does not mean your closing is clean.</p>';
     }
 
+    if (sc.contract_low_confidence) {
+      html += '<p class="scorecard-warn"><strong>Part of your contract could not be read reliably.</strong> '
+        + 'We discarded ' + sc.contract_low_confidence + ' term'
+        + (sc.contract_low_confidence === 1 ? '' : 's')
+        + ' rather than risk reporting a credit you never negotiated, or missing one you did. '
+        + 'A clearer copy of the contract — the original PDF from your agent rather than a scan '
+        + '— would let us check those.</p>';
+    }
     if (sc.contract_uploaded && !sc.contract_reconciled) {
       html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
         + (sc.contract_mismatch && sc.contract_mismatch.length
@@ -603,11 +625,20 @@
       // or schedule we measured it against, the dollar impact" for every finding —
       // contradicting the paragraph directly above, which had just explained that
       // for unbenchmarkable fees there is no "should be" and no schedule.
-      ? '<p class="scorecard-note">The full audit sets out each finding: what the charge is, why it '
-        + 'was flagged, the basis we used, whether it can still be changed before you close, and a '
-        + 'dollar figure where one can be established. Where we could not price a fee, it says so and '
-        + 'gives you the question to ask instead. Findings that need a response come with a drafted '
-        + 'email to the right recipient.</p>'
+      // Replaced a paragraph describing the product with one describing the
+      // customer's own closing. Every line has to earn its place with a fact
+      // from their documents.
+      ? '<p class="scorecard-note">'
+        + (sc.flag_dollars
+            ? 'We can put a figure on ' + money(sc.flag_dollars) + ' of what we flagged'
+              + (sc.flags_with_dollars < sc.flag_count
+                  ? '; the other ' + (sc.flag_count - sc.flags_with_dollars) + ' need a question answered before a number can be attached'
+                  : '')
+              + '. '
+            : 'None of what we flagged can be priced from this document alone &mdash; each needs a '
+              + 'question answered first. ')
+        + 'The full audit names each charge, what we measured it against, whether you can still '
+        + 'change it before you close, and gives you the email to send.</p>'
       : (sc.cd_charge_lines === 0
         ? '<p class="scorecard-note">We could not read the individual charges from this document, so '
           + 'the fee-level checks did not run. This is not a clean result — upload a complete copy '
@@ -676,7 +707,6 @@
     e.preventDefault();
     const btn = e.currentTarget;
     const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
     const files = uploader.getFiles();
@@ -695,7 +725,7 @@
       const resp = await fetch('/api/closing-scorecard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email, description: descEl.value.trim(), files: encoded }),
+        body: JSON.stringify({ email: email, files: encoded }),
       });
       const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');
