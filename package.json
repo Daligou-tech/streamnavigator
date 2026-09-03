@@ -6,11 +6,10 @@
     "node": "24.x"
   },
   "scripts": {
-    "test": "node --test tests/*.test.js",
+    "test": "node tests/run-all.js",
     "check-prices": "node scripts/check-prices.js",
     "harness": "node scripts/audit-harness.js",
-    "check": "npm run build-benchmarks && npm test && npm run harness",
-    "build-benchmarks": "node scripts/build-benchmarks.js"
+    "check": "npm test && npm run harness"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
