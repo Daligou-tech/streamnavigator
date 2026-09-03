@@ -1203,9 +1203,64 @@ test('a different property is a hard mismatch', () => {
 });
 
 test('different borrowers are a hard mismatch', () => {
+  // Nothing else identifies these documents: no lender, no address. The names
+  // are the only evidence we hold and they disagree completely.
   const r = checkTransactionMatch(
     { borrower_names: ['Michael Jones', 'Mary Stone'] },
     { borrowerNames: ['Tarik M Nabi'] }
+  );
+  assert.equal(r.sameTransaction, false);
+  assert.equal(r.mismatches[0].field, 'borrower');
+  assert.equal(r.mismatches[0].hard, true);
+});
+
+test('one borrower in common is not a mismatch at all', () => {
+  // The note names one buyer, the contract names both. Same party.
+  const r = checkTransactionMatch(
+    { borrower_names: ['Michael A. Jones Jr.', 'Mary Stone'] },
+    { borrowerNames: ['Michael Jones'] }
+  );
+  assert.equal(r.sameTransaction, true);
+  assert.deepEqual(r.mismatches, []);
+});
+
+test('a corroborated loan reports a name difference without refusing', () => {
+  // Same lender and same house. A surname that changed between the estimate and
+  // the closing is a naming quirk, not a different loan — say so, but still run
+  // the tolerance comparison the customer paid for.
+  const r = checkTransactionMatch(
+    {
+      lender_name: 'Ficus Bank, N.A.',
+      property_address: '456 Somewhere Ave, Anytown, PA 12345',
+      borrower_names: ['Mary Stone'],
+    },
+    {
+      lenderName: 'Ficus Bank',
+      propertyAddress: '456 Somewhere Avenue, Anytown, PA 12345',
+      borrowerNames: ['Mary Jones'],
+    }
+  );
+  assert.equal(r.sameTransaction, true);
+  assert.equal(r.mismatches[0].field, 'borrower');
+  assert.equal(r.mismatches[0].hard, false);
+});
+
+test('a matching lender alone is enough to corroborate disagreeing names', () => {
+  const r = checkTransactionMatch(
+    { lender_name: 'Ficus Bank', borrower_names: ['Mary Stone'] },
+    { lenderName: 'Ficus Bank', borrowerNames: ['Tarik M Nabi'] }
+  );
+  assert.equal(r.sameTransaction, true);
+  assert.equal(r.mismatches[0].hard, false);
+});
+
+test('an unreadable address does not corroborate anything', () => {
+  // sameAddress() returns true when it cannot parse a street line — that means
+  // "no contradiction", not "same house", and it must not license a comparison
+  // the borrower names are arguing against.
+  const r = checkTransactionMatch(
+    { property_address: '', borrower_names: ['Mary Stone'] },
+    { propertyAddress: '', borrowerNames: ['Tarik M Nabi'] }
   );
   assert.equal(r.sameTransaction, false);
 });

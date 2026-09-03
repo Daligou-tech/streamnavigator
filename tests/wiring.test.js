@@ -50,7 +50,11 @@ test('every form_data key read by an endpoint is declared', () => {
       if (['email', 'token', 'id', 'product', 'ts', 'access_token', 'status', 'file_paths'].includes(key)) continue;
       // navigator-engine serves every product; keys belonging to the others are
       // not this contract's business.
-      if (['category', 'zip', 'financing', 'timeline', 'budget', 'notes'].includes(key)) continue;
+      // `description` sits in the same generic context block as `category`:
+      // navigator-intake writes it for the free-text products, closing never
+      // does. It was declared here with a closing owner that never mentioned
+      // it, which is what the owner check below was catching.
+      if (['category', 'description', 'zip', 'financing', 'timeline', 'budget', 'notes'].includes(key)) continue;
       if (!KNOWN_KEYS.includes(key)) undeclared.push(`${rel(file)} reads formData.${key}`);
     }
   }

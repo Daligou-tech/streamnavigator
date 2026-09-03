@@ -123,6 +123,26 @@ function toolUseResponse(input) {
   };
 }
 
+// The engine makes two different kinds of call. A full attempt asks for
+// submit_purchase_report; a targeted field repair asks for submit_field_repair
+// behind a forced tool_choice, so it can refill one empty explanation without
+// spending a whole retry. A fake that answers every request with a
+// submit_purchase_report block starves the repair path: repairExplanationField
+// finds no submit_field_repair block, logs, returns null, and the attempt falls
+// through to a full retry. These helpers route on the requested tool the way
+// the real API would, so a test can decide whether the repair succeeds.
+function requestedTool(opts) {
+  const body = JSON.parse((opts && opts.body) || '{}');
+  return (body.tool_choice && body.tool_choice.name) || null;
+}
+
+function fieldRepairResponse(value) {
+  return {
+    ok: true,
+    json: async () => ({ content: [{ type: 'tool_use', name: 'submit_field_repair', input: { value } }] }),
+  };
+}
+
 test('a complete first response produces a report with all six sections and marks the submission complete', async (t) => {
   const submission = fakeSubmission();
   const { reportInserts, submissionUpdates } = installFakes({ submission });
@@ -168,9 +188,18 @@ test('a response missing a required section (financing_impact.explanation) hands
   const originalFetch = global.fetch;
 
   let call = 0;
-  global.fetch = async () => {
+  let mainCalls = 0;
+  global.fetch = async (url, opts) => {
     call++;
-    if (call === 1) {
+    if (requestedTool(opts) === 'submit_field_repair') {
+      // An empty repair is a failed repair: the engine stops the repair loop
+      // and falls through to the hand-back path this test is about. Without
+      // this branch the fake answers the repair with a submit_purchase_report
+      // block, which fails for the wrong reason and hides what is being tested.
+      return fieldRepairResponse('');
+    }
+    mainCalls++;
+    if (mainCalls === 1) {
       const bad = completeReportInput({ financing_impact: { applicable: false, explanation: '' } });
       return toolUseResponse(bad);
     }
@@ -188,7 +217,8 @@ test('a response missing a required section (financing_impact.explanation) hands
 
   const report = await generatePurchaseReport('sub-1');
 
-  assert.equal(call, 2, 'expected exactly one Anthropic call per generatePurchaseReport invocation');
+  assert.equal(mainCalls, 2, 'expected exactly one full Anthropic attempt per generatePurchaseReport invocation');
+  assert.equal(call, 3, 'two full attempts plus the one targeted field-repair call the first attempt spent before giving up');
   assert.ok(report.sections[1].items[0].length > 0, 'financing section must be populated after the second attempt');
   assert.equal(reportInserts.length, 1);
   assert.equal(submission.generation_attempts, 2);
@@ -290,9 +320,12 @@ test('a leaked tag that is the entire content of a required field still triggers
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
   let call = 0;
-  global.fetch = async () => {
+  let mainCalls = 0;
+  global.fetch = async (url, opts) => {
     call++;
-    if (call === 1) {
+    if (requestedTool(opts) === 'submit_field_repair') return fieldRepairResponse('');
+    mainCalls++;
+    if (mainCalls === 1) {
       const bad = completeReportInput({
         financing_impact: { applicable: false, explanation: '<parameter name="estimate_low">' },
       });
@@ -308,9 +341,45 @@ test('a leaked tag that is the entire content of a required field still triggers
   assert.equal(submission.status, 'paid');
 
   const report = await generatePurchaseReport('sub-1');
-  assert.equal(call, 2);
+  assert.equal(mainCalls, 2);
+  assert.equal(call, 3, 'the stripped field is repairable in principle, so one repair call is attempted before the retry');
   assert.equal(reportInserts.length, 1);
   assert.ok(report.headline);
+});
+
+test('a repairable empty explanation is refilled in-call instead of spending a full retry', async (t) => {
+  // The counterpart to the two tests above, and the reason their call counts
+  // moved. When the targeted repair actually comes back with prose, the
+  // attempt completes: no hand-back to "paid", no second poll, no extra
+  // generation attempt burned on a report that was one field short.
+  const submission = fakeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let mainCalls = 0;
+  let repairCalls = 0;
+  global.fetch = async (url, opts) => {
+    if (requestedTool(opts) === 'submit_field_repair') {
+      repairCalls++;
+      return fieldRepairResponse('Paying cash, so the sticker price is the cost. There is no financing interest to add.');
+    }
+    mainCalls++;
+    return toolUseResponse(completeReportInput({ financing_impact: { applicable: false, explanation: '' } }));
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.ok(report, 'a successful repair must complete the attempt rather than hand back');
+  assert.equal(mainCalls, 1, 'the repair replaces a full retry — it must not trigger a second full attempt');
+  assert.equal(repairCalls, 1);
+  assert.equal(submission.generation_attempts, 1, 'a repaired attempt must not burn a second attempt');
+  assert.equal(reportInserts.length, 1);
+  assert.ok(report.sections[1].items[0].length > 0, 'the repaired financing explanation must reach the stored report');
+  assert.ok(submissionUpdates.some((u) => u.status === 'complete'));
+  assert.ok(!submissionUpdates.some((u) => u.status === 'paid'));
 });
 
 test('an unsupported web_search tool error on the first call falls back to a knowledge-only call and still succeeds', async (t) => {
@@ -404,9 +473,16 @@ test('the first, non-forced call enables extended thinking as scratch space for 
   await generatePurchaseReport('sub-1');
 
   assert.equal(firstBody.tool_choice.type, 'auto', 'thinking is only valid alongside a non-forced tool_choice');
-  assert.equal(firstBody.thinking.type, 'enabled');
-  assert.ok(firstBody.thinking.budget_tokens > 0);
-  assert.ok(firstBody.max_tokens > firstBody.thinking.budget_tokens, 'max_tokens must exceed the thinking budget to leave room for the actual output');
+  // Adaptive, not a fixed budget. ANTHROPIC_MODEL is claude-sonnet-5, and on
+  // the Claude 5 models adaptive is the only way to turn thinking on — the
+  // legacy thinking:{type:'enabled',budget_tokens:N} form is rejected there,
+  // so this assertion is what stops a well-meaning revert to it.
+  assert.equal(firstBody.thinking.type, 'adaptive');
+  // effort belongs in a top-level output_config, not inside thinking. Putting
+  // it in the wrong place is a 400, not a silent downgrade.
+  assert.equal(firstBody.output_config.effort, 'high');
+  assert.equal(firstBody.thinking.budget_tokens, undefined, 'budget_tokens alongside adaptive is rejected');
+  assert.ok(firstBody.max_tokens > 4096, 'thinking and the final output share max_tokens — leave room for both');
 });
 
 test('__internal.isReportComplete rejects a report missing any one of the six required sections', () => {
