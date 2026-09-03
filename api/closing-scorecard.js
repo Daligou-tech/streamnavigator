@@ -187,6 +187,9 @@ module.exports = async (req, res) => {
     } catch (err) {
       // Classification failing is not fatal — fall back to treating the first
       // file as the Closing Disclosure, which is what the single-file path does.
+      // Logged anyway: a persistent failure here silently sends multi-file
+      // uploads down the single-file path, and nothing else would show it.
+      console.error('[closing-scorecard] document classification failed:', err && err.message);
       documents = [{ index: 0, document_type: null }];
     }
   }
@@ -195,14 +198,36 @@ module.exports = async (req, res) => {
   try {
     extraction = await extractClosingDisclosure(ANTHROPIC_API_KEY, [contentBlocks[primaryIndex]]);
   } catch (err) {
+    // This catch used to swallow the error entirely. It is the single failure
+    // the customer sees most often and the one with the least information
+    // behind it: when `temperature: 0` was shipped, every extraction failed for
+    // forty minutes and this message was the only symptom, so the cause was
+    // invisible in the logs. Never silent again.
+    console.error('[closing-scorecard] extraction failed:', err && err.message);
+
+    // "It may be a scan quality issue" is actively wrong when the API returned
+    // 401, 429 or 500 — the customer rescans a perfectly good document, fails
+    // again, and concludes the product does not work. The extractor puts the
+    // HTTP status in the message, so tell them the truth about whose problem
+    // it is.
+    // ANY HTTP status back from the API is our problem, 400 included. A 400
+    // means we sent a malformed request — which is precisely what `temperature:
+    // 0` was, and for forty minutes it told customers holding perfect PDFs to
+    // go and find a better scan. Only a failure with no HTTP status at all
+    // (the model returned no tool call) is plausibly about the document.
+    const msg = String((err && err.message) || '');
+    const ourFault = /Anthropic API error \d{3}/.test(msg);
+
     res.status(200).json({
       ok: true,
       id: submission.id,
       token: submission.access_token,
       scorecard: null,
-      error_message:
-        'We could not read that document automatically. It may be a scan quality issue. ' +
-        'Try uploading a clearer copy, or the original PDF from your lender rather than a photo.',
+      error_message: ourFault
+        ? 'Our document reader is temporarily unavailable. This is on our side, not your '
+          + 'document \u2014 please try again in a few minutes. Nothing has been charged.'
+        : 'We could not read that document automatically. It may be a scan quality issue. '
+          + 'Try uploading a clearer copy, or the original PDF from your lender rather than a photo.',
     });
     return;
   }
