@@ -702,6 +702,10 @@
     // Every blocked check names a document the page can accept, so none of
     // these is a dead end.
     if (sc.unlocks && sc.unlocks.length) {
+      var docUnlocks = 0;
+      for (var di = 0; di < sc.unlocks.length; di++) {
+        if (sc.unlocks[di].accepts !== 'answers') docUnlocks += sc.unlocks[di].unlocks_count;
+      }
       html += '<div class="sc-panel sc-panel-accent">'
         + '<p class="sc-h">What would unlock more</p><ul class="sc-list">';
       for (var ui = 0; ui < sc.unlocks.length; ui++) {
@@ -709,7 +713,23 @@
         html += '<li><b>' + escH(u.title) + '</b> &mdash; unlocks ' + u.unlocks_count
           + (u.unlocks_count === 1 ? ' check. ' : ' checks. ') + escH(u.why) + '</li>';
       }
-      html += '</ul></div>';
+      // The button belongs HERE, beside the checks it unlocks. The footer
+      // redesign dropped it and turned this panel into a dead end -- the exact
+      // failure the product notes flagged as "upsells with nowhere to upload".
+      if (docUnlocks > 0) {
+        html += '</ul>'
+          + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
+          + 'style="margin-top:12px;">&#8593; Add those documents &mdash; still free</button>'
+          // Uploading is free and re-scores immediately, but a usable Loan
+          // Estimate or contract moves the paid report to $59. Saying that on
+          // the button that raises it is the difference between an upgrade and
+          // a bait-and-switch.
+          + '<p class="sc-sub">Adding documents is free and updates this scorecard right away. '
+          + 'If a check actually runs against them, the full audit is $59 instead of $29.</p>'
+          + '</div>';
+      } else {
+        html += '</ul></div>';
+      }
     }
 
     html += sc.flag_count > 0
