@@ -1521,34 +1521,63 @@ const normName = normOrg;
 function checkTransactionMatch(cd, le) {
   const mismatches = [];
 
+  // Tracks whether a field other than the borrower names positively identified
+  // the two documents as the same loan. Only a match counts; a field that both
+  // documents leave blank corroborates nothing.
+  let corroborated = false;
+
   const cdLender = normOrg(cd.lender_name);
   const leLender = normOrg(le.lenderName);
-  if (cdLender && leLender && cdLender !== leLender) {
-    mismatches.push({
-      field: 'lender', hard: true,
-      cd: cd.lender_name, le: le.lenderName,
-    });
+  if (cdLender && leLender) {
+    if (cdLender !== leLender) {
+      mismatches.push({
+        field: 'lender', hard: true,
+        cd: cd.lender_name, le: le.lenderName,
+      });
+    } else {
+      corroborated = true;
+    }
   }
 
-  if (cd.property_address && le.propertyAddress
-      && !sameAddress(cd.property_address, le.propertyAddress)) {
-    mismatches.push({
-      field: 'property address', hard: true,
-      cd: cd.property_address, le: le.propertyAddress,
-    });
+  if (cd.property_address && le.propertyAddress) {
+    if (!sameAddress(cd.property_address, le.propertyAddress)) {
+      mismatches.push({
+        field: 'property address', hard: true,
+        cd: cd.property_address, le: le.propertyAddress,
+      });
+    } else if (normAddress(cd.property_address).street
+               && normAddress(le.propertyAddress).street) {
+      // sameAddress() returns true when either street line is unparseable, so
+      // it means "no contradiction", not "same house". Only a street line we
+      // actually read on both documents is corroboration.
+      corroborated = true;
+    }
   }
 
-  // Soft, not hard. Two documents for the same sale routinely list the buyer
-  // differently — one borrower named on the note but both on the contract, a
-  // maiden name, a middle initial. A name difference on its own is not enough
-  // to refuse the comparison; a different lender or a different house is.
-  // Overlap is enough: if any person appears on both, treat it as the same party.
+  // Borrower names are weak identity evidence next to a lender or an address,
+  // and they are conclusive evidence when we hold nothing else.
+  //
+  // Two documents for the same sale routinely list the buyer differently — one
+  // borrower named on the note but both on the contract, a middle initial, a
+  // maiden name. Overlap absorbs most of that: if any one person appears on
+  // both, this is the same party. What overlap cannot absorb is a surname that
+  // changed between the estimate and the closing, so a complete non-overlap is
+  // always reported.
+  //
+  // Whether it BLOCKS the comparison depends on corroboration. If the lender or
+  // the property already matched, the loan is identified and disagreeing names
+  // are a naming quirk — refusing there would deny a paying customer the
+  // tolerance analysis over a middle initial. If neither matched, because
+  // neither document stated one we could read, the names are the only identity
+  // evidence in hand and they say these are two different loans. Comparing them
+  // anyway is exactly how five confident tolerance findings were once produced
+  // against a stranger's fees.
   const cdNames = (cd.borrower_names || []).map(normPerson).filter(Boolean);
   const leNames = (le.borrowerNames || []).map(normPerson).filter(Boolean);
   const shareAName = cdNames.some((n) => leNames.includes(n));
   if (cdNames.length && leNames.length && !shareAName) {
     mismatches.push({
-      field: 'borrower', hard: false,
+      field: 'borrower', hard: !corroborated,
       cd: (cd.borrower_names || []).join(', '), le: (le.borrowerNames || []).join(', '),
     });
   }

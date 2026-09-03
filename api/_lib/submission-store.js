@@ -19,9 +19,15 @@
 
 // owner: the file responsible for producing this key. Informational, and
 // checked by the wiring test.
+//
+// Scoped to the closing product. The other Navigators write their own shapes
+// into the same `form_data` column — contractor uses `description`, `category`
+// and `zip` — and those keys do not belong here. `description` was declared
+// with a closing owner that never mentions it, which the wiring test caught
+// only in its third check; the "written somewhere" check passed because
+// closing-extract.js has `description:` on every JSON-schema property.
 const FORM_DATA_KEYS = {
   stage: 'api/closing-scorecard.js',
-  description: 'api/closing-scorecard.js',
   ip_hash: 'api/closing-scorecard.js',
   extraction: 'api/closing-scorecard.js',
   scorecard: 'api/closing-scorecard.js',
