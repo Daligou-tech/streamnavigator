@@ -94,6 +94,66 @@ const EXTRACTION_TOOL = {
       interest_rate_pct: { type: 'number', description: 'Note rate as a percentage, e.g. 6.5 for 6.5%.' },
       loan_term_years: { type: 'number' },
 
+      monthly_principal_interest: amountField(
+        'The monthly Principal & Interest figure from the Projected Payments table on '
+        + 'page 1, for the FIRST payment period only. Not the total monthly payment: '
+        + 'exclude escrow and mortgage insurance.'),
+
+      loan_terms_features: {
+        type: 'object',
+        description:
+          'The Loan Terms box on page 1. Each field answers "Can this amount increase '
+          + 'after closing?" or "Does the loan have these features?". Report false only '
+          + 'when the document says NO. Omit any field whose box you cannot read — an '
+          + 'omitted field causes a check to decline, a wrong one causes it to misfire.',
+        properties: {
+          rate_can_increase:        { type: 'boolean' },
+          payment_can_increase:     { type: 'boolean' },
+          loan_amount_can_increase: { type: 'boolean' },
+          has_balloon_payment:      { type: 'boolean' },
+          has_prepayment_penalty:   { type: 'boolean' },
+          has_interest_only_period: { type: 'boolean' },
+        },
+      },
+
+      loan_calculations: {
+        type: 'object',
+        description:
+          'The five figures in the Loan Calculations box on page 5. Transcribe them '
+          + 'exactly as printed. NEVER compute one that is missing or unreadable — these '
+          + 'are checked against each other, so a computed value would make an '
+          + 'inconsistent document look consistent.',
+        properties: {
+          total_of_payments: amountField('Total of Payments, page 5.'),
+          finance_charge:    amountField('Finance Charge, page 5.'),
+          amount_financed:   amountField('Amount Financed, page 5.'),
+          annual_percentage_rate_pct: {
+            type: 'number',
+            description: 'Annual Percentage Rate as printed, e.g. 6.665 for 6.665%.',
+          },
+          total_interest_percentage_pct: {
+            type: 'number',
+            description: 'Total Interest Percentage as printed, e.g. 71.2 for 71.2%.',
+          },
+        },
+      },
+
+      points_lines: {
+        type: 'array',
+        description:
+          'Any Section A line whose printed label states a percentage of the loan '
+          + 'amount, such as "0.75% of Loan Amount (Points)". One entry per such line. '
+          + 'Omit the array if no line states a percentage.',
+        items: {
+          type: 'object',
+          properties: {
+            points_pct:     { type: 'number', description: 'The percentage as printed, e.g. 0.75.' },
+            charged_amount: { type: 'number', description: 'The dollar amount on that line.' },
+          },
+          required: ['points_pct', 'charged_amount'],
+        },
+      },
+
       line_items: {
         type: 'array',
         description:
@@ -204,6 +264,11 @@ const EXTRACTION_TOOL = {
         type: 'object',
         description: 'Section G, initial escrow payment at closing, plus page 4 escrow detail.',
         properties: {
+          monthly_escrow_payment: amountField(
+            'The monthly Escrow figure from the Projected Payments table on page 1.'),
+          escrowed_property_costs_year1: amountField(
+            'Estimated Escrowed Property Costs over Year 1, from the escrow account '
+            + 'section on page 4.'),
           annual_disbursements: {
             type: 'array',
             description: 'Each escrowed item and its estimated ANNUAL total, from the escrow account section on page 4.',
