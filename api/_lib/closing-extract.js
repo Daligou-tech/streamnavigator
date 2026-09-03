@@ -178,6 +178,20 @@ const EXTRACTION_TOOL = {
                 + 'Individual charges have one; section headings and subtotals do not. Omit it if '
                 + 'the line carries no number.',
             },
+            amount_present: {
+              type: 'boolean',
+              description:
+                'Whether a dollar amount is actually PRINTED on this line. This is a different '
+                + 'question from confidence, and the two are constantly confused.\n'
+                + 'false = the line is pre-printed on the form and the amount space is empty or '
+                + 'struck through, because the charge does not apply to this loan. A blank month '
+                + 'count, as in "Mortgage Insurance Premium (   mo.)", is the clearest sign.\n'
+                + 'true = a figure is printed, even if it is $0.00, and even if you had trouble '
+                + 'reading it. Use confidence to say how well you read it.\n'
+                + 'This decides whether the customer is asked to type the figure in. Reporting a '
+                + 'blank line as present asks her to invent a number for a charge she was never '
+                + 'given, and any finding built on it would be fabricated.',
+            },
             section: {
               type: 'string',
               enum: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'none'],
@@ -1315,6 +1329,13 @@ function listUnreadableFields(extraction) {
   const lowConf = (o) => o && typeof o.confidence === 'number' && o.confidence < CONF_THRESHOLD;
 
   (e.line_items || []).forEach((li, i) => {
+    // A line with no printed amount is not an unreadable figure -- it is a
+    // charge this loan does not carry. Asking for it invites an invented
+    // number, and the panel promises to run checks on whatever is typed.
+    if (li && li.amount_present === false) return;
+    // Same for a line that reads as zero: there is no overcharge to find in
+    // $0.00, so interrupting the customer for it buys nothing.
+    if (li && (li.amount === 0 || li.amount === null || li.amount === undefined)) return;
     if (lowConf(li)) {
       out.push({
         path: `line_items.${i}`,
