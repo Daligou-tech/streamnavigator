@@ -322,10 +322,10 @@ function runDocumentAudit(input = {}) {
         + `${blocked.length} need ${describeBlockers(blocked)}.`,
     unlocks: buildUnlocks(blocked),
     benchmark_coverage: benchmarkCoverage,
-    evidence_basis:
-      'Every finding is arithmetic on your own documents, a lending rule applied to them, '
-      + 'or a published rate or statute for your county. Where we hold neither a rate nor '
-      + 'comparison data for a charge, we name that charge rather than guessing at it.',
+    // Removed: a four-line justification in small grey type, sitting directly
+    // beneath a panel that had already made the same point in bullets. It was
+    // read by nobody and pushed the unlock actions below the fold.
+    evidence_basis: null,
   };
 
   return {
