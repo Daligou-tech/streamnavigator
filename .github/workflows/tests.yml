@@ -47,6 +47,11 @@ jobs:
       # pick it up on its own.
       - run: node tests/render-check.js
 
+      # Already-stale rows and collapsed coverage, on every push. The 30-day
+      # early warning runs on a schedule instead — see corpus-health.yml — so a
+      # push in December does not start failing for a reason unrelated to it.
+      - run: node scripts/check-corpus-freshness.js --warn-days 0
+
       # Every patch script in scripts/ is idempotent and refuses cleanly when
       # already applied, so running them here is safe and answers a question
       # that otherwise gets asked by hand: has this one actually been run?
