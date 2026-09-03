@@ -652,16 +652,21 @@
     // string concatenation.
     // The service writes full sentences ("We compare these against ... : A, B").
     // The bullet label already carries that, so keep only what follows the colon.
-    var stripLead = function (s) {
+    // Declared with `function`, not `var`, on purpose. A `var` assignment only
+    // exists from its own line onward, so moving any call site above it -- which
+    // is exactly what the footer redesign did -- makes it undefined at runtime
+    // while still parsing cleanly. A function declaration hoists to the top of
+    // the enclosing function and cannot break that way.
+    function stripLead(s) {
       var i = String(s || '').indexOf(': ');
       return i === -1 ? String(s || '') : String(s).slice(i + 2);
-    };
+    }
 
-    var escH = function (v) {
+    function escH(v) {
       return String(v == null ? '' : v)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    };
+    }
 
     // What we could and could not price, as a short bulleted list rather than
     // three paragraphs of small grey prose.
