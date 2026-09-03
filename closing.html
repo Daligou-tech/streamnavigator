@@ -34,6 +34,30 @@
 .scorecard-rows b{font-size:19px;white-space:nowrap;}
 .scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
 .scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+/* Everything below the scorecard box. Same size as the rows above it, because
+   this is what the customer is deciding on. */
+.sc-panel{margin:16px 0 0;padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.035);}
+.sc-panel + .sc-panel{margin-top:12px;}
+.sc-panel-accent{background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.10);}
+.sc-h{font-size:15px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em;}
+.sc-lead{font-size:15px;line-height:1.55;margin:0 0 10px;}
+.sc-list{list-style:none;padding:0;margin:0;font-size:15px;line-height:1.55;}
+.sc-list li{position:relative;padding:6px 0 6px 18px;}
+.sc-list li:before{content:"";position:absolute;left:2px;top:14px;width:5px;height:5px;
+  border-radius:50%;background:currentColor;opacity:.55;}
+.sc-list li b,.sc-list li strong{font-weight:700;}
+.sc-sub{font-size:13px;line-height:1.5;opacity:.75;margin:8px 0 0;}
+.sc-details{margin:12px 0 0;font-size:15px;}
+.sc-details > summary{cursor:pointer;font-weight:700;padding:10px 0;list-style:none;
+  border-top:1px solid rgba(0,0,0,.10);}
+.sc-details > summary::-webkit-details-marker{display:none;}
+.sc-details > summary:before{content:"\25B8  ";display:inline-block;transition:transform .15s;}
+.sc-details[open] > summary:before{transform:rotate(90deg);}
+.sc-details .sc-list li{padding-left:18px;}
+@media (max-width:520px){
+  .sc-panel{padding:12px 13px;}
+  .sc-h,.sc-lead,.sc-list,.sc-details{font-size:15px;}
+}
 .inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
 .inline-error strong{display:block;margin-bottom:4px;}
 .upload-checklist{list-style:none;padding:0;margin:0 0 10px;font-size:14px;line-height:1.5;}
@@ -185,7 +209,7 @@
         </div>
         <ul class="price-feats">
           <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> <strong>$29</strong> — benchmark checks against county and state schedules, arithmetic, escrow, prorations, duplicate and stacked fees, drafted emails</li>
+          <li><span class="tick">✓</span> <strong>$29</strong> — the document's own arithmetic, the Loan Calculations box, escrow and prorations, duplicate and stacked fees, published tax rates where we hold them, drafted emails</li>
           <li><span class="tick">✓</span> <strong>$59</strong> — adds TRID tolerance testing and purchase-contract reconciliation, the two checks that can conclude money is owed back</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
@@ -488,22 +512,23 @@
           + ' &mdash; the reason is above &mdash; so you are not being charged for checks that '
           + 'did not run. Replace the upload and the price goes back to $59, because then the '
           + 'analysis actually happens.</p>'
-          + '<p class="scorecard-note">Your $29 audit still covers benchmark checks against your '
-          + 'county and state schedules, the arithmetic, escrow and proration checks, duplicate '
-          + 'and stacked-fee detection, and your drafted emails.</p>'
+          + '<p class="scorecard-note">Your $29 audit still covers the arithmetic, the Loan '
+          + 'Calculations box, escrow and proration checks, duplicate and stacked-fee detection, '
+          + 'published tax rates for your county where we hold them, and your drafted emails.</p>'
           + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
           + 'style="margin-top:10px;">&#8593; Replace those documents</button>';
       } else if (sc.tier.id === 'basic') {
-        html += '<p class="scorecard-note"><strong>Your audit is $29.</strong> That covers the '
-          + 'benchmark checks against your county and state schedules, the arithmetic, escrow and '
-          + 'proration checks, duplicate and stacked-fee detection, and your drafted emails '
-          + '&mdash; everything a Closing Disclosure alone can support.'
-          + '<br><br>Add your <strong>Loan Estimates</strong> and we can test whether a fee rose beyond '
-          + 'what the lending rules permit, which can mean your lender owes you a refund. Add your '
-          + '<strong>purchase contract</strong> and we can check that every credit you negotiated '
-          + 'actually landed. Either one makes it $59.</p>'
-          + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
-          + 'style="margin-top:10px;">&#8593; Add those documents</button>';
+        html += '<div class="sc-panel">'
+          + '<p class="sc-h">Your audit is $29</p>'
+          + '<ul class="sc-list">'
+          + '<li>Every figure on the document rechecked against its own arithmetic</li>'
+          + '<li>The Loan Calculations box on page 5 &mdash; APR, finance charge, '
+          + 'amount financed, total of payments</li>'
+          + '<li>Escrow, prorations and per-diem interest recomputed from your closing date</li>'
+          + '<li>Duplicate and stacked fees identified by name</li>'
+          + '<li>Published tax rates and statutes for your county, where we hold them</li>'
+          + '<li>The email to send your lender, already written</li>'
+          + '</ul></div>';
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
           + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
@@ -568,10 +593,18 @@
         + ' This is not a clean result for those checks.</p>';
     }
 
+    // One line until clicked. Every item is still here: these are not passes,
+    // and a customer who wants the detail must be able to get all of it.
     if (sc.checks_skipped_detail && sc.checks_skipped_detail.length) {
-      html += '<p class="scorecard-note"><strong>Checks we could not run:</strong> '
-        + sc.checks_skipped_detail.join('; ')
-        + '. These are not passes — we could not test them at all.</p>';
+      var n = sc.checks_skipped_detail.length;
+      html += '<details class="sc-details"><summary>' + n + ' check'
+        + (n === 1 ? '' : 's') + ' we could not run &mdash; tap to see which</summary>'
+        + '<ul class="sc-list">';
+      for (var si = 0; si < n; si++) {
+        html += '<li>' + escH(sc.checks_skipped_detail[si]) + '</li>';
+      }
+      html += '</ul><p class="sc-sub">These are not passes. We could not test them at all.</p>'
+        + '</details>';
     }
 
     if (sc.deposits_excluded && sc.total_is_derived) {
@@ -617,49 +650,61 @@
     // Self-contained escaper: these strings are server-side constants today,
     // but a future unlock could carry a filename and this file builds HTML by
     // string concatenation.
+    // The service writes full sentences ("We compare these against ... : A, B").
+    // The bullet label already carries that, so keep only what follows the colon.
+    var stripLead = function (s) {
+      var i = String(s || '').indexOf(': ');
+      return i === -1 ? String(s || '') : String(s).slice(i + 2);
+    };
+
     var escH = function (v) {
       return String(v == null ? '' : v)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     };
 
-    if (sc.evidence_basis) {
-      html += '<p class="scorecard-note"><strong>What we checked against:</strong> '
-        + escH(sc.evidence_basis) + '</p>';
-    }
-
-    // Named before payment. A customer must not buy a report to find out that
-    // her title insurance was never priced.
+    // What we could and could not price, as a short bulleted list rather than
+    // three paragraphs of small grey prose.
     if (sc.benchmark_coverage) {
       var bc = sc.benchmark_coverage;
-      html += '<div class="scorecard-coverage">';
+      var covItems = '';
       if (bc.priced_sentence) {
-        html += '<p class="scorecard-note"><strong>Priced against a published rate:</strong> '
-          + escH(bc.priced_sentence) + '</p>';
+        covItems += '<li><b>Priced against a published rate or statute:</b> '
+          + escH(stripLead(bc.priced_sentence)) + '</li>';
       }
       if (bc.distribution_sentence) {
-        html += '<p class="scorecard-note"><strong>Compared to what other loans paid:</strong> '
-          + escH(bc.distribution_sentence) + '</p>';
+        covItems += '<li><b>Compared with what similar loans paid:</b> '
+          + escH(stripLead(bc.distribution_sentence)) + '</li>';
       }
       if (bc.not_priced_sentence) {
-        html += '<p class="scorecard-note scorecard-note-gap"><strong>Not priced'
-          + (bc.jurisdiction ? ' in ' + escH(bc.jurisdiction) : '') + ':</strong> '
-          + escH(bc.not_priced_sentence) + '</p>';
+        covItems += '<li><b>Not priced'
+          + (bc.jurisdiction ? ' in ' + escH(bc.jurisdiction) : '') + ':</b> '
+          + escH(stripLead(bc.not_priced_sentence)) + '</li>';
       }
-      html += '</div>';
+      if (covItems) {
+        html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
+          + '<ul class="sc-list">' + covItems + '</ul>'
+          + (sc.evidence_basis ? '<p class="sc-sub">' + escH(sc.evidence_basis) + '</p>' : '')
+          + '</div>';
+      }
+    } else if (sc.evidence_basis) {
+      html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
+        + '<p class="sc-lead">' + escH(sc.evidence_basis) + '</p></div>';
     }
+
+    // (rendered above, inside the "What we measured against" panel)
 
     // Every blocked check names a document the page can accept, so none of
     // these is a dead end.
     if (sc.unlocks && sc.unlocks.length) {
-      html += '<div class="scorecard-unlocks">';
+      html += '<div class="sc-panel sc-panel-accent">'
+        + '<p class="sc-h">What would unlock more</p><ul class="sc-list">';
       for (var ui = 0; ui < sc.unlocks.length; ui++) {
         var u = sc.unlocks[ui];
-        html += '<p class="scorecard-note"><strong>' + escH(u.title) + '</strong> — unlocks '
-          + u.unlocks_count + (u.unlocks_count === 1 ? ' check. ' : ' checks. ')
-          + escH(u.why) + '</p>';
+        html += '<li><b>' + escH(u.title) + '</b> &mdash; unlocks ' + u.unlocks_count
+          + (u.unlocks_count === 1 ? ' check. ' : ' checks. ') + escH(u.why) + '</li>';
       }
-      html += '</div>';
+      html += '</ul></div>';
     }
 
     html += sc.flag_count > 0
