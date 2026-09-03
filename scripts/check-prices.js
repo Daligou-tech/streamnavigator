@@ -120,15 +120,23 @@ function checkPage(file, spec) {
 
   // 1. displayed price
   const displayed = extractDisplayedPrices(html);
+  // A page may price more than one tier. Closing prices a $29 document-only
+  // audit and a $59 audit that adds tolerance testing, and both are correct on
+  // the page at once. `alsoAllowedPriceCents` lists the additional tiers so a
+  // real second price does not read as a stale one — while anything NOT listed
+  // still fails, which is the point of the check.
+  const allowed = new Set(
+    [spec.expectedPriceCents].concat(spec.alsoAllowedPriceCents || [])
+  );
   if (displayed.length === 0) {
     problems.push('No price-amount element found on the page.');
   } else {
-    const wrong = displayed.filter((cts) => cts !== spec.expectedPriceCents);
+    const wrong = displayed.filter((cts) => !allowed.has(cts));
     if (wrong.length) {
       problems.push(
-        `Page displays ${wrong.map(money).join(', ')} but config expects ${money(
-          spec.expectedPriceCents
-        )}.`
+        `Page displays ${wrong.map(money).join(', ')} but config allows ${[...allowed]
+          .map(money)
+          .join(', ')}.`
       );
     }
   }
