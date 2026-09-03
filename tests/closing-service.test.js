@@ -103,11 +103,63 @@ test('no benchmark finding reaches the customer', () => {
   }
 });
 
-test('the scorecard carries no benchmark vocabulary', () => {
+test('benchmark gaps are named, never reduced to a count', () => {
   const { scorecard } = svc.runDocumentAudit({ extraction: CD() });
+  // The old "10 of 14 fees, no rate data" told Sarah a number and nothing else.
   assert.ok(!('benchmarkable_count' in scorecard));
   assert.ok(!('cannot_benchmark_count' in scorecard));
-  assert.ok(/arithmetic or a regulatory rule/.test(scorecard.evidence_basis));
+  assert.ok(scorecard.benchmark_coverage, 'no coverage disclosure');
+  assert.ok(/published rate or statute/.test(scorecard.evidence_basis));
+});
+
+test('the coverage disclosure names every unpriced category in plain English', () => {
+  const cd = CD();
+  cd.line_items = [
+    { category: 'title_insurance_owners', amount: 1800, label: "Owner's Title Insurance" },
+    { category: 'appraisal', amount: 650, label: 'Appraisal Fee' },
+    { category: 'transfer_tax', amount: 6750, label: 'Transfer Tax' },
+  ];
+  const { scorecard } = svc.runDocumentAudit({ extraction: cd });
+  const cov = scorecard.benchmark_coverage;
+
+  // Only categories actually on the document are discussed.
+  const named = [...cov.priced, ...cov.distribution, ...cov.unpriced].map((c) => c.category);
+  assert.ok(!named.includes('survey'), 'discussed a category not on the document');
+
+  assert.ok(cov.not_priced_sentence, 'nothing tells Sarah what is unpriced');
+  // Real names, not codes.
+  assert.ok(/Owner's title insurance/.test(cov.not_priced_sentence)
+    || /Owner's title insurance/.test(JSON.stringify(cov.priced)),
+    'title insurance is never named');
+  assert.ok(/Appraisal fee/.test(cov.not_priced_sentence)
+    || /Appraisal fee/.test(JSON.stringify(cov.priced)),
+    'appraisal is never named');
+});
+
+test('the disclosure uses no vague quantifiers', () => {
+  const cd = CD();
+  cd.line_items = [
+    { category: 'title_insurance_owners', amount: 1800 },
+    { category: 'appraisal', amount: 650 },
+    { category: 'settlement_service', amount: 900 },
+    { category: 'survey', amount: 400 },
+  ];
+  const { scorecard } = svc.runDocumentAudit({ extraction: cd });
+  const text = JSON.stringify(scorecard.benchmark_coverage).toLowerCase();
+  for (const re of [/\ba few\b/, /\bseveral\b/, /\bsome of your\b/, /\bvarious\b/,
+    /\ba number of\b/, /\bnumerous\b/, /\bmany of\b/]) {
+    assert.ok(!re.test(text), `coverage disclosure contains a vague quantifier: ${re}`);
+  }
+});
+
+test('charges verified by arithmetic are not reported as a coverage gap', () => {
+  const cd = CD();
+  cd.line_items = [{ category: 'prepaid_interest', amount: 480 }];
+  const { scorecard } = svc.runDocumentAudit({ extraction: cd });
+  const cov = scorecard.benchmark_coverage;
+  assert.ok(!cov.unpriced.some((u) => u.category === 'prepaid_interest'),
+    'prepaid interest listed as unpriced when it is verified exactly');
+  assert.ok(cov.verified_by_arithmetic.some((x) => x.category === 'prepaid_interest'));
 });
 
 test('the null benchmark never returns a value', () => {
