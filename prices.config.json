@@ -1,6 +1,5 @@
 {
   "_comment": "Source of truth for what each page SHOULD show. When you change a price, update it HERE FIRST, then update the page, then run: npm run check-prices. Amounts are in cents so they compare cleanly against Stripe's unit_amount.",
-
   "pages": {
     "buying.html": {
       "label": "Purchase Navigator",
@@ -11,7 +10,11 @@
     "closing.html": {
       "label": "Closing Navigator",
       "expectedPriceCents": 5900,
-      "stripeLinkId": "28EdR90NS7Yo0FS0xqabK0e"
+      "stripeLinkId": "28EdR90NS7Yo0FS0xqabK0e",
+      "alsoAllowedPriceCents": [
+        2900
+      ],
+      "_tiers": "$59 is the full audit (adds TRID tolerance testing and contract reconciliation). $29 is the document-only audit: every check that runs on the Closing Disclosure alone. Both appear on the page; the price a customer actually pays follows the analysis that ran."
     },
     "contractor.html": {
       "label": "Contractor Navigator",
@@ -64,7 +67,6 @@
       "stripeLinkId": "4gMaEXbsw2E49co5RKabK07"
     }
   },
-
   "_skipped": {
     "streaming.html": "Multi-tier page ($0 / $4.99 / $8.99 with two links). Different shape from the single-price navigators, so the checker skips it rather than reporting a false mismatch."
   }

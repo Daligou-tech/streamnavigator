@@ -114,8 +114,8 @@
       </div>
       <div class="step-card reveal">
         <div class="step-num">2</div>
-        <h4>Answer two quick questions</h4>
-        <p>Property type and occupancy, and whether your lender gave you a written list of service providers. About 30 seconds — both change the analysis.</p>
+        <h4>Answer a quick question</h4>
+        <p>Property type and occupancy — about 15 seconds, and it changes the analysis. If you upload a Loan Estimate we ask one more, about your lender's written list of service providers, because that decides which tolerance rule applies.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">3</div>
@@ -209,7 +209,7 @@
         </div>
         <ul class="price-feats">
           <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> <strong>$29</strong> — the document's own arithmetic, the Loan Calculations box, escrow and prorations, duplicate and stacked fees, published tax rates where we hold them, drafted emails</li>
+          <li><span class="tick">✓</span> <strong>$29</strong> — 20 named checks that run on the Closing Disclosure alone: the Loan Calculations box, escrow cushion against the RESPA limit, per-diem interest and prorations against your closing date, duplicate and stacked fees, plus the emails already drafted</li>
           <li><span class="tick">✓</span> <strong>$59</strong> — adds TRID tolerance testing and purchase-contract reconciliation, the two checks that can conclude money is owed back</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
@@ -222,7 +222,7 @@
           <div class="scorecard-panel" id="scorecard-panel"></div>
 
           <div id="questions-block">
-            <p class="field-hint" style="margin-top:18px;"><strong>Two quick questions.</strong> Both change the analysis — about 30 seconds.</p>
+            <p class="field-hint" style="margin-top:18px;" id="q-intro"><strong>One quick question.</strong> It changes the analysis — about 15 seconds.</p>
             <div class="field-block">
               <label for="q-property-type">1. What is the property type and occupancy?</label>
               <select id="q-property-type">
@@ -234,7 +234,12 @@
                 <option value="other">Other</option>
               </select>
             </div>
-            <div class="field-block">
+            <!-- Only asked when a Loan Estimate is present. The answer feeds
+                 analyzeTolerances() and the zero-tolerance bucket assignment,
+                 both of which need an LE baseline; on a CD-only audit it
+                 changes no finding, so asking for it takes 15 seconds from the
+                 customer and buys them nothing. -->
+            <div class="field-block" id="q-provider-block" style="display:none;">
               <label for="q-provider-list">2. Did your lender give you a written list of service providers?</label>
               <select id="q-provider-list">
                 <option value="">Choose one…</option>
@@ -339,6 +344,28 @@
   const uploader = wireUploadZone(zone, input, list);
 
   let submissionRef = null;
+
+  // Answers survive a re-upload. They belong to the customer and the property,
+  // not to a submission id, and re-asking a question they already answered is
+  // the fastest way to look like the previous step was thrown away.
+  const savedAnswers = { property_type: '', provider_list: '' };
+  function rememberAnswers() {
+    const pt = document.getElementById('q-property-type');
+    const pl = document.getElementById('q-provider-list');
+    if (pt) savedAnswers.property_type = pt.value;
+    if (pl) savedAnswers.provider_list = pl.value;
+  }
+  function restoreAnswers() {
+    const pt = document.getElementById('q-property-type');
+    const pl = document.getElementById('q-provider-list');
+    if (pt && savedAnswers.property_type) pt.value = savedAnswers.property_type;
+    if (pl && savedAnswers.provider_list) pl.value = savedAnswers.provider_list;
+  }
+  document.addEventListener('change', function(ev){
+    if (ev.target && (ev.target.id === 'q-property-type' || ev.target.id === 'q-provider-list')) {
+      rememberAnswers();
+    }
+  });
   let unreadableRemaining = 0;
   let acknowledgedGaps = false;
   function showError(title, detail, slot) {
@@ -512,23 +539,41 @@
           + ' &mdash; the reason is above &mdash; so you are not being charged for checks that '
           + 'did not run. Replace the upload and the price goes back to $59, because then the '
           + 'analysis actually happens.</p>'
-          + '<p class="scorecard-note">Your $29 audit still covers the arithmetic, the Loan '
-          + 'Calculations box, escrow and proration checks, duplicate and stacked-fee detection, '
-          + 'published tax rates for your county where we hold them, and your drafted emails.</p>'
+          + '<p class="scorecard-note">Your $29 audit still covers every check that runs on '
+          + 'the Closing Disclosure alone &mdash; the Loan Calculations box, the escrow cushion '
+          + 'against the RESPA limit, per-diem interest and prorations, duplicate and '
+          + 'stacked-fee detection, and your drafted emails.</p>'
           + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
           + 'style="margin-top:10px;">&#8593; Replace those documents</button>';
       } else if (sc.tier.id === 'basic') {
         html += '<div class="sc-panel">'
           + '<p class="sc-h">Your audit is $29</p>'
+          // The count comes from the scorecard, not from this copy. A hardcoded
+          // number drifts the moment a check is added or retired, and an
+          // overstated one is the claim a customer checks first.
+          + '<p class="sc-sub">' + (sc.checks_run || 0) + ' of these '
+          + (sc.checks_run === 1 ? 'check has' : 'checks have') + ' already run on your '
+          + 'document. Paying shows you what each one found.</p>'
           + '<ul class="sc-list">'
-          + '<li>Every figure on the document rechecked against its own arithmetic</li>'
-          + '<li>The Loan Calculations box on page 5 &mdash; APR, finance charge, '
-          + 'amount financed, total of payments</li>'
-          + '<li>Escrow, prorations and per-diem interest recomputed from your closing date</li>'
-          + '<li>Duplicate and stacked fees identified by name</li>'
-          + '<li>Published tax rates and statutes for your county, where we hold them</li>'
-          + '<li>The email to send your lender, already written</li>'
-          + '</ul></div>';
+          + '<li><b>The Loan Calculations box on page 5</b> &mdash; APR, finance charge, '
+          + 'amount financed, total of payments and TIP, each recomputed from your own '
+          + 'loan terms</li>'
+          + '<li><b>Escrow cushion against the RESPA limit</b> &mdash; one sixth of your '
+          + 'annual disbursements is the legal maximum, and the CD prints the balance '
+          + 'without printing the cap</li>'
+          + '<li><b>Per-diem interest and tax prorations</b> &mdash; recomputed from your '
+          + 'closing date and first payment date</li>'
+          + '<li><b>Duplicate and stacked fees, named</b> &mdash; one service billed twice '
+          + 'under two labels, or split across overlapping lender charges</li>'
+          + '<li><b>Cash to Close and the payment schedule</b> &mdash; reconciled against '
+          + 'the closing cost total and the stated terms</li>'
+          + '<li><b>The email to send your lender</b>, already written, naming the charge '
+          + 'and who to send it to</li>'
+          + '</ul>'
+          + '<p class="sc-fine">Every one of these is arithmetic on your own document or a '
+          + 'lending rule applied to it. None of them needs a second document, and none '
+          + 'depends on us holding rate data for your county.</p>'
+          + '</div>';
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
           + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
@@ -770,6 +815,22 @@
 
     panel.innerHTML = html;
 
+    // The provider-list question only earns its place once a Loan Estimate is
+    // here, because tolerance testing is the only thing that reads it.
+    const provBlock = document.getElementById('q-provider-block');
+    const hasLE = Boolean(sc.loan_estimates_uploaded || (sc.tier && sc.tier.has_loan_estimate));
+    if (provBlock) provBlock.style.display = hasLE ? '' : 'none';
+    const intro = document.getElementById('q-intro');
+    if (intro) {
+      intro.innerHTML = hasLE
+        ? '<strong>Two quick questions.</strong> Both change the analysis \u2014 about 30 seconds.'
+        : '<strong>One quick question.</strong> It changes the analysis \u2014 about 15 seconds.';
+    }
+
+    // Adding a Loan Estimate starts a new submission, so anything already
+    // answered would otherwise be asked a second time. Restore it instead.
+    restoreAnswers();
+
     const addDocs = document.getElementById('add-docs-btn');
     if (addDocs) addDocs.addEventListener('click', function(ev){ ev.preventDefault(); showUploader(); });
   }
@@ -876,9 +937,13 @@
     e.preventDefault();
     const btn = e.currentTarget;
     const propertyType = document.getElementById('q-property-type').value;
-    const providerList = document.getElementById('q-provider-list').value;
+    const provBlock = document.getElementById('q-provider-block');
+    const providerAsked = provBlock && provBlock.style.display !== 'none';
+    const providerList = providerAsked ? document.getElementById('q-provider-list').value : '';
     if (!propertyType) { showToast('Please answer the property type question.'); return; }
-    if (!providerList) { showToast('Please answer the service provider list question.'); return; }
+    // Only required when tolerance testing can actually use it.
+    if (providerAsked && !providerList) { showToast('Please answer the service provider list question.'); return; }
+    rememberAnswers();
     if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
 
     // Stop someone paying $59 for an audit with known holes without being told.
@@ -907,7 +972,8 @@
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           id: submissionRef.id, token: submissionRef.token,
-          property_type: propertyType, provider_list: providerList,
+          property_type: propertyType,
+          ...(providerList ? { provider_list: providerList } : {}),
         }),
       });
       const data = await readJson(resp);
