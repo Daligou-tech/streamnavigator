@@ -33,21 +33,21 @@
 .scorecard-rows li:last-child{border-bottom:0;}
 .scorecard-rows b{font-size:19px;white-space:nowrap;}
 .scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
-.scorecard-note{font-size:13px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+.scorecard-note{font-size:15px;line-height:1.55;margin:12px 0 0;opacity:.85;}
 /* Everything below the scorecard box. Same size as the rows above it, because
    this is what the customer is deciding on. */
 .sc-panel{margin:16px 0 0;padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.035);}
 .sc-panel + .sc-panel{margin-top:12px;}
 .sc-panel-accent{background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.10);}
-.sc-h{font-size:15px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em;}
-.sc-lead{font-size:15px;line-height:1.55;margin:0 0 10px;}
-.sc-list{list-style:none;padding:0;margin:0;font-size:15px;line-height:1.55;}
+.sc-h{font-size:17px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em;}
+.sc-lead{font-size:16px;line-height:1.55;margin:0 0 10px;}
+.sc-list{list-style:none;padding:0;margin:0;font-size:16px;line-height:1.5;}
 .sc-list li{position:relative;padding:6px 0 6px 18px;}
 .sc-list li:before{content:"";position:absolute;left:2px;top:14px;width:5px;height:5px;
   border-radius:50%;background:currentColor;opacity:.55;}
 .sc-list li b,.sc-list li strong{font-weight:700;}
-.sc-sub{font-size:13px;line-height:1.5;opacity:.75;margin:8px 0 0;}
-.sc-details{margin:12px 0 0;font-size:15px;}
+.sc-sub{font-size:15px;line-height:1.5;opacity:.9;margin:8px 0 0;}
+.sc-details{margin:12px 0 0;font-size:16px;}
 .sc-details > summary{cursor:pointer;font-weight:700;padding:10px 0;list-style:none;
   border-top:1px solid rgba(0,0,0,.10);}
 .sc-details > summary::-webkit-details-marker{display:none;}
@@ -56,7 +56,7 @@
 .sc-details .sc-list li{padding-left:18px;}
 @media (max-width:520px){
   .sc-panel{padding:12px 13px;}
-  .sc-h,.sc-lead,.sc-list,.sc-details{font-size:15px;}
+  .sc-h,.sc-lead,.sc-list,.sc-details{font-size:16px;}
 }
 .inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
 .inline-error strong{display:block;margin-bottom:4px;}
@@ -366,6 +366,26 @@
       rememberAnswers();
     }
   });
+
+  // Push already-given answers onto the current submission. Silent by design:
+  // this runs behind a re-upload the customer initiated for another reason, and
+  // a failure here costs them nothing they had a moment ago.
+  async function replayAnswers() {
+    if (!submissionRef || !savedAnswers.property_type) return;
+    try {
+      const resp = await fetch('/api/closing-answers', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: submissionRef.id, token: submissionRef.token,
+          property_type: savedAnswers.property_type,
+          ...(savedAnswers.provider_list ? { provider_list: savedAnswers.provider_list } : {}),
+        }),
+      });
+      const data = await readJson(resp);
+      if (resp.ok && data.ok && data.scorecard) renderScorecard(data.scorecard);
+    } catch (err) { /* keep the scorecard we already have */ }
+  }
   let unreadableRemaining = 0;
   let acknowledgedGaps = false;
   function showError(title, detail, slot) {
@@ -539,10 +559,8 @@
           + ' &mdash; the reason is above &mdash; so you are not being charged for checks that '
           + 'did not run. Replace the upload and the price goes back to $59, because then the '
           + 'analysis actually happens.</p>'
-          + '<p class="scorecard-note">Your $29 audit still covers every check that runs on '
-          + 'the Closing Disclosure alone &mdash; the Loan Calculations box, the escrow cushion '
-          + 'against the RESPA limit, per-diem interest and prorations, duplicate and '
-          + 'stacked-fee detection, and your drafted emails.</p>'
+          + '<p class="scorecard-note">You still get every check that runs on the Closing '
+          + 'Disclosure alone.</p>'
           + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
           + 'style="margin-top:10px;">&#8593; Replace those documents</button>';
       } else if (sc.tier.id === 'basic') {
@@ -551,28 +569,16 @@
           // The count comes from the scorecard, not from this copy. A hardcoded
           // number drifts the moment a check is added or retired, and an
           // overstated one is the claim a customer checks first.
-          + '<p class="sc-sub">' + (sc.checks_run || 0) + ' of these '
-          + (sc.checks_run === 1 ? 'check has' : 'checks have') + ' already run on your '
-          + 'document. Paying shows you what each one found.</p>'
+          + '<p class="sc-sub">' + (sc.checks_run || 0) + ' checks already ran. '
+          + 'Paying shows what each one found.</p>'
           + '<ul class="sc-list">'
-          + '<li><b>The Loan Calculations box on page 5</b> &mdash; APR, finance charge, '
-          + 'amount financed, total of payments and TIP, each recomputed from your own '
-          + 'loan terms</li>'
-          + '<li><b>Escrow cushion against the RESPA limit</b> &mdash; one sixth of your '
-          + 'annual disbursements is the legal maximum, and the CD prints the balance '
-          + 'without printing the cap</li>'
-          + '<li><b>Per-diem interest and tax prorations</b> &mdash; recomputed from your '
-          + 'closing date and first payment date</li>'
-          + '<li><b>Duplicate and stacked fees, named</b> &mdash; one service billed twice '
-          + 'under two labels, or split across overlapping lender charges</li>'
-          + '<li><b>Cash to Close and the payment schedule</b> &mdash; reconciled against '
-          + 'the closing cost total and the stated terms</li>'
-          + '<li><b>The email to send your lender</b>, already written, naming the charge '
-          + 'and who to send it to</li>'
+          + '<li><b>Loan Calculations box</b> &mdash; APR, finance charge, TIP, recomputed</li>'
+          + '<li><b>Escrow cushion</b> &mdash; against the RESPA legal maximum</li>'
+          + '<li><b>Per-diem interest and prorations</b> &mdash; from your closing date</li>'
+          + '<li><b>Duplicate and stacked fees</b> &mdash; named</li>'
+          + '<li><b>Cash to Close</b> &mdash; reconciled</li>'
+          + '<li><b>An email to your lender</b> &mdash; already written</li>'
           + '</ul>'
-          + '<p class="sc-fine">Every one of these is arithmetic on your own document or a '
-          + 'lending rule applied to it. None of them needs a second document, and none '
-          + 'depends on us holding rate data for your county.</p>'
           + '</div>';
       } else {
         html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
@@ -923,6 +929,12 @@
         unreadable_fields: data.scorecard.unreadable_fields || [],
       };
       renderScorecard(data.scorecard);
+      // Adding a Loan Estimate starts a NEW submission, and the answers were
+      // saved against the old one. Restoring them into the selects is not
+      // enough: the scorecard is computed server-side, so without replaying
+      // them the customer is told two checks are still blocked on questions
+      // they already answered. Replay, then re-render with the real result.
+      await replayAnswers();
       document.getElementById('stage-1').style.display = 'none';
       document.getElementById('stage-2').style.display = 'block';
       document.getElementById('stage-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
