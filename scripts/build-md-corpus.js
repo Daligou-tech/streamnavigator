@@ -1,4 +1,12 @@
-// Generates data/benchmarks.json for Maryland.
+// Generates data/benchmarks.json.
+//
+// Maryland recording fees and taxes are built here from the DLS table below.
+// The promulgated title insurance rates for Texas and Florida live in
+// scripts/promulgated-title-rates.js and are appended; they are a different
+// kind of source (state insurance regulators, not county tax tables) with a
+// different re-verification cadence, so they are kept separate but emitted
+// into the one corpus file, because two generators writing one file is how a
+// row silently disappears.
 //
 // The rate table below is transcribed ONCE, from the FY2026 columns of the
 // Maryland Department of Legislative Services table cited in DLS_URL. Every
@@ -8,6 +16,8 @@
 // Run: node build-md-corpus.js > data/benchmarks.json
 
 'use strict';
+
+const titleRates = require('./promulgated-title-rates');
 
 const DLS_URL = 'https://dls.maryland.gov/pubs/prod/NoPblTabPDF/2026CountyLocalTaxRates.pdf';
 const DLS_NAME =
@@ -278,7 +288,7 @@ const out = {
     + 'the published sources do not agree on whether the premium brackets are marginal. '
     + 'Montgomery is high-volume and high-dollar, so a wrong row there is the most '
     + 'expensive row in the corpus. It stays out until someone reads the county code.',
-  rows,
+  rows: rows.concat(titleRates.rows),
 };
 
 process.stdout.write(JSON.stringify(out, null, 2) + '\n');
