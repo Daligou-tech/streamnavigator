@@ -1,1 +1,69 @@
+name: tests
 
+# Runs on every push and pull request, which includes commits created by the
+# GitHub web UI's "Add files via upload" — so uploading a file here is enough
+# to get it checked. Nothing needs to be run locally.
+#
+# This exists because four separate red tests sat on main at once, three of
+# them for the same reason: a decision changed in one file and its contract
+# stayed behind in another. Each was caught in under a second by a suite
+# nobody had run.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly what
+      # package-lock.json pins and fails if the lockfile and package.json have
+      # drifted apart. It also matters that dependencies are installed at all —
+      # purchase-engine.test.js needs @supabase/supabase-js, and without it the
+      # suite reports 10 failures where there are really 3, which teaches
+      # everyone to discount the number.
+      - run: npm ci
+
+      # The whole folder, not `node --test tests/*.test.js`. The two styles of
+      # suite in there (node:test/TAP and the plain "N/N passed" ones) both run
+      # under this, and a filtered run is how seven suites went unreported.
+      - run: npm test
+
+      # Parsing is not verifying. `escH is not a function` took the page down
+      # while the file parsed perfectly, so this executes the render path
+      # instead of just loading it. Not a .test.js file, so run-all.js does not
+      # pick it up on its own.
+      - run: node tests/render-check.js
+
+      # Every patch script in scripts/ is idempotent and refuses cleanly when
+      # already applied, so running them here is safe and answers a question
+      # that otherwise gets asked by hand: has this one actually been run?
+      # add-loan-calculations-schema.js sat unapplied for three iterations
+      # while seven checks stayed dark.
+      - name: patch scripts are all applied
+        run: |
+          set -e
+          for s in add-loan-calculations-schema fix-overpromises wire-document-service; do
+            node "scripts/$s.js"
+          done
+          # A patch script that changed a tracked file means it had not been
+          # applied on main. Fail loudly rather than let the working tree
+          # silently differ from what is deployed.
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::A patch script modified tracked files — it had not been applied on main:"
+            git status --porcelain
+            git --no-pager diff
+            exit 1
+          fi
