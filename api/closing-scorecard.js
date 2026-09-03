@@ -49,6 +49,9 @@ const MAX_FILES = 12;
 // Mirrors TIERS.basic in _lib/closing-extract.js.
 const TIERS_BASIC = { id: 'basic', price_cents: 2900, price_label: '$29' };
 
+// Contract terms read below this confidence are discarded, not used.
+const CONTRACT_CONF_THRESHOLD = 0.85;
+
 function guessMediaType(filename) {
   const ext = String(filename).toLowerCase().split('.').pop();
   if (ext === 'pdf') return 'application/pdf';
@@ -125,7 +128,6 @@ module.exports = async (req, res) => {
       product: 'closing',
       email: email || null,
       form_data: {
-        description: typeof body.description === 'string' ? body.description.trim() : '',
         stage: 'scorecard',
         ip_hash: ipHash,
       },
@@ -279,6 +281,7 @@ module.exports = async (req, res) => {
   // Before this, contract_terms was read in three places and written in none.
   let contractTerms = null;
   let contractMismatch = null;
+  let contractLowConfidence = 0;
   const contractIndexes = classified
     .filter((d) => d.document_type === 'purchase_contract')
     .map((d) => d.index)
@@ -301,14 +304,26 @@ module.exports = async (req, res) => {
         continue;
       }
 
-      const terms = toContractTerms(raw);
+      // A barely legible scan still yields SOME terms, and a misread seller
+      // credit becomes a confident "your credit is missing" finding — money
+      // invented out of a bad photograph. That is the worst thing this product
+      // can do, so terms read with low confidence are dropped and the customer
+      // is told the contract could not be used rather than charged for it.
+      const terms = toContractTerms(raw).filter((t) => {
+        const c = typeof t.confidence === 'number' ? t.confidence : 1;
+        if (c < CONTRACT_CONF_THRESHOLD) { contractLowConfidence += 1; return false; }
+        return true;
+      });
       if (terms.length) contractTerms = [...(contractTerms || []), ...terms];
     } catch (err) {
       console.error('[closing-scorecard] purchase contract extraction failed:', err.message);
     }
   }
 
-  const { findings, skipped } = runClosingAudit(extraction, { loanEstimates, contractTerms });
+  // The two questions are asked after this runs, so answers are empty here;
+  // /api/closing-answers re-runs the audit once they arrive.
+  const answers = (submission.form_data || {}).answers || {};
+  const { findings, skipped } = runClosingAudit(extraction, { answers, loanEstimates, contractTerms });
 
   // Tolerance testing needs charges on BOTH sides. Reading the Loan Estimates is
   // only half of it — if the Closing Disclosure has no charge lines (a page-1
@@ -361,6 +376,7 @@ module.exports = async (req, res) => {
     contract_terms_read: contractTerms ? contractTerms.length : 0,
     contract_uploaded: contractIndexes.length,
     contract_mismatch: contractMismatch,
+    contract_low_confidence: contractLowConfidence,
     transaction_mismatch: transactionMismatch
       ? {
           fields: ((findings.find((f) => f.checkId === 'TRID_TRANSACTION_MISMATCH') || {}).detail || {}).mismatches || [],
@@ -377,7 +393,6 @@ module.exports = async (req, res) => {
     .from('navigator_submissions')
     .update({
       form_data: {
-        description: typeof body.description === 'string' ? body.description.trim() : '',
         stage: 'scorecard',
         ip_hash: ipHash,
         extraction,

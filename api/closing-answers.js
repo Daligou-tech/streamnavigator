@@ -16,6 +16,7 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { mergeFormData } = require('./_lib/submission-store');
+const { runClosingAudit, buildScorecard } = require('./_lib/closing-extract');
 
 const PROPERTY_TYPES = [
   'single_family', 'condo', 'other_attached', 'investment', 'other',
@@ -66,12 +67,44 @@ module.exports = async (req, res) => {
   }
 
   const formData = submission.form_data || {};
+  const answers = { property_type: propertyType, provider_list: providerList };
+
+  // Storing the answers was never the point. Until now they were written here
+  // and read by nothing: the audit had already run at upload time, before the
+  // questions were asked, so both answers changed the price of nothing.
+  //
+  // Re-running the audit is what makes them real. The provider-list answer
+  // decides which tolerance bucket the shoppable charges fall into, and the
+  // property-type answer decides whether an HOA or condo charge is expected or
+  // unexplained. Everything the re-run needs was stored at the scorecard stage.
+  let refreshed = null;
+  if (formData.extraction) {
+    try {
+      const { findings, skipped } = runClosingAudit(formData.extraction, {
+        answers,
+        loanEstimates: formData.loan_estimates || null,
+        contractTerms: formData.contract_terms || null,
+      });
+      refreshed = {
+        // Preserve the fields the scorecard endpoint computed that the audit
+        // does not produce (tier, tolerance flags, mismatch detail).
+        ...(formData.scorecard || {}),
+        ...buildScorecard(formData.extraction, findings, skipped),
+      };
+    } catch (err) {
+      // A failed re-run must not cost the customer their scorecard or block
+      // checkout. Keep the original and carry on.
+      console.error('[closing-answers] audit re-run failed:', err.message);
+    }
+  }
+
   const { error: updateError } = await admin
     .from('navigator_submissions')
     .update({
       form_data: mergeFormData(formData, {
         stage: 'answered',
-        answers: { property_type: propertyType, provider_list: providerList },
+        answers,
+        ...(refreshed ? { scorecard: refreshed } : {}),
       }),
       updated_at: new Date().toISOString(),
     })
@@ -82,5 +115,5 @@ module.exports = async (req, res) => {
     return;
   }
 
-  res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true, scorecard: refreshed });
 };
