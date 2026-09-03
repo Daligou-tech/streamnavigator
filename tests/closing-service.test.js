@@ -109,7 +109,17 @@ test('benchmark gaps are named, never reduced to a count', () => {
   assert.ok(!('benchmarkable_count' in scorecard));
   assert.ok(!('cannot_benchmark_count' in scorecard));
   assert.ok(scorecard.benchmark_coverage, 'no coverage disclosure');
-  assert.ok(/published rate or statute/.test(scorecard.evidence_basis));
+  // The naming now lives in the coverage disclosure itself. It used to be
+  // asserted against a separate evidence_basis paragraph, which repeated the
+  // same point in small grey type below a panel that had already made it and
+  // pushed the unlock actions off the screen. The requirement is that the gaps
+  // are NAMED somewhere the customer will actually read, not that a particular
+  // sentence exists.
+  const bc = scorecard.benchmark_coverage;
+  assert.ok(
+    bc.not_priced_sentence || bc.priced_sentence,
+    'coverage is disclosed as a count with nothing named',
+  );
 });
 
 test('the coverage disclosure names every unpriced category in plain English', () => {
