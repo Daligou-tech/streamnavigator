@@ -108,13 +108,34 @@ const stackFor = (county, salePrice, extra = {}) =>
     category: 'transfer_tax', state: 'MD', county, salePrice, ...extra,
   });
 
-test('Baltimore City and Baltimore County produce different totals', () => {
-  const city = stackFor('Baltimore City', 400000);
-  const county = stackFor('Baltimore County', 400000);
-  // state 0.5% = 2000; local 1.5% = 6000; recordation 800 units x rate
-  assert.strictEqual(city.total, 12000);    // + 800 x $5.00 = 4000
-  assert.strictEqual(county.total, 10000);  // + 800 x $2.50 = 2000
+// Recordation is a separate tax in its own category. It is NOT part of the
+// transfer-tax total: the extractor cannot yet tell a recordation line from a
+// recording fee, so folding it into the transfer-tax denominator would invent
+// a shortfall whenever the numerator happened to exclude it.
+const recordationFor = (county, salePrice, extra = {}) =>
+  getBenchmark.stacked({
+    category: 'recordation_tax', state: 'MD', county, salePrice, ...extra,
+  });
+
+test('Baltimore City and Baltimore County carry the same transfer tax', () => {
+  // Both levy 1.5% locally, so transfer tax alone does NOT distinguish them.
+  // This is why the recordation test below is the one that catches the mix-up.
+  assert.strictEqual(stackFor('Baltimore City', 400000).total, 8000);
+  assert.strictEqual(stackFor('Baltimore County', 400000).total, 8000);
+});
+
+test('Baltimore City and Baltimore County differ on recordation tax', () => {
+  const city = recordationFor('Baltimore City', 400000);
+  const county = recordationFor('Baltimore County', 400000);
+  assert.strictEqual(city.total, 4000);    // 800 units x $5.00
+  assert.strictEqual(county.total, 2000);  // 800 units x $2.50
   assert.notStrictEqual(city.total, county.total);
+});
+
+test('recordation is never folded into the transfer-tax total', () => {
+  // The regression tests/closing-scorecard.test.js caught: a Baltimore City
+  // deed at $90,000 owes $1,800 in transfer tax, not $2,700.
+  assert.strictEqual(stackFor('Baltimore City', 90000).total, 1800);
 });
 
 test('an ambiguous jurisdiction returns no total instead of the wrong one', () => {
@@ -136,36 +157,38 @@ test('spelling variants of one county agree to the cent', () => {
 // 4. Arithmetic, checked by hand against the FY2026 DLS table
 // ---------------------------------------------------------------------------
 
-test('Howard at $500,000 stacks to $11,250', () => {
-  // state 2500 + county transfer 1.25% 6250 + recordation 1000 x $2.50 = 2500
-  assert.strictEqual(stackFor('Howard', 500000).total, 11250);
+test('Howard at $500,000 stacks to $8,750 in transfer tax', () => {
+  // state 0.5% 2500 + county transfer 1.25% 6250
+  assert.strictEqual(stackFor('Howard', 500000).total, 8750);
+  // recordation, separately: 1000 units x $2.50
+  assert.strictEqual(recordationFor('Howard', 500000).total, 2500);
 });
 
 test('Frederick charges no local transfer tax', () => {
-  // state 1500 + county transfer 0 + recordation 600 x $7.00 = 4200
+  // state 0.5% 1500 + county transfer 0
   const s = stackFor('Frederick', 300000);
-  assert.strictEqual(s.total, 5700);
-  const local = s.components.find((c) => /local transfer/.test(c.label));
+  assert.strictEqual(s.total, 1500);
+  // but it has the joint-highest recordation rate: 600 units x $7.00
+  assert.strictEqual(recordationFor('Frederick', 300000).total, 4200);
+  const local = s.components.find((c) => /Frederick transfer tax/.test(c.label));
   assert.strictEqual(local.amount, 0);
   assert.ok(/without authority/.test(local.note));
 });
 
 test('recordation rounds up to the next whole $500', () => {
   // $400,001 -> 801 units in Baltimore County, not 800
-  const s = stackFor('Baltimore County', 400001);
-  const rec = s.components.find((c) => /recordation/.test(c.label));
-  assert.strictEqual(rec.amount, 801 * 2.5);
+  assert.strictEqual(recordationFor('Baltimore County', 400001).total, 801 * 2.5);
 });
 
 test('Anne Arundel resolves below $1M and declines at or above it', () => {
-  // state 3000 + transfer 1% 6000 + recordation 1200 x $3.50 = 4200
-  assert.strictEqual(stackFor('Anne Arundel', 600000).total, 13200);
+  // state 0.5% 3000 + county transfer 1% 6000
+  assert.strictEqual(stackFor('Anne Arundel', 600000).total, 9000);
   assert.strictEqual(stackFor('Anne Arundel', 1200000).total, null);
 });
 
 test('every stacked total carries its component breakdown and a source', () => {
   const s = stackFor('Talbot', 450000);
-  assert.strictEqual(s.components.length, 3);
+  assert.strictEqual(s.components.length, 2); // state + county transfer
   for (const c of s.components) {
     assert.ok(c.label && typeof c.amount === 'number');
     assert.ok(/^https?:\/\//.test(c.sourceUrl), `no source url on ${c.label}`);
@@ -249,7 +272,7 @@ test('an ambiguous county is rescued by the property address', () => {
     category: 'transfer_tax', state: 'MD', county: 'Baltimore', salePrice: 400000,
     propertyAddress: '1234 Main St, Towson, MD 21204',
   });
-  assert.strictEqual(s.total, 10000); // Baltimore County rates
+  assert.strictEqual(s.total, 8000); // resolved to Baltimore County
 });
 
 // ---------------------------------------------------------------------------
