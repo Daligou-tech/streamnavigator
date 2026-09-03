@@ -30,6 +30,7 @@ const {
   checkTransactionMatch,
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
+const { runDocumentAudit } = require('./_lib/closing-service');
 
 // Uploads arrive base64-encoded in a JSON body. Vercel caps a function request
 // body at 4.5MB and returns 413 FUNCTION_PAYLOAD_TOO_LARGE above it — at the
@@ -323,7 +324,22 @@ module.exports = async (req, res) => {
   // The two questions are asked after this runs, so answers are empty here;
   // /api/closing-answers re-runs the audit once they arrive.
   const answers = (submission.form_data || {}).answers || {};
-  const { findings, skipped } = runClosingAudit(extraction, { answers, loanEstimates, contractTerms });
+  // The document-only service. It runs the same engine with benchmarking
+  // absent rather than merely disabled, adds the page 5 loan-math checks, and
+  // returns a scorecard whose denominator is CHECKS rather than fees with rate
+  // data. The tier it computes is ignored here: the block below already has
+  // richer downgrade reasons because it can see which uploads were unusable.
+  const audited = runDocumentAudit({
+    extraction,
+    answers,
+    loanEstimates,
+    contractTerms,
+    unusableDocuments: [
+      ...(leIndexes.length && !loanEstimates ? ['loan_estimate'] : []),
+      ...(contractIndexes.length && !contractTerms ? ['purchase_contract'] : []),
+    ],
+  });
+  const { findings, skipped } = audited;
 
   // Tolerance testing needs charges on BOTH sides. Reading the Loan Estimates is
   // only half of it — if the Closing Disclosure has no charge lines (a page-1
@@ -361,7 +377,8 @@ module.exports = async (req, res) => {
       };
 
   const scorecard = {
-    ...buildScorecard(extraction, findings, skipped),
+    ...audited.scorecard,
+    coverage_by_group: audited.coverage_by_group,
     tier: effectiveTier,
     tolerance_tested: toleranceTested,
     tolerance_blocked_reason: transactionMismatch

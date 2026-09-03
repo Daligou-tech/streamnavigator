@@ -17,6 +17,7 @@
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { mergeFormData } = require('./_lib/submission-store');
 const { runClosingAudit, buildScorecard } = require('./_lib/closing-extract');
+const { runDocumentAudit } = require('./_lib/closing-service');
 
 const PROPERTY_TYPES = [
   'single_family', 'condo', 'other_attached', 'investment', 'other',
@@ -80,7 +81,8 @@ module.exports = async (req, res) => {
   let refreshed = null;
   if (formData.extraction) {
     try {
-      const { findings, skipped } = runClosingAudit(formData.extraction, {
+      const audited = runDocumentAudit({
+        extraction: formData.extraction,
         answers,
         loanEstimates: formData.loan_estimates || null,
         contractTerms: formData.contract_terms || null,
@@ -89,7 +91,8 @@ module.exports = async (req, res) => {
         // Preserve the fields the scorecard endpoint computed that the audit
         // does not produce (tier, tolerance flags, mismatch detail).
         ...(formData.scorecard || {}),
-        ...buildScorecard(formData.extraction, findings, skipped),
+        ...audited.scorecard,
+        coverage_by_group: audited.coverage_by_group,
       };
     } catch (err) {
       // A failed re-run must not cost the customer their scorecard or block
