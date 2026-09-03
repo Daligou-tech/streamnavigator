@@ -17,6 +17,7 @@
 'use strict';
 
 const { EvidenceKind } = require('./closing-audit');
+const { canonicalizeMdCounty, cityFromAddress, isMaryland } = require('./md-jurisdiction');
 
 const HARD_EVIDENCE = new Set([
   EvidenceKind.HARD_RATE_TABLE,
@@ -30,7 +31,7 @@ const SOFT_EVIDENCE = new Set([EvidenceKind.MARKET_RANGE, EvidenceKind.COMPARABL
 const DEFAULT_STALE_AFTER_DAYS = 400;
 const MIN_RANGE_SAMPLE = 30;
 
-const ROW_KINDS = new Set(['exact', 'tiered', 'per_unit', 'percent', 'range']);
+const ROW_KINDS = new Set(['exact', 'tiered', 'per_unit', 'per_instrument', 'percent', 'range']);
 
 // ---------------------------------------------------------------------------
 // validation
@@ -91,6 +92,12 @@ function validateRow(row, index = 0) {
       if (typeof row.rate_pct !== 'number') at('percent rows need rate_pct');
       if (!['loan_amount', 'sale_price'].includes(row.basis)) at('percent rows need basis of loan_amount or sale_price');
       break;
+    case 'per_instrument':
+      // A statutory fee charged once per recorded instrument. No basis: it does
+      // not scale with the loan or the price.
+      if (typeof row.unit_amount !== 'number') at('per_instrument rows need unit_amount');
+      break;
+
     case 'per_unit':
       if (typeof row.unit_amount !== 'number') at('per_unit rows need unit_amount');
       if (typeof row.unit_size !== 'number' || row.unit_size <= 0) at('per_unit rows need a positive unit_size');
@@ -158,6 +165,16 @@ function amountFor(row, ctx) {
       if (typeof basisValue !== 'number') return null;
       return { exact: round2((basisValue * row.rate_pct) / 100) };
 
+    case 'per_instrument': {
+      // Returns nothing unless the caller knows how many instruments were
+      // recorded. Guessing two because most purchases record a deed and a deed
+      // of trust would silently misprice every cash sale and every closing with
+      // a subordinate lien.
+      const n = ctx.instrumentCount;
+      if (!Number.isInteger(n) || n < 1) return null;
+      return { exact: round2(n * row.unit_amount) };
+    }
+
     case 'per_unit': {
       // Transfer taxes are typically "$X per $500 of consideration, rounded up".
       if (typeof basisValue !== 'number') return null;
@@ -204,6 +221,24 @@ function toBenchmark(row, ctx) {
 // national. A county schedule is always a better answer than a state average.
 const SPECIFICITY = { municipality: 3, county: 2, state: 1, national: 0 };
 
+// ---------------------------------------------------------------------------
+// jurisdiction resolution
+// ---------------------------------------------------------------------------
+
+// Open issue #2: extraction returns "Baltimore" on one run and "Baltimore City"
+// on the next, and those are different tax tables. norm() below only lowercases
+// and strips a "county" suffix, so bare "Baltimore" quietly matched Baltimore
+// COUNTY -- half the recordation rate of Baltimore City. Canonicalising here
+// makes the lookup deterministic regardless of which spelling arrived, and an
+// unresolvable name yields no benchmark instead of the wrong one.
+function resolveCounty(ctx) {
+  if (!ctx.county || !isMaryland(ctx.state)) return { county: ctx.county, blocked: false };
+  const city = ctx.city || cityFromAddress(ctx.propertyAddress);
+  const r = canonicalizeMdCounty(ctx.county, { city });
+  if (r.ok) return { county: r.county, blocked: false };
+  return { county: null, blocked: true, reason: r.reason, ambiguous: r.ambiguous };
+}
+
 function makeGetBenchmark(rows, options = {}) {
   const { now = () => new Date(), staleAfterDays = DEFAULT_STALE_AFTER_DAYS } = options;
 
@@ -218,8 +253,12 @@ function makeGetBenchmark(rows, options = {}) {
   const loaded = rows.slice();
 
   function getBenchmark(ctx = {}) {
-    const { category, state, county, municipality } = ctx;
+    const { category, state, municipality } = ctx;
     if (!category) return null;
+
+    const resolved = resolveCounty(ctx);
+    if (resolved.blocked) return null;
+    const county = resolved.county;
 
     const when = now();
     const candidates = loaded.filter((r) => {
@@ -257,8 +296,14 @@ function makeGetBenchmark(rows, options = {}) {
   // single row, which would understate the true statutory figure. Rows marked
   // stackable are added together across jurisdiction levels instead.
   getBenchmark.stacked = function stacked(ctx = {}) {
-    const { category, state, county, municipality } = ctx;
+    const { category, state, municipality } = ctx;
     if (!category) return { total: null, components: [] };
+
+    const resolved = resolveCounty(ctx);
+    if (resolved.blocked) {
+      return { total: null, components: [], unresolvedJurisdiction: resolved.reason };
+    }
+    const county = resolved.county;
 
     const when = now();
     const rows = loaded.filter((r) => {
@@ -273,6 +318,33 @@ function makeGetBenchmark(rows, options = {}) {
     });
 
     if (!rows.length) return { total: null, components: [] };
+
+    // Completeness guard. Without this, a county the corpus does not model
+    // still matches the STATE-level rows and returns a partial total -- e.g.
+    // Maryland's 0.5% state transfer tax alone, with the county transfer and
+    // recordation taxes silently missing. Every real charge would then exceed
+    // that total and be reported as an overcharge. If the corpus models county
+    // rows for this category anywhere in this state, the requested county must
+    // be among them or the whole stack refuses.
+    if (county) {
+      const modelsCounties = loaded.some(
+        (r) => r.fee_category === category && r.stackable
+          && r.jurisdiction_type === 'county' && norm(r.state) === norm(state)
+      );
+      const haveThisCounty = rows.some(
+        (r) => r.jurisdiction_type === 'county' && norm(r.county) === norm(county)
+      );
+      if (modelsCounties && !haveThisCounty) {
+        return {
+          total: null,
+          components: [],
+          unresolvedJurisdiction:
+            `No county-level rates are on file for ${county}, ${state}. `
+            + 'Returning the state portion alone would understate the statutory total '
+            + 'and report a correct charge as an overcharge.',
+        };
+      }
+    }
 
     const components = [];
     let total = 0;
