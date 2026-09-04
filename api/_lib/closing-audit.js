@@ -451,12 +451,20 @@ function checkCashToClose(c, toleranceDollars = 1.0) {
     //
     // Caught by CFPB sample H-25F1: $655 paid before closing produced a phantom
     // $1,310.00 "confirmed mathematical error" — exactly twice the figure.
-    const expectedAlt =
+    //
+    // Total Payoffs and Payments is a subtraction row and is printed with a
+    // minus sign, so it carries the same double-subtraction risk as the
+    // deposit and credit rows on the standard table below. Reproduce it under
+    // both readings and accept either if it matches the printed figure.
+    const altBase =
       toCents(c.loanAmount) -
       g('totalClosingCostsJ') +
-      g('closingCostsPaidBeforeClosing') -
-      g('totalPayoffsAndPayments');
+      g('closingCostsPaidBeforeClosing');
+    const altAsPrinted = altBase - g('totalPayoffsAndPayments');
+    const altAsMagnitude = altBase - Math.abs(g('totalPayoffsAndPayments'));
     const statedAlt = g('statedCashToClose');
+    const altPrintedOk = Math.abs(statedAlt - altAsPrinted) <= toCents(toleranceDollars);
+    const expectedAlt = altPrintedOk ? altAsPrinted : altAsMagnitude;
     const varAlt = statedAlt - expectedAlt;
     const okAlt = Math.abs(varAlt) <= toCents(toleranceDollars);
 
@@ -485,16 +493,38 @@ function checkCashToClose(c, toleranceDollars = 1.0) {
     });
   }
 
-  const expected =
-    g('totalClosingCostsJ') -
-    g('closingCostsPaidBeforeClosing') +
-    g('downPaymentFundsFromBorrower') -
-    g('deposit') -
-    g('fundsForBorrower') -
-    g('sellerCredits') -
-    g('adjustmentsAndOtherCredits');
+  // The Closing Disclosure PRINTS the subtraction rows with an explicit minus
+  // sign: a $30,000 deposit appears as "- $30,000". Extractors disagree about
+  // whether to keep that sign, and this formula already encodes the
+  // subtraction, so a value arriving with its printed minus is subtracted
+  // twice and the reported error is exactly twice the credits.
+  //
+  // Real case, 2526 Heath Place: an $845,200 purchase with a $30,000 deposit
+  // and $702.35 of adjustments, both extracted negative, produced a $61,404.70
+  // "confirmed mathematical error" — precisely 2 x 30,702.35 — on a table that
+  // reconciles to the cent. Same family as the H-25F1 $1,310 phantom above,
+  // which was fixed on the alternative table only.
+  //
+  // Rather than pick a convention and hope, reproduce the table under both
+  // readings and treat it as reconciling if EITHER matches what the document
+  // prints. This cannot hide a real error: a table that does not add up fails
+  // under both. It also handles the legitimate case where Adjustments and
+  // Other Credits is genuinely a positive number, which the magnitude reading
+  // alone would get wrong.
+  const CREDIT_ROWS = ['closingCostsPaidBeforeClosing', 'deposit', 'fundsForBorrower',
+    'sellerCredits', 'adjustmentsAndOtherCredits'];
+  const base = g('totalClosingCostsJ') + g('downPaymentFundsFromBorrower');
+  const asPrinted = base - CREDIT_ROWS.reduce((a, k) => a + g(k), 0);
+  const asMagnitude = base - CREDIT_ROWS.reduce((a, k) => a + Math.abs(g(k)), 0);
 
   const stated = g('statedCashToClose');
+  const tolCents = toCents(toleranceDollars);
+  const printedOk = Math.abs(stated - asPrinted) <= tolCents;
+
+  // On a mismatch, report the magnitude reading: when the extractor already
+  // supplies magnitudes the two are identical, and when it does not, this is
+  // the reading that matches the printed table.
+  const expected = printedOk ? asPrinted : asMagnitude;
   const variance = stated - expected;
 
   if (Math.abs(variance) <= toCents(toleranceDollars)) {
