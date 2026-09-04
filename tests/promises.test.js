@@ -36,45 +36,64 @@ test('the catalog is non-empty and every check declares what it needs', () => {
   assert.equal(new Set(catalogIds).size, catalogIds.length, 'duplicate check id in the catalog');
 });
 
-// --- the two prices --------------------------------------------------------
+// --- the one price ---------------------------------------------------------
 
-test('the prices the page prints are the prices the service charges', () => {
-  // The page prints these in five places. If PRICES moves, the page keeps
-  // selling the old number until someone notices it in Stripe.
-  assert.equal(PRICES.basic, 29);
+test('the price the page prints is the price the service charges', () => {
+  // Two-tier pricing was retired. `basic` and `full` still exist as coverage
+  // labels — which analysis ran — but they are not price points any more, so
+  // they must carry the same number. A tier that reports $29 while the pay
+  // button opens the $59 Stripe link is a billing dispute, not a copy bug.
   assert.equal(PRICES.full, 59);
-  assert.ok(page.includes(`$${PRICES.basic}`), `closing.html never prints $${PRICES.basic}`);
+  assert.equal(PRICES.basic, PRICES.full,
+    'two-tier pricing was retired — a coverage tier must not carry its own price');
   assert.ok(page.includes(`$${PRICES.full}`), `closing.html never prints $${PRICES.full}`);
+
+  // The retired price must not come back. It reappearing anywhere on the page
+  // means someone restored the old pricing card without restoring the tier
+  // logic behind it.
+  assert.equal(/\$29\b/.test(page), false,
+    'closing.html prints $29 — the retired second tier, which checkout does not charge');
 });
 
-test('the $59 tier is backed by checks that actually need the extra documents', () => {
-  // The page says the higher price "adds TRID tolerance testing and
-  // purchase-contract reconciliation". Charging more for documents that unlock
-  // nothing is the specific failure the tier logic was built to prevent.
+test('the extra documents are backed by checks that actually need them', () => {
+  // The page says a Loan Estimate and a purchase contract add TRID tolerance
+  // testing and contract reconciliation "at no extra cost". They cost the
+  // customer an upload, so they still have to unlock something.
   const le = CATALOG.filter((c) => c.needs === Needs.LE);
   const contract = CATALOG.filter((c) => c.needs === Needs.CONTRACT);
-  assert.ok(le.length >= 5, `only ${le.length} Loan Estimate checks back the $59 tier`);
+  assert.ok(le.length >= 5, `only ${le.length} Loan Estimate checks justify asking for one`);
   assert.ok(contract.length >= 1, 'nothing in the catalog uses the purchase contract');
 });
 
-test('the $29 tier is backed by checks that need only the Closing Disclosure', () => {
+test('the audit is backed by checks that need only the Closing Disclosure', () => {
+  // Most customers upload the CD and nothing else. If this thins out, the
+  // free scorecard has little to report and the $59 buys little to read.
   const cdOnly = CATALOG.filter((c) => c.needs === Needs.CD);
   assert.ok(cdOnly.length >= 15,
-    `only ${cdOnly.length} CD-only checks — the $29 audit is thinner than the page implies`);
+    `only ${cdOnly.length} CD-only checks — the audit is thinner than the page implies`);
 });
 
 // --- benchmark claims ------------------------------------------------------
 
-test('the page never promises benchmarking without the "where we hold them" hedge', () => {
-  // The corpus covers one state. Any sentence that says the audit checks
+test('the page never claims coverage without naming the gaps in the same breath', () => {
+  // The corpus covers three states. Any sentence saying the audit checks
   // whether a fee is too high, without conditioning on held data, is a promise
-  // to 49 states that cannot be kept.
+  // to forty-seven states that cannot be kept.
   //
-  // The page's own wording is "published tax rates where we hold them" and
-  // "Where we hold a published rate ... we say so; where we do not, we tell you
-  // which charges that applies to". This asserts those hedges survive edits.
-  assert.match(page, /where we (hold|do not)/i,
-    'the conditional hedge on benchmark coverage has been edited out of closing.html');
+  // This used to grep for the literal hedge "where we hold them". That copy is
+  // gone: the county-level claims were removed from the page entirely, which
+  // satisfies the intent more completely than hedging ever did — and the file
+  // header says a test that fails on ordinary copy edits gets deleted.
+  //
+  // What survives is the scorecard's coverage panel, rendered from the engine's
+  // own describeCoverage sentences. The invariant is structural, not verbal: if
+  // the page can print what WAS priced, it must also be able to print what was
+  // not. A build that renders only the positive line reads as full coverage.
+  const claimsPriced = /Priced against a published rate/i.test(page);
+  const namesGaps = /Not priced/i.test(page);
+  assert.equal(claimsPriced && !namesGaps, false,
+    'closing.html renders the "priced against" line with no "not priced" counterpart, '
+    + 'so a partially covered audit reads as a complete one');
 
   // Unconditional claims that would be false outside the covered states.
   const forbidden = [

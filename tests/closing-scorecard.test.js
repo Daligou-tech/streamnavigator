@@ -625,15 +625,17 @@ test('high-value Baltimore City sales are skipped because the yield tax is unmod
 
 const { determineTier, TIERS } = require('../api/_lib/closing-extract');
 
-test('a Closing Disclosure on its own is the $29 tier', () => {
+test('a Closing Disclosure on its own is the CD-only coverage tier', () => {
   const t = determineTier([{ index: 0, document_type: 'closing_disclosure' }]);
   assert.equal(t.id, 'basic');
-  assert.equal(t.price_cents, 2900);
-  assert.equal(t.price_label, '$29');
+  // Pricing is flat. The tier id records which analysis ran; it does not price
+  // it, so this must stay level with the full tier.
+  assert.equal(t.price_cents, 5900);
+  assert.equal(t.price_label, '$59');
   assert.equal(t.has_loan_estimate, false);
 });
 
-test('a settlement statement on its own is also $29', () => {
+test('a settlement statement on its own is also the CD-only tier', () => {
   assert.equal(determineTier([{ index: 0, document_type: 'alta_settlement_statement' }]).id, 'basic');
 });
 
@@ -679,10 +681,12 @@ test('an unrelated extra document does not trigger the upgrade price', () => {
   assert.equal(t.upgrade_documents, 0);
 });
 
-test('tier prices are the two agreed numbers and nothing else', () => {
+test('both coverage tiers carry the one agreed price', () => {
   assert.deepEqual(Object.keys(TIERS), ['basic', 'full']);
-  assert.equal(TIERS.basic.price_cents, 2900);
   assert.equal(TIERS.full.price_cents, 5900);
+  assert.equal(TIERS.basic.price_cents, TIERS.full.price_cents,
+    'a coverage tier priced differently from checkout is a billing dispute');
+  assert.equal(TIERS.basic.price_label, TIERS.full.price_label);
 });
 
 // --- regression: 4324 Parkside Dr refinance ----------------------------------
