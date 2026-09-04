@@ -541,7 +541,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
                 <option value="other">Other</option>
               </select>
             </div>
-        <div class="field-block" id="q-provider-block" >
+        <div class="field-block" id="q-provider-block">
               <label for="q-provider-list">3. Did your lender give you a written list of service providers?</label>
               <select id="q-provider-list">
                 <option value="">Choose one…</option>
@@ -551,12 +551,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
               </select>
               <p class="field-hint">Only matters if you are sending a Loan Estimate. Without a written list, Section C charges are tested at zero tolerance — any increase may be refundable.</p>
             </div>
-            <div class="inline-error" id="pay-error"  role="alert" aria-live="assertive"></div>
-            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
-            <p class="price-secure">🔒 Secured by Stripe</p>
-          </div>
-        </div>
-        <div class="field-block">
+<div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
@@ -571,19 +566,19 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
         <div id="stage-2" style="display:none;">
           <div class="scorecard-panel" id="scorecard-panel"></div>
 
+          <!-- All three questions are asked before the scorecard now, so this
+               block is kept only as the slot the script writes its intro into. -->
           <div id="questions-block">
             <p class="field-hint" style="margin-top:18px;" id="q-intro"></p>
-            
-            
-            <!-- Only asked when a Loan Estimate is present. The answer feeds
-                 analyzeTolerances() and the zero-tolerance bucket assignment,
-                 both of which need an LE baseline; on a CD-only audit it
-                 changes no finding, so asking for it takes 15 seconds from the
-                 customer and buys them nothing. -->
-            
-      </div>
+          </div>
+
+          <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
+          <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
+          <p class="price-secure">🔒 Secured by Stripe</p>
+        </div><!-- /stage-2 -->
+      </div><!-- /intake-card -->
+    </div><!-- /single-price-wrap -->
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-    </div>
   </div>
 </section>
 
