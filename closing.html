@@ -520,7 +520,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           <div class="upload-file-list" id="upload-list"></div>
           <p class="field-hint">Loan Estimates: send the most recent one. If you have every revision, send them all — it fixes the legal baseline.</p>
         </div>
-        <p class="field-hint" style="margin-top:4px;"><strong>Two quick questions.</strong> They decide which checks can run, and they run in your free scorecard.</p>
+        <p class="field-hint" style="margin-top:4px;"><strong>Three quick questions.</strong> They decide which checks can run, and they all run in your free scorecard.</p>
         <div class="field-block">
               <label for="q-transaction-type">1. Are you buying or refinancing?</label>
               <select id="q-transaction-type">
@@ -541,6 +541,21 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
                 <option value="other">Other</option>
               </select>
             </div>
+        <div class="field-block" id="q-provider-block" >
+              <label for="q-provider-list">3. Did your lender give you a written list of service providers?</label>
+              <select id="q-provider-list">
+                <option value="">Choose one…</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+                <option value="dont_know">Don't know</option>
+              </select>
+              <p class="field-hint">Only matters if you are sending a Loan Estimate. Without a written list, Section C charges are tested at zero tolerance — any increase may be refundable.</p>
+            </div>
+            <div class="inline-error" id="pay-error"  role="alert" aria-live="assertive"></div>
+            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
+            <p class="price-secure">🔒 Secured by Stripe</p>
+          </div>
+        </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
@@ -565,21 +580,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
                  both of which need an LE baseline; on a CD-only audit it
                  changes no finding, so asking for it takes 15 seconds from the
                  customer and buys them nothing. -->
-            <div class="field-block" id="q-provider-block" style="display:none;">
-              <label for="q-provider-list">3. Did your lender give you a written list of service providers?</label>
-              <select id="q-provider-list">
-                <option value="">Choose one…</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-                <option value="dont_know">Don't know</option>
-              </select>
-              <p class="field-hint">Without a written list, Section C charges are tested at zero tolerance — any increase may be refundable.</p>
-            </div>
-            <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
-            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
-            <p class="price-secure">🔒 Secured by Stripe</p>
-          </div>
-        </div>
+            
       </div>
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
     </div>
@@ -1123,11 +1124,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 
     panel.innerHTML = html;
 
-    // The provider-list question only earns its place once a Loan Estimate is
-    // here, because tolerance testing is the only thing that reads it.
-    const provBlock = document.getElementById('q-provider-block');
+    // The provider question is asked before the scorecard now, so nothing here
+    // shows or hides it. hasLE is still needed below for the upgrade prompt.
     const hasLE = Boolean(sc.loan_estimates_uploaded || (sc.tier && sc.tier.has_loan_estimate));
-    if (provBlock) provBlock.style.display = hasLE ? '' : 'none';
     const intro = document.getElementById('q-intro');
     if (intro) {
       intro.innerHTML = hasLE
@@ -1211,12 +1210,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     e.preventDefault();
     const btn = e.currentTarget;
     const propertyType = document.getElementById('q-property-type').value;
-    const provBlock = document.getElementById('q-provider-block');
-    const providerAsked = provBlock && provBlock.style.display !== 'none';
-    const providerList = providerAsked ? document.getElementById('q-provider-list').value : '';
+    // Asked before the scorecard now, so it is already answered by this point
+    // and there is no visible field left to send anyone back to. A blank means
+    // the customer skipped it, which is the same information as "don't know".
+    const provEl = document.getElementById('q-provider-list');
+    const providerList = provEl ? (provEl.value || 'dont_know') : '';
     if (!propertyType) { showToast('Please answer the property type question.'); return; }
-    // Only required when tolerance testing can actually use it.
-    if (providerAsked && !providerList) { showToast('Please answer the service provider list question.'); return; }
+
     rememberAnswers();
     if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
 
