@@ -21,7 +21,11 @@ const fs = require('fs');
 const path = require('path');
 
 const DRY = process.argv.includes('--dry-run');
-const TARGET = path.join(process.cwd(), 'closing.html');
+// The scorecard renderer this patch edits moved out of closing.html when the
+// scorecard got its own URL. The patch itself is unchanged; only its target
+// moved. Left pointing at closing.html, it reported "run wire-document-service
+// first" on a tree where everything was already applied.
+const TARGET = path.join(process.cwd(), 'closing-scorecard-view.js');
 const MARKER = 'benchmark_coverage';
 
 const EDITS = [
@@ -89,7 +93,7 @@ const DISCLOSURE_INSERT = DISCLOSURE_ANCHOR + `
 
 function main() {
   if (!fs.existsSync(TARGET)) {
-    fail('closing.html not found. Run this from the repository root.');
+    fail('closing-scorecard-view.js not found. Run this from the repository root.');
   }
   const src = fs.readFileSync(TARGET, 'utf8');
 

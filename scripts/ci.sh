@@ -28,6 +28,7 @@ npm test
 # loading it. Not a .test.js file, so run-all.js does not pick it up on its own.
 step "render check"
 node tests/render-check.js
+node tests/render-check.js closing-scorecard.html
 
 # Already-stale rows and collapsed coverage. The 30-day early warning runs on a
 # schedule instead — see corpus-health.yml — so a push in December does not

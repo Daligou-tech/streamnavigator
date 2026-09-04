@@ -4,7 +4,7 @@
 // Three files, three small edits:
 //   api/closing-scorecard.js  source findings and the scorecard from runDocumentAudit
 //   api/closing-answers.js    same, on the re-run after the two questions
-//   closing.html              replace the benchmark coverage copy with check coverage
+//   closing-scorecard-view.js  replace the benchmark coverage copy with check coverage
 //
 // A patch rather than replacement files: all three are ahead of main in your
 // working copy, and handing you whole files would discard those edits.
@@ -111,7 +111,9 @@ const EDITS = [
   },
 
   {
-    file: 'closing.html',
+    // Was closing.html. The scorecard renderer moved to its own file when the
+    // scorecard got its own URL; the edits below are unchanged, only relocated.
+    file: 'closing-scorecard-view.js',
     marker: 'checks_blocked',
     replacements: [
       {
@@ -221,9 +223,9 @@ function main() {
 
   // The inserted block declares its own escaper. Guard against a collision if
   // the page later grows one with the same name in the same scope.
-  const html = results.find((r) => r.edit.file === 'closing.html');
+  const html = results.find((r) => r.edit.file === 'closing-scorecard-view.js');
   if (html && !html.skip && /\bvar escH\b|\bfunction escH\b/.test(html.src)) {
-    fail('closing.html: an escH already exists and the patch declares one. Nothing was written.');
+    fail('closing-scorecard-view.js: an escH already exists and the patch declares one. Nothing was written.');
   }
 
   // Pass 2: write.
