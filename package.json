@@ -7,6 +7,7 @@
   },
   "scripts": {
     "test": "node tests/run-all.js",
+    "ci": "bash scripts/ci.sh",
     "check-prices": "node scripts/check-prices.js",
     "harness": "node scripts/audit-harness.js",
     "check": "npm test && npm run harness"
