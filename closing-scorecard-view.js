@@ -142,7 +142,16 @@
       // shown only when it would genuinely buy them a different analysis.
       if (sc.tier) {
         applyTier(sc.tier);
-        if (sc.tier.id === 'basic' && sc.tier.downgraded_from_full) {
+        // A contract that simply promises the buyer nothing is not a document we
+        // "could not use". Saying so contradicts the note below it, which tells
+        // the same customer their contract read fine and had nothing in it.
+        var contractEmptyNotBroken = sc.contract_uploaded && !sc.contract_reconciled
+          && !sc.contract_low_confidence
+          && !(sc.contract_mismatch && sc.contract_mismatch.length)
+          && !sc.contract_terms_read;
+        var onlyContractMissing = contractEmptyNotBroken && !sc.tier.has_loan_estimate;
+
+        if (sc.tier.id === 'basic' && sc.tier.downgraded_from_full && !onlyContractMissing) {
           // The extra document could not be used, so those checks did not run.
           // Price is flat, so this is a coverage message, not a billing one.
           // Saying so plainly is the difference between a refund request and a
@@ -156,7 +165,7 @@
             + 'extra cost. The price is $59 either way.</p>'
             + '<p class="scorecard-note">You still get every check that runs on the Closing '
             + 'Disclosure alone.</p>'
-            + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
+            + '<button type="button" class="btn btn-ghost btn-sm js-add-docs" '
             + 'style="margin-top:10px;">&#8593; Replace those documents</button>';
         } else if (sc.tier.id === 'basic') {
           html += '<div class="sc-panel">'
@@ -243,14 +252,34 @@
           + '— would let us check those.</p>';
       }
       if (sc.contract_uploaded && !sc.contract_reconciled) {
-        html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
-          + (sc.contract_mismatch && sc.contract_mismatch.length
-              ? 'The contract you uploaded does not match this Closing Disclosure ('
-                + sc.contract_mismatch.map(function(m){ return m.field; }).join(' and ')
-                + ' differ), so we did not compare them.'
-              : 'We could not read any credits, concessions or cost allocations from the contract — '
-                + 'it may be missing pages or an addendum.')
-          + ' This is not a clean result for those checks.</p>';
+        // A contract that was read cleanly and simply does not promise the buyer
+        // anything is the ordinary case, not a failure. Telling that customer we
+        // "could not read" their contract sends them hunting for a better scan of
+        // a document that was already perfectly legible, and leaves them thinking
+        // part of what they are about to pay for is broken.
+        //
+        // The three cases are distinguishable: a mismatch names the fields, an
+        // unreadable contract leaves low-confidence terms behind, and a contract
+        // with nothing in it produces neither.
+        var nothingToReconcile = !sc.contract_low_confidence
+          && !(sc.contract_mismatch && sc.contract_mismatch.length)
+          && !sc.contract_terms_read;
+        if (nothingToReconcile) {
+          html += '<p class="scorecard-note"><strong>Your contract states no seller credits or '
+            + 'concessions.</strong> We read it and found nothing the seller agreed to pay toward '
+            + 'your costs, so there is nothing to check against the Closing Disclosure. That is a '
+            + 'normal result, not a problem &mdash; if you did negotiate a credit, it may sit in an '
+            + 'addendum that was not included, and adding that page would let us check it.</p>';
+        } else {
+          html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
+            + (sc.contract_mismatch && sc.contract_mismatch.length
+                ? 'The contract you uploaded does not match this Closing Disclosure ('
+                  + sc.contract_mismatch.map(function(m){ return m.field; }).join(' and ')
+                  + ' differ), so we did not compare them.'
+                : 'We could not read any credits, concessions or cost allocations from the contract — '
+                  + 'it may be missing pages or an addendum.')
+            + ' This is not a clean result for those checks.</p>';
+        }
       }
 
       // One line until clicked. Every item is still here: these are not passes,
@@ -368,7 +397,7 @@
         // failure the product notes flagged as "upsells with nowhere to upload".
         if (docUnlocks > 0) {
           html += '</ul>'
-            + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
+            + '<button type="button" class="btn btn-ghost btn-sm js-add-docs" '
             + 'style="margin-top:12px;">&#8593; Add those documents &mdash; still free</button>'
             // Uploading is free and re-scores immediately, but a usable Loan
             // Estimate or contract moves the paid report to $59. Saying that on
@@ -438,8 +467,15 @@
       // to repopulate.
       if (typeof restoreAnswers === 'function') restoreAnswers();
 
-      const addDocs = document.getElementById('add-docs-btn');
-      if (addDocs) addDocs.addEventListener('click', function(ev){ ev.preventDefault(); showUploader(); });
+      // Both the "Replace those documents" and "Add those documents" buttons
+      // carried id="add-docs-btn". getElementById returns the first match only,
+      // so the lower button -- the one attached to the upsell panel, the one a
+      // customer reaches after reading what they would gain -- did nothing at
+      // all when clicked. A class and querySelectorAll wires every one of them.
+      const addDocs = document.querySelectorAll('.js-add-docs');
+      for (let i = 0; i < addDocs.length; i += 1) {
+        addDocs[i].addEventListener('click', function(ev){ ev.preventDefault(); showUploader(); });
+      }
     }
 
     return {

@@ -518,6 +518,10 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
+          <!-- Only shown when files were carried back from the scorecard. An
+               upload box that silently refills looks like a bug; saying so makes
+               it look like the product remembered. -->
+          <p class="field-hint" id="restored-note" style="display:none;margin-top:8px;"></p>
           <p class="field-hint">Loan Estimates: send the most recent one. If you have every revision, send them all — it fixes the legal baseline.</p>
         </div>
         <p class="field-hint" style="margin-top:4px;"><strong>Three quick questions.</strong> They decide which checks can run, and they all run in your free scorecard.</p>
@@ -639,6 +643,66 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 
   const uploader = wireUploadZone(zone, input, list);
 
+  // Roughly 3.5MB of base64. Chrome and Firefox allow about 5MB per origin and
+  // the scorecard payload shares that budget, so anything larger is skipped
+  // rather than risking a quota error that loses the scorecard too.
+  const UPLOAD_CACHE_LIMIT = 3500000;
+  const UPLOAD_CACHE_KEY = 'closing_uploads';
+
+  function rememberUploads(encoded, email) {
+    try {
+      const blob = JSON.stringify({ files: encoded, email: email, saved_at: Date.now() });
+      if (blob.length > UPLOAD_CACHE_LIMIT) {
+        sessionStorage.removeItem(UPLOAD_CACHE_KEY);
+        return;
+      }
+      sessionStorage.setItem(UPLOAD_CACHE_KEY, blob);
+    } catch (err) {
+      // Private browsing, or over quota. Not worth telling the customer about:
+      // the only consequence is that they re-pick their files.
+    }
+  }
+
+  // Re-attaches the files through the upload input itself rather than reaching
+  // into the uploader's private list, so the running file-count and size checks
+  // still apply exactly as they would to a fresh selection.
+  function restoreUploads() {
+    let cached = null;
+    try {
+      cached = JSON.parse(sessionStorage.getItem(UPLOAD_CACHE_KEY) || 'null');
+    } catch (err) {
+      return;
+    }
+    if (!cached || !cached.files || !cached.files.length) return;
+    if (typeof DataTransfer === 'undefined') return;
+
+    try {
+      const dt = new DataTransfer();
+      for (const f of cached.files) {
+        const bin = atob(f.dataBase64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+        dt.items.add(new File([bytes], f.name, { type: f.type || 'application/pdf' }));
+      }
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change'));
+    } catch (err) {
+      return;
+    }
+
+    const emailEl = document.getElementById('intake-email');
+    if (emailEl && !emailEl.value && cached.email) emailEl.value = cached.email;
+
+    const note = document.getElementById('restored-note');
+    if (note) {
+      note.textContent = cached.files.length === 1
+        ? 'Your document is still attached. Remove it with the \u2715 if you want to swap it.'
+        : 'Your ' + cached.files.length + ' documents are still attached. Remove any of them '
+          + 'with the \u2715 and add a replacement.';
+      note.style.display = 'block';
+    }
+  }
+
   let submissionRef = null;
 
   // Answers survive a re-upload. They belong to the customer and the property,
@@ -734,6 +798,10 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   // built on it would carry their typo into a letter to their lender.
 
 
+  // Answers and files both survive the trip to the scorecard and back.
+  restoreAnswers();
+  restoreUploads();
+
   document.getElementById('scorecard-btn').addEventListener('click', async function(e){
     e.preventDefault();
     const btn = e.currentTarget;
@@ -753,6 +821,16 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
       for (const f of files) {
         encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
       }
+
+      // Held so that coming back from the scorecard does not throw away files
+      // the customer already chose. A customer told to replace one bad document
+      // was being sent to an empty upload box and made to find the Closing
+      // Disclosure again -- the file that was never the problem.
+      //
+      // Guarded on size: sessionStorage is a few megabytes and a full 3MB upload
+      // base64s to more than that. If it does not fit, the box comes up empty as
+      // before rather than the whole submission failing.
+      rememberUploads(encoded, email);
       const resp = await fetch('/api/closing-scorecard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
