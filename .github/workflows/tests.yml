@@ -1,22 +1,44 @@
 name: tests
 
-# Runs on every push and pull request, which includes commits created by the
-# GitHub web UI's "Add files via upload" — so uploading a file here is enough
-# to get it checked. Nothing needs to be run locally.
+# Runs on every push, which includes commits created by the GitHub web UI's
+# "Add files via upload" — so uploading a file here is enough to get it checked.
+# Nothing needs to be run locally.
 #
 # This exists because four separate red tests sat on main at once, three of
 # them for the same reason: a decision changed in one file and its contract
 # stayed behind in another. Each was caught in under a second by a suite
 # nobody had run.
+#
+# The steps themselves live in scripts/ci.sh, not here. They used to live in
+# this file only, which meant the sequence CI ran could not be run anywhere
+# else — not locally, not by the Vercel deploy gate. One file, three callers,
+# no drift.
 
 on:
   push:
     branches: ['**']
+  # A PR from a branch in this repo already ran on push. Without the job-level
+  # filter below, every such PR runs the suite twice and, when it fails, sends
+  # two identical emails.
   pull_request:
+    branches: ['**']
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
+
+# Push three commits in a minute and only the last one needs an answer.
+# Superseded runs are cancelled instead of finishing and reporting on code that
+# has already been replaced.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
+    # Skip the duplicate run when a pull request comes from a branch in this
+    # same repository — the push event already covered that commit.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -36,39 +58,8 @@ jobs:
       # everyone to discount the number.
       - run: npm ci
 
-      # The whole folder, not `node --test tests/*.test.js`. The two styles of
-      # suite in there (node:test/TAP and the plain "N/N passed" ones) both run
-      # under this, and a filtered run is how seven suites went unreported.
-      - run: npm test
-
-      # Parsing is not verifying. `escH is not a function` took the page down
-      # while the file parsed perfectly, so this executes the render path
-      # instead of just loading it. Not a .test.js file, so run-all.js does not
-      # pick it up on its own.
-      - run: node tests/render-check.js
-
-      # Already-stale rows and collapsed coverage, on every push. The 30-day
-      # early warning runs on a schedule instead — see corpus-health.yml — so a
-      # push in December does not start failing for a reason unrelated to it.
-      - run: node scripts/check-corpus-freshness.js --warn-days 0
-
-      # Every patch script in scripts/ is idempotent and refuses cleanly when
-      # already applied, so running them here is safe and answers a question
-      # that otherwise gets asked by hand: has this one actually been run?
-      # add-loan-calculations-schema.js sat unapplied for three iterations
-      # while seven checks stayed dark.
-      - name: patch scripts are all applied
-        run: |
-          set -e
-          for s in add-loan-calculations-schema fix-overpromises wire-document-service; do
-            node "scripts/$s.js"
-          done
-          # A patch script that changed a tracked file means it had not been
-          # applied on main. Fail loudly rather than let the working tree
-          # silently differ from what is deployed.
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::A patch script modified tracked files — it had not been applied on main:"
-            git status --porcelain
-            git --no-pager diff
-            exit 1
-          fi
+      # Suites, render check, corpus freshness, patch scripts, clean-tree gate.
+      # Identical to `npm run ci` locally and to what the Vercel deploy gate
+      # runs before it will let a commit ship.
+      - name: full verification (scripts/ci.sh)
+        run: npm run ci
