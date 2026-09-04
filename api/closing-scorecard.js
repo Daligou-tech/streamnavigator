@@ -285,6 +285,7 @@ module.exports = async (req, res) => {
   // The records are stored so the paid report reuses them instead of paying to
   // read the same PDFs twice.
   let loanEstimates = null;
+  let leAddressMismatch = null;
   const leIndexes = classified
     .filter((d) => d.document_type === 'loan_estimate')
     .map((d) => d.index)
@@ -302,6 +303,33 @@ module.exports = async (req, res) => {
         console.error('[closing-scorecard] loan estimate extraction failed:', err.message);
       }
     }
+
+    // The address check runs on every Loan Estimate we managed to read,
+    // including the ones dropped below for having no issue date.
+    //
+    // A customer uploaded a Closing Disclosure for 2526 Heath Place, Reston VA
+    // alongside a Loan Estimate for 17709 Sunrise Dr, Lutz FL. The estimate was
+    // dropped for want of an issue date, so the identity comparison never ran
+    // and the page told them we "could not read your Loan Estimate clearly
+    // enough" — sending them off to hunt for a better scan of a document for
+    // the wrong house. The engine could not have told them: it never saw the
+    // record. Wrong document is a different problem from unreadable document,
+    // and it is the one the customer can actually fix.
+    //
+    // Reported only when EVERY estimate read disagrees with the Closing
+    // Disclosure. One matching estimate among several means the right document
+    // is present and the comparison can run.
+    const addressMismatches = records
+      .map((r) => checkTransactionMatch(extraction, r).mismatches
+        .find((m) => m.field === 'property address' && m.hard))
+      .filter(Boolean);
+    if (records.length && addressMismatches.length === records.length) {
+      leAddressMismatch = {
+        cd: addressMismatches[0].cd || null,
+        le: addressMismatches[0].le || null,
+      };
+    }
+
     // selectBaseline orders revisions by issue date. Without one we cannot
     // establish which Loan Estimate governs, and guessing a baseline is worse
     // than declining to test.
@@ -423,11 +451,17 @@ module.exports = async (req, res) => {
     coverage_by_group: audited.coverage_by_group,
     tier: effectiveTier,
     tolerance_tested: toleranceTested,
-    tolerance_blocked_reason: transactionMismatch
-      ? 'different_loan'
-      : (loanEstimates && !cdChargeCount)
-        ? 'no_cd_charges'
-        : (leIndexes.length && !loanEstimates ? 'le_unreadable' : null),
+    // Ordered most specific first. An address that does not match is the one
+    // reason the customer can act on without guessing, so it outranks both
+    // "different loan" and "unreadable".
+    tolerance_blocked_reason: leAddressMismatch
+      ? 'different_address'
+      : transactionMismatch
+        ? 'different_loan'
+        : (loanEstimates && !cdChargeCount)
+          ? 'no_cd_charges'
+          : (leIndexes.length && !loanEstimates ? 'le_unreadable' : null),
+    address_mismatch: leAddressMismatch,
     // Surfaced so the page can tell the customer which checks did not run and
     // why, rather than leaving it to a silent count.
     checks_skipped_detail: skipped,
