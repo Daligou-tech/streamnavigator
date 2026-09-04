@@ -47,8 +47,9 @@ const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
 const MAX_TOTAL_MB = Math.round((MAX_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
 const MAX_FILES = 12;
 
-// Mirrors TIERS.basic in _lib/closing-extract.js.
-const TIERS_BASIC = { id: 'basic', price_cents: 2900, price_label: '$29' };
+// Mirrors TIERS.basic in _lib/closing-extract.js. Pricing is flat: the id says
+// which analysis ran, not what the customer is charged.
+const TIERS_BASIC = { id: 'basic', price_cents: 5900, price_label: '$59' };
 
 // Contract terms read below this confidence are discarded, not used.
 const CONTRACT_CONF_THRESHOLD = 0.85;
