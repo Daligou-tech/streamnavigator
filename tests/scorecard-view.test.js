@@ -112,6 +112,62 @@ test('unread figures are counted back through the returned view', () => {
   assert.equal(view.hasAcknowledged(), true);
 });
 
+
+// --- both "add documents" buttons must be clickable --------------------------
+// The panel renders two of them: one beside the failure explanation and one at
+// the bottom of the "what would unlock more" upsell. Both carried the same id,
+// and getElementById returns the first match, so the lower one -- reached after
+// the customer reads what they would gain -- did nothing when clicked.
+
+test('every add-documents button is wired, not just the first', () => {
+  const { html } = render({ ...BASE,
+    tier: { id: 'basic', downgraded_from_full: true, has_purchase_contract: true },
+    contract_uploaded: 1, contract_terms_read: 0, contract_low_confidence: 2,
+    unlocks: [{ title: 'Loan Estimate', unlocks_count: 6, why: 'tolerance testing', accepts: 'loan_estimate' }],
+  });
+  const buttons = (html.match(/js-add-docs/g) || []).length;
+  assert.ok(buttons >= 2, `expected both buttons, found ${buttons}`);
+  assert.equal(/id="add-docs-btn"/.test(html), false,
+    'a duplicate id is back; only the first button would respond to a click');
+});
+
+// --- regression: a contract that promises nothing is not an unreadable one ---
+// A Virginia sales contract read cleanly and stated no seller credits. The page
+// said we "could not read any credits, concessions or cost allocations from the
+// contract -- it may be missing pages", sending the customer to re-scan a
+// document that was perfectly legible.
+
+const EMPTY_CONTRACT = {
+  ...BASE,
+  contract_uploaded: 1, contract_terms_read: 0, contract_low_confidence: 0,
+  contract_mismatch: null, contract_reconciled: false,
+  tier: { id: 'basic', downgraded_from_full: true, has_purchase_contract: true },
+};
+
+test('a readable contract with no credits is not called unreadable', () => {
+  const { html } = render(EMPTY_CONTRACT);
+  assert.equal(/could not read any credits/.test(html), false);
+  assert.match(html, /states no seller credits or concessions/);
+});
+
+test('a readable contract with no credits is not called a document we could not use', () => {
+  const { html } = render(EMPTY_CONTRACT);
+  assert.equal(/could not use it/.test(html), false,
+    'the summary contradicts the note below it');
+});
+
+test('a contract that truly could not be read still says so', () => {
+  const { html } = render({ ...EMPTY_CONTRACT, contract_low_confidence: 3 });
+  assert.match(html, /could not read any credits|could not be read reliably/);
+});
+
+test('a contract for the wrong property still names the mismatch', () => {
+  const { html } = render({ ...EMPTY_CONTRACT,
+    contract_mismatch: [{ field: 'property address' }] });
+  assert.match(html, /does not match this Closing Disclosure/);
+  assert.equal(/states no seller credits/.test(html), false);
+});
+
 const total = passed + failures.length;
 if (failures.length) {
   console.error(`\n${failures.length} of ${total} failed:\n`);
