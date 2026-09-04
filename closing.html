@@ -70,11 +70,11 @@ section{padding:60px 0;border-bottom:1px solid var(--rule)}
 .sec-intro{max-width:64ch;color:var(--ink-soft);margin-bottom:32px}
 
 .steps{list-style:none;margin:0;padding:0;counter-reset:s;max-width:780px}
-.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:20px;padding:20px 0;border-top:1px solid var(--rule-soft)}
+.steps li{counter-increment:s;display:grid;grid-template-columns:38px 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--rule-soft)}
 .steps li:first-child{border-top:1px solid var(--rule)}
 .steps li::before{content:counter(s);font-family:"IBM Plex Mono",monospace;font-size:.95rem;color:var(--flag);padding-top:3px;grid-column:1;grid-row:1}
-.steps li h3{grid-column:2;grid-row:1}
-.steps li p{grid-column:2;grid-row:2;margin:6px 0 0;color:var(--ink-soft);font-size:.96rem;max-width:62ch}
+.steps li h3{grid-column:2;grid-row:1;line-height:1.25}
+.steps li p{grid-column:2;grid-row:2;margin:1px 0 0;color:var(--ink-soft);font-size:.95rem;line-height:1.5;max-width:62ch}
 .free-tag{display:inline-block;font-size:.74rem;color:var(--ok);background:var(--ok-tint);border:1px solid #CADED6;border-radius:2px;padding:2px 7px;margin-left:9px;vertical-align:2px}
 
 .checks{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
@@ -368,7 +368,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
       <li><h3>Upload your Closing Disclosure</h3><p>The only document we need. Add your Loan Estimate and contract if you have them — more checks, same price.</p></li>
       <li><h3>Tell us buying or refinancing</h3><p>One tap, plus your property type. It decides which checks apply.</p></li>
       <li><h3>Get your free scorecard<span class="free-tag">Free</span></h3><p>How many findings, what they are worth, and anything we could not read. No card.</p></li>
-      <li><h3>Decide, then pay $59</h3><p>Only if the scorecard found something. One flat price.</p></li>
+      <li><h3>Decide, then pay</h3><p>Only if the scorecard found something. One flat price.</p></li>
       <li><h3>Receive your report in your inbox</h3><p>Findings ordered by severity — confirmed arithmetic errors first, then potential rule violations — each marked changeable now, likely locked, a possible post-closing remedy, or needing another document.</p></li>
     </ol>
   </div>
@@ -500,6 +500,27 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           <div class="upload-file-list" id="upload-list"></div>
           <p class="field-hint">Loan Estimates: send the most recent one. If you have every revision, send them all — it fixes the legal baseline.</p>
         </div>
+        <p class="field-hint" style="margin-top:4px;"><strong>Two quick questions.</strong> They decide which checks can run, and they run in your free scorecard.</p>
+        <div class="field-block">
+              <label for="q-transaction-type">1. Are you buying or refinancing?</label>
+              <select id="q-transaction-type">
+                <option value="">Choose one…</option>
+                <option value="purchase">Buying a home</option>
+                <option value="refinance">Refinancing</option>
+              </select>
+              <p class="field-hint">If you send a purchase contract, buyers get seller-credit reconciliation. Refinances get payoff and per-diem verification, and your rescission window.</p>
+            </div>
+        <div class="field-block">
+              <label for="q-property-type">2. What is the property type and occupancy?</label>
+              <select id="q-property-type">
+                <option value="">Choose one…</option>
+                <option value="single_family">Single-family residence</option>
+                <option value="condo">Condo</option>
+                <option value="other_attached">Other attached housing</option>
+                <option value="investment">Investment property</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
@@ -516,27 +537,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           <div class="scorecard-panel" id="scorecard-panel"></div>
 
           <div id="questions-block">
-            <p class="field-hint" style="margin-top:18px;" id="q-intro"><strong>Two quick questions.</strong> They change the analysis — about 15 seconds.</p>
-            <div class="field-block">
-              <label for="q-transaction-type">1. Are you buying or refinancing?</label>
-              <select id="q-transaction-type">
-                <option value="">Choose one…</option>
-                <option value="purchase">Buying a home</option>
-                <option value="refinance">Refinancing</option>
-              </select>
-              <p class="field-hint">If you send a purchase contract, buyers get seller-credit reconciliation. Refinances get payoff and per-diem verification, and your rescission window.</p>
-            </div>
-            <div class="field-block">
-              <label for="q-property-type">2. What is the property type and occupancy?</label>
-              <select id="q-property-type">
-                <option value="">Choose one…</option>
-                <option value="single_family">Single-family residence</option>
-                <option value="condo">Condo</option>
-                <option value="other_attached">Other attached housing</option>
-                <option value="investment">Investment property</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+            <p class="field-hint" style="margin-top:18px;" id="q-intro"></p>
+            
+            
             <!-- Only asked when a Loan Estimate is present. The answer feeds
                  analyzeTolerances() and the zero-tolerance bucket assignment,
                  both of which need an LE baseline; on a CD-only audit it
@@ -1115,8 +1118,8 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     const intro = document.getElementById('q-intro');
     if (intro) {
       intro.innerHTML = hasLE
-        ? '<strong>Two quick questions.</strong> Both change the analysis \u2014 about 30 seconds.'
-        : '<strong>One quick question.</strong> It changes the analysis \u2014 about 15 seconds.';
+        ? '<strong>One more question.</strong> It decides which tolerance rule applies to Section C \u2014 about 15 seconds.'
+        : '';
     }
 
     // Adding a Loan Estimate starts a new submission, so anything already
