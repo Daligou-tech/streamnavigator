@@ -30,6 +30,7 @@ const { runClosingAudit, buildScorecard } = require('./closing-extract');
 const loanMath = require('./closing-math');
 const { checkSectionTotals } = require('./section-benchmark');
 const { describeCoverage } = require('./benchmark-coverage');
+const { buildEmails } = require('./closing-emails');
 
 // Benchmarking is ON, but its gaps are disclosed by NAME rather than by count.
 //
@@ -328,8 +329,31 @@ function runDocumentAudit(input = {}) {
     evidence_basis: null,
   };
 
+  // Ranked once, then reused. The emails must list findings in the same order
+  // the report shows them, or a customer reading both sees two different
+  // priorities for the same document.
+  const rankedFindings = audit.rank ? audit.rank(findings) : findings;
+
+  // Drafts for the customer to send. Routing is not decided here: every finding
+  // already carries askLender / askSettlement, set by the check that produced
+  // it. Either draft is null when nothing was routed to that party, and a clean
+  // document correctly produces no emails at all.
+  // Only fields the extractor actually captures. There is no loan number, no
+  // settlement agent name and no contact names in the schema, so those are left
+  // out rather than passed as undefined — buildEmails drops what it is not
+  // given and never prints a placeholder at the customer.
+  const emails = buildEmails(rankedFindings, {
+    propertyAddress: extraction.property_address,
+    closingDate: extraction.closing_date,
+    borrowerName: Array.isArray(extraction.borrower_names)
+      ? extraction.borrower_names.filter(Boolean).join(' and ')
+      : null,
+    lenderName: extraction.lender_name,
+  });
+
   return {
-    findings: audit.rank ? audit.rank(findings) : findings,
+    findings: rankedFindings,
+    emails,
     skipped,
     coverage,
     coverage_by_group: groupCoverage(coverage),
