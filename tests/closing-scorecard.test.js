@@ -927,6 +927,69 @@ test('a genuine error on the alternative table is still caught', () => {
   assert.equal(f.dollarImpact, 1000);
 });
 
+// --- regression: 2526 Heath Place, Reston VA ---------------------------------
+// A purchase whose Cash to Close table reconciles to the cent. The extractor
+// returned the deposit and the adjustments row carrying the minus signs the
+// Closing Disclosure prints on them (-30,000 and -702.35). The formula already
+// encodes the subtraction, so both were subtracted twice and the free scorecard
+// led with "Dollars in question $61,405" -- exactly 2 x 30,702.35, the
+// signature of a sign error, on a document with nothing wrong with it.
+//
+// Same family as H-25F1 above, which was fixed on the alternative table only.
+
+const heathPlace = {
+  transactionType: 'purchase',
+  totalClosingCostsJ: 33825.53,
+  closingCostsPaidBeforeClosing: 0,
+  downPaymentFundsFromBorrower: 211300,
+  deposit: -30000,
+  fundsForBorrower: 0,
+  sellerCredits: 0,
+  adjustmentsAndOtherCredits: -702.35,
+  statedCashToClose: 214423.18,
+};
+
+test('credit rows carrying their printed minus sign are not subtracted twice', () => {
+  const f = checkCashToClose(heathPlace);
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+  assert.ok(!f.dollarImpact, 'a reconciling table must not carry a dollar figure');
+});
+
+test('the sign error would show as exactly twice the credits', () => {
+  // If this regresses the variance is 61,404.70, which is 2 x 30,702.35.
+  const f = checkCashToClose(heathPlace);
+  assert.notEqual(Math.abs(f.variance), 61404.7);
+});
+
+test('the same table read as magnitudes gives the identical result', () => {
+  // The two conventions must not disagree, or the finding a customer sees
+  // depends on which extractor build read their document.
+  const asMagnitudes = { ...heathPlace, deposit: 30000, adjustmentsAndOtherCredits: 702.35 };
+  const a = checkCashToClose(heathPlace);
+  const b = checkCashToClose(asMagnitudes);
+  assert.equal(a.severity, b.severity);
+  assert.equal(a.expected, b.expected);
+});
+
+test('a genuine purchase error survives the sign handling', () => {
+  const f = checkCashToClose({ ...heathPlace, statedCashToClose: 219423.18 });
+  assert.equal(f.severity, Severity.CONFIRMED_MATH_ERROR);
+  assert.equal(f.dollarImpact, 5000);
+});
+
+test('a positive adjustments row still reconciles', () => {
+  // Adjustments and Other Credits is genuinely positive when the borrower owes
+  // more, not less. Taking the magnitude alone would get this wrong.
+  const f = checkCashToClose({
+    transactionType: 'purchase',
+    totalClosingCostsJ: 10000, closingCostsPaidBeforeClosing: 0,
+    downPaymentFundsFromBorrower: 50000, deposit: 5000,
+    fundsForBorrower: 0, sellerCredits: 0, adjustmentsAndOtherCredits: -1500,
+    statedCashToClose: 56500,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
 test('total closing costs falls back to the Cash to Close table', () => {
   // A page-3 excerpt, or a scan missing page 2, has no section subtotals but
   // still carries J in the Cash to Close table. Showing a blank headline there

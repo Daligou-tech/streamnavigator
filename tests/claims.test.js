@@ -20,7 +20,13 @@ function test(name, fn) {
 }
 
 const root = path.join(__dirname, '..');
-const page = fs.readFileSync(path.join(root, 'closing.html'), 'utf8');
+// The customer-facing surface is three files now, not one. The scorecard
+// renderer moved to closing-scorecard-view.js when the scorecard got its own
+// URL, and a promise is a promise wherever it is printed -- scoping these
+// assertions to closing.html alone would let every claim below move one file
+// to the left and stop being checked.
+const SURFACE = ['closing.html', 'closing-scorecard-view.js', 'closing-scorecard.html'];
+const page = SURFACE.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
 const service = fs.readFileSync(path.join(root, 'api', '_lib', 'closing-service.js'), 'utf8');
 const { CATALOG, PRICES } = require('../api/_lib/closing-service');
 
