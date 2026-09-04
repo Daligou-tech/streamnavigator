@@ -1,989 +1,527 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Closing Disclosure Audit — StreamNavigator AI</title>
-<meta name="description" content="Upload your Closing Disclosure. We check its arithmetic, its escrow and per-diem calculations, and — with your Loan Estimate — whether any fee rose beyond what the lending rules permit. Where we hold a published rate or comparison data for your county we say so; where we do not, we tell you which charges that applies to before you pay." />
-<link rel="canonical" href="https://streamnavigator.ai/closing" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Closing Disclosure Audit — StreamNavigator</title>
+<meta name="description" content="An independent recheck of your Closing Disclosure: its own arithmetic, the federal rules that govern escrow and prepaid interest, and whether any fee rose beyond what the lending rules allow. Free scorecard first.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-<link rel="shortcut icon" href="/favicon.ico">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* Free scorecard panel + Step 2 questions */
-.scorecard-alert{border:3px solid #b3261e;border-radius:12px;padding:20px 22px;margin:0 0 18px;background:rgba(179,38,30,.07);}
-.scorecard-alert h3{font-size:21px;line-height:1.25;margin:0 0 10px;color:#8c1d18;}
-.scorecard-alert p{font-size:15px;line-height:1.55;margin:0 0 10px;}
-.mismatch-rows{list-style:none;padding:0;margin:14px 0;}
-.mismatch-rows li{display:grid;grid-template-columns:1fr;gap:2px;padding:10px 0;border-top:1px solid rgba(140,29,24,.25);}
-.mismatch-rows li > span{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.75;}
-.mismatch-rows li > b{font-size:17px;}
-.mismatch-rows li > em{font-size:12px;font-style:normal;opacity:.7;margin-bottom:4px;}
-.mismatch-why{font-size:13px!important;opacity:.9;}
-.scorecard-panel{border:2px solid var(--ink);border-radius:10px;padding:18px 20px;margin-bottom:8px;}
-.scorecard-head{font-size:15px;margin-bottom:12px;}
-.scorecard-rows{list-style:none;padding:0;margin:0 0 12px;}
-.scorecard-rows li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.08);font-size:15px;}
-.scorecard-rows li:last-child{border-bottom:0;}
-.scorecard-rows b{font-size:19px;white-space:nowrap;}
-.scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
-.scorecard-note{font-size:15px;line-height:1.55;margin:12px 0 0;opacity:.85;}
-/* Everything below the scorecard box. Same size as the rows above it, because
-   this is what the customer is deciding on. */
-.sc-panel{margin:16px 0 0;padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.035);}
-.sc-panel + .sc-panel{margin-top:12px;}
-.sc-panel-accent{background:rgba(0,0,0,.06);border:1px solid rgba(0,0,0,.10);}
-.sc-h{font-size:17px;font-weight:700;margin:0 0 10px;letter-spacing:-.01em;}
-.sc-lead{font-size:16px;line-height:1.55;margin:0 0 10px;}
-.sc-list{list-style:none;padding:0;margin:0;font-size:16px;line-height:1.5;}
-.sc-list li{position:relative;padding:6px 0 6px 18px;}
-.sc-list li:before{content:"";position:absolute;left:2px;top:14px;width:5px;height:5px;
-  border-radius:50%;background:currentColor;opacity:.55;}
-.sc-list li b,.sc-list li strong{font-weight:700;}
-.sc-sub{font-size:15px;line-height:1.5;opacity:.9;margin:8px 0 0;}
-.sc-details{margin:12px 0 0;font-size:16px;}
-.sc-details > summary{cursor:pointer;font-weight:700;padding:10px 0;list-style:none;
-  border-top:1px solid rgba(0,0,0,.10);}
-.sc-details > summary::-webkit-details-marker{display:none;}
-.sc-details > summary:before{content:"\25B8  ";display:inline-block;transition:transform .15s;}
-.sc-details[open] > summary:before{transform:rotate(90deg);}
-.sc-details .sc-list li{padding-left:18px;}
-@media (max-width:520px){
-  .sc-panel{padding:12px 13px;}
-  .sc-h,.sc-lead,.sc-list,.sc-details{font-size:16px;}
+:root{
+  --ink:#1B2A3A;
+  --ink-soft:#4A5A6A;
+  --paper:#FBFAF7;
+  --panel:#FFFFFF;
+  --rule:#D8DAD5;
+  --rule-soft:#E9EAE6;
+  --flag:#B01F12;
+  --flag-tint:#FBEEEC;
+  --ok:#2C6A57;
+  --ok-tint:#EDF3F0;
+  --hold:#8A6A16;
+  --hold-tint:#FAF3E2;
 }
-.inline-error{border:2px solid #b3261e;border-radius:10px;padding:14px 16px;margin:0 0 14px;background:rgba(179,38,30,.06);font-size:14px;line-height:1.55;}
-.inline-error strong{display:block;margin-bottom:4px;}
-.upload-checklist{list-style:none;padding:0;margin:0 0 10px;font-size:14px;line-height:1.5;}
-.upload-checklist li{padding:6px 0 6px 20px;position:relative;border-bottom:1px solid rgba(0,0,0,.06);}
-.upload-checklist li:last-child{border-bottom:0;}
-.upload-checklist li:before{content:"•";position:absolute;left:4px;}
-.upload-note{font-size:13px;margin:0 0 12px;opacity:.85;}
-.fix-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:10px 0;font-size:13px;}
-.fix-row em{opacity:.7;font-style:normal;}
-.fix-row input{width:130px;padding:8px 10px;border:2px solid var(--ink);border-radius:8px;font:inherit;font-size:14px;}
-#fix-fields{margin-top:12px;}
-.fix-note{font-size:12px;opacity:.75;margin:8px 0 0;}
-#fix-status{font-size:13px;margin:8px 0 0;}
-#stage-2 select{width:100%;padding:12px;font:inherit;font-size:15px;border:2px solid var(--ink);border-radius:8px;background:#fff;}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  font-size:17px;line-height:1.6;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+.col{max-width:660px}
+h1,h2,h3{font-family:"Newsreader",Georgia,serif;font-weight:500;letter-spacing:-0.01em;margin:0}
+h1{font-size:clamp(2.3rem,5.2vw,3.5rem);line-height:1.08}
+h2{font-size:clamp(1.6rem,3.2vw,2.1rem);line-height:1.18;margin-bottom:14px}
+h3{font-size:1.13rem;line-height:1.35;font-weight:600}
+p{margin:0 0 16px}
+a{color:inherit}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* nav */
+header.nav{border-bottom:1px solid var(--rule);background:var(--paper);position:sticky;top:0;z-index:20}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:62px}
+.brand{font-family:"Newsreader",serif;font-size:1.12rem;font-weight:600;text-decoration:none;letter-spacing:-.01em}
+.brand span{color:var(--ink-soft);font-weight:400}
+.nav-links{display:flex;gap:24px;font-size:.93rem}
+.nav-links a{color:var(--ink-soft);text-decoration:none}
+.nav-links a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+@media(max-width:760px){.nav-links{display:none}}
+
+/* hero */
+.hero{padding:66px 0 54px;border-bottom:1px solid var(--rule)}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:start}
+@media(max-width:900px){.hero-grid{grid-template-columns:1fr;gap:38px}}
+.notice{display:inline-block;font-size:.82rem;letter-spacing:.02em;color:var(--ink-soft);border:1px solid var(--rule);border-radius:2px;padding:5px 10px;margin-bottom:22px}
+.lede{font-size:1.1rem;color:var(--ink-soft);max-width:56ch}
+
+/* ledger card — the one bold element */
+.ledger{background:var(--panel);border:1px solid var(--ink);box-shadow:5px 5px 0 rgba(27,42,58,.08)}
+.ledger-head{display:flex;justify-content:space-between;align-items:baseline;padding:12px 16px;border-bottom:1px solid var(--ink);font-size:.8rem;color:var(--ink-soft)}
+.ledger-head b{color:var(--ink);font-weight:600;font-size:.86rem}
+.row{display:grid;grid-template-columns:1fr auto;gap:14px;padding:10px 16px;border-bottom:1px solid var(--rule-soft);font-size:.9rem}
+.row .lbl{color:var(--ink-soft)}
+.row .amt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.row.hit{background:var(--flag-tint)}
+.row.hit .lbl{color:var(--ink);font-weight:500}
+.row.hit .amt{color:var(--flag);font-weight:500}
+.note{padding:11px 16px;background:var(--flag-tint);border-bottom:1px solid var(--rule-soft);font-size:.83rem;line-height:1.5;color:var(--ink)}
+.note b{color:var(--flag)}
+.ledger-foot{padding:11px 16px;font-size:.79rem;color:var(--ink-soft)}
+
+/* buttons */
+.btn{display:inline-block;background:var(--ink);color:var(--paper);text-decoration:none;
+  font-family:"IBM Plex Sans",sans-serif;font-size:1rem;font-weight:500;
+  padding:14px 26px;border:1px solid var(--ink);border-radius:2px;cursor:pointer}
+.btn:hover{background:#12202E}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:#F1EFEA}
+.btn:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.btn-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:26px}
+.btn-note{font-size:.85rem;color:var(--ink-soft)}
+
+section{padding:62px 0;border-bottom:1px solid var(--rule)}
+.sec-intro{max-width:62ch;color:var(--ink-soft);margin-bottom:34px}
+
+/* steps — a real sequence, so numbered */
+.steps{list-style:none;margin:0;padding:0;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:46px 1fr;gap:20px;padding:20px 0;border-top:1px solid var(--rule-soft)}
+.steps li:first-child{border-top:1px solid var(--rule)}
+.steps li::before{content:counter(s);font-family:"IBM Plex Mono",monospace;font-size:.95rem;color:var(--flag);padding-top:2px}
+.steps p{margin:6px 0 0;color:var(--ink-soft);font-size:.96rem;max-width:60ch}
+.free-tag{display:inline-block;font-size:.74rem;color:var(--ok);background:var(--ok-tint);border:1px solid #CADED6;border-radius:2px;padding:2px 7px;margin-left:9px;vertical-align:2px}
+
+/* checks */
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+@media(max-width:820px){.checks{grid-template-columns:1fr}}
+.chk{display:grid;grid-template-columns:30px 1fr;gap:12px;padding:11px 0;border-top:1px solid var(--rule-soft);font-size:.94rem;line-height:1.45}
+.chk .n{font-family:"IBM Plex Mono",monospace;font-size:.83rem;color:var(--ink-soft);padding-top:2px}
+.group-h{margin:32px 0 4px;font-size:1rem;font-weight:600}
+.group-h:first-of-type{margin-top:0}
+.group-sub{color:var(--ink-soft);font-size:.9rem;margin:0 0 6px}
+
+/* status legend */
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 0}
+.pill{font-size:.82rem;padding:5px 11px;border-radius:2px;border:1px solid}
+.pill.a{background:var(--ok-tint);border-color:#CADED6;color:var(--ok)}
+.pill.b{background:var(--hold-tint);border-color:#E7D9AE;color:var(--hold)}
+.pill.c{background:var(--flag-tint);border-color:#EED4CF;color:var(--flag)}
+
+/* sample */
+.sample{background:var(--panel);border:1px solid var(--rule);padding:26px 28px}
+.finding{border-top:1px solid var(--rule-soft);padding:18px 0}
+.finding:first-of-type{border-top:none;padding-top:4px}
+.finding-h{display:flex;justify-content:space-between;gap:16px;align-items:baseline;flex-wrap:wrap}
+.finding-h .amt{font-family:"IBM Plex Mono",monospace;color:var(--flag);font-weight:500}
+.finding p{font-size:.92rem;color:var(--ink-soft);margin:7px 0 0;max-width:64ch}
+.finding .basis{font-size:.85rem;color:var(--ink-soft);margin-top:7px;padding-left:13px;border-left:2px solid var(--rule)}
+
+/* price */
+.price-card{background:var(--panel);border:1px solid var(--ink);padding:32px}
+.price-top{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:18px;margin-bottom:20px}
+.fig{font-family:"Newsreader",serif;font-size:2.5rem;line-height:1}
+.fig small{font-size:.95rem;color:var(--ink-soft);font-family:"IBM Plex Sans",sans-serif;margin-left:8px}
+.incl{list-style:none;margin:0;padding:0}
+.incl li{padding:8px 0 8px 22px;position:relative;font-size:.95rem;border-top:1px solid var(--rule-soft)}
+.incl li:first-child{border-top:none}
+.incl li::before{content:"";position:absolute;left:0;top:15px;width:9px;height:9px;border:1px solid var(--ok);background:var(--ok-tint)}
+
+/* form */
+.form{margin-top:26px;border-top:1px solid var(--rule);padding-top:24px}
+label{display:block;font-size:.9rem;font-weight:500;margin-bottom:6px}
+.hint{font-size:.85rem;color:var(--ink-soft);margin:0 0 12px}
+input[type=email],select{width:100%;padding:12px 13px;border:1px solid var(--rule);border-radius:2px;font-family:inherit;font-size:.97rem;background:var(--panel);color:var(--ink)}
+.drop{border:1px dashed #B9BDB6;border-radius:2px;background:#FDFDFB;padding:26px 20px;text-align:center;cursor:pointer}
+.drop:hover{background:#F7F7F3;border-color:var(--ink-soft)}
+.drop strong{display:block;font-weight:500;margin-bottom:5px}
+.drop span{font-size:.85rem;color:var(--ink-soft)}
+.field{margin-bottom:20px}
+.filelist{list-style:none;margin:12px 0 0;padding:0;font-size:.88rem}
+.filelist li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--rule-soft)}
+.filelist .sz{font-family:"IBM Plex Mono",monospace;color:var(--ink-soft)}
+.err{color:var(--flag);font-size:.88rem;margin-top:10px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:640px){.two{grid-template-columns:1fr}}
+
+/* faq */
+details{border-top:1px solid var(--rule-soft);padding:0}
+details:first-of-type{border-top:1px solid var(--rule)}
+summary{padding:16px 0;cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-family:"IBM Plex Mono",monospace;color:var(--ink-soft)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 0 18px;color:var(--ink-soft);font-size:.95rem;max-width:66ch}
+
+/* limits */
+.limits{background:#F4F2ED;border:1px solid var(--rule);padding:26px 28px}
+.limits ul{margin:0;padding-left:20px}
+.limits li{margin-bottom:9px;font-size:.95rem;color:var(--ink-soft)}
+.limits li:last-child{margin-bottom:0}
+
+footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
+.disc{max-width:72ch;margin-bottom:20px}
+.foot-links{display:flex;gap:18px;flex-wrap:wrap}
+.foot-links a{color:var(--ink-soft)}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/closing#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Closing Disclosure Audit</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Closing Disclosure Audit</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#checks">The checks</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> You have 3 business days to review</div>
-      <h1>Find the errors in your closing costs <span class="grad">before you sign.</span></h1>
-      <p class="sub">Upload your Closing Disclosure and get a free scorecard. We recheck the document's own arithmetic, its escrow and per-diem calculations, and every figure in the Loan Calculations box. Add your Loan Estimate and we test whether any fee rose beyond what the lending rules permit. Before you pay anything, we name the charges we cannot price for your county.</p>
-    </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head reveal">
-      <div class="eyebrow">How it works</div>
-      <h2>Not a comparison. An audit.</h2>
-    </div>
-    <div class="steps-grid">
-      <div class="step-card reveal">
-        <div class="step-num">1</div>
-        <h4>Upload your Closing Disclosure</h4>
-        <p>That is the only document we need to start. Add your purchase contract and Loan Estimates to unlock two further checks.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">2</div>
-        <h4>Answer a quick question</h4>
-        <p>Property type and occupancy — about 15 seconds, and it changes the analysis. If you upload a Loan Estimate we ask one more, about your lender's written list of service providers, because that decides which tolerance rule applies.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">3</div>
-        <h4>Pay $59</h4>
-        <p>One flat price per closing audited.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">4</div>
-        <h4>We audit the charges themselves</h4>
-        <p>Every material fee is tested against county recording schedules, state title rate filings, transfer tax tables, the RESPA escrow cap, per-diem interest, and the arithmetic on the document — then against your Loan Estimate and contract if you provided them.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">5</div>
-        <h4>Get your action pack</h4>
-        <p>Every material finding ranked by dollar impact, the top 5 highlighted, each labelled changeable now, likely locked, or a possible post-closing refund — plus drafted emails for your lender and settlement agent.</p>
-      </div>
-    </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head reveal">
-      <div class="eyebrow">What you get</div>
-      <h2>Find what is wrong — before you sign.</h2>
-    </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card reveal">
-        <ul class="check-list">
-          <li><span class="tick">✓</span> Every material finding, ranked by dollar impact — with the top 5 highlighted, not the rest hidden</li>
-          <li><span class="tick">✓</span> What each finding is, the arithmetic, rule, published rate or comparison data behind it, and what to ask your lender</li>
-          <li><span class="tick">✓</span> Arithmetic verification: section subtotals, prepaid interest, escrow cushion, prorations, and Cash to Close</li>
-          <li><span class="tick">✓</span> Duplicate and stacked-fee detection, and missing seller credits</li>
-          <li><span class="tick">✓</span> Whether each finding is still changeable before closing, likely locked, or a possible post-closing refund</li>
-          <li><span class="tick">✓</span> Ready-to-send emails for your lender and your settlement agent</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    This page is already wired to a live Stripe Payment Link for "Closing
-    Navigator Report" ($59, one-time), configured to match the other 11
-    Navigator pages: after payment redirects to
-    https://streamnavigator.ai/navigator-status, and this page already
-    appends ?client_reference_id=<submission id> automatically (see
-    navigator-shared.js) so payment ties back to the right submission.
-    To change the price or product name, edit it in the Stripe Dashboard —
-    Product catalog -> "Closing Navigator Report" — no code changes needed
-    here unless you create a brand-new Payment Link, in which case paste
-    the new https://buy.stripe.com/... URL over the one on the button below.
-    The shared webhook (api/navigator-stripe-webhook.js) already recognizes
-    this product once 'closing' is added to ALLOWED_PRODUCTS in
-    api/_lib/supabaseAdmin.js — already done as part of this change.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head reveal">
-      <div class="eyebrow">Get started</div>
-      <h2>See what we found first. Then decide.</h2>
-      <p>Upload your Closing Disclosure and see the free scorecard before you decide. $29 for the audit; $59 if you add the documents that unlock the two checks which can put money back.</p>
-    </div>
-    <div class="single-price-wrap">
-      <div class="price-card featured reveal" id="intake-card">
-        <span class="price-badge">Free scorecard first</span>
-        <h3>Closing Disclosure Audit</h3>
-        <p class="desc">An independent recheck of your Closing Disclosure: its own arithmetic, the federal lending rules, and — for the charges where we hold county data — a published rate or what comparable loans actually paid. The scorecard names which is which before you pay.</p>
-        <div class="price-amount">$29<span style="font-size:.5em; font-weight:400;"> &ndash; $59</span></div>
-        <div class="price-period">$29 for the Closing Disclosure audit &middot; $59 when you add Loan Estimates or your purchase contract</div>
 
-        <div id="stage-1">
-        <div class="field-block">
-          <label>Upload your documents</label>
-          <ul class="upload-checklist">
-            <li><strong>Closing Disclosure</strong> — required. This alone is a $29 audit.</li>
-            <li><strong>Loan Estimate</strong> — optional. Lets us test whether a fee rose beyond what the lending rules allow.</li>
-            <li><strong>Purchase contract</strong> — optional. Lets us check the credits you negotiated actually landed.</li>
-          </ul>
-          <p class="upload-note">Add either optional document and your audit is $59 instead of $29. Drop them all in the same box.</p>
-          <div class="upload-zone" id="upload-zone">
-            <div class="upload-ico">📎</div>
-            <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 3MB total across all files</div>
-          </div>
-          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
-          <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">On Loan Estimates: add the most recent one, not an older one. If you have the full sequence including every revision, upload them all — more history lets us establish the correct legal baseline instead of assuming one.</p>
-        </div>
-        <div class="field-block">
-          <label>Email</label>
-          <input type="email" id="intake-email" placeholder="you@example.com">
-        </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> <strong>$29</strong> — 20 named checks that run on the Closing Disclosure alone: the Loan Calculations box, escrow cushion against the RESPA limit, per-diem interest and prorations against your closing date, duplicate and stacked fees, plus the emails already drafted</li>
-          <li><span class="tick">✓</span> <strong>$59</strong> — adds TRID tolerance testing and purchase-contract reconciliation, the two checks that can conclude money is owed back</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
-        </ul>
-        <div class="inline-error" id="scorecard-error" style="display:none;" role="alert" aria-live="assertive"></div>
-        <a href="#" class="btn btn-primary" id="scorecard-btn">Get My Free Scorecard →</a>
-        <p class="price-secure">No card required for the scorecard.</p>
-        </div><!-- /stage-1 -->
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="notice">You have 3 business days to review before you sign</span>
+      <h1>Your Closing Disclosure has arithmetic in it. We check whether it adds up.</h1>
+      <p class="lede">Upload the document and we recheck its own maths — the section subtotals, the Loan Calculations box, prepaid interest against your closing date, the escrow cushion against the federal cap — and we look for charges billed twice. You see how many findings we have before you pay anything.</p>
+      <div class="btn-row">
+        <a class="btn" href="#price">Get my free scorecard</a>
+        <a class="btn ghost" href="#sample">See a sample report</a>
+      </div>
+      <p class="btn-note" style="margin-top:14px">No card needed for the scorecard.</p>
+    </div>
 
-        <div id="stage-2" style="display:none;">
-          <div class="scorecard-panel" id="scorecard-panel"></div>
-
-          <div id="questions-block">
-            <p class="field-hint" style="margin-top:18px;" id="q-intro"><strong>One quick question.</strong> It changes the analysis — about 15 seconds.</p>
-            <div class="field-block">
-              <label for="q-property-type">1. What is the property type and occupancy?</label>
-              <select id="q-property-type">
-                <option value="">Choose one…</option>
-                <option value="single_family">Single-family residence</option>
-                <option value="condo">Condo</option>
-                <option value="other_attached">Other attached housing</option>
-                <option value="investment">Investment property</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <!-- Only asked when a Loan Estimate is present. The answer feeds
-                 analyzeTolerances() and the zero-tolerance bucket assignment,
-                 both of which need an LE baseline; on a CD-only audit it
-                 changes no finding, so asking for it takes 15 seconds from the
-                 customer and buys them nothing. -->
-            <div class="field-block" id="q-provider-block" style="display:none;">
-              <label for="q-provider-list">2. Did your lender give you a written list of service providers?</label>
-              <select id="q-provider-list">
-                <option value="">Choose one…</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-                <option value="dont_know">Don't know</option>
-              </select>
-              <p class="field-hint">This decides which tolerance rule applies to the services in Section C of your Closing Disclosure. Without a written list, your lender cannot rely on the shopping exception, and those charges are tested at zero tolerance instead — meaning any increase over your Loan Estimate may be refundable.</p>
-            </div>
-            <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
-            <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
-            <p class="price-secure">🔒 Secured by Stripe</p>
-          </div>
-        </div>
-      </div>
-    </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head reveal">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
-    </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">What documents do I need? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Only your final Closing Disclosure. The purchase contract lets us check seller credits and concessions, and Loan Estimates let us test whether a fee increase exceeded what the lending rules allow — both are useful, neither is required.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">How is this different from reading the Closing Disclosure myself? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Reading it tells you what you are being charged. It cannot tell you whether the number is right. We re-run the arithmetic, test the prepaid interest and escrow cushion against the rules that govern them, look for duplicated and stacked charges, and measure benchmarkable fees against published schedules — then rank everything by dollar impact.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Will you contact my lender for me? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No. You get drafted emails for your lender and your settlement agent, each naming the specific charge, the amount, the rule or schedule behind it, and what you are asking for — but you send them yourself. We are not a law firm and this is not legal advice.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if nothing changed? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You will be told plainly. The free scorecard shows you the count before you pay anything, so you are never buying a report to find out there was nothing in it. It also names the exact charges we cannot price for your county — by name, not as a number — so you know what is and is not covered before you decide.</div></div>
-      </div>
-    </div>
-  </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final reveal">
-      <h2>You have three business days. Use them.</h2>
-      <p>Upload your Closing Disclosure and see your free scorecard. Reports are usually ready within 5 minutes.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Get My Free Scorecard</a>
-    </div>
-  </section>
-</main>
-<footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
-      <a href="/streaming">Streaming Navigator</a>
-      <a href="/contractor">🔧 Contractor Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/home-savings">💡 Home Savings Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/subscriptions">📺 Subscription Navigator</a>
-      <a href="/government-money">🏛️ Government Money Finder</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
+    <div class="ledger" aria-label="Example of a flagged line">
+      <div class="ledger-head"><b>Closing Disclosure, page 2</b><span>Section F — Prepaids</span></div>
+      <div class="row"><span class="lbl">Homeowner's insurance, 12 mo.</span><span class="amt">$1,842.00</span></div>
+      <div class="row hit"><span class="lbl">Prepaid interest, 22 days @ $41.10/day</span><span class="amt">$904.20</span></div>
+      <div class="row"><span class="lbl">Property taxes, 6 mo.</span><span class="amt">$2,310.00</span></div>
+      <div class="note"><b>Finding.</b> Your disbursement date is the 24th. From the 24th to month end is 8 days, not 22. At the rate printed on your own document, the line should read $328.80.</div>
+      <div class="ledger-foot">Difference: <span class="mono">$575.40</span> — changeable before closing</div>
     </div>
   </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
-      <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">The scorecard comes first. You see the number of findings, and which parts of your document we could not check, before you decide whether the report is worth buying.</p>
+    <ol class="steps col" style="max-width:760px">
+      <li><h3>Upload your Closing Disclosure</h3><p>That is the only document we need. If your Loan Estimates or purchase contract fit in the same upload, add them — they unlock further checks and cost you nothing extra.</p></li>
+      <li><h3>Answer two quick questions</h3><p>Your property type, and whether your lender gave you a written list of service providers. About fifteen seconds. The second one decides which tolerance rule your fees fall under, so it changes what we can conclude.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">Free</span></h3><p>Within a few minutes you get the count of findings, the total dollars they touch, and a plain list of anything we could not read or verify on your document. No card, no charge, no obligation.</p></li>
+      <li><h3>Decide, then pay $59</h3><p>Only if the scorecard shows something worth reading. One flat price per closing, whatever you uploaded.</p></li>
+      <li><h3>Get your full report and your emails</h3><p>Every finding with the arithmetic or the rule behind it, ranked by dollar impact, each marked changeable now, likely locked, or possible post-closing refund — plus drafted emails to your lender and your settlement agent that you send yourself.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="checks">
+  <div class="wrap">
+    <h2>The twenty checks, named</h2>
+    <p class="sec-intro">Every one of these tests your document against itself or against a federal rule. We do not compare your fees to local averages, and we do not tell you a charge is too expensive — that would mean guessing, and a wrong guess three days before closing is worse than no answer. What follows is what can be verified.</p>
+
+    <h3 class="group-h">Runs on your Closing Disclosure alone</h3>
+    <p class="group-sub">Twenty checks. No other document needed.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">01</span><span>Loan Costs subtotals for sections A, B and C recomputed from the lines above them</span></div>
+      <div class="chk"><span class="n">02</span><span>Total Loan Costs (D) against the sum of A, B and C</span></div>
+      <div class="chk"><span class="n">03</span><span>Other Costs subtotals for sections E, F, G and H</span></div>
+      <div class="chk"><span class="n">04</span><span>Total Other Costs (I) against the sum of E through H</span></div>
+      <div class="chk"><span class="n">05</span><span>Total Closing Costs (J), including lender credits applied</span></div>
+      <div class="chk"><span class="n">06</span><span>The Calculating Cash to Close table, line by line</span></div>
+      <div class="chk"><span class="n">07</span><span>Summaries of Transactions: does the borrower's side balance</span></div>
+      <div class="chk"><span class="n">08</span><span>Loan Calculations box: Total of Payments</span></div>
+      <div class="chk"><span class="n">09</span><span>Loan Calculations box: Finance Charge</span></div>
+      <div class="chk"><span class="n">10</span><span>Loan Calculations box: Amount Financed</span></div>
+      <div class="chk"><span class="n">11</span><span>Loan Calculations box: Total Interest Percentage</span></div>
+      <div class="chk"><span class="n">12</span><span>Annual Percentage Rate consistency with the terms printed on page 1</span></div>
+      <div class="chk"><span class="n">13</span><span>Prepaid interest: day count and per-diem rate against your disbursement date</span></div>
+      <div class="chk"><span class="n">14</span><span>Escrow cushion against the federal two-month maximum</span></div>
+      <div class="chk"><span class="n">15</span><span>Initial escrow statement against the monthly escrow figure on page 1</span></div>
+      <div class="chk"><span class="n">16</span><span>Property tax proration against your closing date</span></div>
+      <div class="chk"><span class="n">17</span><span>HOA and assessment prorations against your closing date</span></div>
+      <div class="chk"><span class="n">18</span><span>The same charge appearing twice across sections A, B, C, E and H</span></div>
+      <div class="chk"><span class="n">19</span><span>Stacked lender fees: processing, underwriting, administration and application billed separately</span></div>
+      <div class="chk"><span class="n">20</span><span>Page 1 loan terms against page 4: prepayment penalty, escrow, adjustable-rate detail</span></div>
     </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
+
+    <h3 class="group-h">Unlocked by your Loan Estimates</h3>
+    <p class="group-sub">Optional. These are the checks that can conclude money is owed back to you.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">21</span><span>Zero-tolerance fees: did any rise at all without a documented change of circumstance</span></div>
+      <div class="chk"><span class="n">22</span><span>The ten-percent group tested cumulatively, not line by line</span></div>
+      <div class="chk"><span class="n">23</span><span>Lender credits: were any reduced between the estimate and the disclosure</span></div>
+      <div class="chk"><span class="n">24</span><span>Charges that appear on the disclosure with no counterpart on any estimate</span></div>
+    </div>
+
+    <h3 class="group-h">Unlocked by your purchase contract</h3>
+    <p class="group-sub">Optional. The most commonly missed money at the closing table.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">25</span><span>Seller credits and concessions you negotiated, against what actually landed on the disclosure</span></div>
+      <div class="chk"><span class="n">26</span><span>Who-pays-what allocations against what the contract says</span></div>
+    </div>
+
+    <div class="legend">
+      <span class="pill a">Changeable now</span>
+      <span class="pill b">Likely locked</span>
+      <span class="pill c">Possible post-closing refund</span>
+    </div>
+    <p class="btn-note" style="margin-top:12px">Every finding carries one of these three labels, so you know what is worth a phone call today.</p>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>A sample report</h2>
+    <p class="sec-intro">Three findings from a real report, with the numbers changed. This is the level of detail you get for every finding — what is wrong, the arithmetic behind it, and what to do about it.</p>
+    <div class="sample col" style="max-width:760px">
+      <div class="finding">
+        <div class="finding-h"><h3>Prepaid interest billed for 22 days instead of 8</h3><span class="amt">$575.40</span></div>
+        <p>Page 2, section F. Your disbursement date is the 24th, which leaves 8 days of interest to month end.</p>
+        <div class="basis">22 days × $41.10 = $904.20 charged. 8 days × $41.10 = $328.80 correct. Both figures are printed on your own document.</div>
+        <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
+      </div>
+      <div class="finding">
+        <div class="finding-h"><h3>Escrow cushion exceeds the federal maximum</h3><span class="amt">$412.00</span></div>
+        <p>Page 2, section G. Federal rules cap the cushion at two months of escrow payments.</p>
+        <div class="basis">Monthly escrow $618.00, so the cap is $1,236.00. Your initial deposit holds $1,648.00 of cushion.</div>
+        <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
+      </div>
+      <div class="finding">
+        <div class="finding-h"><h3>Underwriting fee rose after your last Loan Estimate</h3><span class="amt">$300.00</span></div>
+        <p>Lender fees cannot increase without a documented change of circumstance. We found no revised estimate in what you uploaded.</p>
+        <div class="basis">Loan Estimate dated 14 March: $995.00. Closing Disclosure: $1,295.00. Ask your lender for the change of circumstance notice, or for the difference back.</div>
+        <p style="margin-top:9px"><span class="pill c">Possible post-closing refund</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>See what we found. Then decide.</h2>
+    <p class="sec-intro">One price, whatever you upload. Adding your Loan Estimates or contract unlocks more checks and costs nothing extra — we would rather you gave us everything.</p>
+
+    <div class="price-card col" style="max-width:760px">
+      <div class="price-top">
+        <div>
+          <h3 style="font-family:Newsreader,serif;font-size:1.35rem;font-weight:500">Closing Disclosure Audit</h3>
+          <p style="margin:6px 0 0;color:var(--ink-soft);font-size:.93rem">Free scorecard first. Pay only if it finds something.</p>
+        </div>
+        <div class="fig">$59<small>one closing</small></div>
+      </div>
+
+      <ul class="incl">
+        <li>All twenty document checks, plus the four tolerance checks and two contract checks if you upload those documents</li>
+        <li>Every finding ranked by dollar impact, with the arithmetic or rule behind it</li>
+        <li>Each finding marked changeable now, likely locked, or possible post-closing refund</li>
+        <li>Drafted emails for your lender and your settlement agent</li>
+        <li>A named list of anything we could not read or verify on your document</li>
+        <li>Full refund if the report does not contain the findings your scorecard promised</li>
+      </ul>
+
+      <form class="form" id="scorecard" novalidate>
+        <div class="field">
+          <label for="files">Your documents</label>
+          <p class="hint">Closing Disclosure required. Loan Estimates and purchase contract optional — put everything in this one box.</p>
+          <div class="drop" id="drop" role="button" tabindex="0" aria-controls="files">
+            <strong>Choose files or drag them here</strong>
+            <span>PDF, JPG or PNG · 3 MB total</span>
+          </div>
+          <input id="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+          <ul class="filelist" id="filelist"></ul>
+          <p class="err" id="fileerr" hidden></p>
+          <p class="hint" style="margin-top:12px">Send the Closing Disclosure first — if there is room left, add your Loan Estimates and contract. If you have several Loan Estimates, the most recent one matters most. Running out of space is common with phone photos; a PDF from your lender's portal is usually much smaller.</p>
+        </div>
+
+        <div class="two">
+          <div class="field">
+            <label for="ptype">Property type</label>
+            <select id="ptype" required>
+              <option value="">Select…</option>
+              <option>Single-family house</option>
+              <option>Condominium</option>
+              <option>Townhouse</option>
+              <option>Two to four units</option>
+              <option>Manufactured home</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="plist">Did your lender give you a written list of service providers?</label>
+            <select id="plist">
+              <option value="">Not sure / didn't get one</option>
+              <option value="used_list">Yes, and I used someone on it</option>
+              <option value="off_list">Yes, but I chose someone else</option>
+              <option value="no_list">No, I never received one</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Where should the scorecard go</label>
+          <input id="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+        </div>
+
+        <button class="btn" type="submit" id="submit">Get my free scorecard</button>
+        <p class="btn-note" style="margin-top:12px">No card required. Usually ready within five minutes.</p>
+        <p class="err" id="formerr" hidden></p>
+        <p id="done" hidden style="margin-top:16px;padding:14px 16px;background:var(--ok-tint);border:1px solid #CADED6;font-size:.94rem">Your documents are in. Watch your inbox — the scorecard usually arrives within five minutes.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Worth reading before you upload, so nothing in the report surprises you.</p>
+    <div class="limits col" style="max-width:760px">
       <ul>
-        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
+        <li>We do not tell you a fee is too expensive. We check whether figures are correct and whether rules were followed. Whether a title company charges more than the one down the road is not something we can verify, so we do not claim to.</li>
+        <li>We do not shop for you, negotiate for you, or contact your lender. You send the emails.</li>
+        <li>We read what you send us. If a scan is unclear, we say which lines we could not read rather than guessing at them — that list is in your free scorecard, before you pay.</li>
+        <li>Most closing costs are settled by the time your disclosure arrives. We mark clearly which findings are still worth a phone call and which are not.</li>
+        <li>This is automated analysis, not legal or mortgage advice. Every finding shows the arithmetic or the rule behind it so you can check it yourself, and take it to your lender, attorney or settlement agent.</li>
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, financial, or mortgage advice. Findings are stated as potential issues to raise, not as legal conclusions. Always review your full closing documents and consult your lender, attorney, or title company before you sign.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col" style="max-width:760px">
+      <details><summary>What documents do I need?</summary><div class="body">Only your final Closing Disclosure. Your Loan Estimates unlock the tolerance checks, and your purchase contract lets us check that the seller credits you negotiated actually landed. Both are useful, neither is required, and neither costs extra.</div></details>
+      <details><summary>How is this different from reading the document myself?</summary><div class="body">Reading it tells you what you are being charged. It does not tell you whether the number is right. We re-run the arithmetic, test the prepaid interest and escrow cushion against the rules that govern them, look for charges billed twice, and rank everything by how many dollars it moves.</div></details>
+      <details><summary>Do you compare my fees to what other people paid?</summary><div class="body">No. We used to describe something like that and we removed it, because we could not stand behind it. Telling you a fee is high without solid ground is how you end up challenging a legitimate charge the day before closing. Everything in your report is either arithmetic from your own document or a federal rule we can name.</div></details>
+      <details><summary>Will you contact my lender for me?</summary><div class="body">No. You get drafted emails for your lender and your settlement agent, each naming the charge, the amount, the arithmetic or rule behind it, and what you are asking for. You send them yourself. We are not a law firm and this is not legal advice.</div></details>
+      <details><summary>What if my document is a bad scan?</summary><div class="body">We tell you. Your free scorecard names every line we could not read clearly, so you know what is and is not covered before you spend anything. If too much is unreadable we will say so and suggest you send a cleaner copy rather than take your money.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">The free scorecard shows the count before you pay, so you are never buying a report to discover it is empty. If you do buy and the report does not contain the findings your scorecard promised, reply and we refund you in full.</div></details>
+      <details><summary>How long does it take?</summary><div class="body">The scorecard is usually ready within five minutes, and the full report within five minutes of payment. You have three business days between receiving your Closing Disclosure and signing — this is built to fit inside that window.</div></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, financial, or mortgage advice. Findings are drawn from the documents you upload and from federal disclosure rules; they are not a substitute for review by your lender, attorney, or settlement agent. Always read your full closing documents before you sign.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">© 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
-<div class="toast" id="toast">
-  <span class="ico">✓</span> <span id="toast-text"></span>
-</div>
-<script src="/navigator-shared.js"></script>
 <script>
 (function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
+  var MAX_TOTAL = 3*1024*1024, MAX_FILES = 6;
+  var input=document.getElementById('files'), drop=document.getElementById('drop'),
+      list=document.getElementById('filelist'), fileerr=document.getElementById('fileerr'),
+      form=document.getElementById('scorecard'), formerr=document.getElementById('formerr'),
+      done=document.getElementById('done'), submit=document.getElementById('submit');
+  var chosen=[];
 
-  let submissionRef = null;
+  function fmt(b){return b<1048576?(b/1024).toFixed(0)+' KB':(b/1048576).toFixed(1)+' MB';}
+  function show(msg){ if(msg){fileerr.textContent=msg;fileerr.hidden=false;} else {fileerr.hidden=true;} }
 
-  // Answers survive a re-upload. They belong to the customer and the property,
-  // not to a submission id, and re-asking a question they already answered is
-  // the fastest way to look like the previous step was thrown away.
-  const savedAnswers = { property_type: '', provider_list: '' };
-  function rememberAnswers() {
-    const pt = document.getElementById('q-property-type');
-    const pl = document.getElementById('q-provider-list');
-    if (pt) savedAnswers.property_type = pt.value;
-    if (pl) savedAnswers.provider_list = pl.value;
-  }
-  function restoreAnswers() {
-    const pt = document.getElementById('q-property-type');
-    const pl = document.getElementById('q-provider-list');
-    if (pt && savedAnswers.property_type) pt.value = savedAnswers.property_type;
-    if (pl && savedAnswers.provider_list) pl.value = savedAnswers.provider_list;
-  }
-  document.addEventListener('change', function(ev){
-    if (ev.target && (ev.target.id === 'q-property-type' || ev.target.id === 'q-provider-list')) {
-      rememberAnswers();
-    }
-  });
-
-  // What the customer has already told us, ready to travel with any request.
-  // Answers belong to the property, not to a submission id, so they are sent
-  // with every upload rather than posted separately afterwards.
-  function answerPayload() {
-    rememberAnswers();
-    const out = {};
-    if (savedAnswers.property_type) out.property_type = savedAnswers.property_type;
-    if (savedAnswers.provider_list) out.provider_list = savedAnswers.provider_list;
-    return out;
-  }
-
-  let unreadableRemaining = 0;
-  let acknowledgedGaps = false;
-  function showError(title, detail, slot) {
-    const box = document.getElementById(slot || 'scorecard-error');
-    box.innerHTML = '<strong></strong><span></span>';
-    box.querySelector('strong').textContent = title;
-    box.querySelector('span').textContent = detail;
-    box.style.display = 'block';
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-
-  function clearError(slot) {
-    const box = document.getElementById(slot || 'scorecard-error');
-    box.style.display = 'none';
-    box.textContent = '';
-  }
-
-  // Vercel rejects an oversized request body at the edge with a 413 and a
-  // non-JSON payload, so resp.json() throws and the customer previously saw
-  // "Something went wrong — please try again", which is both unhelpful and
-  // untrue: retrying an oversized upload can never work. The client now blocks
-  // this case before upload, but a slow-growing payload could still hit it.
-  async function readJson(resp) {
-    if (resp.status === 413) {
-      throw new Error('Those files are too large to send in one go. Upload your Closing Disclosure on its own first — you can add the Loan Estimate and contract straight afterwards.');
-    }
-    const text = await resp.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error('The server sent back a response we could not read. Please try again in a moment.');
-    }
-  }
-
-  const money = (n) => n === null || n === undefined
-    ? '—'
-    : '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
-
-  // The scorecard shows counts and headline figures only. It deliberately never
-  // names a flagged fee or its dollar impact — that is the paid report. It has to
-  // be worth reading on its own without being a substitute for what it sells.
-  // The scorecard used to hide the upload section entirely and then tell the
-  // customer to "upload them above" — pointing at a box that was no longer on
-  // the page. This brings it back, with the files they already chose intact, so
-  // they only add the new ones.
-  // Bound directly to the button after it is rendered rather than delegated from
-  // document. The delegated version matched on ev.target.id, which fails
-  // silently if anything inside the button becomes the click target — and a
-  // silent failure here strands the customer on a screen telling them to add
-  // documents with no way to do it.
-  function showUploader() {
-    document.getElementById('stage-2').style.display = 'none';
-    document.getElementById('stage-1').style.display = 'block';
-    const btn = document.getElementById('scorecard-btn');
-    btn.textContent = 'Update My Free Scorecard →';
-    btn.style.pointerEvents = 'auto';
-    btn.disabled = false;
-    document.getElementById('upload-zone').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
-
-  function applyTier(tier) {
-    const btn = document.getElementById('pay-btn');
-    const link = btn.getAttribute(tier.id === 'full' ? 'data-link-full' : 'data-link-basic');
-    if (link && link.indexOf('REPLACE_WITH_') === -1) btn.setAttribute('href', link);
-    btn.textContent = 'Unlock the Full Audit — ' + tier.price_label + ' →';
-  }
-
-  function renderScorecard(sc) {
-    unreadableRemaining = (sc.unreadable_fields || []).length;
-    acknowledgedGaps = false;   // a fresh scorecard means a fresh decision
-    const panel = document.getElementById('scorecard-panel');
-    const pct = sc.closing_costs_pct_of_loan;
-    const rows = [];
-
-    if (sc.total_closing_costs !== null && sc.total_closing_costs !== undefined) {
-      rows.push(['Total closing costs', money(sc.total_closing_costs)]);
-      rows.push(['As a share of your loan', pct === null ? '—' : pct + '%']);
-      // A bare percentage tells a first-time buyer nothing. Say what normal is,
-      // and say why a small loan reads high — many fees are flat dollars.
-      if (sc.cost_context) {
-        var cc = sc.cost_context;
-        rows.push(['Typical range', cc.typical_low + '–' + cc.typical_high + '% of loan']);
-      }
-    } else if (sc.total_borrower_charges) {
-      // A settlement statement prints no Total Closing Costs line, so this is
-      // added up from the charge lines. Labelled as calculated so it is never
-      // mistaken for the lender's own total.
-      rows.push([
-        'Your fees and charges (' + sc.charge_lines_counted + ' lines)',
-        money(sc.total_borrower_charges),
-      ]);
-      if (sc.loan_amount) {
-        rows.push([
-          'As a share of your loan',
-          Math.round((sc.total_borrower_charges / sc.loan_amount) * 1000) / 10 + '%',
-        ]);
-      }
-    }
-
-    rows.push(['Potential issues found', String(sc.flag_count)]);
-    // Three issues could be $50 or $5,000. Without magnitude the decision to
-    // pay is a coin flip.
-    if (sc.flag_dollars) {
-      rows.push(['Dollars in question', money(sc.flag_dollars)
-        + (sc.flags_with_dollars < sc.flag_count ? ' (' + sc.flags_with_dollars + ' of ' + sc.flag_count + ' priced)' : '')]);
-    }
-    if (sc.flag_severity && sc.flag_severity.high) {
-      rows.push(['Of those, high priority', String(sc.flag_severity.high)]);
-    }
-    if (sc.needs_more_documents_count) {
-      rows.push(['Items needing another document', String(sc.needs_more_documents_count)]);
-    }
-    // Checks, not fees. "10 of 14 fees, no rate data" measured a corpus we do
-    // not claim to have, and its denominator was never reachable. This one is.
-    if (sc.checks_total) {
-      rows.push(['Checks run', sc.checks_run + ' of ' + sc.checks_total]);
-    }
-    if (sc.checks_blocked) {
-      rows.push(['Checks needing another document', String(sc.checks_blocked)]);
-    }
-
-    // Shown ABOVE the figures and at a size that cannot be skimmed past. Someone
-    // comparing two different properties' documents needs to know that before
-    // they read a single number, or they will trust findings built on the wrong
-    // pairing.
-    let html = '';
-    if (sc.transaction_mismatch) {
-      const m = sc.transaction_mismatch;
-      const rows = (m.fields || []).map(function(f){
-        return '<li><span>' + f.field + '</span>'
-          + '<b>' + (f.cd === null || f.cd === undefined ? 'not stated' : f.cd) + '</b>'
-          + '<em>on your Closing Disclosure</em>'
-          + '<b>' + (f.le === null || f.le === undefined ? 'not stated' : f.le) + '</b>'
-          + '<em>on your Loan Estimate</em></li>';
-      }).join('');
-      html += '<div class="scorecard-alert">'
-        + '<h3>These two documents are not the same loan</h3>'
-        + '<p>We stopped the comparison rather than give you findings that mean nothing.</p>'
-        + (rows ? '<ul class="mismatch-rows">' + rows + '</ul>' : '')
-        + '<p class="mismatch-why">A Loan Estimate is a promise made by one particular lender about '
-        + 'one particular property. Comparing it against a different loan\'s charges would produce '
-        + 'numbers that look like violations but are meaningless. Upload the Loan Estimate for this '
-        + 'property and lender, and we will run the comparison.</p>'
-        + '</div>';
-    }
-
-    html += '<div class="scorecard-head"><strong>Your free scorecard</strong>'
-      + (sc.document_label ? ' &middot; read from your ' + sc.document_label : '')
-      + (sc.property_county ? ' &middot; ' + sc.property_county + (sc.property_state ? ', ' + sc.property_state : '') : '')
-      + '</div><ul class="scorecard-rows">'
-      + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
-      + '</ul>';
-
-    // Only meaningful when we added the total up ourselves. A real Closing
-    // Disclosure prints Total Closing Costs (J), and J already includes the
-    // initial escrow payment in section G — telling the customer those were
-    // "not counted above" would be flatly untrue.
-    // Tier is decided by what the customer actually uploaded, and the upsell is
-    // shown only when it would genuinely buy them a different analysis.
-    if (sc.tier) {
-      applyTier(sc.tier);
-      if (sc.tier.id === 'basic' && sc.tier.downgraded_from_full) {
-        // Charged $29 rather than $59 because the extra document could not be
-        // used. Saying so plainly is the difference between a refund request
-        // and a customer who fixes the upload and comes back.
-        html += '<p class="scorecard-note"><strong>Your audit is $29, not $59.</strong> You uploaded '
-          + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract ? 'extra documents'
-            : sc.tier.has_loan_estimate ? 'a Loan Estimate' : 'a purchase contract')
-          + ', but we could not use '
-          + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract ? 'them' : 'it')
-          + ' &mdash; the reason is above &mdash; so you are not being charged for checks that '
-          + 'did not run. Replace the upload and the price goes back to $59, because then the '
-          + 'analysis actually happens.</p>'
-          + '<p class="scorecard-note">You still get every check that runs on the Closing '
-          + 'Disclosure alone.</p>'
-          + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
-          + 'style="margin-top:10px;">&#8593; Replace those documents</button>';
-      } else if (sc.tier.id === 'basic') {
-        html += '<div class="sc-panel">'
-          + '<p class="sc-h">Your audit is $29</p>'
-          // The count comes from the scorecard, not from this copy. A hardcoded
-          // number drifts the moment a check is added or retired, and an
-          // overstated one is the claim a customer checks first.
-          + '<p class="sc-sub">' + (sc.checks_run || 0) + ' checks already ran. '
-          + 'Paying shows what each one found.</p>'
-          + '<ul class="sc-list">'
-          + '<li><b>Loan Calculations box</b> &mdash; APR, finance charge, TIP, recomputed</li>'
-          + '<li><b>Escrow cushion</b> &mdash; against the RESPA legal maximum</li>'
-          + '<li><b>Per-diem interest and prorations</b> &mdash; from your closing date</li>'
-          + '<li><b>Duplicate and stacked fees</b> &mdash; named</li>'
-          + '<li><b>Cash to Close</b> &mdash; reconciled</li>'
-          + '<li><b>An email to your lender</b> &mdash; already written</li>'
-          + '</ul>'
-          + '</div>';
-      } else {
-        html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
-          + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
-              ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both apply'
-              : sc.tier.has_loan_estimate
-                ? 'Loan Estimates, so TRID tolerance testing has already run against the correct baseline'
-                : 'a purchase contract, so we have checked your negotiated credits against the closing figures')
-          + '.</p>';
-      }
-    }
-
-    if (sc.loan_estimates_uploaded && !sc.tolerance_tested) {
-      if (sc.tolerance_blocked_reason === 'different_loan') {
-        // already stated prominently above; do not repeat it in small print
-      } else
-      html += '<p class="scorecard-warn"><strong>Tolerance testing did not run.</strong> '
-        + (sc.tolerance_blocked_reason === 'different_loan'
-            ? 'The Loan Estimate you uploaded appears to be for a different loan'
-              + (sc.transaction_mismatch && sc.transaction_mismatch.cd_lender && sc.transaction_mismatch.le_lender
-                  ? ' — your Closing Disclosure is from ' + sc.transaction_mismatch.cd_lender
-                    + ', but the Loan Estimate is from ' + sc.transaction_mismatch.le_lender
-                  : '')
-              + '. A Loan Estimate is a promise by one particular lender, so comparing it against a '
-              + 'different lender\'s charges would produce findings that mean nothing. Upload the '
-              + 'Loan Estimate for this loan and we will run the comparison.'
-            : sc.tolerance_blocked_reason === 'no_cd_charges'
-            ? 'We read your Loan Estimate, but no individual charges could be read from your Closing '
-              + 'Disclosure — page 2 carries the closing cost details and it appears to be missing or '
-              + 'unreadable. There was nothing to compare the Loan Estimate against.'
-            : 'We could not read your Loan Estimate'
-              + (sc.loan_estimates_uploaded === 1 ? '' : 's')
-              + ' clearly enough, or no issue date was printed — we need that to work out which one '
-              + 'sets the legal baseline.')
-        + ' Upload a complete copy and we will run it. This is not a clean result for those checks.</p>';
-    }
-
-    // The same trap without a Loan Estimate: no charge lines means most of the
-    // audit could not run, and a flag count of zero would read as a clean bill.
-    if (!sc.loan_estimates_uploaded && sc.cd_charge_lines === 0) {
-      html += '<p class="scorecard-warn"><strong>No individual charges could be read.</strong> '
-        + 'Page 2 of the Closing Disclosure carries the closing cost details, and it appears to be '
-        + 'missing or unreadable in what you uploaded. Most of the audit needs those lines, so a '
-        + 'count of zero here does not mean your closing is clean.</p>';
-    }
-
-    if (sc.contract_low_confidence) {
-      html += '<p class="scorecard-warn"><strong>Part of your contract could not be read reliably.</strong> '
-        + 'We discarded ' + sc.contract_low_confidence + ' term'
-        + (sc.contract_low_confidence === 1 ? '' : 's')
-        + ' rather than risk reporting a credit you never negotiated, or missing one you did. '
-        + 'A clearer copy of the contract — the original PDF from your agent rather than a scan '
-        + '— would let us check those.</p>';
-    }
-    if (sc.contract_uploaded && !sc.contract_reconciled) {
-      html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
-        + (sc.contract_mismatch && sc.contract_mismatch.length
-            ? 'The contract you uploaded does not match this Closing Disclosure ('
-              + sc.contract_mismatch.map(function(m){ return m.field; }).join(' and ')
-              + ' differ), so we did not compare them.'
-            : 'We could not read any credits, concessions or cost allocations from the contract — '
-              + 'it may be missing pages or an addendum.')
-        + ' This is not a clean result for those checks.</p>';
-    }
-
-    // One line until clicked. Every item is still here: these are not passes,
-    // and a customer who wants the detail must be able to get all of it.
-    if (sc.checks_skipped_detail && sc.checks_skipped_detail.length) {
-      var n = sc.checks_skipped_detail.length;
-      html += '<details class="sc-details"><summary>' + n + ' check'
-        + (n === 1 ? '' : 's') + ' we could not run &mdash; tap to see which</summary>'
-        + '<ul class="sc-list">';
-      for (var si = 0; si < n; si++) {
-        html += '<li>' + escH(sc.checks_skipped_detail[si]) + '</li>';
-      }
-      html += '</ul><p class="sc-sub">These are not passes. We could not test them at all.</p>'
-        + '</details>';
-    }
-
-    if (sc.deposits_excluded && sc.total_is_derived) {
-      html += '<p class="scorecard-note">Not counted above: ' + money(sc.deposits_excluded.total)
-        + ' in deposits or holdbacks across ' + sc.deposits_excluded.count + ' line'
-        + (sc.deposits_excluded.count === 1 ? '' : 's') + '. That is your own money set aside, '
-        + 'not a fee, so including it would overstate what this closing costs you.</p>';
-    }
-
-    if (sc.checks_unavailable && sc.checks_unavailable.length) {
-      html += '<p class="scorecard-warn"><strong>Some checks need your Closing Disclosure.</strong> '
-        + 'A settlement statement carries the charges but not your loan terms, section subtotals or '
-        + 'escrow disclosure, so we could not test: ' + sc.checks_unavailable.join(', ')
-        + '. Upload the Closing Disclosure too and those run as well.</p>';
-    }
-
-    if (sc.unreadable_fields && sc.unreadable_fields.length) {
-      // Previously this said "a clearer copy would give you a fuller audit" and
-      // stopped there — advice with nothing behind it. Now the customer can read
-      // the figure off their own document and we re-run the audit against it.
-      html += '<div class="scorecard-warn"><strong>We could not read '
-        + sc.unreadable_fields.length + ' figure'
-        + (sc.unreadable_fields.length === 1 ? '' : 's') + '.</strong> '
-        + 'We excluded '
-        + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
-        + ' rather than guessing. Type '
-        + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
-        + ' in from your own copy and we will run the checks that need '
-        + (sc.unreadable_fields.length === 1 ? 'it' : 'them') + '.'
-        + '<div id="fix-fields">'
-        + sc.unreadable_fields.map(function(f){
-            return '<label class="fix-row"><span>' + f.label
-              + (f.page ? ' <em>(page ' + f.page + ')</em>' : '')
-              + '</span><input type="text" inputmode="decimal" placeholder="$0.00" data-path="'
-              + f.path + '" /></label>';
-          }).join('')
-        + '<button class="btn btn-ghost btn-sm" id="fix-btn">Recheck with these figures</button>'
-        + '<p class="fix-note">We cannot verify what you type, so any finding based on '
-        + 'a figure you enter will say so.</p>'
-        + '<p id="fix-status"></p></div></div>';
-    }
-
-    // Self-contained escaper: these strings are server-side constants today,
-    // but a future unlock could carry a filename and this file builds HTML by
-    // string concatenation.
-    // The service writes full sentences ("We compare these against ... : A, B").
-    // The bullet label already carries that, so keep only what follows the colon.
-    // Declared with `function`, not `var`, on purpose. A `var` assignment only
-    // exists from its own line onward, so moving any call site above it -- which
-    // is exactly what the footer redesign did -- makes it undefined at runtime
-    // while still parsing cleanly. A function declaration hoists to the top of
-    // the enclosing function and cannot break that way.
-    function stripLead(s) {
-      var i = String(s || '').indexOf(': ');
-      return i === -1 ? String(s || '') : String(s).slice(i + 2);
-    }
-
-    function escH(v) {
-      return String(v == null ? '' : v)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-
-    // What we could and could not price, as a short bulleted list rather than
-    // three paragraphs of small grey prose.
-    if (sc.benchmark_coverage) {
-      var bc = sc.benchmark_coverage;
-      var covItems = '';
-      if (bc.priced_sentence) {
-        covItems += '<li><b>Priced against a published rate or statute:</b> '
-          + escH(stripLead(bc.priced_sentence)) + '</li>';
-      }
-      if (bc.distribution_sentence) {
-        covItems += '<li><b>Compared with what similar loans paid:</b> '
-          + escH(stripLead(bc.distribution_sentence)) + '</li>';
-      }
-      if (bc.not_priced_sentence) {
-        covItems += '<li><b>Not priced'
-          + (bc.jurisdiction ? ' in ' + escH(bc.jurisdiction) : '') + ':</b> '
-          + escH(stripLead(bc.not_priced_sentence)) + '</li>';
-      }
-      if (covItems) {
-        html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
-          + '<ul class="sc-list">' + covItems + '</ul>'
-          + (sc.evidence_basis ? '<p class="sc-sub">' + escH(sc.evidence_basis) + '</p>' : '')
-          + '</div>';
-      }
-    } else if (sc.evidence_basis) {
-      html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
-        + '<p class="sc-lead">' + escH(sc.evidence_basis) + '</p></div>';
-    }
-
-    // (rendered above, inside the "What we measured against" panel)
-
-    // Every blocked check names a document the page can accept, so none of
-    // these is a dead end.
-    if (sc.unlocks && sc.unlocks.length) {
-      var docUnlocks = 0;
-      for (var di = 0; di < sc.unlocks.length; di++) {
-        if (sc.unlocks[di].accepts !== 'answers') docUnlocks += sc.unlocks[di].unlocks_count;
-      }
-      html += '<div class="sc-panel sc-panel-accent">'
-        + '<p class="sc-h">What would unlock more</p><ul class="sc-list">';
-      for (var ui = 0; ui < sc.unlocks.length; ui++) {
-        var u = sc.unlocks[ui];
-        html += '<li><b>' + escH(u.title) + '</b> &mdash; unlocks ' + u.unlocks_count
-          + (u.unlocks_count === 1 ? ' check. ' : ' checks. ') + escH(u.why) + '</li>';
-      }
-      // The button belongs HERE, beside the checks it unlocks. The footer
-      // redesign dropped it and turned this panel into a dead end -- the exact
-      // failure the product notes flagged as "upsells with nowhere to upload".
-      if (docUnlocks > 0) {
-        html += '</ul>'
-          + '<button type="button" class="btn btn-ghost btn-sm" id="add-docs-btn" '
-          + 'style="margin-top:12px;">&#8593; Add those documents &mdash; still free</button>'
-          // Uploading is free and re-scores immediately, but a usable Loan
-          // Estimate or contract moves the paid report to $59. Saying that on
-          // the button that raises it is the difference between an upgrade and
-          // a bait-and-switch.
-          + '<p class="sc-sub">Adding documents is free and updates this scorecard right away. '
-          + 'If a check actually runs against them, the full audit is $59 instead of $29.</p>'
-          + '</div>';
-      } else {
-        html += '</ul></div>';
-      }
-    }
-
-    html += sc.flag_count > 0
-      // Narrower than it was. The old wording promised "what it should be, the rule
-      // or schedule we measured it against, the dollar impact" for every finding —
-      // contradicting the paragraph directly above, which had just explained that
-      // for unbenchmarkable fees there is no "should be" and no schedule.
-      // Replaced a paragraph describing the product with one describing the
-      // customer's own closing. Every line has to earn its place with a fact
-      // from their documents.
-      ? '<p class="scorecard-note">'
-        + (sc.flag_dollars
-            ? 'We can put a figure on ' + money(sc.flag_dollars) + ' of what we flagged'
-              + (sc.flags_with_dollars < sc.flag_count
-                  ? '; the other ' + (sc.flag_count - sc.flags_with_dollars) + ' need a question answered before a number can be attached'
-                  : '')
-              + '. '
-            : 'None of what we flagged can be priced from this document alone &mdash; each needs a '
-              + 'question answered first. ')
-        + 'The full audit names each charge, what we measured it against, whether you can still '
-        + 'change it before you close, and gives you the email to send.</p>'
-      : (sc.cd_charge_lines === 0
-        ? '<p class="scorecard-note">We could not read the individual charges from this document, so '
-          + 'the fee-level checks did not run. This is not a clean result — upload a complete copy '
-          + 'including page 2.</p>'
-        : sc.tolerance_tested
-          // Tolerance testing has already run against the Loan Estimates. Say so,
-          // so the count means what the customer thinks it means.
-          ? '<p class="scorecard-note">No issues surfaced. That includes tolerance testing against '
-            + (sc.loan_estimates_read === 1 ? 'your Loan Estimate' : 'all ' + sc.loan_estimates_read + ' Loan Estimates')
-            + ' — we checked whether any fee rose beyond what the lending rules permit, and none did. '
-            + 'The full audit shows you every charge we examined, what we measured it against, and '
-            + 'the drafted emails.</p>'
-          : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
-            + 'goes further: every charge measured against your county and state schedules, with the basis '
-            + 'shown. Add your Loan Estimates or purchase contract and it also runs tolerance testing and '
-            + 'credit reconciliation, which are where most recoverable money turns up.</p>');
-
-    panel.innerHTML = html;
-
-    // The provider-list question only earns its place once a Loan Estimate is
-    // here, because tolerance testing is the only thing that reads it.
-    const provBlock = document.getElementById('q-provider-block');
-    const hasLE = Boolean(sc.loan_estimates_uploaded || (sc.tier && sc.tier.has_loan_estimate));
-    if (provBlock) provBlock.style.display = hasLE ? '' : 'none';
-    const intro = document.getElementById('q-intro');
-    if (intro) {
-      intro.innerHTML = hasLE
-        ? '<strong>Two quick questions.</strong> Both change the analysis \u2014 about 30 seconds.'
-        : '<strong>One quick question.</strong> It changes the analysis \u2014 about 15 seconds.';
-    }
-
-    // Adding a Loan Estimate starts a new submission, so anything already
-    // answered would otherwise be asked a second time. Restore it instead.
-    restoreAnswers();
-
-    const addDocs = document.getElementById('add-docs-btn');
-    if (addDocs) addDocs.addEventListener('click', function(ev){ ev.preventDefault(); showUploader(); });
-  }
-
-  // Delegated because the fields are rendered into the scorecard after load.
-  document.addEventListener('click', async function(ev){
-    if (!ev.target || ev.target.id !== 'fix-btn') return;
-    ev.preventDefault();
-    const btn = ev.target;
-    const status = document.getElementById('fix-status');
-    const values = {};
-    document.querySelectorAll('#fix-fields input[data-path]').forEach(function(inp){
-      const v = (inp.value || '').trim();
-      if (v) values[inp.getAttribute('data-path')] = v;
+  function toBase64(file){
+    return new Promise(function(res,rej){
+      var r=new FileReader();
+      r.onload=function(){ var s=String(r.result); res(s.slice(s.indexOf(',')+1)); };
+      r.onerror=function(){ rej(new Error('read')); };
+      r.readAsDataURL(file);
     });
-    if (!Object.keys(values).length) { status.textContent = 'Enter at least one figure first.'; return; }
-    if (!submissionRef) { status.textContent = 'Please run a scorecard first.'; return; }
+  }
 
-    btn.disabled = true;
-    status.textContent = 'Rechecking…';
-    try {
-      const resp = await fetch('/api/closing-corrections', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: submissionRef.id, token: submissionRef.token, values: values }),
-      });
-      const data = await readJson(resp);
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not apply those figures.');
-      renderScorecard(data.scorecard);
-      // Refresh what travels through checkout. Without this the paid report page
-      // reads a stale list from localStorage and asks the customer to fix
-      // figures they have already fixed.
-      if (submissionRef) submissionRef.unreadable_fields = data.remaining || [];
-      const s2 = document.getElementById('fix-status');
-      if (s2) {
-        s2.textContent = 'Updated with ' + data.applied + ' figure'
-          + (data.applied === 1 ? '' : 's') + '. '
-          + (data.remaining.length ? data.remaining.length + ' still missing.' : 'Nothing else outstanding.');
-      }
-    } catch (err) {
-      btn.disabled = false;
-      status.textContent = err.message || 'Something went wrong — please try again.';
+  function render(){
+    list.innerHTML='';
+    var total=0;
+    chosen.forEach(function(f,i){
+      total+=f.size;
+      var li=document.createElement('li');
+      var n=document.createElement('span'); n.textContent=f.name;
+      var s=document.createElement('span'); s.className='sz'; s.textContent=fmt(f.size);
+      var x=document.createElement('button');
+      x.type='button'; x.textContent='Remove'; x.style.cssText='background:none;border:none;color:#B01F12;cursor:pointer;font:inherit;font-size:.85rem;padding:0 0 0 10px';
+      x.addEventListener('click',function(){chosen.splice(i,1);render();});
+      var right=document.createElement('span'); right.appendChild(s); right.appendChild(x);
+      li.appendChild(n); li.appendChild(right); list.appendChild(li);
+    });
+    if(chosen.length){
+      var li=document.createElement('li');
+      var left=document.createElement('span'); left.style.fontWeight='500';
+      left.textContent=chosen.length+' file'+(chosen.length>1?'s':'');
+      var right=document.createElement('span'); right.className='sz';
+      right.textContent=fmt(total)+' of 3 MB';
+      if(total>MAX_TOTAL*0.85){right.style.color='#B01F12';}
+      li.appendChild(left); li.appendChild(right); list.appendChild(li);
     }
-  });
+  }
 
-  document.getElementById('scorecard-btn').addEventListener('click', async function(e){
+  function add(files){
+    var incoming=Array.prototype.slice.call(files), msg='';
+    incoming.forEach(function(f){
+      if(chosen.length>=MAX_FILES){msg='That is as many files as we can take at once. Send the Closing Disclosure first \u2014 you can always send the rest afterwards.';return;}
+      var t=chosen.reduce(function(a,b){return a+b.size;},0);
+      if(t+f.size>MAX_TOTAL){msg='"'+f.name+'" would push you past 3 MB. Send the Closing Disclosure on its own first, or ask your lender for the PDF instead of photographing it \u2014 those are far smaller.';return;}
+      if(!/\.(pdf|jpe?g|png|webp)$/i.test(f.name)){msg='We can read PDF, JPG, PNG and WEBP files only.';return;}
+      chosen.push(f);
+    });
+    show(msg); render();
+  }
+
+  drop.addEventListener('click',function(){input.click();});
+  drop.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();input.click();}});
+  input.addEventListener('change',function(){add(input.files);input.value='';});
+  ['dragenter','dragover'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.style.background='#F3F2EE';});});
+  ['dragleave','drop'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.style.background='';});});
+  drop.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files)add(e.dataTransfer.files);});
+
+  form.addEventListener('submit',function(e){
     e.preventDefault();
-    const btn = e.currentTarget;
-    const emailEl = document.getElementById('intake-email');
-    const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
-    const files = uploader.getFiles();
-    if (files.length === 0) { showToast('Please attach your Closing Disclosure or settlement statement to continue.'); return; }
+    formerr.hidden=true;
+    var email=document.getElementById('email').value.trim(),
+        ptype=document.getElementById('ptype').value,
+        plist=document.getElementById('plist').value;
+    if(!chosen.length){formerr.textContent='Add your Closing Disclosure first \u2014 that is the one document we need.';formerr.hidden=false;return;}
+    if(!ptype){formerr.textContent='Choose a property type. It takes a moment and it changes which escrow rules apply.';formerr.hidden=false;return;}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){formerr.textContent='Check the email address \u2014 that is where the scorecard goes.';formerr.hidden=false;return;}
 
-    clearError();
-    const originalText = btn.textContent;
-    btn.textContent = 'Reading your document…';
-    btn.style.pointerEvents = 'none';
+    submit.disabled=true; submit.textContent='Sending\u2026';
 
-    try {
-      const encoded = [];
-      for (const f of files) {
-        encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
-      }
-      const resp = await fetch('/api/closing-scorecard', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(Object.assign({ email: email, files: encoded }, answerPayload())),
+    Promise.all(chosen.map(function(f){
+      return toBase64(f).then(function(b){return {name:f.name,type:f.type,dataBase64:b};});
+    })).then(function(files){
+      return fetch('/api/closing-scorecard',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email:email,files:files})
       });
-      const data = await readJson(resp);
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');
-
-      // A document we could not read, or one that is not a CD, is caught here —
-      // while it is still free — instead of after taking the customer's money.
-      if (!data.scorecard) {
-        // Shown inline and left on screen. This used to be a toast that faded
-        // after a few seconds; a customer watching the button saw nothing at all
-        // and concluded the site was broken.
-        showError('We could not audit that document', data.error_message
-          || 'We could not read it clearly enough. Try the original PDF from your lender rather than a photo or scan.');
-        btn.textContent = originalText;
-        btn.style.pointerEvents = 'auto';
-        return;
-      }
-
-      // Carried through checkout so the paid report page knows which figures are
-      // still missing and can offer to rebuild once they are supplied.
-      submissionRef = {
-        id: data.id, token: data.token, product: 'closing',
-        unreadable_fields: data.scorecard.unreadable_fields || [],
-      };
-      // The answers travelled with the upload, so this scorecard already
-      // reflects them. Nothing to replay.
-      renderScorecard(data.scorecard);
-      document.getElementById('stage-1').style.display = 'none';
-      document.getElementById('stage-2').style.display = 'block';
-      document.getElementById('stage-2').scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } catch (err) {
-      showError('Something went wrong', err.message || 'Please try again in a moment.');
-      btn.textContent = originalText;
-      btn.style.pointerEvents = 'auto';
-    }
-  });
-
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
-    e.preventDefault();
-    const btn = e.currentTarget;
-    const propertyType = document.getElementById('q-property-type').value;
-    const provBlock = document.getElementById('q-provider-block');
-    const providerAsked = provBlock && provBlock.style.display !== 'none';
-    const providerList = providerAsked ? document.getElementById('q-provider-list').value : '';
-    if (!propertyType) { showToast('Please answer the property type question.'); return; }
-    // Only required when tolerance testing can actually use it.
-    if (providerAsked && !providerList) { showToast('Please answer the service provider list question.'); return; }
-    rememberAnswers();
-    if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
-
-    // Stop someone paying $59 for an audit with known holes without being told.
-    // The figures are free to fix right here, and the customer is engaged now in
-    // a way they will not be after checkout. One explicit confirmation, not a
-    // hard block — some people genuinely do not have the document to hand.
-    if (unreadableRemaining > 0 && !acknowledgedGaps) {
-      acknowledgedGaps = true;
-      showError(
-        unreadableRemaining + ' figure' + (unreadableRemaining === 1 ? '' : 's') + ' still unread',
-        'Checks that need ' + (unreadableRemaining === 1 ? 'it' : 'them') + ' will not run, and your '
-        + 'report will say so. Filling ' + (unreadableRemaining === 1 ? 'it' : 'them')
-        + ' in above is free and takes a moment. Click again to continue without.',
-        'pay-error'
-      );
-      return;
-    }
-
-    clearError('pay-error');
-    const originalText = btn.textContent;
-    btn.textContent = 'Saving your answers…';
-    btn.style.pointerEvents = 'none';
-    try {
-      const resp = await fetch('/api/closing-answers', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          id: submissionRef.id, token: submissionRef.token,
-          property_type: propertyType,
-          ...(providerList ? { provider_list: providerList } : {}),
-        }),
+    }).then(function(r){
+      if(!r.ok) throw new Error('scorecard');
+      return r.json();
+    }).then(function(ref){
+      var payload={id:ref.id, token:ref.token, property_type:ptype};
+      if(plist) payload.provider_list=plist;
+      return fetch('/api/closing-answers',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(payload)
       });
-      const data = await readJson(resp);
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not save your answers.');
-      goToStripe(btn.getAttribute('href'), submissionRef, document.getElementById('intake-email').value.trim());
-    } catch (err) {
-      showError('Could not save your answers', err.message || 'Please try again in a moment.', 'pay-error');
-      btn.textContent = originalText;
-      btn.style.pointerEvents = 'auto';
-    }
+    }).then(function(){
+      form.querySelectorAll('.field,.two,#submit,.btn-note').forEach(function(el){el.hidden=true;});
+      done.hidden=false;
+    }).catch(function(){
+      submit.disabled=false; submit.textContent='Get my free scorecard';
+      formerr.innerHTML='That did not go through. Try again in a moment, or reach us at <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a>.';
+      formerr.hidden=false;
+    });
   });
 })();
 </script>
