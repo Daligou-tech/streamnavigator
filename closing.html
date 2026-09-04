@@ -672,8 +672,28 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     } catch (err) {
       return;
     }
+
+    // Consumed on read, always -- before the restore is even attempted, and
+    // whether or not it succeeds.
+    //
+    // Without this the cache reloaded the same files on every visit to the page
+    // and there was no way out of it: removing a file with the X cleared the box
+    // but not the cache, so the next refresh put it straight back. A customer
+    // who uploaded the wrong document could not get rid of it without closing
+    // the tab, and nothing on the page said so.
+    //
+    // One restore is all the feature was ever for: the trip back from the
+    // scorecard. rememberUploads() writes a fresh copy on every submission, so
+    // the next round trip still works.
+    try { sessionStorage.removeItem(UPLOAD_CACHE_KEY); } catch (err) { /* nothing to clear */ }
+
     if (!cached || !cached.files || !cached.files.length) return;
     if (typeof DataTransfer === 'undefined') return;
+
+    // A cache older than the trip it was meant for is not worth restoring. Half
+    // an hour covers reading a scorecard and coming back; anything beyond that
+    // is a different session in the customer's mind, whatever the tab thinks.
+    if (!cached.saved_at || Date.now() - cached.saved_at > 1800000) return;
 
     try {
       const dt = new DataTransfer();
@@ -695,9 +715,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     const note = document.getElementById('restored-note');
     if (note) {
       note.textContent = cached.files.length === 1
-        ? 'Your document is still attached. Remove it with the \u2715 if you want to swap it.'
+        ? 'Your document is still attached. Remove it with the \u2715 to swap it for another.'
         : 'Your ' + cached.files.length + ' documents are still attached. Remove any of them '
-          + 'with the \u2715 and add a replacement.';
+          + 'with the \u2715 to swap them for others.';
       note.style.display = 'block';
     }
   }
