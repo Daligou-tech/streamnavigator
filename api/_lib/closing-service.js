@@ -264,7 +264,23 @@ function runDocumentAudit(input = {}) {
 
   // --- coverage: which catalog checks produced a result ---------------------
   const emitted = new Set(findings.map((f) => f.checkId));
+
+  // A refinance has no purchase contract, so a check that needs one is not
+  // waiting on a document the customer forgot — it does not apply to this
+  // transaction at all. Reporting it as blocked asks a refinancing customer for
+  // a sales contract that does not exist, and inflates the denominator with a
+  // check that can never run.
+  const isRefinance = String(answers.transaction_type || '').toLowerCase() === 'refinance';
+
   const coverage = CATALOG.map((c) => {
+    if (isRefinance && c.needs === Needs.CONTRACT) {
+      return {
+        ...c,
+        status: 'not_applicable',
+        notApplicableReason: 'There is no purchase contract on a refinance.',
+        outOfScope: true,
+      };
+    }
     if (!have[c.needs]) {
       return { ...c, status: 'needs_document', blockedBy: c.needs };
     }
@@ -282,7 +298,12 @@ function runDocumentAudit(input = {}) {
   // document it is zero, which would tell the person whose closing is in good
   // order that we did nothing for them. `attempted` is the honest denominator:
   // every check whose inputs were present, whatever the outcome.
-  const attempted = coverage.filter((c) => have[c.needs]);
+  const attempted = coverage.filter((c) => c.status === 'ran' || c.status === 'not_applicable'
+    ? have[c.needs] && !c.outOfScope
+    : false);
+  // Checks that cannot apply to this transaction are removed from the
+  // denominator rather than counted against it.
+  const inScopeTotal = CATALOG.length - coverage.filter((c) => c.outOfScope).length;
   const blocked = coverage.filter((c) => c.status === 'needs_document');
   const notApplicable = coverage.filter((c) => c.status === 'not_applicable');
 
@@ -328,10 +349,11 @@ function runDocumentAudit(input = {}) {
     // and how much it found. Collapsing them is what made a good result look
     // like a failure.
     checks_attempted: attempted.length,
+    checks_in_scope: inScopeTotal,
     findings_count: ran.length,
     coverage_headline: blocked.length === 0
-      ? `All ${CATALOG.length} checks ran against your documents.`
-      : `${attempted.length} of ${CATALOG.length} checks ran. `
+      ? `All ${inScopeTotal} checks that apply to your closing ran.`
+      : `${attempted.length} of ${inScopeTotal} checks ran. `
         + `${blocked.length} need ${describeBlockers(blocked)}.`,
     unlocks: buildUnlocks(blocked),
     benchmark_coverage: benchmarkCoverage,
