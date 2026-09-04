@@ -343,6 +343,10 @@ module.exports = async (req, res) => {
   let contractTerms = null;
   let contractMismatch = null;
   let contractLowConfidence = 0;
+  // True once a contract has been parsed AND matched to this Closing Disclosure.
+  // A parsed contract with no terms is empty, not unreadable, and the two must
+  // not be told to the customer in the same words.
+  let contractParsed = false;
   const contractIndexes = classified
     .filter((d) => d.document_type === 'purchase_contract')
     .map((d) => d.index)
@@ -364,6 +368,7 @@ module.exports = async (req, res) => {
         contractMismatch = match.mismatches.filter((m) => m.hard);
         continue;
       }
+      contractParsed = true;
 
       // A barely legible scan still yields SOME terms, and a misread seller
       // credit becomes a confident "your credit is missing" finding — money
@@ -399,6 +404,14 @@ module.exports = async (req, res) => {
   // returns a scorecard whose denominator is CHECKS rather than fees with rate
   // data. The tier it computes is ignored here: the block below already has
   // richer downgrade reasons because it can see which uploads were unusable.
+  // Read fine, matched this closing, nothing discarded for low confidence, and
+  // no terms in it. That is a contract with no seller credits -- an ordinary
+  // outcome, not a failed upload.
+  const contractEmpty = Boolean(
+    contractParsed && !contractTerms && !contractLowConfidence
+    && !(contractMismatch && contractMismatch.length)
+  );
+
   const audited = runDocumentAudit({
     extraction,
     answers,
@@ -406,8 +419,12 @@ module.exports = async (req, res) => {
     contractTerms,
     unusableDocuments: [
       ...(leIndexes.length && !loanEstimates ? ['loan_estimate'] : []),
-      ...(contractIndexes.length && !contractTerms ? ['purchase_contract'] : []),
+      // Only when the contract could not be USED. A contract that read cleanly
+      // and states nothing is reported as empty below instead.
+      ...(contractIndexes.length && !contractTerms && !contractEmpty
+        ? ['purchase_contract'] : []),
     ],
+    emptyDocuments: contractEmpty ? ['purchase_contract'] : [],
   });
   const { findings, skipped } = audited;
 
