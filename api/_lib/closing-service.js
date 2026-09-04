@@ -196,6 +196,11 @@ function runDocumentAudit(input = {}) {
     contractTerms = null,
     answers = {},
     unusableDocuments = [],
+    // A document that was supplied, read cleanly, and simply contains nothing
+    // for these checks to work on -- a purchase contract with no seller credits
+    // is the ordinary case. Distinct from unusable: there is nothing to fix and
+    // nothing to re-upload, so the checks are out of scope rather than blocked.
+    emptyDocuments = [],
     getBenchmark = defaultGetBenchmark(),
   } = input;
 
@@ -280,7 +285,27 @@ function runDocumentAudit(input = {}) {
   // check that can never run.
   const isRefinance = String(answers.transaction_type || '').toLowerCase() === 'refinance';
 
+  // Which uploaded file backs each requirement, so a check can tell the
+  // difference between "you never sent this" and "you sent it and it did not
+  // work". Advertising "Upload your purchase contract" to somebody who just
+  // uploaded their purchase contract reads as though the product did not
+  // notice.
+  const DOC_FOR_NEED = {
+    [Needs.LE]: 'loan_estimate',
+    [Needs.CONTRACT]: 'purchase_contract',
+  };
+
   const coverage = CATALOG.map((c) => {
+    if (emptyDocuments.includes(DOC_FOR_NEED[c.needs])) {
+      return {
+        ...c,
+        status: 'not_applicable',
+        notApplicableReason: c.needs === Needs.CONTRACT
+          ? 'Your contract states no seller credits or concessions, so there is nothing to reconcile.'
+          : 'The document was read and contains nothing these checks apply to.',
+        outOfScope: true,
+      };
+    }
     if (isRefinance && c.needs === Needs.CONTRACT) {
       return {
         ...c,
@@ -290,7 +315,15 @@ function runDocumentAudit(input = {}) {
       };
     }
     if (!have[c.needs]) {
-      return { ...c, status: 'needs_document', blockedBy: c.needs };
+      return {
+        ...c,
+        status: 'needs_document',
+        blockedBy: c.needs,
+        // Already supplied, just not usable. Still blocked, but the customer
+        // needs to REPLACE it, not upload it, and the panel above already told
+        // them why.
+        alreadySupplied: unusableDocuments.includes(DOC_FOR_NEED[c.needs]),
+      };
     }
     if (emitted.has(c.id)) return { ...c, status: 'ran' };
     // The document is here but the check produced nothing. Either it had no
@@ -363,7 +396,10 @@ function runDocumentAudit(input = {}) {
       ? `All ${inScopeTotal} checks that apply to your closing ran.`
       : `${attempted.length} of ${inScopeTotal} checks ran. `
         + `${blocked.length} need ${describeBlockers(blocked)}.`,
-    unlocks: buildUnlocks(blocked),
+    // Only offer documents the customer has not already sent. A document that
+    // was sent and could not be used is handled by the replace prompt, not by
+    // an upsell telling them to do the thing they just did.
+    unlocks: buildUnlocks(blocked.filter((c) => !c.alreadySupplied)),
     benchmark_coverage: benchmarkCoverage,
     // Removed: a four-line justification in small grey type, sitting directly
     // beneath a panel that had already made the same point in bullets. It was
