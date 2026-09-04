@@ -1,22 +1,218 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Closing Disclosure Audit — StreamNavigator</title>
-<meta name="description" content="Upload your Closing Disclosure. We check its arithmetic, its escrow and per-diem calculations, and — with your Loan Estimate — whether any fee rose beyond what the lending rules permit." />
-<link rel="canonical" href="https://streamnavigator.ai/closing" />
+<meta name="description" content="An independent recheck of your Closing Disclosure: its own arithmetic, the federal rules that govern escrow and prepaid interest, and whether any fee rose beyond what the lending rules allow. Free scorecard first.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-<link rel="shortcut icon" href="/favicon.ico">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+:root{
+  --ink:#1B2A3A; --ink-soft:#5B6570; --paper:#FBFAF7; --panel:#FFFFFF;
+  --rule:#D8DAD5; --rule-soft:#E9EAE6;
+  --flag:#B01F12; --flag-tint:#FBEEEC;
+  --ok:#2C6A57; --ok-tint:#EDF3F0;
+  --hold:#8A6A16; --hold-tint:#FAF3E2;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;font-size:17px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+.col{max-width:780px}
+h1,h2,h3{font-family:"Newsreader",Georgia,serif;font-weight:500;letter-spacing:-0.01em;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.3rem);line-height:1.09}
+h2{font-size:clamp(1.55rem,3.1vw,2.05rem);line-height:1.18;margin-bottom:14px}
+h3{font-size:1.1rem;line-height:1.35;font-weight:600}
+p{margin:0 0 16px}
+a{color:inherit}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+header.nav{border-bottom:1px solid var(--rule);background:var(--paper);position:sticky;top:0;z-index:20}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:62px}
+.brand{font-family:"Newsreader",serif;font-size:1.12rem;font-weight:600;text-decoration:none}
+.brand span{color:var(--ink-soft);font-weight:400}
+.nav-links{display:flex;gap:24px;font-size:.93rem}
+.nav-links a{color:var(--ink-soft);text-decoration:none}
+.nav-links a:hover{color:var(--ink);text-decoration:underline;text-underline-offset:3px}
+@media(max-width:820px){.nav-links{display:none}}
+
+.hero{padding:62px 0 52px;border-bottom:1px solid var(--rule)}
+.hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:52px;align-items:start}
+@media(max-width:940px){.hero-grid{grid-template-columns:1fr;gap:36px}}
+.notice{display:inline-block;font-size:.82rem;color:var(--ink-soft);border:1px solid var(--rule);border-radius:2px;padding:5px 10px;margin-bottom:20px}
+.lede{font-size:1.08rem;color:var(--ink-soft);max-width:58ch}
+
+.ledger{background:var(--panel);border:1px solid var(--ink);box-shadow:5px 5px 0 rgba(27,42,58,.08)}
+.ledger-head{display:flex;justify-content:space-between;align-items:baseline;padding:12px 16px;border-bottom:1px solid var(--ink);font-size:.8rem;color:var(--ink-soft)}
+.ledger-head b{color:var(--ink);font-weight:600;font-size:.86rem}
+.row{display:grid;grid-template-columns:1fr auto;gap:14px;padding:10px 16px;border-bottom:1px solid var(--rule-soft);font-size:.89rem}
+.row .lbl{color:var(--ink-soft)}
+.row .amt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.row.hit{background:var(--flag-tint)}
+.row.hit .lbl{color:var(--ink);font-weight:500}
+.row.hit .amt{color:var(--flag);font-weight:500}
+.note{padding:11px 16px;background:var(--flag-tint);border-bottom:1px solid var(--rule-soft);font-size:.83rem;line-height:1.5}
+.note b{color:var(--flag)}
+.src{padding:10px 16px;font-size:.76rem;color:var(--ink-soft);border-bottom:1px solid var(--rule-soft)}
+.ledger-foot{padding:11px 16px;font-size:.79rem;color:var(--ink-soft)}
+
+.btn{display:inline-block;background:var(--ink);color:var(--paper);text-decoration:none;font-size:1rem;font-weight:500;padding:14px 26px;border:1px solid var(--ink);border-radius:2px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#12202E}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:#F1EFEA}
+.btn:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.btn-row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:24px}
+.btn-note{font-size:.85rem;color:var(--ink-soft)}
+
+section{padding:60px 0;border-bottom:1px solid var(--rule)}
+.sec-intro{max-width:64ch;color:var(--ink-soft);margin-bottom:32px}
+
+.steps{list-style:none;margin:0;padding:0;counter-reset:s;max-width:780px}
+.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:20px;padding:20px 0;border-top:1px solid var(--rule-soft)}
+.steps li:first-child{border-top:1px solid var(--rule)}
+.steps li::before{content:counter(s);font-family:"IBM Plex Mono",monospace;font-size:.95rem;color:var(--flag);padding-top:3px;grid-column:1;grid-row:1}
+.steps li h3{grid-column:2;grid-row:1}
+.steps li p{grid-column:2;grid-row:2;margin:6px 0 0;color:var(--ink-soft);font-size:.96rem;max-width:62ch}
+.free-tag{display:inline-block;font-size:.74rem;color:var(--ok);background:var(--ok-tint);border:1px solid #CADED6;border-radius:2px;padding:2px 7px;margin-left:9px;vertical-align:2px}
+
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+@media(max-width:860px){.checks{grid-template-columns:1fr}}
+.chk{display:grid;grid-template-columns:30px 1fr;gap:12px;padding:11px 0;border-top:1px solid var(--rule-soft);font-size:.93rem;line-height:1.45}
+.chk .n{font-family:"IBM Plex Mono",monospace;font-size:.82rem;color:var(--ink-soft);padding-top:2px}
+.group-h{margin:34px 0 3px;font-size:1.02rem;font-weight:600}
+.group-h:first-of-type{margin-top:0}
+.group-sub{color:var(--ink-soft);font-size:.9rem;margin:0 0 8px;max-width:66ch}
+.tag{display:inline-block;font-size:.72rem;border-radius:2px;padding:2px 7px;margin-left:8px;vertical-align:2px;border:1px solid}
+.tag.p{background:#F1F0EC;border-color:var(--rule);color:var(--ink-soft)}
+.tag.r{background:#F1F0EC;border-color:var(--rule);color:var(--ink-soft)}
+
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin:24px 0 0}
+.pill{font-size:.82rem;padding:5px 11px;border-radius:2px;border:1px solid}
+.pill.a{background:var(--ok-tint);border-color:#CADED6;color:var(--ok)}
+.pill.b{background:var(--hold-tint);border-color:#E7D9AE;color:var(--hold)}
+.pill.c{background:var(--flag-tint);border-color:#EED4CF;color:var(--flag)}
+
+.sample{background:var(--panel);border:1px solid var(--rule);padding:26px 28px;max-width:780px}
+.finding{border-top:1px solid var(--rule-soft);padding:18px 0}
+.finding:first-of-type{border-top:none;padding-top:4px}
+.finding-h{display:flex;justify-content:space-between;gap:16px;align-items:baseline;flex-wrap:wrap}
+.finding-h .amt{font-family:"IBM Plex Mono",monospace;color:var(--flag);font-weight:500}
+.finding p{font-size:.92rem;color:var(--ink-soft);margin:7px 0 0;max-width:66ch}
+.finding .basis{font-size:.85rem;color:var(--ink-soft);margin-top:7px;padding-left:13px;border-left:2px solid var(--rule)}
+.finding .cite{font-size:.79rem;color:var(--ink-soft);margin-top:7px}
+
+.price-card{background:var(--panel);border:1px solid var(--ink);padding:32px;max-width:780px}
+.price-top{display:flex;justify-content:space-between;align-items:baseline;gap:20px;flex-wrap:wrap;border-bottom:1px solid var(--rule);padding-bottom:18px;margin-bottom:20px}
+.fig{font-family:"Newsreader",serif;font-size:2.5rem;line-height:1}
+.fig small{font-size:.95rem;color:var(--ink-soft);font-family:"IBM Plex Sans",sans-serif;margin-left:8px}
+.incl{list-style:none;margin:0;padding:0}
+.incl li{padding:8px 0 8px 22px;position:relative;font-size:.95rem;border-top:1px solid var(--rule-soft)}
+.incl li:first-child{border-top:none}
+.incl li::before{content:"";position:absolute;left:0;top:15px;width:9px;height:9px;border:1px solid var(--ok);background:var(--ok-tint)}
+
+.form{margin-top:26px;border-top:1px solid var(--rule);padding-top:24px}
+label{display:block;font-size:.9rem;font-weight:500;margin-bottom:6px}
+.hint{font-size:.85rem;color:var(--ink-soft);margin:0 0 12px}
+input[type=email],select{width:100%;padding:12px 13px;border:1px solid var(--rule);border-radius:2px;font-family:inherit;font-size:.97rem;background:var(--panel);color:var(--ink)}
+.drop{border:1px dashed #B9BDB6;border-radius:2px;background:#FDFDFB;padding:26px 20px;text-align:center;cursor:pointer}
+.drop:hover{background:#F7F7F3;border-color:var(--ink-soft)}
+.drop strong{display:block;font-weight:500;margin-bottom:5px}
+.drop span{font-size:.85rem;color:var(--ink-soft)}
+.field{margin-bottom:20px}
+.filelist{list-style:none;margin:12px 0 0;padding:0;font-size:.88rem}
+.filelist li{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--rule-soft)}
+.filelist .sz{font-family:"IBM Plex Mono",monospace;color:var(--ink-soft)}
+.err{color:var(--flag);font-size:.88rem;margin-top:10px}
+.seg{display:flex;gap:0;border:1px solid var(--rule);border-radius:2px;overflow:hidden;max-width:420px}
+.seg button{flex:1;background:var(--panel);border:none;border-right:1px solid var(--rule);padding:12px 10px;font:inherit;font-size:.94rem;cursor:pointer;color:var(--ink-soft)}
+.seg button:last-child{border-right:none}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+
+details{border-top:1px solid var(--rule-soft)}
+details:first-of-type{border-top:1px solid var(--rule)}
+summary{padding:16px 0;cursor:pointer;font-weight:500;list-style:none;display:flex;justify-content:space-between;gap:16px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-family:"IBM Plex Mono",monospace;color:var(--ink-soft)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 0 18px;color:var(--ink-soft);font-size:.95rem;max-width:68ch}
+
+.limits{background:#F4F2ED;border:1px solid var(--rule);padding:26px 28px;max-width:780px}
+.limits ul{margin:0;padding-left:20px}
+.limits li{margin-bottom:10px;font-size:.95rem;color:var(--ink-soft)}
+.limits li:last-child{margin-bottom:0}
+
+footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
+.disc{max-width:74ch;margin-bottom:20px}
+.foot-links{display:flex;gap:18px;flex-wrap:wrap}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---- bridge: names the transplanted components expect, mapped to this page's palette ---- */
+:root{
+  --bg:var(--paper); --bg-alt:#F4F2ED; --surface:var(--panel); --surface-2:#F4F2ED;
+  --text:var(--ink); --text-dim:var(--ink-soft); --text-dimmer:#7C8791;
+  --border:var(--rule); --border-strong:#BFC3BC;
+  --accent:#FFFFFF; --accent-deep:var(--flag); --accent-2:var(--ok); --accent-2-deep:#22513F;
+  --accent-3:var(--flag); --accent-3-deep:var(--flag); --yellow:var(--hold-tint);
+  --gradient:var(--ink); --gradient-text:none; --gradient-warm:var(--ink);
+  --radius:3px; --radius-sm:2px;
+  --shadow-hard:5px 5px 0 rgba(27,42,58,.10);
+  --shadow-hard-sm:4px 4px 0 rgba(27,42,58,.09);
+  --shadow-hard-xs:3px 3px 0 rgba(27,42,58,.08);
+  --shadow-soft:0 24px 60px -32px rgba(27,42,58,.16);
+  --shadow-glow:0 0 0 1px rgba(27,42,58,.14);
+}
+
+/* ---- component rules lifted from navigator-shared.css ---- */
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:10px 20px; border-radius:999px; font-weight:700; font-size:14px;
+    border:2px solid var(--ink); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease, background .2s ease;
+    white-space:nowrap;}
+.btn:active{transform:translate(3px,3px); box-shadow:none !important;}
+.btn-primary{background:var(--accent); color:var(--ink); font-weight:800;
+    box-shadow:var(--shadow-hard-sm);}
+.btn-primary:hover{box-shadow:2px 2px 0 var(--ink); transform:translate(2px,2px);}
+.btn-ghost{background:var(--surface); color:var(--text); border-color:var(--ink);
+    box-shadow:var(--shadow-hard-xs);}
+.btn-ghost:hover{background:var(--surface-2); box-shadow:2px 2px 0 var(--ink); transform:translate(1px,1px);}
+.btn-sm{padding:8px 16px; font-size:13px;}
+.app-side .side-item .ico{width:16px; height:16px; border-radius:4px; background:rgba(31,27,22,0.08); flex-shrink:0;}
+.search-row .ico{width:16px;height:16px; color:var(--text-dimmer); flex-shrink:0;}
+.check-list .tick{width:30px; height:30px; border-radius:9px; background:var(--status-active); color:var(--surface); display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:2px; font-size:16px; font-weight:800;}
+.price-card{background:var(--surface); border:2px solid var(--border-strong); border-radius:var(--radius); padding:32px 28px;
+    display:flex; flex-direction:column;}
+.price-card.featured{border-color:var(--ink); background:linear-gradient(180deg, rgba(255,255,255,0.6), var(--surface) 40%);
+    position:relative; box-shadow:var(--shadow-hard);}
+.price-badge{position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink);}
+.price-card h3{font-size:19px; margin-bottom:6px;}
+.price-card .desc{font-size:13.5px; color:var(--text-dimmer); margin-bottom:20px;}
+.price-amount{font-size:2.5rem; font-family:'Sora',sans-serif; font-weight:800; margin-bottom:4px;}
+.price-amount span{font-size:15px; color:var(--text-dimmer); font-weight:500; font-family:'Inter',sans-serif;}
+.price-period{font-size:13px; color:var(--text-dimmer); margin-bottom:24px;}
+.price-feats{list-style:none; display:flex; flex-direction:column; gap:12px; margin-bottom:28px; flex:1;}
+.price-feats li{font-size:14px; color:var(--text-dim); display:flex; gap:10px; align-items:flex-start;}
+.price-feats .tick{color:var(--status-active-deep); flex-shrink:0; font-weight:800;}
+.price-card .btn{width:100%;}
+.price-secure{text-align:center; font-size:11.5px; color:var(--text-dimmer); margin-top:10px; font-weight:600;}
+.pricing-footnote{text-align:center; font-size:13px; color:var(--text-dimmer); max-width:560px; margin:40px auto 0;}
+.toast.show{transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto;}
+.toast .ico{color:var(--status-active-deep);}
+.reveal.in{opacity:1; transform:translateY(0);}
+.field-block > label{display:block; font-size:12.5px; font-weight:700; letter-spacing:0.03em; color:var(--text-dim); text-transform:uppercase; margin-bottom:10px;}
+.field-block input[type="text"], .field-block input[type="email"], .field-block textarea{width:100%; padding:12px 16px; border-radius:10px; border:1.5px solid var(--border-strong);
+  background:var(--surface); color:var(--text); font-size:14.5px; font-family:inherit; outline:none;}
+.field-block input:focus, .field-block textarea:focus{border-color:var(--accent-deep);}
+.field-block textarea{min-height:96px; resize:vertical;}
+.field-hint{font-size:12px; color:var(--text-dimmer); margin-top:6px;}
+.upload-zone:hover, .upload-zone.drag{border-color:var(--accent-deep); background:var(--surface-2);}
+.upload-zone.has-files{border-style:solid; border-color:var(--ink);}
+.upload-zone .upload-ico{font-size:30px; margin-bottom:10px;}
+.upload-zone .upload-cta{font-weight:700; color:var(--text); font-size:14.5px; margin-bottom:4px;}
+.upload-zone .upload-sub{font-size:12.5px; color:var(--text-dimmer);}
+.upload-file-list{display:flex; flex-direction:column; gap:8px; margin-top:14px; text-align:left;}
+.single-price-wrap .price-card{max-width:400px; width:100%;}
+
 /* Free scorecard panel + Step 2 questions */
 .scorecard-alert{border:3px solid #b3261e;border-radius:12px;padding:20px 22px;margin:0 0 18px;background:rgba(179,38,30,.07);}
 .scorecard-alert h3{font-size:21px;line-height:1.25;margin:0 0 10px;color:#8c1d18;}
@@ -74,289 +270,242 @@
 #fix-status{font-size:13px;margin:8px 0 0;}
 #stage-2 select{width:100%;padding:12px;font:inherit;font-size:15px;border:2px solid var(--ink);border-radius:8px;background:#fff;}
 
-/* ===== Closing Disclosure Audit — page-scoped visual override =====
-   Redefines shared design tokens for this page only. No markup or script
-   changes: every selector below already exists in navigator-shared.css.
-   The other eleven Navigator pages are untouched. */
-:root{
-  --bg:#FBFAF7;
-  --bg-alt:#F4F2ED;
-  --bg-gradient:#FBFAF7;
-  --surface:#FFFFFF;
-  --surface-2:#F4F2ED;
-  --ink:#1B2A3A;
-  --border:rgba(27,42,58,0.14);
-  --border-strong:rgba(27,42,58,0.30);
-  --text:#1B2A3A;
-  --text-dim:#5B6570;
-  --text-dimmer:#7C8791;
-  --accent:#FFFFFF;
-  --accent-deep:#B01F12;
-  --accent-2:#2C6A57;
-  --accent-2-deep:#22513F;
-  --accent-3:#B01F12;
-  --accent-3-deep:#B01F12;
-  --yellow:#FAF3E2;
-  --gradient:#1B2A3A;
-  --gradient-text:none;
-  --gradient-warm:#1B2A3A;
-  --radius:3px;
-  --radius-sm:2px;
-  --shadow-hard:5px 5px 0 rgba(27,42,58,0.10);
-  --shadow-hard-sm:4px 4px 0 rgba(27,42,58,0.09);
-  --shadow-hard-xs:3px 3px 0 rgba(27,42,58,0.08);
-}
-body{ font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif; font-size:17px; line-height:1.6; }
-h1,h2,h3,h4,.price-amount,.sc-h{
-  font-family:'Newsreader',Georgia,serif; font-weight:500; letter-spacing:-0.01em;
-}
-h1{ font-size:clamp(2.2rem,5vw,3.4rem); line-height:1.09; }
-h2{ font-size:clamp(1.55rem,3.1vw,2.05rem); line-height:1.18; }
-/* the gradient span in the headline becomes plain ink, not transparent text */
-.grad, .hero h1 .grad, h1 .grad, h2 .grad{
-  background:none; -webkit-background-clip:border-box; background-clip:border-box;
-  -webkit-text-fill-color:var(--ink); color:var(--ink);
-}
-.sub{ font-size:1.08rem; color:var(--text-dim); }
-/* an all-caps tracked eyebrow is the one thing that most dates the page */
-.eyebrow{
-  font-family:'IBM Plex Mono',ui-monospace,monospace;
-  text-transform:none; letter-spacing:0; font-weight:400;
-  font-size:12.5px; color:var(--text-dim);
-}
-.hero{ padding:72px 24px 54px; }
-.step-card{ border:1px solid var(--border-strong); box-shadow:none; padding:24px 22px; }
-.step-num{
-  background:none; color:var(--accent-deep); border:none; box-shadow:none;
-  font-family:'IBM Plex Mono',ui-monospace,monospace; font-weight:400;
-  width:auto; height:auto; justify-content:flex-start; margin-bottom:10px; font-size:.95rem;
-}
-.check-card{ border:1px solid var(--ink); border-radius:3px; box-shadow:var(--shadow-hard-sm); }
-.price-card{ border:1px solid var(--ink); border-radius:3px; }
-.price-amount{ font-weight:500; font-size:2.5rem; }
-.btn{ border-radius:2px; font-weight:500; }
-.btn-primary{
-  background:var(--ink); color:#FBFAF7; border:1px solid var(--ink); box-shadow:none; font-weight:500;
-}
-.btn-primary:hover{ background:#12202E; }
-.faq-q{ font-weight:500; font-size:16px; }
-.tick{ color:var(--accent-2); }
-.bg-noise{ display:none; }
 
-/* ---- layout: left-aligned narrow measure, hairline rules ---- */
-section{ padding:64px 24px; border-bottom:1px solid var(--border); }
-.hero{ padding:70px 24px 52px; text-align:left; }
-.hero .wrap{ max-width:960px; }
-h1{ max-width:16ch; margin:0 0 20px; }
-.sub{ max-width:60ch; margin:0 0 30px; }
-.section-head{ max-width:64ch; margin:0 auto 34px; text-align:left; }
-.wrap{ max-width:960px; }
-.section-head, .steps-grid, .faq-list, .single-price-wrap, #what-you-get .wrap{
-  margin-left:auto; margin-right:auto;
-}
-
-/* steps become a numbered list with hairline rules, not a card grid.
-   Each child is placed explicitly: the number can never trap the
-   paragraph in its own 44px column. */
-.steps-grid{ display:block; max-width:820px; }
-.step-card{
-  display:grid; grid-template-columns:44px 1fr; gap:20px;
-  border:none; border-top:1px solid var(--border); border-radius:0;
-  box-shadow:none; padding:20px 0; background:none;
-}
-.steps-grid .step-card:first-child{ border-top:1px solid var(--border-strong); }
-.step-card .step-num{ grid-column:1; grid-row:1; margin:0; padding-top:2px; }
-.step-card h4{ grid-column:2; grid-row:1; margin:0; font-size:1.12rem; font-weight:600; }
-.step-card p{ grid-column:2; grid-row:2; margin:6px 0 0; color:var(--text-dim); font-size:.96rem; max-width:62ch; }
-
-/* what-you-get: hairline rows rather than one heavy floating card */
-#what-you-get{ background:var(--bg-alt); border-top:1px solid var(--border-strong); border-bottom:1px solid var(--border-strong); }
-#what-you-get .wrap{ max-width:820px !important; }
-.check-card{
-  border:none; box-shadow:none; background:none; padding:0;
-  max-width:none; margin:0; border-radius:0;
-}
-.check-list{ gap:0; }
-.check-list li{
-  font-size:.96rem; font-weight:400; line-height:1.5; color:var(--text);
-  border-top:1px solid var(--border); padding:13px 0; gap:12px;
-}
-.check-list li:first-child{ border-top:none; }
-.tick{ flex:0 0 auto; }
-
-/* pricing + faq: left-aligned, same measure as everything else */
-.single-price-wrap{ justify-content:flex-start; max-width:820px; }
-.price-card{ border:1px solid var(--ink); border-radius:3px; width:100%; }
-.price-feats{ gap:0; }
-.price-feats li{ border-top:1px solid var(--border); padding:11px 0; font-size:.95rem; }
+/* ---- transplanted intake + scorecard, restyled ---- */
+.single-price-wrap{ display:block; max-width:780px; }
+.price-card{ background:var(--panel); border:1px solid var(--ink); border-radius:3px; padding:32px; box-shadow:none; }
+.price-badge{ display:inline-block; font-size:.74rem; color:var(--ok); background:var(--ok-tint);
+  border:1px solid #CADED6; border-radius:2px; padding:3px 9px; margin-bottom:14px; letter-spacing:0; text-transform:none; font-weight:500; }
+.price-card h3{ font-family:"Newsreader",Georgia,serif; font-weight:500; font-size:1.35rem; margin:0 0 6px; }
+.price-card .desc{ color:var(--ink-soft); font-size:.93rem; margin:0 0 18px; max-width:62ch; }
+.price-amount{ font-family:"Newsreader",Georgia,serif; font-weight:500; font-size:2.5rem; line-height:1; margin:0; }
+.price-period{ color:var(--ink-soft); font-size:.88rem; margin:6px 0 20px; }
+.price-feats{ list-style:none; margin:0 0 24px; padding:0; display:block; }
+.price-feats li{ display:flex; gap:10px; align-items:flex-start; font-size:.95rem;
+  border-top:1px solid var(--rule-soft); padding:10px 0; }
 .price-feats li:first-child{ border-top:none; }
-.faq-list{ max-width:820px; gap:0; }
-.faq-item{
-  background:none; border:none; border-top:1px solid var(--border);
-  border-radius:0; overflow:visible;
-}
-.faq-list .faq-item:first-child{ border-top:1px solid var(--border-strong); }
-.faq-q{ padding:16px 0; }
-.faq-a-inner{ padding:0 0 18px; color:var(--text-dim); font-size:.95rem; max-width:68ch; }
-.plus{ font-family:'IBM Plex Mono',ui-monospace,monospace; color:var(--text-dim); }
-.upload-zone{ border:1px dashed var(--border-strong); border-radius:2px; }
-.cta-final{ text-align:left; }
-
-@media(max-width:640px){
-  section{ padding:48px 20px; }
-  .step-card{ grid-template-columns:32px 1fr; gap:14px; }
-  h1{ max-width:none; }
-}
-
-/* ---- hero worked example ---- */
-.hero .wrap{ display:grid; grid-template-columns:1.02fr .98fr; gap:52px; align-items:start; }
-.hero h1, .hero .sub{ grid-column:1; }
-.hero h1{ grid-row:1; } .hero .sub{ grid-row:2; margin-bottom:0; }
-.ledger{
-  grid-column:2; grid-row:1 / span 2;
-  background:var(--surface); border:1px solid var(--ink);
-  box-shadow:5px 5px 0 rgba(27,42,58,.08); align-self:start;
-}
-.ledger-head{
-  display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-  padding:12px 16px; border-bottom:1px solid var(--ink);
-  font-size:.8rem; color:var(--text-dim);
-}
-.ledger-head b{ color:var(--ink); font-weight:600; font-size:.86rem; }
-.ledger .row{
-  display:grid; grid-template-columns:1fr auto; gap:14px;
-  padding:10px 16px; border-bottom:1px solid var(--border); font-size:.89rem;
-}
-.ledger .row .lbl{ color:var(--text-dim); }
-.ledger .row .amt{ font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
-.ledger .row.hit{ background:#FBEEEC; }
-.ledger .row.hit .lbl{ color:var(--ink); font-weight:500; }
-.ledger .row.hit .amt{ color:var(--accent-deep); font-weight:500; }
-.ledger-note{ padding:11px 16px; background:#FBEEEC; border-bottom:1px solid var(--border); font-size:.83rem; line-height:1.5; }
-.ledger-note b{ color:var(--accent-deep); }
-.ledger-foot{ padding:11px 16px; font-size:.79rem; color:var(--text-dim); }
-.footer-links{ font-size:.9rem; color:var(--text-dim); margin-bottom:18px; }
-@media(max-width:940px){
-  .hero .wrap{ grid-template-columns:1fr; gap:30px; }
-  .hero h1,.hero .sub,.ledger{ grid-column:1; }
-  .ledger{ grid-row:auto; }
-  .hero .sub{ margin-bottom:0; }
-}
+.tick{ color:var(--ok); flex:0 0 auto; }
+.price-secure,.pricing-footnote{ font-size:.85rem; color:var(--ink-soft); }
+.upload-zone{ border:1px dashed #B9BDB6; border-radius:2px; background:#FDFDFB;
+  padding:26px 20px; text-align:center; cursor:pointer; }
+.upload-zone:hover{ background:#F7F7F3; border-color:var(--ink-soft); }
+.upload-cta{ font-weight:500; }
+.upload-sub,.upload-note,.field-hint{ font-size:.85rem; color:var(--ink-soft); }
+.upload-checklist{ font-size:.9rem; color:var(--ink-soft); }
+.field-block{ margin:18px 0; }
+.field-block label{ display:block; font-size:.9rem; font-weight:500; margin-bottom:6px; }
+#stage-2 select,.field-block select,.field-block input,input[type=email]{
+  width:100%; padding:12px 13px; border:1px solid var(--rule); border-radius:2px;
+  font-family:inherit; font-size:.97rem; background:var(--panel); color:var(--ink); }
+.inline-error{ border:1px solid #EED4CF; background:var(--flag-tint); color:var(--ink);
+  padding:12px 14px; border-radius:2px; font-size:.9rem; margin:14px 0; }
+.inline-error strong{ display:block; color:var(--flag); margin-bottom:3px; }
+.btn{ display:inline-block; border-radius:2px; font-weight:500; font-family:inherit;
+  padding:14px 26px; text-decoration:none; cursor:pointer; border:1px solid var(--ink); }
+.btn-primary{ background:var(--ink); color:var(--paper); box-shadow:none; }
+.btn-primary:hover{ background:#12202E; }
+.btn-ghost{ background:transparent; color:var(--ink); }
+.btn-sm{ padding:10px 18px; font-size:.9rem; }
+.scorecard-panel{ margin:4px 0 18px; }
+.scorecard-head{ font-family:"Newsreader",Georgia,serif; font-size:1.2rem; font-weight:500; margin:0 0 8px; }
+.scorecard-rows,.mismatch-rows{ list-style:none; margin:12px 0; padding:0; }
+.scorecard-rows li,.mismatch-rows li{ border-top:1px solid var(--rule-soft); padding:9px 0; font-size:.92rem; }
+.scorecard-note,.mismatch-why,.sc-sub,.fix-note{ font-size:.88rem; color:var(--ink-soft); margin:8px 0 0; }
+.scorecard-alert,.scorecard-warn{ border:1px solid #EED4CF; background:var(--flag-tint);
+  padding:12px 14px; border-radius:2px; font-size:.9rem; margin:12px 0; }
+.sc-panel{ border:1px solid var(--rule); background:#F7F6F2; padding:18px 20px; border-radius:2px; margin:14px 0; }
+.sc-panel-accent{ border-color:var(--ink); }
+.sc-h{ font-family:"Newsreader",Georgia,serif; font-size:1.15rem; font-weight:500; margin:0 0 4px; }
+.sc-lead{ font-size:.95rem; margin:0 0 8px; }
+.sc-list{ list-style:none; margin:10px 0 0; padding:0; }
+.sc-list li{ border-top:1px solid var(--rule-soft); padding:8px 0; font-size:.9rem; }
+.sc-details{ font-size:.9rem; }
+.fix-row{ display:flex; gap:12px; align-items:center; margin:10px 0; font-size:.88rem; }
+.fix-row input{ width:130px; padding:8px 10px; border:1px solid var(--rule); border-radius:2px; font:inherit; }
+.toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
+  background:var(--ink); color:var(--paper); padding:12px 18px; border-radius:2px;
+  font-size:.9rem; display:none; z-index:60; }
+.toast.show{ display:block; }
+.reveal{ opacity:1 !important; transform:none !important; }
 </style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/closing#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Closing Disclosure Audit</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Closing Disclosure Audit</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#checks">The checks</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> You have 3 business days to review</div>
-      <h1>If a fee rose after your Loan Estimate, your lender may owe you <span class="grad">the difference back.</span></h1>
-      <p class="sub">Federal rules cap how far certain closing costs can move between your Loan Estimate and your Closing Disclosure. Go over the cap without a documented reason and the lender has to refund the difference. We test every fee against those caps, recheck every calculation on the document, and measure your escrow cushion against the federal limit. Buying or refinancing, any state. Before you pay anything, we tell you what we found and what we could not read.</p>
-      <div class="ledger">
-        <div class="ledger-head"><b>Loan Estimate &rarr; Closing Disclosure</b><span>Section A &mdash; Origination</span></div>
-        <div class="row"><span class="lbl">Processing fee</span><span class="amt">$670.00 &rarr; $670.00</span></div>
-        <div class="row hit"><span class="lbl">Underwriting fee</span><span class="amt">$995.00 &rarr; $1,295.00</span></div>
-        <div class="row"><span class="lbl">Credit report</span><span class="amt">$44.00 &rarr; $44.00</span></div>
-        <div class="ledger-note"><b>Finding.</b> Lender fees sit in the zero-tolerance group. This one rose $300 after your Loan Estimate. Unless your lender documented a changed circumstance, the rule says they owe the difference back &mdash; and you have 60 days after closing to ask.</div>
-        <div class="ledger-foot">$300.00 &mdash; possible post-closing refund</div>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="notice">You have 3 business days to review before you sign</span>
+      <h1>If a fee rose after your Loan Estimate, your lender may owe you the difference back.</h1>
+      <p class="lede">Federal rules cap how far certain closing costs can move between your Loan Estimate and your Closing Disclosure. Go past the cap without a documented reason and the lender has to refund the difference. We test every fee against those caps, recheck every calculation on the document, and measure your escrow cushion against the federal limit. Purchases and refinances, any state.</p>
+      <div class="btn-row">
+        <a class="btn" href="#price">Get my free scorecard</a>
+        <a class="btn ghost" href="#sample">See a sample report</a>
+      </div>
+      <p class="btn-note" style="margin-top:14px">No card needed for the scorecard.</p>
+    </div>
+
+    <div class="ledger" aria-label="Example finding">
+      <div class="ledger-head"><b>Loan Estimate &rarr; Closing Disclosure</b><span>Section A &mdash; Origination</span></div>
+      <div class="row"><span class="lbl">Processing fee</span><span class="amt">$670 &rarr; $670</span></div>
+      <div class="row hit"><span class="lbl">Underwriting fee</span><span class="amt">$995 &rarr; $1,295</span></div>
+      <div class="row"><span class="lbl">Credit report</span><span class="amt">$44 &rarr; $44</span></div>
+      <div class="note"><b>Finding.</b> Lender fees sit in the zero-tolerance group. This one rose $300 after your Loan Estimate. Unless the lender documented a changed circumstance, the rule says they owe the difference back &mdash; and you have 60 days after closing to ask.</div>
+      <div class="ledger-foot">$300.00 &mdash; possible post-closing refund</div>
+    </div>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">The scorecard comes first. You see how many findings there are, and which parts of your document we could not check, before you decide whether the report is worth buying.</p>
+    <ol class="steps">
+      <li><h3>Upload your Closing Disclosure</h3><p>That is the only document we need. If your Loan Estimates fit in the same upload, add them — and if you are buying, your purchase contract too. Both unlock further checks and cost nothing extra.</p></li>
+      <li><h3>Tell us buying or refinancing</h3><p>One tap. It changes which checks run: buyers who send a contract get seller-credit reconciliation, refinancers get payoff and per-diem verification and their rescission window.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">Free</span></h3><p>Within a few minutes: the count of findings, the dollars they touch, and a named list of anything we could not read on your document. No card, no charge, no obligation.</p></li>
+      <li><h3>Decide, then pay $59</h3><p>Only if the scorecard shows something worth reading. One flat price per closing, whatever you uploaded.</p></li>
+      <li><h3>Get your report and your emails</h3><p>Every finding with the arithmetic, the rule, or the published rate behind it — each one sourced and dated so you can check it yourself. Ranked by dollar impact, marked changeable now, likely locked, or possible post-closing refund, with drafted emails you send yourself.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="checks">
+  <div class="wrap">
+    <h2>Every check, named</h2>
+    <p class="sec-intro">Each one tests your document against its own arithmetic or against a federal rule, so it works the same in every state. We do not compare your fees to local averages and we never tell you a charge is too expensive — see <a href="#limits">what this does not do</a> for why that line matters.</p>
+
+    <h3 class="group-h">The document's own arithmetic</h3>
+    <p class="group-sub">Runs on the Closing Disclosure alone. Nothing else needed.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">01</span><span>Loan Costs subtotals A, B and C recomputed from the lines above them</span></div>
+      <div class="chk"><span class="n">02</span><span>Total Loan Costs (D) against the sum of A, B and C</span></div>
+      <div class="chk"><span class="n">03</span><span>Other Costs subtotals E, F, G and H</span></div>
+      <div class="chk"><span class="n">04</span><span>Total Other Costs (I) against the sum of E through H</span></div>
+      <div class="chk"><span class="n">05</span><span>Total Closing Costs (J), with lender credits applied</span></div>
+      <div class="chk"><span class="n">06</span><span>The Calculating Cash to Close table, line by line</span></div>
+      <div class="chk"><span class="n">07</span><span>Summaries of Transactions: does your side balance</span></div>
+      <div class="chk"><span class="n">08</span><span>Loan Calculations: Total of Payments</span></div>
+      <div class="chk"><span class="n">09</span><span>Loan Calculations: Finance Charge</span></div>
+      <div class="chk"><span class="n">10</span><span>Loan Calculations: Amount Financed</span></div>
+      <div class="chk"><span class="n">11</span><span>Loan Calculations: Total Interest Percentage</span></div>
+      <div class="chk"><span class="n">12</span><span>The four Loan Calculations figures tested against each other for internal consistency</span></div>
+      <div class="chk"><span class="n">13</span><span>Prepaid interest: day count and per-diem against your disbursement date</span></div>
+      <div class="chk"><span class="n">14</span><span>Escrow cushion against the federal two-month maximum</span></div>
+      <div class="chk"><span class="n">15</span><span>Initial escrow statement against the monthly escrow figure on page 1</span></div>
+      <div class="chk"><span class="n">16</span><span>Aggregate adjustment: present, correctly signed, and proportionate</span></div>
+      <div class="chk"><span class="n">17</span><span>Itemised amounts that do not add to the charge on the same line</span></div>
+      <div class="chk"><span class="n">18</span><span>The same charge appearing twice across sections A, B, C, E and H</span></div>
+      <div class="chk"><span class="n">19</span><span>Stacked lender fees: processing, underwriting, administration and application billed separately</span></div>
+      <div class="chk"><span class="n">20</span><span>Page 1 loan terms against page 4: prepayment penalty, escrow, adjustable-rate detail</span></div>
+    </div>
+
+    <h3 class="group-h">Unlocked by your Loan Estimates</h3>
+    <p class="group-sub">Optional. These are the checks that can conclude money is owed back to you.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">21</span><span>Zero-tolerance fees: did any rise at all without a documented change of circumstance</span></div>
+      <div class="chk"><span class="n">22</span><span>The ten-percent group tested cumulatively, not line by line</span></div>
+      <div class="chk"><span class="n">23</span><span>Lender credits: were any reduced between the estimate and the disclosure</span></div>
+      <div class="chk"><span class="n">24</span><span>Charges on the disclosure with no counterpart on any estimate</span></div>
+    </div>
+
+    <h3 class="group-h">Unlocked by your purchase contract<span class="tag p">purchase</span></h3>
+    <p class="group-sub">Optional, and often the largest single finding in the report.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">25</span><span>Seller credits and concessions you negotiated, against what actually landed on the disclosure</span></div>
+      <div class="chk"><span class="n">26</span><span>Who-pays-what allocations against what the contract says</span></div>
+    </div>
+
+    <h3 class="group-h">Refinance only<span class="tag r">refinance</span></h3>
+    <p class="group-sub">Runs on the Closing Disclosure alone.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">27</span><span>Payoff figure and per-diem interest to the payoff date</span></div>
+      <div class="chk"><span class="n">28</span><span>Your rescission window: the dates, and what it lets you do</span></div>
+    </div>
+
+    <div class="legend">
+      <span class="pill a">Changeable now</span>
+      <span class="pill b">Likely locked</span>
+      <span class="pill c">Possible post-closing refund</span>
+    </div>
+    <p class="btn-note" style="margin-top:12px">Every finding carries one of these, so you know what is worth a phone call today.</p>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>A sample report</h2>
+    <p class="sec-intro">Four findings, with the figures changed. Every line shows the arithmetic or names the rule behind it, so you can verify it without taking our word.</p>
+    <div class="sample">
+      <div class="finding">
+        <div class="finding-h"><h3>Underwriting fee rose after your last Loan Estimate</h3><span class="amt">$300.00</span></div>
+        <p>Lender fees cannot increase without a documented changed circumstance. We found no revised estimate in what you uploaded.</p>
+        <div class="basis">Loan Estimate dated 14 March: $995.00. Closing Disclosure: $1,295.00. Ask your lender for the change-of-circumstance notice, or for the difference back.</div>
+        <div class="cite">Basis: the zero-tolerance category under the federal disclosure rules.</div>
+        <p style="margin-top:9px"><span class="pill c">Possible post-closing refund</span></p>
+      </div>
+      <div class="finding">
+        <div class="finding-h"><h3>Escrow cushion exceeds the federal maximum</h3><span class="amt">$412.00</span></div>
+        <p>Federal rules cap the cushion at two months of escrow payments. Yours holds more than that.</p>
+        <div class="basis">Monthly escrow $618.00, so the cap is $1,236.00. Your initial deposit holds $1,648.00 of cushion.</div>
+        <div class="cite">Basis: the two-month escrow limit, recomputed from figures on your own document.</div>
+        <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
+      </div>
+      <div class="finding">
+        <div class="finding-h"><h3>Prepaid interest billed for 22 days instead of 8</h3><span class="amt">$575.40</span></div>
+        <p>Page 2, section F. Your disbursement date is the 24th, which leaves 8 days of interest to month end.</p>
+        <div class="basis">22 days &times; $41.10 = $904.20 charged. 8 days &times; $41.10 = $328.80 correct. Both figures are printed on your own document.</div>
+        <div class="cite">Basis: arithmetic, using the per-diem rate and disbursement date on the form.</div>
+        <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
+      </div>
+      <div class="finding">
+        <div class="finding-h"><h3>Seller credit is $1,500 short of the contract</h3><span class="amt">$1,500.00</span></div>
+        <p>Your contract provides a $6,000 seller credit toward closing costs. Section L shows $4,500.</p>
+        <div class="basis">Purchase agreement, paragraph 4(c): $6,000. Closing Disclosure, section L line 05: $4,500.</div>
+        <div class="cite">Basis: the contract you uploaded. This is contractual, not a request.</div>
+        <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
       </div>
     </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head reveal">
-      <div class="eyebrow">How it works</div>
-      <h2>Not a comparison. An audit.</h2>
-    </div>
-    <div class="steps-grid">
-      <div class="step-card reveal">
-        <div class="step-num">1</div>
-        <h4>Upload your Closing Disclosure</h4>
-        <p>That is the only document we need to start. Add your Loan Estimates, and your purchase contract if you are buying, to unlock further checks. They cost nothing extra.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>See what we found. Then decide.</h2>
+    <p class="sec-intro">One price, whatever you upload. Adding your Loan Estimates or contract unlocks more checks and costs nothing extra — we would rather you gave us everything.</p>
+
+    <div class="price-card">
+      <div class="price-top">
+        <div>
+          <h3 style="font-family:Newsreader,serif;font-size:1.35rem;font-weight:500">Closing Disclosure Audit</h3>
+          <p style="margin:6px 0 0;color:var(--ink-soft);font-size:.93rem">Free scorecard first. Pay only if it finds something.</p>
+        </div>
+        <div class="fig">$59<small>one closing</small></div>
       </div>
-      <div class="step-card reveal">
-        <div class="step-num">2</div>
-        <h4>Tell us buying or refinancing</h4>
-        <p>Plus your property type. About fifteen seconds, and it changes which checks run: buyers who send a contract get seller-credit reconciliation, refinancers get payoff and per-diem verification against the payoff date.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">3</div>
-        <h4>Read your free scorecard</h4>
-        <p>How many findings, the dollars they touch, and a named list of anything we could not read on your document. No card, no charge, no obligation.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">4</div>
-        <h4>Decide, then pay $59</h4>
-        <p>One flat price per closing, whatever you uploaded. Only worth paying if the scorecard found something.</p>
-      </div>
-      <div class="step-card reveal">
-        <div class="step-num">5</div>
-        <h4>Get your action pack</h4>
-        <p>Every finding ranked by dollar impact, each labelled changeable now, likely locked, or a possible post-closing refund, each showing the arithmetic or the federal rule behind it — plus drafted emails for your lender and settlement agent.</p>
-      </div>
-    </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head reveal">
-      <div class="eyebrow">What you get</div>
-      <h2>Find what is wrong — before you sign.</h2>
-    </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card reveal">
-        <ul class="check-list">
-          <li><span class="tick">&#10003;</span> Every finding ranked by dollar impact, with the arithmetic or the federal rule behind it — each one shown in full so you can check it yourself</li>
-          <li><span class="tick">&#10003;</span> Arithmetic verification: section subtotals, the Loan Calculations box, prepaid interest, escrow cushion, prorations and Cash to Close</li>
-          <li><span class="tick">&#10003;</span> Your escrow cushion measured against the federal two-month maximum, and the initial escrow statement reconciled against the monthly figure on page 1</li>
-          <li><span class="tick">&#10003;</span> Duplicate and stacked-fee detection, and — if you are buying and send the contract — the seller credits you negotiated checked against what actually landed</li>
-          <li><span class="tick">&#10003;</span> Whether each finding is still changeable before closing, likely locked, or a possible post-closing refund</li>
-          <li><span class="tick">&#10003;</span> A named list of anything we could not read on your document — shown free, before you pay</li>
-          <li><span class="tick">&#10003;</span> Ready-to-send emails for your lender and your settlement agent</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    This page is already wired to a live Stripe Payment Link for "Closing
-    Navigator Report" ($59, one-time), configured to match the other 11
-    Navigator pages: after payment redirects to
-    https://streamnavigator.ai/navigator-status, and this page already
-    appends ?client_reference_id=<submission id> automatically (see
-    navigator-shared.js) so payment ties back to the right submission.
-    To change the price or product name, edit it in the Stripe Dashboard —
-    Product catalog -> "Closing Navigator Report" — no code changes needed
-    here unless you create a brand-new Payment Link, in which case paste
-    the new https://buy.stripe.com/... URL over the one on the button below.
-    The shared webhook (api/navigator-stripe-webhook.js) already recognizes
-    this product once 'closing' is added to ALLOWED_PRODUCTS in
-    api/_lib/supabaseAdmin.js — already done as part of this change.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head reveal">
-      <div class="eyebrow">Get started</div>
-      <h2>See what we found first. Then decide.</h2>
-      <p>Upload your Closing Disclosure and see the free scorecard before you decide. One flat $59 if you want the report — adding your Loan Estimates or contract unlocks more checks and costs nothing extra.</p>
-    </div>
-    <div class="single-price-wrap">
+
+      <ul class="incl">
+        <li>Every check that applies to your closing, purchase or refinance</li>
+        
+        <li>Every finding showing the arithmetic or naming the federal rule behind it</li>
+        <li>Each finding marked changeable now, likely locked, or possible post-closing refund</li>
+        <li>Drafted emails for your lender and your settlement agent</li>
+        <li>A named list of anything we could not read on your document</li>
+        <li>Full refund if the report does not contain the findings your scorecard promised</li>
+      </ul>
+
+      <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
         <span class="price-badge">Free scorecard first</span>
         <h3>Closing Disclosure Audit</h3>
@@ -445,51 +594,52 @@ h1{ max-width:16ch; margin:0 0 20px; }
       </div>
     </div>
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head reveal">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
     </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">What documents do I need? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Only your final Closing Disclosure. Loan Estimates unlock the tolerance checks. If you are buying, the purchase contract lets us confirm the seller credits you negotiated actually landed. Both are useful, neither is required, and neither changes the price.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">How is this different from reading the Closing Disclosure myself? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Reading it tells you what you are being charged. It does not tell you whether the arithmetic holds, whether your escrow cushion exceeds the federal limit, or whether a fee moved further than the lending rules allow after your Loan Estimate. None of those are visible by reading — they only appear when you recompute the figures and compare the two documents line by line.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Does this work for a refinance? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes. We verify the payoff figure and its per-diem interest against the payoff date, and set out your rescission window — the three business days after signing in which you can unwind the loan, which purchase buyers do not get. Everything else runs the same. Refinances skip the contract and seller-credit checks, because there is no contract.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Where do your published figures come from? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Almost every check runs on federal rules or on the document's own arithmetic, so it works the same in all fifty states — that is the whole audit and it is what the price buys. Separately, in a small number of states we hold verified county recording and transfer tax figures read from the publishing authority's own page. Where we have them, the report shows the source and the date we checked it. Where we do not, we say nothing about those fees rather than guess, and the free scorecard tells you which is which before you pay.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Why not just tell me if my fees are high? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Because we would be guessing. There is no authoritative published figure for what an underwriting fee or a settlement fee should cost, and telling you a legitimate charge is excessive three days before closing is worse than telling you nothing. We check what can be checked — the arithmetic, the federal caps, the escrow limit — and we stay quiet about the rest rather than inventing a benchmark.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Will you contact my lender for me? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No. You get drafted emails for your lender and your settlement agent, each naming the specific charge, the amount, the rule or schedule behind it, and what you are asking for — but you send them yourself. We are not a law firm and this is not legal advice.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if nothing changed? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You will be told plainly. The free scorecard shows you the count before you pay anything, so you are never buying a report to find out there was nothing in it. It also names anything on your document we could not read clearly, so you know exactly what is and is not covered before you decide.</div></div>
-      </div>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Worth reading before you upload, so nothing in the report surprises you.</p>
+    <div class="limits">
+      <ul>
+        <li><strong>We do not tell you a fee is too expensive.</strong> We check arithmetic and federal rules. What a lender charges to underwrite, or a title company to close, is set by that company, and there is no authoritative figure to check it against. So we do not pretend there is.</li>
+        
+        
+        <li><strong>We do not shop, negotiate, or contact anyone.</strong> You send the emails.</li>
+        <li><strong>We read what you send.</strong> If a scan is unclear we name the lines we could not read rather than guessing — that list is in your free scorecard, before you pay.</li>
+        <li><strong>This is automated analysis, not legal, tax or mortgage advice.</strong> Every finding shows the arithmetic, the rule or the published rate behind it, so you can check it and take it to your lender, attorney or settlement agent.</li>
+      </ul>
     </div>
-  </section>
-  
-</main>
-<footer id="contact">
-  <p class="footer-links"><a href="/">All Navigators</a> &nbsp;&middot;&nbsp; <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></p>
-  <p class="footer-disclaimer">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, tax, financial, or mortgage advice, and is not an appraisal, a title opinion, or a determination of your tax liability. Findings are stated as potential issues to raise, not as legal conclusions, and nothing in a report asserts that any lender, title company or settlement agent has acted improperly. Where a report cites a published government figure, it names the source and the date it was checked; those sources change and may be superseded. Always review your full closing documents and consult your lender, attorney, settlement agent or tax advisor before you sign.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col">
+      <details><summary>Does this work for a refinance?</summary><div class="body">Yes. We verify the payoff figure and its per-diem interest against the payoff date, and set out your rescission window — the three business days after signing in which you can unwind the loan, which purchase buyers do not get. Everything else runs the same. Refinances skip the contract and seller-credit checks, because there is no contract.</div></details>
+      <details><summary>What documents do I need?</summary><div class="body">Only your final Closing Disclosure. Loan Estimates unlock the tolerance checks. If you are buying, the purchase contract lets us confirm your seller credits landed. All optional, none cost extra.</div></details>
+      <details><summary>Does this work in my state?</summary><div class="body">Yes. Every check runs on the arithmetic of your own document or on federal disclosure rules, both of which are identical in all fifty states. Nothing in the report depends on us holding data for your county.</div></details>
+      <details><summary>Why not just tell me if my fees are high?</summary><div class="body">Because we would be guessing. There is no authoritative published figure for what an underwriting fee or a settlement fee should cost, and telling you a legitimate charge is excessive three days before closing is worse than telling you nothing. We check what can be checked and are explicit about the rest.</div></details>
+      <details><summary>How is this different from reading the document myself?</summary><div class="body">Reading it tells you what you are being charged. It does not tell you whether the arithmetic holds, whether your escrow cushion exceeds the federal limit, or whether a fee moved further than the lending rules allow after your Loan Estimate. None of that is visible by reading — it only appears when you recompute the figures and compare the two documents line by line.</div></details>
+      <details><summary>Will you contact my lender for me?</summary><div class="body">No. You get drafted emails for your lender and your settlement agent, each naming the charge, the amount, the source behind it, and what you are asking for. You send them. We are not a law firm and this is not legal advice.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">The free scorecard shows the count before you pay, so you never buy a report to discover it is empty. If you do buy and the report does not contain the findings your scorecard promised, reply and we refund you in full.</div></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, tax, financial, or mortgage advice, and is not an appraisal, a title opinion, or a determination of your tax liability. Findings are drawn from the documents you upload and from publicly published government schedules, statutes, rate filings and assessment records, each cited in your report with the date it was checked; those sources change and may be superseded. Projections of future escrow or tax amounts are estimates only and are not a representation of what you will be charged. Nothing here is a statement that any provider has acted improperly. Always read your full closing documents and consult your lender, attorney, settlement agent or tax advisor before you sign.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">© 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
