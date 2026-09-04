@@ -320,6 +320,26 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:12px 18px; border-radius:2px; font-size:.9rem; display:none; z-index:60; }
 .toast.show{ display:block; }
 .reveal{ opacity:1 !important; transform:none !important; }
+
+/* ---- intake card: type sized to fill the box ---- */
+.price-card .desc{ font-size:1.02rem; line-height:1.55; max-width:none; }
+.price-card h3{ font-size:1.55rem; }
+.price-amount{ font-size:3rem; }
+.price-period{ font-size:.98rem; }
+.field-block label{ font-size:1.02rem; font-weight:600; margin-bottom:8px; }
+.upload-checklist{ font-size:.99rem; line-height:1.55; }
+.upload-checklist li{ padding:7px 0 7px 18px; }
+.upload-note{ font-size:.97rem; opacity:1; color:var(--ink-soft); margin:0 0 14px; }
+.upload-cta{ font-size:1.05rem; }
+.upload-sub{ font-size:.93rem; }
+.field-hint{ font-size:.95rem; line-height:1.5; }
+#stage-2 select, .field-block select, .field-block input, input[type=email]{
+  font-size:1.02rem; padding:13px 14px; }
+.price-feats li{ font-size:1rem; padding:12px 0; }
+.price-secure, .pricing-footnote{ font-size:.93rem; }
+.sc-h{ font-size:1.3rem; }
+.sc-sub, .scorecard-note{ font-size:.95rem; }
+.scorecard-rows li, .sc-list li{ font-size:1rem; }
 </style>
 </head>
 <body>
@@ -791,10 +811,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     // Checks, not fees. "10 of 14 fees, no rate data" measured a corpus we do
     // not claim to have, and its denominator was never reachable. This one is.
     if (sc.checks_total) {
-      rows.push(['Checks run', sc.checks_run + ' of ' + sc.checks_total]);
+      rows.push(['Checks run', (sc.checks_attempted || sc.checks_run) + ' of ' + sc.checks_total]);
     }
     if (sc.checks_blocked) {
       rows.push(['Checks needing another document', String(sc.checks_blocked)]);
+    }
+    if (typeof sc.findings_count === 'number') {
+      rows.push(['Findings to review', String(sc.findings_count)]);
     }
 
     // Shown ABOVE the figures and at a size that cannot be skimmed past. Someone
@@ -963,29 +986,19 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     }
 
     if (sc.unreadable_fields && sc.unreadable_fields.length) {
-      // Previously this said "a clearer copy would give you a fuller audit" and
-      // stopped there — advice with nothing behind it. Now the customer can read
-      // the figure off their own document and we re-run the audit against it.
+      // We report what we could not read; we do not ask the customer to key it
+      // in. A figure they type is unverified, and a finding resting on it is
+      // weaker than no finding at all — it puts their own typo in an email to
+      // their lender under our name.
       html += '<div class="scorecard-warn"><strong>We could not read '
         + sc.unreadable_fields.length + ' figure'
         + (sc.unreadable_fields.length === 1 ? '' : 's') + '.</strong> '
         + 'We excluded '
         + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
-        + ' rather than guessing. Type '
+        + ' rather than guessing, so any check that needed '
         + (sc.unreadable_fields.length === 1 ? 'it' : 'them')
-        + ' in from your own copy and we will run the checks that need '
-        + (sc.unreadable_fields.length === 1 ? 'it' : 'them') + '.'
-        + '<div id="fix-fields">'
-        + sc.unreadable_fields.map(function(f){
-            return '<label class="fix-row"><span>' + f.label
-              + (f.page ? ' <em>(page ' + f.page + ')</em>' : '')
-              + '</span><input type="text" inputmode="decimal" placeholder="$0.00" data-path="'
-              + f.path + '" /></label>';
-          }).join('')
-        + '<button class="btn btn-ghost btn-sm" id="fix-btn">Recheck with these figures</button>'
-        + '<p class="fix-note">We cannot verify what you type, so any finding based on '
-        + 'a figure you enter will say so.</p>'
-        + '<p id="fix-status"></p></div></div>';
+        + ' did not run. A clearer copy from your lender\'s portal usually reads '
+        + 'cleanly \u2014 you can re-upload at no charge.</div>';
     }
 
     // Self-contained escaper: these strings are server-side constants today,
@@ -1131,45 +1144,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   }
 
   // Delegated because the fields are rendered into the scorecard after load.
-  document.addEventListener('click', async function(ev){
-    if (!ev.target || ev.target.id !== 'fix-btn') return;
-    ev.preventDefault();
-    const btn = ev.target;
-    const status = document.getElementById('fix-status');
-    const values = {};
-    document.querySelectorAll('#fix-fields input[data-path]').forEach(function(inp){
-      const v = (inp.value || '').trim();
-      if (v) values[inp.getAttribute('data-path')] = v;
-    });
-    if (!Object.keys(values).length) { status.textContent = 'Enter at least one figure first.'; return; }
-    if (!submissionRef) { status.textContent = 'Please run a scorecard first.'; return; }
-
-    btn.disabled = true;
-    status.textContent = 'Rechecking…';
-    try {
-      const resp = await fetch('/api/closing-corrections', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: submissionRef.id, token: submissionRef.token, values: values }),
-      });
-      const data = await readJson(resp);
-      if (!resp.ok || !data.ok) throw new Error(data.error || 'Could not apply those figures.');
-      renderScorecard(data.scorecard);
-      // Refresh what travels through checkout. Without this the paid report page
-      // reads a stale list from localStorage and asks the customer to fix
-      // figures they have already fixed.
-      if (submissionRef) submissionRef.unreadable_fields = data.remaining || [];
-      const s2 = document.getElementById('fix-status');
-      if (s2) {
-        s2.textContent = 'Updated with ' + data.applied + ' figure'
-          + (data.applied === 1 ? '' : 's') + '. '
-          + (data.remaining.length ? data.remaining.length + ' still missing.' : 'Nothing else outstanding.');
-      }
-    } catch (err) {
-      btn.disabled = false;
-      status.textContent = err.message || 'Something went wrong — please try again.';
-    }
-  });
+  // The manual-figure recheck was removed. We report what we could not read and
+  // stop there; a value the customer types cannot be verified, and a finding
+  // built on it would carry their typo into a letter to their lender.
 
   document.getElementById('scorecard-btn').addEventListener('click', async function(e){
     e.preventDefault();
@@ -1283,6 +1260,30 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     }
   });
 })();
+
+  // The upload checklist offers a purchase contract. On a refinance there is no
+  // contract, so asking for one reads as though we did not listen to the answer
+  // given two fields above.
+  (function(){
+    const tx = document.getElementById('q-transaction-type');
+    if (!tx) return;
+    function syncContractLine(){
+      const isRefi = tx.value === 'refinance';
+      document.querySelectorAll('.upload-checklist li').forEach(function(li){
+        if (/purchase contract/i.test(li.textContent)) {
+          li.style.display = isRefi ? 'none' : '';
+        }
+      });
+      const note = document.querySelector('.upload-note');
+      if (note) {
+        note.textContent = isRefi
+          ? 'A Loan Estimate unlocks the tolerance checks, at no extra cost. Drop it in the same box.'
+          : 'Optional documents unlock extra checks at no extra cost. Drop them all in the same box.';
+      }
+    }
+    tx.addEventListener('change', syncContractLine);
+    syncContractLine();
+  })();
 </script>
 </body>
 </html>
