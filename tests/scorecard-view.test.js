@@ -168,6 +168,18 @@ test('a contract for the wrong property still names the mismatch', () => {
   assert.equal(/states no seller credits/.test(html), false);
 });
 
+
+// --- the add-documents buttons land on the upload box ------------------------
+// Sending the customer to the top of a long marketing page they have already
+// read, and making them find the upload box again, is the same failure as an
+// upsell with nowhere to upload.
+
+test('the default add-documents destination is the upload box', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'closing-scorecard-view.js'), 'utf8');
+  assert.match(src, /\/closing#upload/);
+});
+
 const total = passed + failures.length;
 if (failures.length) {
   console.error(`\n${failures.length} of ${total} failed:\n`);

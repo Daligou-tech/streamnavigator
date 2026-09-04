@@ -990,6 +990,54 @@ test('a positive adjustments row still reconciles', () => {
   assert.equal(f.severity, Severity.WITHIN_NORMS);
 });
 
+// --- a document already uploaded is never offered as an upsell ---------------
+// A customer uploaded their purchase contract, and the scorecard went on
+// telling them that uploading a purchase contract would unlock a check. The
+// same happened with a Loan Estimate for the wrong property: the panel above
+// said replace it, the panel below said upload it.
+
+const CD_FOR_COVERAGE = {
+  document_type: 'closing_disclosure',
+  loan_amount: 845200,
+  closing_date: '2026-08-01',
+  property_address: '2526 Heath Place, Reston VA',
+  borrower_names: ['Nabi'],
+  cash_to_close: {},
+  line_items: [{ label: 'Origination charge', amount: 1000, category: 'origination', section: 'A' }],
+};
+const ANSWERS_FOR_COVERAGE = { transaction_type: 'purchase', property_type: 'single_family' };
+const svc = require('../api/_lib/closing-service');
+const coverageRun = (opts) => svc.runDocumentAudit({
+  extraction: CD_FOR_COVERAGE, answers: ANSWERS_FOR_COVERAGE, ...opts }).scorecard;
+const offered = (sc) => (sc.unlocks || []).map((u) => u.accepts);
+
+test('a Closing Disclosure on its own is offered both extra documents', () => {
+  assert.deepEqual(offered(coverageRun({})).sort(), ['loan_estimate', 'purchase_contract']);
+});
+
+test('an unusable Loan Estimate is not offered again as an upload', () => {
+  const sc = coverageRun({ unusableDocuments: ['loan_estimate'] });
+  assert.equal(offered(sc).includes('loan_estimate'), false,
+    'the page is telling the customer to upload the document they just uploaded');
+});
+
+test('a contract with no credits is not offered again as an upload', () => {
+  const sc = coverageRun({ emptyDocuments: ['purchase_contract'] });
+  assert.equal(offered(sc).includes('purchase_contract'), false);
+});
+
+test('a contract with no credits leaves the denominator, it does not block it', () => {
+  // "20 of 27" read identically whether the customer uploaded a contract or
+  // not, so supplying one appeared to accomplish nothing.
+  const alone = coverageRun({});
+  const withContract = coverageRun({ emptyDocuments: ['purchase_contract'] });
+  assert.equal(alone.checks_in_scope, 27);
+  assert.equal(withContract.checks_in_scope, 26,
+    'the contract check should leave the denominator, not sit in it as blocked');
+  assert.ok(withContract.checks_blocked < alone.checks_blocked,
+    'uploading the contract did not reduce the blocked count');
+});
+
 test('total closing costs falls back to the Cash to Close table', () => {
   // A page-3 excerpt, or a scan missing page 2, has no section subtotals but
   // still carries J in the Cash to Close table. Showing a blank headline there
