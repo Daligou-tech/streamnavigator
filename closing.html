@@ -760,6 +760,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   }
 
   function renderScorecard(sc) {
+    // Nothing offered to a refinancing customer should mention a purchase
+    // contract; there is never one, so the offer reads as not having listened.
+    const isRefi = (savedAnswers.transaction_type || '') === 'refinance';
     unreadableRemaining = (sc.unreadable_fields || []).length;
     acknowledgedGaps = false;   // a fresh scorecard means a fresh decision
     const panel = document.getElementById('scorecard-panel');
@@ -807,7 +810,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     // Checks, not fees. "10 of 14 fees, no rate data" measured a corpus we do
     // not claim to have, and its denominator was never reachable. This one is.
     if (sc.checks_total) {
-      rows.push(['Checks run', (sc.checks_attempted || sc.checks_run) + ' of ' + sc.checks_total]);
+      rows.push(['Checks run', (sc.checks_attempted || sc.checks_run) + ' of ' + (sc.checks_in_scope || sc.checks_total)]);
     }
     if (sc.checks_blocked) {
       rows.push(['Checks needing another document', String(sc.checks_blocked)]);
@@ -1112,10 +1115,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
             + (sc.loan_estimates_read === 1 ? 'your Loan Estimate' : 'all ' + sc.loan_estimates_read + ' Loan Estimates')
             + ' — we checked whether any fee rose beyond what the lending rules permit, and none did. '
             + 'The full audit shows you every charge we examined and what we measured it against.</p>'
-          : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
-            + 'goes further: every charge measured against your county and state schedules, with the basis '
-            + 'shown. Add your Loan Estimates or purchase contract and it also runs tolerance testing and '
-            + 'credit reconciliation, which are where most recoverable money turns up.</p>');
+          : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. '
+        + 'The full audit shows every check we ran and what each one was measured against. '
+        + 'Add your Loan Estimate'
+        + (isRefi ? '' : ' or purchase contract')
+        + ' and it also runs tolerance testing'
+        + (isRefi ? '' : ' and credit reconciliation')
+        + ', which is where most recoverable money turns up.</p>');
 
     panel.innerHTML = html;
 
