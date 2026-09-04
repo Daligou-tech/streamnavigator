@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Closing Disclosure Audit — StreamNavigator</title>
-<meta name="description" content="An independent recheck of your Closing Disclosure: its own arithmetic, the federal rules that govern escrow and prepaid interest, and whether any fee rose beyond what the lending rules allow. Free scorecard first.">
+<meta name="description" content="An independent recheck of your Closing Disclosure: its own arithmetic, the fees your state and county set by law, and whether your escrow account is set high enough to survive next year's tax bill.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -281,13 +281,11 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .price-amount{ font-family:"Newsreader",Georgia,serif; font-weight:500; font-size:2.5rem; line-height:1; margin:0; }
 .price-period{ color:var(--ink-soft); font-size:.88rem; margin:6px 0 20px; }
 .price-feats{ list-style:none; margin:0 0 24px; padding:0; display:block; }
-.price-feats li{ display:flex; gap:10px; align-items:flex-start; font-size:.95rem;
-  border-top:1px solid var(--rule-soft); padding:10px 0; }
+.price-feats li{ display:flex; gap:10px; align-items:flex-start; font-size:.95rem; border-top:1px solid var(--rule-soft); padding:10px 0; }
 .price-feats li:first-child{ border-top:none; }
 .tick{ color:var(--ok); flex:0 0 auto; }
 .price-secure,.pricing-footnote{ font-size:.85rem; color:var(--ink-soft); }
-.upload-zone{ border:1px dashed #B9BDB6; border-radius:2px; background:#FDFDFB;
-  padding:26px 20px; text-align:center; cursor:pointer; }
+.upload-zone{ border:1px dashed #B9BDB6; border-radius:2px; background:#FDFDFB; padding:26px 20px; text-align:center; cursor:pointer; }
 .upload-zone:hover{ background:#F7F7F3; border-color:var(--ink-soft); }
 .upload-cta{ font-weight:500; }
 .upload-sub,.upload-note,.field-hint{ font-size:.85rem; color:var(--ink-soft); }
@@ -297,11 +295,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 #stage-2 select,.field-block select,.field-block input,input[type=email]{
   width:100%; padding:12px 13px; border:1px solid var(--rule); border-radius:2px;
   font-family:inherit; font-size:.97rem; background:var(--panel); color:var(--ink); }
-.inline-error{ border:1px solid #EED4CF; background:var(--flag-tint); color:var(--ink);
-  padding:12px 14px; border-radius:2px; font-size:.9rem; margin:14px 0; }
+.inline-error{ border:1px solid #EED4CF; background:var(--flag-tint); color:var(--ink); padding:12px 14px; border-radius:2px; font-size:.9rem; margin:14px 0; }
 .inline-error strong{ display:block; color:var(--flag); margin-bottom:3px; }
-.btn{ display:inline-block; border-radius:2px; font-weight:500; font-family:inherit;
-  padding:14px 26px; text-decoration:none; cursor:pointer; border:1px solid var(--ink); }
+.btn{ display:inline-block; border-radius:2px; font-weight:500; font-family:inherit; padding:14px 26px; text-decoration:none; cursor:pointer; border:1px solid var(--ink); }
 .btn-primary{ background:var(--ink); color:var(--paper); box-shadow:none; }
 .btn-primary:hover{ background:#12202E; }
 .btn-ghost{ background:transparent; color:var(--ink); }
@@ -311,8 +307,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .scorecard-rows,.mismatch-rows{ list-style:none; margin:12px 0; padding:0; }
 .scorecard-rows li,.mismatch-rows li{ border-top:1px solid var(--rule-soft); padding:9px 0; font-size:.92rem; }
 .scorecard-note,.mismatch-why,.sc-sub,.fix-note{ font-size:.88rem; color:var(--ink-soft); margin:8px 0 0; }
-.scorecard-alert,.scorecard-warn{ border:1px solid #EED4CF; background:var(--flag-tint);
-  padding:12px 14px; border-radius:2px; font-size:.9rem; margin:12px 0; }
+.scorecard-alert,.scorecard-warn{ border:1px solid #EED4CF; background:var(--flag-tint); padding:12px 14px; border-radius:2px; font-size:.9rem; margin:12px 0; }
 .sc-panel{ border:1px solid var(--rule); background:#F7F6F2; padding:18px 20px; border-radius:2px; margin:14px 0; }
 .sc-panel-accent{ border-color:var(--ink); }
 .sc-h{ font-family:"Newsreader",Georgia,serif; font-size:1.15rem; font-weight:500; margin:0 0 4px; }
@@ -322,9 +317,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .sc-details{ font-size:.9rem; }
 .fix-row{ display:flex; gap:12px; align-items:center; margin:10px 0; font-size:.88rem; }
 .fix-row input{ width:130px; padding:8px 10px; border:1px solid var(--rule); border-radius:2px; font:inherit; }
-.toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%);
-  background:var(--ink); color:var(--paper); padding:12px 18px; border-radius:2px;
-  font-size:.9rem; display:none; z-index:60; }
+.toast{ position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:var(--ink); color:var(--paper); padding:12px 18px; border-radius:2px; font-size:.9rem; display:none; z-index:60; }
 .toast.show{ display:block; }
 .reveal{ opacity:1 !important; transform:none !important; }
 </style>
@@ -347,9 +340,8 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 <div class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="notice">You have 3 business days to review before you sign</span>
-      <h1>If a fee rose after your Loan Estimate, your lender may owe you the difference back.</h1>
-      <p class="lede">Federal rules cap how far certain closing costs can move between your Loan Estimate and your Closing Disclosure. Go past the cap without a documented reason and the lender has to refund the difference. We test every fee against those caps, recheck every calculation on the document, and measure your escrow cushion against the federal limit. Purchases and refinances, any state.</p>
+      <h1>Before you sign, know what you&rsquo;re actually paying.</h1>
+      <p class="lede">Twenty-seven checks against your document&rsquo;s own arithmetic and the federal rules that govern it. Every one named below. Any state, purchase or refinance.</p>
       <div class="btn-row">
         <a class="btn" href="#price">Get my free scorecard</a>
         <a class="btn ghost" href="#sample">See a sample report</a>
@@ -371,68 +363,64 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 <section id="how">
   <div class="wrap">
     <h2>How it works</h2>
-    <p class="sec-intro">The scorecard comes first. You see how many findings there are, and which parts of your document we could not check, before you decide whether the report is worth buying.</p>
+    <p class="sec-intro">You see the findings count before you decide whether to buy the report.</p>
     <ol class="steps">
-      <li><h3>Upload your Closing Disclosure</h3><p>That is the only document we need. If your Loan Estimates fit in the same upload, add them — and if you are buying, your purchase contract too. Both unlock further checks and cost nothing extra.</p></li>
-      <li><h3>Tell us buying or refinancing</h3><p>One tap. It changes which checks run: buyers who send a contract get seller-credit reconciliation, refinancers get payoff and per-diem verification and their rescission window.</p></li>
-      <li><h3>Get your free scorecard<span class="free-tag">Free</span></h3><p>Within a few minutes: the count of findings, the dollars they touch, and a named list of anything we could not read on your document. No card, no charge, no obligation.</p></li>
-      <li><h3>Decide, then pay $59</h3><p>Only if the scorecard shows something worth reading. One flat price per closing, whatever you uploaded.</p></li>
-      <li><h3>Get your report and your emails</h3><p>Every finding with the arithmetic, the rule, or the published rate behind it — each one sourced and dated so you can check it yourself. Ranked by dollar impact, marked changeable now, likely locked, or possible post-closing refund, with drafted emails you send yourself.</p></li>
+      <li><h3>Upload your Closing Disclosure</h3><p>The only document we need. Add your Loan Estimate and contract if you have them — more checks, same price.</p></li>
+      <li><h3>Tell us buying or refinancing</h3><p>One tap, plus your property type. It decides which checks apply.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">Free</span></h3><p>How many findings, what they are worth, and anything we could not read. No card.</p></li>
+      <li><h3>Decide, then pay $59</h3><p>Only if the scorecard found something. One flat price.</p></li>
+      <li><h3>Receive your report in your inbox</h3><p>Findings ordered by severity — confirmed arithmetic errors first, then potential rule violations — each marked changeable now, likely locked, a possible post-closing remedy, or needing another document.</p></li>
     </ol>
   </div>
 </section>
 
 <section id="checks">
   <div class="wrap">
-    <h2>Every check, named</h2>
-    <p class="sec-intro">Each one tests your document against its own arithmetic or against a federal rule, so it works the same in every state. We do not compare your fees to local averages and we never tell you a charge is too expensive — see <a href="#limits">what this does not do</a> for why that line matters.</p>
+    <h2>All 27 checks, named</h2>
+    <p class="sec-intro">The whole list — the same twenty-seven your report scores itself against. Eighteen run on the Closing Disclosure alone; the rest need an answer, your Loan Estimate, or your contract.</p>
 
-    <h3 class="group-h">The document's own arithmetic</h3>
-    <p class="group-sub">Runs on the Closing Disclosure alone. Nothing else needed.</p>
+        <h3 class="group-h">Runs on your Closing Disclosure alone</h3>
+    <p class="group-sub">Eighteen checks, no extra documents.</p>
     <div class="checks">
-      <div class="chk"><span class="n">01</span><span>Loan Costs subtotals A, B and C recomputed from the lines above them</span></div>
-      <div class="chk"><span class="n">02</span><span>Total Loan Costs (D) against the sum of A, B and C</span></div>
-      <div class="chk"><span class="n">03</span><span>Other Costs subtotals E, F, G and H</span></div>
-      <div class="chk"><span class="n">04</span><span>Total Other Costs (I) against the sum of E through H</span></div>
-      <div class="chk"><span class="n">05</span><span>Total Closing Costs (J), with lender credits applied</span></div>
-      <div class="chk"><span class="n">06</span><span>The Calculating Cash to Close table, line by line</span></div>
-      <div class="chk"><span class="n">07</span><span>Summaries of Transactions: does your side balance</span></div>
-      <div class="chk"><span class="n">08</span><span>Loan Calculations: Total of Payments</span></div>
-      <div class="chk"><span class="n">09</span><span>Loan Calculations: Finance Charge</span></div>
-      <div class="chk"><span class="n">10</span><span>Loan Calculations: Amount Financed</span></div>
-      <div class="chk"><span class="n">11</span><span>Loan Calculations: Total Interest Percentage</span></div>
-      <div class="chk"><span class="n">12</span><span>The four Loan Calculations figures tested against each other for internal consistency</span></div>
-      <div class="chk"><span class="n">13</span><span>Prepaid interest: day count and per-diem against your disbursement date</span></div>
-      <div class="chk"><span class="n">14</span><span>Escrow cushion against the federal two-month maximum</span></div>
-      <div class="chk"><span class="n">15</span><span>Initial escrow statement against the monthly escrow figure on page 1</span></div>
-      <div class="chk"><span class="n">16</span><span>Aggregate adjustment: present, correctly signed, and proportionate</span></div>
-      <div class="chk"><span class="n">17</span><span>Itemised amounts that do not add to the charge on the same line</span></div>
-      <div class="chk"><span class="n">18</span><span>The same charge appearing twice across sections A, B, C, E and H</span></div>
-      <div class="chk"><span class="n">19</span><span>Stacked lender fees: processing, underwriting, administration and application billed separately</span></div>
-      <div class="chk"><span class="n">20</span><span>Page 1 loan terms against page 4: prepayment penalty, escrow, adjustable-rate detail</span></div>
+      <div class="chk"><span class="n">01</span><span>Cash to Close reconciles with the closing cost total</span></div>
+      <div class="chk"><span class="n">02</span><span>Monthly payment amortises the stated loan terms</span></div>
+      <div class="chk"><span class="n">03</span><span>APR is not below the note rate</span></div>
+      <div class="chk"><span class="n">04</span><span>APR agrees with the amount financed and payment</span></div>
+      <div class="chk"><span class="n">05</span><span>Finance charge covers the interest the payments produce</span></div>
+      <div class="chk"><span class="n">06</span><span>Total of Payments covers the payment schedule</span></div>
+      <div class="chk"><span class="n">07</span><span>Amount financed does not exceed the loan amount</span></div>
+      <div class="chk"><span class="n">08</span><span>Total Interest Percentage matches the schedule</span></div>
+      <div class="chk"><span class="n">09</span><span>Discount points match the percentage printed beside them</span></div>
+      <div class="chk"><span class="n">10</span><span>Monthly escrow matches the disclosed annual costs</span></div>
+      <div class="chk"><span class="n">11</span><span>Prepaid interest matches the per-diem and closing date</span></div>
+      <div class="chk"><span class="n">12</span><span>Tax and assessment prorations are correctly apportioned</span></div>
+      <div class="chk"><span class="n">13</span><span>No charge appears twice under different names</span></div>
+      <div class="chk"><span class="n">14</span><span>Lender fees are not stacked into overlapping charges</span></div>
+      <div class="chk"><span class="n">15</span><span>Escrow cushion is within the RESPA limit</span></div>
+      <div class="chk"><span class="n">16</span><span>Every figure used was read clearly</span></div>
+      <div class="chk"><span class="n">17</span><span>The document is complete and legible</span></div>
+      <div class="chk"><span class="n">18</span><span>The document is the one the checks assume</span></div>
     </div>
-
-    <h3 class="group-h">Unlocked by your Loan Estimates</h3>
-    <p class="group-sub">Optional. These are the checks that can conclude money is owed back to you.</p>
+    <h3 class="group-h">Needs one answer from you</h3>
+    <p class="group-sub">Two checks, from the property type you pick.</p>
     <div class="checks">
-      <div class="chk"><span class="n">21</span><span>Zero-tolerance fees: did any rise at all without a documented change of circumstance</span></div>
-      <div class="chk"><span class="n">22</span><span>The ten-percent group tested cumulatively, not line by line</span></div>
-      <div class="chk"><span class="n">23</span><span>Lender credits: were any reduced between the estimate and the disclosure</span></div>
-      <div class="chk"><span class="n">24</span><span>Charges on the disclosure with no counterpart on any estimate</span></div>
+      <div class="chk"><span class="n">19</span><span>HOA charges match the property type</span></div>
+      <div class="chk"><span class="n">20</span><span>No HOA charges on a property without an association</span></div>
     </div>
-
-    <h3 class="group-h">Unlocked by your purchase contract<span class="tag p">purchase</span></h3>
-    <p class="group-sub">Optional, and often the largest single finding in the report.</p>
+    <h3 class="group-h">Unlocked by your Loan Estimate</h3>
+    <p class="group-sub">Six checks — the only ones that can conclude money is owed back.</p>
     <div class="checks">
-      <div class="chk"><span class="n">25</span><span>Seller credits and concessions you negotiated, against what actually landed on the disclosure</span></div>
-      <div class="chk"><span class="n">26</span><span>Who-pays-what allocations against what the contract says</span></div>
+      <div class="chk"><span class="n">21</span><span>The Loan Estimate describes this same transaction</span></div>
+      <div class="chk"><span class="n">22</span><span>No zero-tolerance charge increased</span></div>
+      <div class="chk"><span class="n">23</span><span>The 10% basket did not exceed its limit</span></div>
+      <div class="chk"><span class="n">24</span><span>The correct Loan Estimate was used as the baseline</span></div>
+      <div class="chk"><span class="n">25</span><span>Any revised Loan Estimate had a valid changed circumstance</span></div>
+      <div class="chk"><span class="n">26</span><span>Every charge on the CD traces back to the Loan Estimate</span></div>
     </div>
-
-    <h3 class="group-h">Refinance only<span class="tag r">refinance</span></h3>
-    <p class="group-sub">Runs on the Closing Disclosure alone.</p>
+    <h3 class="group-h">Unlocked by your purchase contract</h3>
+    <p class="group-sub">One check, often the largest finding in the report.</p>
     <div class="checks">
-      <div class="chk"><span class="n">27</span><span>Payoff figure and per-diem interest to the payoff date</span></div>
-      <div class="chk"><span class="n">28</span><span>Your rescission window: the dates, and what it lets you do</span></div>
+      <div class="chk"><span class="n">27</span><span>The CD reflects the price, credits and dates you agreed</span></div>
     </div>
 
     <div class="legend">
@@ -447,34 +435,34 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 <section id="sample">
   <div class="wrap">
     <h2>A sample report</h2>
-    <p class="sec-intro">Four findings, with the figures changed. Every line shows the arithmetic or names the rule behind it, so you can verify it without taking our word.</p>
+    <p class="sec-intro">Figures changed. Each finding names the check it came from.</p>
     <div class="sample">
       <div class="finding">
-        <div class="finding-h"><h3>Underwriting fee rose after your last Loan Estimate</h3><span class="amt">$300.00</span></div>
-        <p>Lender fees cannot increase without a documented changed circumstance. We found no revised estimate in what you uploaded.</p>
-        <div class="basis">Loan Estimate dated 14 March: $995.00. Closing Disclosure: $1,295.00. Ask your lender for the change-of-circumstance notice, or for the difference back.</div>
-        <div class="cite">Basis: the zero-tolerance category under the federal disclosure rules.</div>
+        <div class="finding-h"><h3>No zero-tolerance charge increased &mdash; failed</h3><span class="amt">$300.00</span></div>
+        <p>Lender fees cannot increase without a documented changed circumstance.</p>
+        <div class="basis">Loan Estimate, 14 March: $995.00. Closing Disclosure: $1,295.00. No revised estimate was present in what you uploaded.</div>
+        <div class="cite">Check 21 of 27 &middot; needs your Loan Estimate</div>
         <p style="margin-top:9px"><span class="pill c">Possible post-closing refund</span></p>
       </div>
       <div class="finding">
-        <div class="finding-h"><h3>Escrow cushion exceeds the federal maximum</h3><span class="amt">$412.00</span></div>
-        <p>Federal rules cap the cushion at two months of escrow payments. Yours holds more than that.</p>
+        <div class="finding-h"><h3>Escrow cushion is within the RESPA limit &mdash; failed</h3><span class="amt">$412.00</span></div>
+        <p>Federal rules cap the cushion at two months of escrow payments. Yours holds more.</p>
         <div class="basis">Monthly escrow $618.00, so the cap is $1,236.00. Your initial deposit holds $1,648.00 of cushion.</div>
-        <div class="cite">Basis: the two-month escrow limit, recomputed from figures on your own document.</div>
+        <div class="cite">Check 15 of 27 &middot; ran on your Closing Disclosure alone</div>
         <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
       </div>
       <div class="finding">
-        <div class="finding-h"><h3>Prepaid interest billed for 22 days instead of 8</h3><span class="amt">$575.40</span></div>
-        <p>Page 2, section F. Your disbursement date is the 24th, which leaves 8 days of interest to month end.</p>
+        <div class="finding-h"><h3>Prepaid interest matches the per-diem and closing date &mdash; failed</h3><span class="amt">$575.40</span></div>
+        <p>Section F bills 22 days. Your disbursement date leaves 8 days of interest to month end.</p>
         <div class="basis">22 days &times; $41.10 = $904.20 charged. 8 days &times; $41.10 = $328.80 correct. Both figures are printed on your own document.</div>
-        <div class="cite">Basis: arithmetic, using the per-diem rate and disbursement date on the form.</div>
+        <div class="cite">Check 11 of 27 &middot; ran on your Closing Disclosure alone</div>
         <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
       </div>
       <div class="finding">
-        <div class="finding-h"><h3>Seller credit is $1,500 short of the contract</h3><span class="amt">$1,500.00</span></div>
+        <div class="finding-h"><h3>The CD reflects the price, credits and dates you agreed &mdash; failed</h3><span class="amt">$1,500.00</span></div>
         <p>Your contract provides a $6,000 seller credit toward closing costs. Section L shows $4,500.</p>
-        <div class="basis">Purchase agreement, paragraph 4(c): $6,000. Closing Disclosure, section L line 05: $4,500.</div>
-        <div class="cite">Basis: the contract you uploaded. This is contractual, not a request.</div>
+        <div class="basis">Purchase agreement, paragraph 4(c): $6,000. Closing Disclosure, section L line 05: $4,500. This is contractual, not a request.</div>
+        <div class="cite">Check 27 of 27 &middot; needs your purchase contract</div>
         <p style="margin-top:9px"><span class="pill a">Changeable now</span></p>
       </div>
     </div>
@@ -483,33 +471,14 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 
 <section id="price">
   <div class="wrap">
-    <h2>See what we found. Then decide.</h2>
-    <p class="sec-intro">One price, whatever you upload. Adding your Loan Estimates or contract unlocks more checks and costs nothing extra — we would rather you gave us everything.</p>
+    <h2>See what we find. Then decide.</h2>
+    <p class="sec-intro">One price, whatever you upload.</p>
 
-    <div class="price-card">
-      <div class="price-top">
-        <div>
-          <h3 style="font-family:Newsreader,serif;font-size:1.35rem;font-weight:500">Closing Disclosure Audit</h3>
-          <p style="margin:6px 0 0;color:var(--ink-soft);font-size:.93rem">Free scorecard first. Pay only if it finds something.</p>
-        </div>
-        <div class="fig">$59<small>one closing</small></div>
-      </div>
-
-      <ul class="incl">
-        <li>Every check that applies to your closing, purchase or refinance</li>
-        
-        <li>Every finding showing the arithmetic or naming the federal rule behind it</li>
-        <li>Each finding marked changeable now, likely locked, or possible post-closing refund</li>
-        <li>Drafted emails for your lender and your settlement agent</li>
-        <li>A named list of anything we could not read on your document</li>
-        <li>Full refund if the report does not contain the findings your scorecard promised</li>
-      </ul>
-
-      <div class="single-price-wrap">
+    <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
         <span class="price-badge">Free scorecard first</span>
         <h3>Closing Disclosure Audit</h3>
-        <p class="desc">An independent recheck of your Closing Disclosure: its own arithmetic and the federal lending rules, recomputed from the figures on the document itself. The scorecard names which is which before you pay.</p>
+        <p class="desc">An independent recheck of your Closing Disclosure against its own arithmetic and the federal lending rules.</p>
         <div class="price-amount">$59</div>
         <div class="price-period">One flat price per closing audited &middot; free scorecard first</div>
 
@@ -529,16 +498,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">On Loan Estimates: add the most recent one, not an older one. If you have the full sequence including every revision, upload them all — more history lets us establish the correct legal baseline instead of assuming one.</p>
+          <p class="field-hint">Loan Estimates: send the most recent one. If you have every revision, send them all — it fixes the legal baseline.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Free scorecard before you pay anything</li>
-          <li><span class="tick">✓</span> <strong>$59</strong> — every check that applies to your closing: the Loan Calculations box, escrow cushion against the RESPA limit, per-diem interest and prorations from your closing date, section subtotals and Cash to Close, duplicate and stacked fees, plus the emails already drafted</li>
-          <li><span class="tick">✓</span> Send your Loan Estimates or purchase contract and TRID tolerance testing and seller-credit reconciliation run too — the checks that can conclude money is owed back. Same price.</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within 5 minutes</li>
         </ul>
         <div class="inline-error" id="scorecard-error" style="display:none;" role="alert" aria-live="assertive"></div>
@@ -584,7 +550,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
                 <option value="no">No</option>
                 <option value="dont_know">Don't know</option>
               </select>
-              <p class="field-hint">This decides which tolerance rule applies to the services in Section C of your Closing Disclosure. Without a written list, your lender cannot rely on the shopping exception, and those charges are tested at zero tolerance instead — meaning any increase over your Loan Estimate may be refundable.</p>
+              <p class="field-hint">Without a written list, Section C charges are tested at zero tolerance — any increase may be refundable.</p>
             </div>
             <div class="inline-error" id="pay-error" style="display:none;" role="alert" aria-live="assertive"></div>
             <a href="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-stripe-link="closing" data-link-full="https://buy.stripe.com/28EdR90NS7Yo0FS0xqabK0e" data-link-basic="https://buy.stripe.com/fZufZhdAE6Uk74gfskabK0h" class="btn btn-primary" id="pay-btn">Unlock the Full Audit →</a>
@@ -592,7 +558,6 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           </div>
         </div>
       </div>
-    </div>
     <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
     </div>
   </div>
@@ -601,15 +566,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 <section id="limits">
   <div class="wrap">
     <h2>What this does not do</h2>
-    <p class="sec-intro">Worth reading before you upload, so nothing in the report surprises you.</p>
+    <p class="sec-intro">Read this before you upload.</p>
     <div class="limits">
       <ul>
-        <li><strong>We do not tell you a fee is too expensive.</strong> We check arithmetic and federal rules. What a lender charges to underwrite, or a title company to close, is set by that company, and there is no authoritative figure to check it against. So we do not pretend there is.</li>
-        
-        
-        <li><strong>We do not shop, negotiate, or contact anyone.</strong> You send the emails.</li>
-        <li><strong>We read what you send.</strong> If a scan is unclear we name the lines we could not read rather than guessing — that list is in your free scorecard, before you pay.</li>
-        <li><strong>This is automated analysis, not legal, tax or mortgage advice.</strong> Every finding shows the arithmetic, the rule or the published rate behind it, so you can check it and take it to your lender, attorney or settlement agent.</li>
+        <li><strong>We do not say a fee is too expensive.</strong> Nobody publishes what an underwriting or settlement fee should cost, so we check arithmetic and federal rules instead of guessing.</li>
+        <li><strong>Not every check runs on every closing.</strong> A document-only audit runs eighteen of twenty-seven. Your report says which ran, which were blocked, and which did not apply.</li>
+        <li><strong>We read what you send.</strong> Lines we could not read are named in the free scorecard, before you pay.</li>
+        <li><strong>Automated analysis, not legal or mortgage advice.</strong> Every finding shows its arithmetic or names its rule, so you can check it and take it to your lender or attorney.</li>
       </ul>
     </div>
   </div>
@@ -619,20 +582,20 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   <div class="wrap">
     <h2>Questions</h2>
     <div class="col">
-      <details><summary>Does this work for a refinance?</summary><div class="body">Yes. We verify the payoff figure and its per-diem interest against the payoff date, and set out your rescission window — the three business days after signing in which you can unwind the loan, which purchase buyers do not get. Everything else runs the same. Refinances skip the contract and seller-credit checks, because there is no contract.</div></details>
-      <details><summary>What documents do I need?</summary><div class="body">Only your final Closing Disclosure. Loan Estimates unlock the tolerance checks. If you are buying, the purchase contract lets us confirm your seller credits landed. All optional, none cost extra.</div></details>
-      <details><summary>Does this work in my state?</summary><div class="body">Yes. Every check runs on the arithmetic of your own document or on federal disclosure rules, both of which are identical in all fifty states. Nothing in the report depends on us holding data for your county.</div></details>
-      <details><summary>Why not just tell me if my fees are high?</summary><div class="body">Because we would be guessing. There is no authoritative published figure for what an underwriting fee or a settlement fee should cost, and telling you a legitimate charge is excessive three days before closing is worse than telling you nothing. We check what can be checked and are explicit about the rest.</div></details>
-      <details><summary>How is this different from reading the document myself?</summary><div class="body">Reading it tells you what you are being charged. It does not tell you whether the arithmetic holds, whether your escrow cushion exceeds the federal limit, or whether a fee moved further than the lending rules allow after your Loan Estimate. None of that is visible by reading — it only appears when you recompute the figures and compare the two documents line by line.</div></details>
-      <details><summary>Will you contact my lender for me?</summary><div class="body">No. You get drafted emails for your lender and your settlement agent, each naming the charge, the amount, the source behind it, and what you are asking for. You send them. We are not a law firm and this is not legal advice.</div></details>
-      <details><summary>What if you find nothing?</summary><div class="body">The free scorecard shows the count before you pay, so you never buy a report to discover it is empty. If you do buy and the report does not contain the findings your scorecard promised, reply and we refund you in full.</div></details>
+      <details><summary>Does this work for a refinance?</summary><div class="body">Yes. Twenty-six of the twenty-seven apply identically. Only the contract check is skipped.</div></details>
+      <details><summary>What documents do I need?</summary><div class="body">Only your final Closing Disclosure. Loan Estimates and contract are optional and free.</div></details>
+      <details><summary>Does this work in my state?</summary><div class="body">Yes. All twenty-seven run on your document's arithmetic or on federal rules — identical in all fifty states.</div></details>
+      <details><summary>Why not just tell me if my fees are high?</summary><div class="body">Because we would be guessing. Nobody publishes what an underwriting fee should cost, and calling a legitimate charge excessive three days before closing is worse than saying nothing.</div></details>
+      <details><summary>How is this different from reading the document myself?</summary><div class="body">Reading tells you what you are charged, not whether it is right. The APR, the finance charge, the escrow cushion and the tolerance caps only fail when you recompute them.</div></details>
+      <details><summary>Will you contact my lender for me?</summary><div class="body">No. Every finding names the charge, the amount and the rule behind it, so you can raise it yourself. Not a law firm, not legal advice.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">The scorecard shows the count before you pay. If the report misses what it promised, we refund in full.</div></details>
     </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p class="disc">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, tax, financial, or mortgage advice, and is not an appraisal, a title opinion, or a determination of your tax liability. Findings are drawn from the documents you upload and from publicly published government schedules, statutes, rate filings and assessment records, each cited in your report with the date it was checked; those sources change and may be superseded. Projections of future escrow or tax amounts are estimates only and are not a representation of what you will be charged. Nothing here is a statement that any provider has acted improperly. Always read your full closing documents and consult your lender, attorney, settlement agent or tax advisor before you sign.</p>
+    <p class="disc">Automated analysis for informational purposes only. Not legal, tax, financial or mortgage advice, and not an appraisal, title opinion or determination of tax liability. Findings are potential issues to raise, not legal conclusions, and nothing in a report asserts that any lender, title company or settlement agent acted improperly. Always read your full closing documents and consult your lender, attorney or settlement agent before you sign.</p>
     <div class="foot-links">
       <a href="/">All Navigators</a>
       <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a>
@@ -1136,8 +1099,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           ? '<p class="scorecard-note">No issues surfaced. That includes tolerance testing against '
             + (sc.loan_estimates_read === 1 ? 'your Loan Estimate' : 'all ' + sc.loan_estimates_read + ' Loan Estimates')
             + ' — we checked whether any fee rose beyond what the lending rules permit, and none did. '
-            + 'The full audit shows you every charge we examined, what we measured it against, and '
-            + 'the drafted emails.</p>'
+            + 'The full audit shows you every charge we examined and what we measured it against.</p>'
           : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. The full audit '
             + 'goes further: every charge measured against your county and state schedules, with the basis '
             + 'shown. Add your Loan Estimates or purchase contract and it also runs tolerance testing and '
