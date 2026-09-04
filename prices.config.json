@@ -11,10 +11,7 @@
       "label": "Closing Navigator",
       "expectedPriceCents": 5900,
       "stripeLinkId": "28EdR90NS7Yo0FS0xqabK0e",
-      "alsoAllowedPriceCents": [
-        2900
-      ],
-      "_tiers": "$59 is the full audit (adds TRID tolerance testing and contract reconciliation). $29 is the document-only audit: every check that runs on the Closing Disclosure alone. Both appear on the page; the price a customer actually pays follows the analysis that ran."
+      "_tiers": "Flat $59. The retired $29 document-only tier is deliberately no longer listed as an allowed price: charging less for a thinner upload gave customers a reason to withhold the Loan Estimate and purchase contract, which are the documents that find recoverable money. Extra documents now add checks at no extra cost. If $29 shows up on the page again, this check should fail."
     },
     "contractor.html": {
       "label": "Contractor Navigator",
