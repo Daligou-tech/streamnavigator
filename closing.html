@@ -113,7 +113,10 @@ h1,h2,h3,h4,.price-amount,.sc-h{
 h1{ font-size:clamp(2.2rem,5vw,3.4rem); line-height:1.09; }
 h2{ font-size:clamp(1.55rem,3.1vw,2.05rem); line-height:1.18; }
 /* the gradient span in the headline becomes plain ink, not transparent text */
-.grad{ background:none; -webkit-background-clip:border-box; background-clip:border-box; color:var(--ink); }
+.grad, .hero h1 .grad, h1 .grad, h2 .grad{
+  background:none; -webkit-background-clip:border-box; background-clip:border-box;
+  -webkit-text-fill-color:var(--ink); color:var(--ink);
+}
 .sub{ font-size:1.08rem; color:var(--text-dim); }
 /* an all-caps tracked eyebrow is the one thing that most dates the page */
 .eyebrow{
@@ -204,6 +207,41 @@ h1{ max-width:16ch; margin:0 0 20px; }
   .step-card{ grid-template-columns:32px 1fr; gap:14px; }
   h1{ max-width:none; }
 }
+
+/* ---- hero worked example ---- */
+.hero .wrap{ display:grid; grid-template-columns:1.02fr .98fr; gap:52px; align-items:start; }
+.hero h1, .hero .sub{ grid-column:1; }
+.hero h1{ grid-row:1; } .hero .sub{ grid-row:2; margin-bottom:0; }
+.ledger{
+  grid-column:2; grid-row:1 / span 2;
+  background:var(--surface); border:1px solid var(--ink);
+  box-shadow:5px 5px 0 rgba(27,42,58,.08); align-self:start;
+}
+.ledger-head{
+  display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+  padding:12px 16px; border-bottom:1px solid var(--ink);
+  font-size:.8rem; color:var(--text-dim);
+}
+.ledger-head b{ color:var(--ink); font-weight:600; font-size:.86rem; }
+.ledger .row{
+  display:grid; grid-template-columns:1fr auto; gap:14px;
+  padding:10px 16px; border-bottom:1px solid var(--border); font-size:.89rem;
+}
+.ledger .row .lbl{ color:var(--text-dim); }
+.ledger .row .amt{ font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+.ledger .row.hit{ background:#FBEEEC; }
+.ledger .row.hit .lbl{ color:var(--ink); font-weight:500; }
+.ledger .row.hit .amt{ color:var(--accent-deep); font-weight:500; }
+.ledger-note{ padding:11px 16px; background:#FBEEEC; border-bottom:1px solid var(--border); font-size:.83rem; line-height:1.5; }
+.ledger-note b{ color:var(--accent-deep); }
+.ledger-foot{ padding:11px 16px; font-size:.79rem; color:var(--text-dim); }
+.footer-links{ font-size:.9rem; color:var(--text-dim); margin-bottom:18px; }
+@media(max-width:940px){
+  .hero .wrap{ grid-template-columns:1fr; gap:30px; }
+  .hero h1,.hero .sub,.ledger{ grid-column:1; }
+  .ledger{ grid-row:auto; }
+  .hero .sub{ margin-bottom:0; }
+}
 </style>
 </head>
 <body>
@@ -231,6 +269,14 @@ h1{ max-width:16ch; margin:0 0 20px; }
       <div class="pill"><span class="dot">✓</span> You have 3 business days to review</div>
       <h1>If a fee rose after your Loan Estimate, your lender may owe you <span class="grad">the difference back.</span></h1>
       <p class="sub">Federal rules cap how far certain closing costs can move between your Loan Estimate and your Closing Disclosure. Go over the cap without a documented reason and the lender has to refund the difference. We test every fee against those caps, recheck every calculation on the document, and measure your escrow cushion against the federal limit. Buying or refinancing, any state. Before you pay anything, we tell you what we found and what we could not read.</p>
+      <div class="ledger">
+        <div class="ledger-head"><b>Loan Estimate &rarr; Closing Disclosure</b><span>Section A &mdash; Origination</span></div>
+        <div class="row"><span class="lbl">Processing fee</span><span class="amt">$670.00 &rarr; $670.00</span></div>
+        <div class="row hit"><span class="lbl">Underwriting fee</span><span class="amt">$995.00 &rarr; $1,295.00</span></div>
+        <div class="row"><span class="lbl">Credit report</span><span class="amt">$44.00 &rarr; $44.00</span></div>
+        <div class="ledger-note"><b>Finding.</b> Lender fees sit in the zero-tolerance group. This one rose $300 after your Loan Estimate. Unless your lender documented a changed circumstance, the rule says they owe the difference back &mdash; and you have 60 days after closing to ask.</div>
+        <div class="ledger-foot">$300.00 &mdash; possible post-closing refund</div>
+      </div>
     </div>
   </section>
   <section id="how-it-works">
@@ -436,50 +482,11 @@ h1{ max-width:16ch; margin:0 0 20px; }
       </div>
     </div>
   </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final reveal">
-      <h2>You have three business days. Use them.</h2>
-      <p>Upload your Closing Disclosure and see your free scorecard. Reports are usually ready within 5 minutes.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Get My Free Scorecard</a>
-    </div>
-  </section>
+  
 </main>
 <footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
-      <a href="/streaming">Streaming Navigator</a>
-      <a href="/contractor">🔧 Contractor Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/home-savings">💡 Home Savings Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/subscriptions">📺 Subscription Navigator</a>
-      <a href="/government-money">🏛️ Government Money Finder</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
-    </div>
-  </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
-      <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul>
-        <li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li>
-      </ul>
-    </div>
-  </div>
-  <p class="footer-disclaimer">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, tax, financial, or mortgage advice, and is not an appraisal, a title opinion, or a determination of your tax liability. Findings are stated as potential issues to raise, not as legal conclusions, and nothing in a report asserts that any lender, title company or settlement agent has acted improperly. Benchmarked figures are drawn from publicly published government schedules, statutes, rate filings and assessment records, each cited in the report with the date it was checked; those sources change and may be superseded. Projections of future escrow or tax amounts are estimates, not representations of what you will be charged. Always review your full closing documents and consult your lender, attorney, settlement agent or tax advisor before you sign.</p>
+  <p class="footer-links"><a href="/">All Navigators</a> &nbsp;&middot;&nbsp; <a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></p>
+  <p class="footer-disclaimer">The Closing Disclosure Audit provides automated analysis for informational purposes only and is not legal, tax, financial, or mortgage advice, and is not an appraisal, a title opinion, or a determination of your tax liability. Findings are stated as potential issues to raise, not as legal conclusions, and nothing in a report asserts that any lender, title company or settlement agent has acted improperly. Where a report cites a published government figure, it names the source and the date it was checked; those sources change and may be superseded. Always review your full closing documents and consult your lender, attorney, settlement agent or tax advisor before you sign.</p>
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
@@ -495,6 +502,22 @@ h1{ max-width:16ch; margin:0 0 20px; }
   const zone = document.getElementById('upload-zone');
   const input = document.getElementById('upload-input');
   const list = document.getElementById('upload-list');
+
+  // navigator-shared.js supplies wireUploadZone, fileToBase64, goToStripe and
+  // showToast. If it did not load — the page opened from disk, a preview
+  // window, or a bad deploy — every later line here throws on an undefined
+  // function and the whole page looks broken. Say what is wrong instead.
+  if (typeof wireUploadZone !== 'function') {
+    if (zone) {
+      zone.innerHTML = '<p style="margin:0; font-size:.95rem; line-height:1.5;">'
+        + '<strong>Upload is unavailable on this preview.</strong><br>'
+        + 'This page loads its upload tools from streamnavigator.ai. Open it there to '
+        + 'send a document.</p>';
+      zone.style.cursor = 'default';
+    }
+    return;
+  }
+
   const uploader = wireUploadZone(zone, input, list);
 
   let submissionRef = null;
