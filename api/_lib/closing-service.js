@@ -276,6 +276,13 @@ function runDocumentAudit(input = {}) {
   });
 
   const ran = coverage.filter((c) => c.status === 'ran');
+  // A check that executed and found nothing wrong is a passing check, not an
+  // absent one. `ran` above is emitted-based and drives pricing, so it stays as
+  // it is; but it must never be the number shown to a customer. On a clean
+  // document it is zero, which would tell the person whose closing is in good
+  // order that we did nothing for them. `attempted` is the honest denominator:
+  // every check whose inputs were present, whatever the outcome.
+  const attempted = coverage.filter((c) => have[c.needs]);
   const blocked = coverage.filter((c) => c.status === 'needs_document');
   const notApplicable = coverage.filter((c) => c.status === 'not_applicable');
 
@@ -317,9 +324,14 @@ function runDocumentAudit(input = {}) {
     checks_not_applicable: notApplicable.length,
     // The honest headline for a document-only product: a denominator that can
     // actually be reached, and the exact documents that would reach it.
+    // Two numbers, deliberately separate: how much of the audit we could run,
+    // and how much it found. Collapsing them is what made a good result look
+    // like a failure.
+    checks_attempted: attempted.length,
+    findings_count: ran.length,
     coverage_headline: blocked.length === 0
-      ? `All ${ran.length + notApplicable.length} checks ran against your documents.`
-      : `${ran.length} of ${CATALOG.length} checks ran. `
+      ? `All ${CATALOG.length} checks ran against your documents.`
+      : `${attempted.length} of ${CATALOG.length} checks ran. `
         + `${blocked.length} need ${describeBlockers(blocked)}.`,
     unlocks: buildUnlocks(blocked),
     benchmark_coverage: benchmarkCoverage,
