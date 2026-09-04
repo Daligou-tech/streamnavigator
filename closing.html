@@ -564,7 +564,6 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
         </ul>
         <div class="inline-error" id="scorecard-error" style="display:none;" role="alert" aria-live="assertive"></div>
         <a href="#" class="btn btn-primary" id="scorecard-btn">Get My Free Scorecard →</a>
-        <p class="price-secure">No card required for the scorecard.</p>
         </div><!-- /stage-1 -->
 
       </div><!-- /intake-card -->
@@ -709,6 +708,27 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   // not to a submission id, and re-asking a question they already answered is
   // the fastest way to look like the previous step was thrown away.
   const savedAnswers = { property_type: '', provider_list: '', transaction_type: '' };
+  const ANSWER_CACHE_KEY = 'closing_answers';
+
+  // savedAnswers lived only in this page's memory, so leaving for the scorecard
+  // and coming back reset every question to blank while the email and the files
+  // came back -- which reads as the product remembering the easy things and
+  // forgetting the ones that took thought.
+  function persistAnswers() {
+    try { sessionStorage.setItem(ANSWER_CACHE_KEY, JSON.stringify(savedAnswers)); }
+    catch (err) { /* private browsing; the fields simply come up blank */ }
+  }
+
+  function loadPersistedAnswers() {
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(ANSWER_CACHE_KEY) || 'null');
+      if (!cached) return;
+      if (cached.property_type) savedAnswers.property_type = cached.property_type;
+      if (cached.provider_list) savedAnswers.provider_list = cached.provider_list;
+      if (cached.transaction_type) savedAnswers.transaction_type = cached.transaction_type;
+    } catch (err) { /* nothing cached */ }
+  }
+
   function rememberAnswers() {
     const pt = document.getElementById('q-property-type');
     const pl = document.getElementById('q-provider-list');
@@ -716,6 +736,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     if (pt) savedAnswers.property_type = pt.value;
     if (pl) savedAnswers.provider_list = pl.value;
     if (tt) savedAnswers.transaction_type = tt.value;
+    persistAnswers();
   }
   function restoreAnswers() {
     const pt = document.getElementById('q-property-type');
@@ -799,8 +820,22 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 
 
   // Answers and files both survive the trip to the scorecard and back.
+  loadPersistedAnswers();
   restoreAnswers();
   restoreUploads();
+
+  // 2. Arriving from the scorecard's "add those documents" button, land on the
+  //    upload box. Dropping the customer at the top of a long marketing page
+  //    and making them find it again is the same failure as an upsell with
+  //    nowhere to upload.
+  if (window.location.hash === '#upload') {
+    const zoneEl = document.getElementById('upload-zone');
+    if (zoneEl) {
+      setTimeout(function(){
+        zoneEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    }
+  }
 
   document.getElementById('scorecard-btn').addEventListener('click', async function(e){
     e.preventDefault();

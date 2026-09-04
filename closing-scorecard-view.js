@@ -22,7 +22,9 @@
   function createScorecardView(ctx) {
     const answers = (ctx && ctx.answers) || {};
     const showUploader = (ctx && ctx.showUploader) || function () {
-      global.location.href = '/closing';
+      // #upload lands the customer on the upload box rather than the top of a
+      // long marketing page they have already read.
+      global.location.href = '/closing#upload';
     };
     const restoreAnswers = (ctx && ctx.restoreAnswers) || null;
 
