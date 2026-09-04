@@ -1,1 +1,26 @@
+{
+  "name": "streamnavigator",
 
+  // Node 22, matching .github/workflows/tests.yml. package.json pins engines to
+  // 24.x for the Vercel runtime; the suite is run on 22 in CI, and the version
+  // the suite is verified against is the version to develop on.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+
+  // Installs exactly what package-lock.json pins, the same as CI, so a
+  // Codespace cannot pass a suite that CI would fail on a lockfile drift.
+  "postCreateCommand": "npm ci",
+
+  // Prints the state of the repo the moment the Codespace is usable, so the
+  // first thing seen is whether main is green rather than a bare prompt.
+  "postAttachCommand": "npm run ci || true",
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint"]
+    }
+  },
+
+  // Nothing here listens on a port — the site is static and the API functions
+  // run on Vercel — so no forwarding is configured on purpose.
+  "forwardPorts": []
+}
