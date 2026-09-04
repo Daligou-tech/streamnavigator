@@ -520,15 +520,23 @@ async function classifyDocuments(apiKey, perFileBlocks) {
 const PRIMARY_TYPES = ['closing_disclosure', 'alta_settlement_statement'];
 const UPGRADE_TYPES = ['loan_estimate', 'purchase_contract'];
 
-// Two tiers, because the value is genuinely bimodal. A Closing Disclosure alone
-// supports arithmetic verification, duplicate detection and fee questions — a
-// competent second pair of eyes, but not a savings-finder. Loan Estimates unlock
-// TRID tolerance testing, and the purchase contract unlocks credit
-// reconciliation; both can conclude that money is owed back. Charging one price
-// for both would overcharge the first customer and undercharge the second.
+// Two tiers of COVERAGE, one price. A Closing Disclosure alone supports
+// arithmetic verification, duplicate detection and fee questions; Loan
+// Estimates unlock TRID tolerance testing and the purchase contract unlocks
+// credit reconciliation. That difference is real, which is why the ids stay —
+// the scorecard says which analysis ran.
+//
+// It is no longer a price difference. Charging $30 more for supplying better
+// documents gave price-sensitive customers a reason to withhold exactly the
+// documents that find recoverable money. Checkout uses the full Stripe link in
+// both cases, so both tiers must carry that number: a tier that reports $29
+// while Stripe charges $59 is a billing dispute waiting for whoever next
+// renders price_label.
+const FLAT_PRICE_CENTS = 5900;
+const FLAT_PRICE_LABEL = '$59';
 const TIERS = {
-  basic: { id: 'basic', price_cents: 2900, price_label: '$29' },
-  full: { id: 'full', price_cents: 5900, price_label: '$59' },
+  basic: { id: 'basic', price_cents: FLAT_PRICE_CENTS, price_label: FLAT_PRICE_LABEL },
+  full: { id: 'full', price_cents: FLAT_PRICE_CENTS, price_label: FLAT_PRICE_LABEL },
 };
 
 function determineTier(documents) {

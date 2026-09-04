@@ -163,7 +163,15 @@ const GROUP_LABELS = {
 // pricing
 // ---------------------------------------------------------------------------
 
-const PRICES = { basic: 29, full: 59 };
+// Flat $59. Two-tier pricing was retired: the old structure charged $30 more
+// for supplying better documents, which gave price-sensitive customers a reason
+// to withhold exactly the documents that find recoverable money. `basic` and
+// `full` survive as coverage labels — which analysis ran — so both must carry
+// the same number. The page prints $59 and the pay button always uses the full
+// Stripe link; anything here that disagrees is a mispriced payload waiting to
+// be rendered.
+const FLAT_PRICE = 59;
+const PRICES = { basic: FLAT_PRICE, full: FLAT_PRICE };
 
 // ---------------------------------------------------------------------------
 // service
