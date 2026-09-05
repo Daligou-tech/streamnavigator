@@ -17,7 +17,6 @@ const path = require('node:path');
 const ROOT = path.join(__dirname, '..');
 const page = fs.readFileSync(path.join(ROOT, 'closing.html'), 'utf8');
 const service = require('../api/_lib/closing-service');
-const corpus = require('../data/benchmarks.json');
 
 // The service exports the catalog and the prices, so read those rather than
 // scraping the source. A regex over source would keep passing after a refactor
@@ -116,14 +115,44 @@ test('the free scorecard names its gaps rather than counting them', () => {
 
 // --- coverage the page implies ---------------------------------------------
 
-test('every state the page could serve is either covered or hedged', () => {
-  // Not a coverage requirement — one state is the current reality. This asserts
-  // the corpus has not silently emptied, which is the case where the hedged
-  // copy becomes technically true and practically a lie.
-  const rows = corpus.rows || [];
-  const states = new Set(rows.map((r) => r.state).filter(Boolean));
-  assert.ok(states.size >= 1, 'the benchmark corpus covers no states at all');
-  assert.ok(rows.length >= 20, `the corpus has collapsed to ${rows.length} rows`);
+test('benchmarking stays retired', () => {
+  // The corpus held 51 rows -- 48 Maryland, 2 Florida, 1 Texas -- and reached
+  // only paying customers, because the free scorecard filtered benchmark
+  // findings out. The weakest evidence in the product was shown exclusively to
+  // the people who paid for it.
+  //
+  // This test used to assert the corpus was healthy. It now asserts it is gone.
+  // Dropping a data file back in must not silently switch fee benchmarking back
+  // on: every other finding here is arithmetic, a legal limit, or a comparison
+  // between two documents the customer holds, and one claim about a market
+  // sample among them is the one that puts a wrong number in a customer's
+  // letter to their lender.
+  // Deliberately NOT asserting the corpus file is absent. A stale data file on
+  // disk that nothing reads is inert; what matters is that no production code
+  // loads it. Testing for absence would also force a pile of file deletions on
+  // anyone shipping through the GitHub web UI, for no gain in safety.
+  for (const rel of ['api/_lib/closing-extract.js', 'api/_lib/closing-service.js']) {
+    const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.equal(/require\((?:'|")[^'"]*benchmarks\.json(?:'|")\)/.test(src), false,
+      rel + ' loads a benchmark corpus again');
+  }
+
+  // The suppliers must answer null for everything, not merely fail to find a row.
+  const { runDocumentAudit: run } = require('../api/_lib/closing-service');
+  assert.equal(typeof run, 'function');
+});
+
+test('the page does not advertise fee benchmarking', () => {
+  // Nothing on the page promised it before -- the corpus was never advertised,
+  // which is why removing it costs no copy. This keeps it that way.
+  const forbidden = [
+    /benchmark(?:ed|s)? against (?:published|state|county|market) (?:rate|data)/i,
+    /fair(?:-| )market (?:price|rate) for (?:each|every) fee/i,
+    /what this fee should cost/i,
+  ];
+  for (const re of forbidden) {
+    assert.equal(re.test(page), false, 'closing.html advertises fee benchmarking: ' + re);
+  }
 });
 
 test('the single entry point the endpoints call still exists', () => {

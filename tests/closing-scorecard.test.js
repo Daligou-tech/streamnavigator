@@ -539,84 +539,9 @@ test('an unreadable-field finding gives no surface-specific instruction', () => 
   assert.equal(/type the value|upload a clearer/i.test(JSON.stringify(warnings[0])), false);
 });
 
-// --- transfer taxes against the real Maryland corpus -------------------------
-
-const { makeGetBenchmark } = require('../api/_lib/benchmark-corpus');
-const corpus = require('../data/benchmarks.json');
-const mdBenchmarks = makeGetBenchmark(corpus.rows);
-
-// Sale price and tax lines taken from the real Baltimore City settlement
-// statement: state transfer $225 and city transfer $675, each the seller's half
-// of a 50/50 split on a $90,000 sale.
-const mdAlta = (over = {}) => altaExtraction(Object.assign({
-  property_state: 'MD',
-  property_county: 'Baltimore City',
-  sale_price: 90000,
-  loan_amount: 96000,
-  line_items: [
-    { section: 'none', label: 'State Transfer Tax to Circuit Court for Baltimore City', amount: 225, payee: 'Circuit Court', paid_by: 'seller', category: 'transfer_tax', confidence: HI, page: 2 },
-    { section: 'none', label: 'City Transfer Tax to Director of Finance', amount: 675, payee: 'Director of Finance', paid_by: 'seller', category: 'transfer_tax', confidence: HI, page: 2 },
-  ],
-}, over));
-
-test('the Maryland corpus computes state and city transfer tax together', () => {
-  const stack = mdBenchmarks.stacked({
-    category: 'transfer_tax', state: 'MD', county: 'Baltimore City', salePrice: 90000,
-  });
-  assert.equal(stack.total, 1800);           // 0.5% + 1.5% of 90,000
-  assert.equal(stack.components.length, 2);
-  assert.ok(stack.components.every((c) => c.sourceUrl.startsWith('https://')));
-});
-
-test('one party\'s share is not reported as a shortfall', () => {
-  // The regression this check exists for: $900 of a $1,800 statutory total is
-  // the seller's half, not a $900 underpayment.
-  const e = mdAlta();
-  const { findings } = runClosingAudit(e, { getBenchmark: mdBenchmarks });
-  const f = byCheck(findings, 'TRANSFER_TAX_TOTAL')[0];
-  assert.equal(f.severity, Severity.INFORMATIONAL);
-  assert.notEqual(f.severity, Severity.POTENTIAL_OVERCHARGE);
-  assert.match(f.basis, /the other party's share/);
-  assert.match(f.whyItMatters, /exemption was applied, not that/);
-});
-
-test('a total above the statutory amount is flagged with the breakdown', () => {
-  const e = mdAlta({
-    line_items: [
-      { section: 'none', label: 'State Transfer Tax', amount: 450, paid_by: 'seller', payee: 'X', category: 'transfer_tax', confidence: HI, page: 2 },
-      { section: 'none', label: 'City Transfer Tax', amount: 1600, paid_by: 'borrower', payee: 'Y', category: 'transfer_tax', confidence: HI, page: 2 },
-    ],
-  });
-  const { findings } = runClosingAudit(e, { getBenchmark: mdBenchmarks });
-  const f = byCheck(findings, 'TRANSFER_TAX_TOTAL')[0];
-  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
-  assert.equal(f.dollarImpact, 250);          // 2050 charged vs 1800 statutory
-  assert.match(f.basis, /Maryland state transfer tax/);
-  assert.match(f.basis, /Baltimore City transfer tax/);
-});
-
-test('an exact match is reported as within norms', () => {
-  const e = mdAlta({
-    line_items: [
-      { section: 'none', label: 'State Transfer Tax', amount: 450, paid_by: 'seller', payee: 'X', category: 'transfer_tax', confidence: HI, page: 2 },
-      { section: 'none', label: 'City Transfer Tax', amount: 1350, paid_by: 'borrower', payee: 'Y', category: 'transfer_tax', confidence: HI, page: 2 },
-    ],
-  });
-  const { findings } = runClosingAudit(e, { getBenchmark: mdBenchmarks });
-  assert.equal(byCheck(findings, 'TRANSFER_TAX_TOTAL')[0].severity, Severity.WITHIN_NORMS);
-});
-
-test('a jurisdiction with no rows still returns nothing rather than guessing', () => {
-  const e = mdAlta({ property_state: 'VA', property_county: 'Fairfax County' });
-  const { findings } = runClosingAudit(e, { getBenchmark: mdBenchmarks });
-  assert.equal(byCheck(findings, 'TRANSFER_TAX_TOTAL').length, 0);
-});
-
-test('high-value Baltimore City sales are skipped because the yield tax is unmodelled', () => {
-  const e = mdAlta({ sale_price: 1500000 });
-  const { findings } = runClosingAudit(e, { getBenchmark: mdBenchmarks });
-  assert.equal(byCheck(findings, 'TRANSFER_TAX_TOTAL').length, 0);
-});
+// Transfer-tax benchmarking against the Maryland corpus was removed when
+// benchmarking was retired. See tests/promises.test.js, which now asserts the
+// corpus stays gone.
 
 // --- pricing tiers -----------------------------------------------------------
 // Value here is genuinely bimodal: a CD alone supports verification, while Loan

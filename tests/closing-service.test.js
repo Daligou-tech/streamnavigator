@@ -58,6 +58,24 @@ const CLEAN_CD = () => {
 // the catalog is the contract
 // ---------------------------------------------------------------------------
 
+test('benchmarking is retired and the coverage disclosure with it', () => {
+  // These three tests used to assert the coverage panel named every unpriced
+  // category in plain English. With nothing priced anywhere, that panel said
+  // "Not priced: everything" on every report -- a gap the customer could never
+  // close, printed forever. It is gone, and so is the section-total check
+  // against comparable loans, which was the only finding in the product resting
+  // on other people's transactions.
+  const out = svc.runDocumentAudit({ extraction: CD() });
+  assert.equal(out.benchmark_coverage, null, 'a coverage disclosure is back');
+  const ids = out.findings.map((f) => f.checkId);
+  for (const retired of ['BENCHMARK', 'TRANSFER_TAX_TOTAL', 'SECTION_TOTAL']) {
+    assert.equal(ids.includes(retired), false, retired + ' findings are back');
+  }
+  // And it must not leave a permanent line in "checks we could not run".
+  const bench = (out.skipped || []).filter((x) => /benchmark|comparable loans/i.test(x));
+  assert.deepEqual(bench, [], 'retired checks still report themselves as skipped');
+});
+
 test('the catalog names every checkId the engine can emit', () => {
   const dir = path.join(__dirname, '..', 'api', '_lib');
   const sources = ['closing-audit.js', 'closing-extract.js', 'closing-math.js']
@@ -103,49 +121,6 @@ test('no benchmark finding reaches the customer', () => {
   }
 });
 
-test('benchmark gaps are named, never reduced to a count', () => {
-  const { scorecard } = svc.runDocumentAudit({ extraction: CD() });
-  // The old "10 of 14 fees, no rate data" told Sarah a number and nothing else.
-  assert.ok(!('benchmarkable_count' in scorecard));
-  assert.ok(!('cannot_benchmark_count' in scorecard));
-  assert.ok(scorecard.benchmark_coverage, 'no coverage disclosure');
-  // The naming now lives in the coverage disclosure itself. It used to be
-  // asserted against a separate evidence_basis paragraph, which repeated the
-  // same point in small grey type below a panel that had already made it and
-  // pushed the unlock actions off the screen. The requirement is that the gaps
-  // are NAMED somewhere the customer will actually read, not that a particular
-  // sentence exists.
-  const bc = scorecard.benchmark_coverage;
-  assert.ok(
-    bc.not_priced_sentence || bc.priced_sentence,
-    'coverage is disclosed as a count with nothing named',
-  );
-});
-
-test('the coverage disclosure names every unpriced category in plain English', () => {
-  const cd = CD();
-  cd.line_items = [
-    { category: 'title_insurance_owners', amount: 1800, label: "Owner's Title Insurance" },
-    { category: 'appraisal', amount: 650, label: 'Appraisal Fee' },
-    { category: 'transfer_tax', amount: 6750, label: 'Transfer Tax' },
-  ];
-  const { scorecard } = svc.runDocumentAudit({ extraction: cd });
-  const cov = scorecard.benchmark_coverage;
-
-  // Only categories actually on the document are discussed.
-  const named = [...cov.priced, ...cov.distribution, ...cov.unpriced].map((c) => c.category);
-  assert.ok(!named.includes('survey'), 'discussed a category not on the document');
-
-  assert.ok(cov.not_priced_sentence, 'nothing tells Sarah what is unpriced');
-  // Real names, not codes.
-  assert.ok(/Owner's title insurance/.test(cov.not_priced_sentence)
-    || /Owner's title insurance/.test(JSON.stringify(cov.priced)),
-    'title insurance is never named');
-  assert.ok(/Appraisal fee/.test(cov.not_priced_sentence)
-    || /Appraisal fee/.test(JSON.stringify(cov.priced)),
-    'appraisal is never named');
-});
-
 test('the disclosure uses no vague quantifiers', () => {
   const cd = CD();
   cd.line_items = [
@@ -160,16 +135,6 @@ test('the disclosure uses no vague quantifiers', () => {
     /\ba number of\b/, /\bnumerous\b/, /\bmany of\b/]) {
     assert.ok(!re.test(text), `coverage disclosure contains a vague quantifier: ${re}`);
   }
-});
-
-test('charges verified by arithmetic are not reported as a coverage gap', () => {
-  const cd = CD();
-  cd.line_items = [{ category: 'prepaid_interest', amount: 480 }];
-  const { scorecard } = svc.runDocumentAudit({ extraction: cd });
-  const cov = scorecard.benchmark_coverage;
-  assert.ok(!cov.unpriced.some((u) => u.category === 'prepaid_interest'),
-    'prepaid interest listed as unpriced when it is verified exactly');
-  assert.ok(cov.verified_by_arithmetic.some((x) => x.category === 'prepaid_interest'));
 });
 
 test('the null benchmark never returns a value', () => {

@@ -180,6 +180,159 @@ test('the default add-documents destination is the upload box', () => {
   assert.match(src, /\/closing#upload/);
 });
 
+
+// --- six copy defects found by rendering each upload combination -------------
+// Each of these shipped. None was a crash: the page rendered cleanly and said
+// something untrue, ungrammatical, or unhelpful to a customer who had done
+// nothing wrong. That is the failure mode this file exists to catch.
+
+const LE_MISMATCH = {
+  ...BASE, loan_estimates_uploaded: 1, loan_estimates_read: 1, tolerance_tested: false,
+  tolerance_blocked_reason: 'different_address',
+  address_mismatch: { cd: '2526 Heath Place, Reston, VA 20191', le: '17709 Sunrise Dr, Lutz, FL 33558' },
+  tier: { id: 'basic', downgraded_from_full: true, has_loan_estimate: true, upgrade_documents: 0 },
+};
+
+const CONTRACT_MISMATCH = {
+  ...BASE, contract_uploaded: 1, contract_reconciled: false, contract_terms_read: 0,
+  contract_low_confidence: 0,
+  contract_mismatch: [{ field: 'property address', hard: true, cd: '2526 Heath Place, Reston, VA 20191', le: '88 Palm Ave, Tampa, FL 33602' }],
+  tier: { id: 'basic', downgraded_from_full: true, has_purchase_contract: true, upgrade_documents: 0 },
+};
+
+test('the failed-upload panel does not point the customer in a direction', () => {
+  // Said "the reason is above". The reason renders below it.
+  const { html } = render(LE_MISMATCH);
+  assert.equal(/reason is above/.test(html), false, 'still claims the reason is above it');
+});
+
+test('a single-field mismatch is described in the singular', () => {
+  const { html } = render(CONTRACT_MISMATCH);
+  assert.equal(/address differ\b/.test(html), false, 'reads "property address differ"');
+  assert.match(html, /does not match/);
+});
+
+test('a contract for the wrong property names both addresses', () => {
+  const { html } = render(CONTRACT_MISMATCH);
+  assert.match(html, /2526 Heath Place/, 'the Closing Disclosure address is not named');
+  assert.match(html, /88 Palm Ave/, 'the contract address is not named');
+});
+
+test('one Loan Estimate is not described as several', () => {
+  const { html } = render({
+    ...BASE, loan_estimates_uploaded: 1, loan_estimates_read: 1, tolerance_tested: true,
+    cd_charge_lines: 22, tier: { id: 'full', has_loan_estimate: true, upgrade_documents: 1 },
+  });
+  assert.equal(/You uploaded Loan Estimates/.test(html), false, 'plural used for a single Loan Estimate');
+  assert.match(html, /You uploaded a Loan Estimate/);
+});
+
+test('several Loan Estimates are still described in the plural', () => {
+  const { html } = render({
+    ...BASE, loan_estimates_uploaded: 3, loan_estimates_read: 3, tolerance_tested: true,
+    cd_charge_lines: 22, tier: { id: 'full', has_loan_estimate: true, upgrade_documents: 1 },
+  });
+  assert.match(html, /You uploaded Loan Estimates/);
+});
+
+test('a clean result confirms the contract check ran, not just tolerance testing', () => {
+  const { html } = render({
+    ...BASE, loan_estimates_uploaded: 1, loan_estimates_read: 1, tolerance_tested: true,
+    cd_charge_lines: 22, contract_uploaded: 1, contract_reconciled: true, contract_terms_read: 3,
+    tier: { id: 'full', has_loan_estimate: true, has_purchase_contract: true, upgrade_documents: 2 },
+  });
+  assert.match(html, /purchase contract/, 'the contract check is never acknowledged');
+  assert.match(html, /credits and concessions/);
+});
+
+// --- never advertise a document the customer has already supplied -----------
+// Fixed once in the coverage panel. This closing sentence was written separately
+// and kept the bug, so a customer who uploaded a contract was told to upload one.
+
+test('a supplied contract is not offered back to the customer', () => {
+  const { html } = render({
+    ...BASE, contract_uploaded: 1, contract_reconciled: false, contract_terms_read: 0,
+    contract_low_confidence: 0, contract_mismatch: null, checks_total: 26,
+    tier: { id: 'basic', has_purchase_contract: true, upgrade_documents: 0 },
+  });
+  assert.equal(/Add your.*purchase contract/.test(html), false, 'offers a contract already uploaded');
+  assert.match(html, /Add your Loan Estimate/, 'should still ask for the document it does not have');
+});
+
+test('a supplied Loan Estimate is not offered back to the customer', () => {
+  const { html } = render(LE_MISMATCH);
+  assert.equal(/Add your Loan Estimate/.test(html), false, 'offers a Loan Estimate already uploaded');
+  assert.match(html, /Add your purchase contract/);
+});
+
+test('nothing is offered when both documents are already in', () => {
+  const { html } = render({
+    ...BASE, loan_estimates_uploaded: 1, loan_estimates_read: 1, contract_uploaded: 1,
+    cd_charge_lines: 22, tolerance_blocked_reason: null,
+    tier: { id: 'basic', has_loan_estimate: true, has_purchase_contract: true, upgrade_documents: 0 },
+  });
+  assert.equal(/Add your/.test(html), false, 'asks for a document when both are already supplied');
+});
+
+
+// --- the denominator the customer can actually reach ------------------------
+// "20 of 27" described a completely audited Closing Disclosure as a 74% job:
+// the other 7 needed a Loan Estimate nobody had asked for. Completeness and
+// upsell were sharing one fraction, and the fraction read as a shortfall.
+
+const CD_ONLY = {
+  ...BASE, checks_attempted: 20, checks_reachable: 20, checks_run: 11,
+  checks_blocked: 7, checks_blocked_by: [{ document: 'your Loan Estimate', count: 7 }],
+  document_label: 'Closing Disclosure',
+};
+
+test('the denominator is what the uploaded documents can reach', () => {
+  const { html } = render(CD_ONLY);
+  assert.match(html, /20 of 20 checks that apply/);
+  assert.equal(/20 of 27/.test(html), false, 'still counts checks no document can reach');
+});
+
+test('a complete audit says so in words', () => {
+  const { html } = render(CD_ONLY);
+  assert.match(html, /That is all of them/);
+});
+
+test('blocked checks are an addition, not a shortfall', () => {
+  const { html } = render(CD_ONLY);
+  assert.match(html, /7 more if you add your Loan Estimate/);
+  assert.equal(/Checks needing another document/.test(html), false,
+    'the old deficit-framed row is back');
+});
+
+test('the fraction is not printed twice', () => {
+  const { html } = render(CD_ONLY);
+  const hits = (html.match(/20 of 20/g) || []).length;
+  assert.equal(hits, 1, `the same fraction appears ${hits} times`);
+});
+
+test('each blocking document is named with its own count', () => {
+  const { html } = render({
+    ...CD_ONLY, checks_attempted: 18, checks_reachable: 18, checks_blocked: 9,
+    checks_blocked_by: [
+      { document: 'your Loan Estimate', count: 7 },
+      { document: 'answer two quick questions', count: 2 },
+    ],
+  });
+  assert.match(html, /7 more if you add your Loan Estimate/);
+  // Documents get "add"; questions get answered. "add two quick answers" was
+  // what the first version produced.
+  assert.match(html, /2 more if you answer two quick questions/);
+  assert.equal(/add answer two quick/.test(html), false, 'verb does not agree with the noun');
+});
+
+test('nothing is offered when every check has already run', () => {
+  const { html } = render({
+    ...CD_ONLY, checks_attempted: 27, checks_reachable: 27, checks_blocked: 0, checks_blocked_by: [],
+  });
+  assert.match(html, /27 of 27 checks that apply/);
+  assert.equal(/more if you/.test(html), false, 'offers an upgrade with nothing left to unlock');
+});
+
 const total = passed + failures.length;
 if (failures.length) {
   console.error(`\n${failures.length} of ${total} failed:\n`);
