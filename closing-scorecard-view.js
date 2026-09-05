@@ -148,18 +148,27 @@
         var reached = sc.checks_reachable || sc.checks_in_scope || sc.checks_total;
         var didRun = sc.checks_attempted || sc.checks_run || 0;
         var docLabel = sc.document_label || 'Closing Disclosure';
-        var line = didRun >= reached
-          ? '<strong>' + didRun + ' of ' + reached + ' checks that apply to your '
-            + escH(docLabel) + '.</strong> That is all of them.'
-          : '<strong>' + didRun + ' of ' + reached + ' checks that apply to your '
-            + escH(docLabel) + '.</strong>';
+        var by = sc.checks_blocked_by || [];
+        var line = '<strong>' + didRun + ' of ' + reached + ' checks that apply to your '
+          + escH(docLabel) + '.</strong>';
+        // "That is all of them" belongs only where there is genuinely nothing
+        // left. Printed while seven more were listed underneath, it read as the
+        // page contradicting itself one line later.
+        if (didRun >= reached && !by.length) line += ' That is all of them.';
 
         // The blocked checks are an addition, phrased as what each document buys.
-        var by = sc.checks_blocked_by || [];
         if (by.length) {
+          // A customer who uploaded a Loan Estimate for the wrong house was told
+          // to "add your Loan Estimate". They added one. The ask is to replace
+          // it, and telling them to add reads as though we did not notice.
+          var supplied = {
+            'your Loan Estimate': Boolean(sc.loan_estimates_uploaded),
+            'your purchase contract': Boolean(sc.contract_uploaded),
+          };
           line += ' ' + by.map(function (b) {
-            // Documents are added; questions are answered.
-            var verb = /answer/i.test(b.document) ? 'if you ' : 'if you add ';
+            // Documents are added or replaced; questions are answered.
+            if (/answer/i.test(b.document)) return b.count + ' more if you ' + escH(b.document);
+            var verb = supplied[b.document] ? 'if you replace ' : 'if you add ';
             return b.count + ' more ' + verb + escH(b.document);
           }).join(', and ') + '.';
         }
