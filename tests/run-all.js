@@ -33,6 +33,35 @@ if (!suites.length) {
   process.exit(1);
 }
 
+// Dependencies before suites.
+//
+// In a checkout where `npm ci` has not run yet -- a fresh clone, a Codespace
+// still starting up -- purchase-engine.test.js cannot load @supabase/supabase-js
+// and reports seven failures. Seven red lines that mean nothing except "you have
+// not installed anything yet" teach whoever is reading to discount the number,
+// which is the whole value of the suite. Say the actual problem once, in a
+// sentence, and stop.
+const required = Object.keys(
+  JSON.parse(fs.readFileSync(path.join(dir, '..', 'package.json'), 'utf8')).dependencies || {}
+);
+const missing = required.filter(
+  (dep) => !fs.existsSync(path.join(dir, '..', 'node_modules', dep))
+);
+if (missing.length) {
+  console.error('');
+  console.error('  Dependencies are not installed, so the suites cannot run.');
+  console.error('');
+  console.error('    Missing: ' + missing.join(', '));
+  console.error('');
+  console.error('  Run this first, then try again:');
+  console.error('');
+  console.error('    npm ci');
+  console.error('');
+  console.error('  (Nothing is wrong with the code. Nothing has been tested yet.)');
+  console.error('');
+  process.exit(1);
+}
+
 function summarise(output) {
   const plain = output.match(/(\d+)\/(\d+) passed/);
   if (plain) return `${plain[1]}/${plain[2]} passed`;
