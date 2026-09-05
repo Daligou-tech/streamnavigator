@@ -30,11 +30,11 @@ step "render check"
 node tests/render-check.js
 node tests/render-check.js closing-scorecard.html
 
-# Already-stale rows and collapsed coverage. The 30-day early warning runs on a
-# schedule instead — see corpus-health.yml — so a push in December does not
-# start failing for a reason unrelated to it.
-step "corpus freshness"
-node scripts/check-corpus-freshness.js --warn-days 0
+# The corpus freshness step is gone with the corpus. Benchmarking was retired,
+# so there are no dated rows left to go stale. Removing the data and the script
+# without removing this line is what stopped every deploy: this file is run by
+# the workflow AND by the Vercel ignored-build-step gate, so a missing script
+# here does not just turn CI red, it cancels the deployment silently.
 
 # Every patch script is idempotent and refuses cleanly when already applied, so
 # running them here is safe and answers a question that otherwise gets asked by
