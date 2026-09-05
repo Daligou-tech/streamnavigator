@@ -97,11 +97,25 @@ function renderItem(f, index) {
   return lines.join('\n');
 }
 
+// Dates arrive from the extractor as 'YYYY-MM-DD'. Printed raw, a letter reads
+// "closing 2026-09-18" -- which is how a system writes, not how the customer
+// writing to their lender does. Parsed as UTC so the day never shifts with the
+// server's timezone. Anything that is not a plain ISO date is passed through
+// untouched rather than guessed at.
+function prettyDate(value) {
+  const raw = String(value).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) return raw;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(d.getTime())) return raw;
+  return d.toLocaleDateString('en-US', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function loanLine(ctx) {
   const bits = [];
   if (hasText(ctx.loanId)) bits.push('loan ' + ctx.loanId.trim());
   if (hasText(ctx.propertyAddress)) bits.push(ctx.propertyAddress.trim());
-  if (hasText(ctx.closingDate)) bits.push('closing ' + ctx.closingDate.trim());
+  if (hasText(ctx.closingDate)) bits.push('closing ' + prettyDate(ctx.closingDate));
   return bits.length ? bits.join(', ') : null;
 }
 

@@ -20,8 +20,28 @@ const COLORS = {
   accent: '#4FB6E8',
 };
 
+// Sets the font explicitly, not just the colour and size. pdfkit carries the
+// last font forward, so with the headline set in Helvetica-Bold every following
+// body paragraph -- the summary, every section item, every line under "What we
+// couldn't verify" -- rendered bold, i.e. the whole report. Caught by rasterising
+// a generated PDF and looking at it. Anything that wants bold sets it itself.
 function addWrappedText(doc, text, options) {
-  doc.fillColor(COLORS.body).fontSize(11).text(text, options);
+  doc.fillColor(COLORS.body).fontSize(11).font('Helvetica').text(text, options);
+}
+
+// The drafted letters, in a fixed order, as a plain list.
+//
+// Either one can be absent — a finding is routed to the lender or to the
+// settlement agent by the check that produced it, and a clean document produces
+// neither. Absent is a normal result, not a failure, so this returns an empty
+// array and every caller below simply prints nothing.
+function collectLetters(report) {
+  const emails = report && report.emails;
+  if (!emails) return [];
+  const out = [];
+  if (emails.lender) out.push({ who: 'Lender', email: emails.lender });
+  if (emails.settlement) out.push({ who: 'Settlement agent', email: emails.settlement });
+  return out;
 }
 
 // Returns a Promise<Buffer> — pdfkit is a stream-based API, so this
@@ -48,6 +68,27 @@ function buildReportPdfBuffer(report, meta) {
 
       if (report.summary) {
         addWrappedText(doc, report.summary, { width: 500 });
+        doc.moveDown(1);
+      }
+
+      // Sign-post, printed before the findings rather than after them.
+      // A customer who reads three pages of findings and stops has still got
+      // the letters — but only if they were told, up front, that they exist.
+      const letters = collectLetters(report);
+      if (letters.length) {
+        doc.fillColor(COLORS.accent).fontSize(11).font('Helvetica-Bold').text(
+          letters.length === 1
+            ? 'A ready-to-send letter is at the back of this report.'
+            : 'Two ready-to-send letters are at the back of this report.',
+          { width: 500 }
+        );
+        doc.moveDown(0.25);
+        doc.fillColor(COLORS.muted).fontSize(10).font('Helvetica').text(
+          letters.length === 1
+            ? `Addressed to your ${letters[0].who.toLowerCase()}, covering the findings below. Check every figure against your own documents before you send it.`
+            : 'One for your lender and one for your settlement agent, covering the findings below. Check every figure against your own documents before you send them.',
+          { width: 500 }
+        );
         doc.moveDown(1);
       }
 
@@ -100,6 +141,66 @@ function buildReportPdfBuffer(report, meta) {
           'Any figures we could not read can be entered on your online report, and we will rebuild it with them included.',
           { width: 500 }
         );
+      }
+
+      // The letters. Last, on their own page, because this is the part the
+      // customer acts on and has to be able to find without hunting — and
+      // because a letter split across a page break by a stray heading reads
+      // like two half-letters.
+      if (letters.length) {
+        doc.addPage();
+        doc.fillColor(COLORS.accent).fontSize(10).font('Helvetica-Bold').text(
+          letters.length === 1 ? 'READY-TO-SEND LETTER' : 'READY-TO-SEND LETTERS',
+          { characterSpacing: 1.5 }
+        );
+        doc.moveDown(0.4);
+        doc.fillColor(COLORS.body).fontSize(11).font('Helvetica').text(
+          'Copy the text below into an email. Read it first: check every figure against '
+          + 'your own documents, add anything you know that we could not see, and delete '
+          + 'anything you would rather not raise. This is your letter, sent under your '
+          + 'name — we are not a party to it.',
+          { width: 500 }
+        );
+        doc.moveDown(1);
+
+        letters.forEach((entry, index) => {
+          // 560 is the practical floor for starting a letter: a heading plus
+          // the To/Subject block plus one line of body. Below that the header
+          // strands at the bottom of a page with the letter overleaf.
+          if (index > 0 || doc.y > 560) doc.addPage();
+
+          doc.fillColor(COLORS.heading).fontSize(13).font('Helvetica-Bold')
+            .text(`Letter ${index + 1} of ${letters.length} — to your ${entry.who.toLowerCase()}`, { width: 500 });
+          doc.moveDown(0.5);
+
+          // `to` is the party's name where the extraction captured one. It is
+          // routinely null — the settlement agent's name is not among the
+          // fields read — so the label is only printed when there is a name to
+          // put after it, never as an empty "To:".
+          if (entry.email.to) {
+            doc.fillColor(COLORS.muted).fontSize(10).font('Helvetica-Bold').text('To');
+            doc.fillColor(COLORS.body).fontSize(11).font('Helvetica').text(String(entry.email.to), { width: 500 });
+            doc.moveDown(0.3);
+          }
+
+          doc.fillColor(COLORS.muted).fontSize(10).font('Helvetica-Bold').text('Subject');
+          doc.fillColor(COLORS.body).fontSize(11).font('Helvetica').text(String(entry.email.subject || ''), { width: 500 });
+          doc.moveDown(0.6);
+
+          // Printed line by line rather than as one block: the body carries its
+          // own paragraph breaks and numbered items, and handing the whole
+          // string to pdfkit at once collapses them into a wall of text.
+          String(entry.email.body || '').split('\n').forEach((line) => {
+            if (doc.y > 700) doc.addPage();
+            if (line.trim() === '') {
+              doc.moveDown(0.5);
+              return;
+            }
+            doc.fillColor(COLORS.body).fontSize(11).font('Helvetica').text(line, { width: 500 });
+          });
+
+          doc.moveDown(1);
+        });
       }
 
       // Footer — checked against remaining space first so a two-line

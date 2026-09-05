@@ -28,8 +28,6 @@
 const audit = require('./closing-audit');
 const { runClosingAudit, buildScorecard } = require('./closing-extract');
 const loanMath = require('./closing-math');
-const { checkSectionTotals } = require('./section-benchmark');
-const { describeCoverage } = require('./benchmark-coverage');
 const { buildEmails } = require('./closing-emails');
 
 // Benchmarking is ON, but its gaps are disclosed by NAME rather than by count.
@@ -43,20 +41,12 @@ const { buildEmails } = require('./closing-emails');
 //
 // NO_BENCHMARKS remains exported for tests and for running the audit with
 // benchmarking deliberately absent.
-// The corpus is loaded once. If it is malformed it refuses to load entirely
-// rather than serve part of itself, and every category falls back to unpriced.
-let cachedGetBenchmark = null;
+// Benchmarking is retired -- see the note in closing-extract.js. Both suppliers
+// now return null, so the audit runs with benchmarking structurally absent
+// rather than merely unavailable. The scorecard has always run this way; this
+// makes the paid report match it.
 function defaultGetBenchmark() {
-  if (cachedGetBenchmark) return cachedGetBenchmark;
-  try {
-    const { makeGetBenchmark } = require('./benchmark-corpus');
-    const corpus = require('../../data/benchmarks.json');
-    cachedGetBenchmark = makeGetBenchmark(corpus.rows || []);
-  } catch (err) {
-    console.error('[closing-service] benchmark corpus unavailable:', err.message);
-    cachedGetBenchmark = NO_BENCHMARKS;
-  }
-  return cachedGetBenchmark;
+  return NO_BENCHMARKS;
 }
 
 const NO_BENCHMARKS = () => null;
@@ -239,32 +229,22 @@ function runDocumentAudit(input = {}) {
     terms: extraction.loan_terms_features || {},
   });
 
-  // Section totals against what comparable loans actually paid. This is the
-  // only check resting on other people's transactions, and section-benchmark.js
-  // caps its severity so it can never read as an established overcharge.
   const st = extraction.section_totals || {};
-  const sectionCtx = {
-    state: extraction.property_state,
-    county: extraction.property_county,
-    propertyAddress: extraction.property_address,
-    loanAmount: extraction.loan_amount,
-    salePrice: extraction.sale_price,
-  };
-  const sections = checkSectionTotals({
-    sectionTotals: { A: v(st.A), D: v(st.D) },
-    getBenchmark,
-    ctx: sectionCtx,
-  });
+  // Section totals against comparable loans is retired along with the rest of
+  // benchmarking. It was the only finding in the product resting on other
+  // people's transactions rather than on arithmetic, a legal limit, or a
+  // comparison between two documents the customer holds. Left in place with a
+  // null supplier it would have contributed nothing but a permanent line in
+  // "checks we could not run" -- a gap the customer could never close, on every
+  // report forever.
+  const findings = [...engineFindings, ...math.findings];
+  const skipped = [...engineSkipped, ...math.skipped];
 
-  const findings = [...engineFindings, ...math.findings, ...sections.findings];
-  const skipped = [...engineSkipped, ...math.skipped, ...sections.skipped];
-
-  // Which named charge categories we can price for THIS property. Read before
-  // payment, so nobody buys a report to discover what is not in it.
-  const presentCategories = [...new Set(
-    (extraction.line_items || []).map((li) => li.category).filter(Boolean)
-  )];
-  const benchmarkCoverage = describeCoverage(getBenchmark, sectionCtx, presentCategories);
+  // The coverage panel answered "which of your fees can we price?". With
+  // nothing priced anywhere, the honest answer is none, and a panel that says
+  // "Not priced: everything" on every report is worse than no panel. The
+  // scorecard's check count already tells the customer what ran.
+  const benchmarkCoverage = null;
 
   // --- what documents do we actually have, usably? -------------------------
   const have = {
@@ -391,6 +371,32 @@ function runDocumentAudit(input = {}) {
     // like a failure.
     checks_attempted: attempted.length,
     checks_in_scope: inScopeTotal,
+    // The denominator the customer can actually reach with the documents they
+    // have given us. "20 of 27" read as a 74% job on a Closing Disclosure that
+    // was audited completely -- the 7 counted checks needed documents nobody
+    // had asked for. Completeness and upsell are two different statements and
+    // were being collapsed into one fraction.
+    checks_reachable: attempted.length + coverage.filter((c) =>
+      c.status === 'needs_document' && have[c.needs] && !c.outOfScope).length,
+    // Blocked checks grouped by the single document that would unlock them, so
+    // the page can say "7 more if you add your Loan Estimate" rather than
+    // leaving the customer to work out which upload buys what.
+    checks_blocked_by: (function () {
+      const labels = {
+        [Needs.LE]: 'your Loan Estimate',
+        [Needs.CONTRACT]: 'your purchase contract',
+        [Needs.ANSWERS]: 'answer two quick questions',
+        [Needs.OTHER_DOC]: 'another document',
+      };
+      const counts = new Map();
+      for (const c of blocked) {
+        const key = labels[c.blockedBy] || c.blockedBy;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([document, count]) => ({ document, count }))
+        .sort((a, b) => b.count - a.count);
+    }()),
     findings_count: ran.length,
     coverage_headline: blocked.length === 0
       ? `All ${inScopeTotal} checks that apply to your closing ran.`

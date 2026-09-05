@@ -14,18 +14,25 @@
 'use strict';
 
 const audit = require('./closing-audit');
-const { makeGetBenchmark } = require('./benchmark-corpus');
 
-// Loaded once per cold start. If the corpus file is malformed the corpus refuses
-// to load entirely and every fee falls back to "cannot benchmark" — the safe
-// direction. A broken corpus must never half-answer.
-let defaultGetBenchmark = () => null;
-try {
-  const corpus = require('../../data/benchmarks.json');
-  defaultGetBenchmark = makeGetBenchmark(corpus.rows || []);
-} catch (err) {
-  console.error('[benchmarks] corpus unavailable, all fees will report cannot-benchmark:', err.message);
-}
+// Benchmarking is retired. Every fee reports cannot-benchmark, everywhere.
+//
+// The corpus held 51 rows: 48 Maryland, 2 Florida, 1 Texas. So the only
+// customers it ever answered for were Marylanders, and it reached them only on
+// the paid path -- the free scorecard has always filtered benchmark findings
+// out. That is the wrong way round: the weakest evidence in the product was
+// shown exclusively to the people who paid for it.
+//
+// Every other check here rests on arithmetic, a legal limit, or a comparison
+// between two documents the customer holds. Those are true or false. "This fee
+// is higher than most comparable loans" is a claim about a sample, and it
+// becomes a dollar figure in a letter a customer sends their lender. One
+// unfamiliar convention in a county schedule and we have put a wrong number in
+// a customer's mouth in front of the person about to fund their house.
+//
+// Kept as a named function rather than deleted so this is a decision in the
+// code, not the accident of a missing data file.
+const defaultGetBenchmark = () => null;
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 

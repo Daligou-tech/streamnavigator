@@ -26,6 +26,8 @@ const { getSupabaseAdmin } = require('./supabaseAdmin');
 const {
   runClosingAudit, extractLoanEstimate, toLoanEstimateRecord,
 } = require('./closing-extract');
+const { buildEmails } = require('./closing-emails');
+const { rankFindings } = require('./closing-audit');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -316,6 +318,12 @@ async function generateNavigatorReport(submissionId) {
     // documents plus an instruction to judge — is what stops it inventing a
     // benchmark when the corpus has no entry for a county.
     let auditBlock = '';
+    // The lender / settlement-agent letters. Built here on the paid path and
+    // attached to the stored report below, so the PDF has something to print.
+    // Null for every other product, and null for a clean Closing Disclosure —
+    // nothing routed to a party means no letter, and inventing one would spend
+    // the customer's credibility with someone they still have to close with.
+    let draftedEmails = null;
     if (submission.product === 'closing') {
       const stored = submission.form_data || {};
       if (!stored.extraction) {
@@ -377,11 +385,26 @@ async function generateNavigatorReport(submissionId) {
           detail: {},
         });
       }
+      // Ranked once, then used for both the write-up and the letters. If the
+      // model saw one order and the letters used another, a customer reading
+      // the PDF top to bottom would meet the same findings twice in two
+      // different priorities.
+      const ranked = rankFindings(findings);
+
+      draftedEmails = buildEmails(ranked, {
+        propertyAddress: stored.extraction.property_address,
+        closingDate: stored.extraction.closing_date,
+        borrowerName: Array.isArray(stored.extraction.borrower_names)
+          ? stored.extraction.borrower_names.filter(Boolean).join(' and ')
+          : null,
+        lenderName: stored.extraction.lender_name,
+      });
+
       auditBlock = [
         '',
         'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
         'recompute them, and do not soften or escalate any severity.',
-        JSON.stringify(findings, null, 1),
+        JSON.stringify(ranked, null, 1),
         skipped.length
           ? `Checks that could not be run because the required values were missing or unreadable: ${skipped.join(', ')}. Say so plainly rather than implying they passed.`
           : '',
@@ -463,6 +486,15 @@ async function generateNavigatorReport(submissionId) {
     }
 
     if (!report) throw lastError || new Error('Failed to generate a valid report after retrying');
+
+    // Attached after generation, never before: the letters are assembled from
+    // the audit's own figures and must not pass through the model, which is
+    // here to write up findings, not to reword a letter the customer will sign
+    // their name to. Attaching after also keeps them clear of the contamination
+    // check above, which is looking for model output, not our own text.
+    if (draftedEmails && (draftedEmails.lender || draftedEmails.settlement)) {
+      report.emails = draftedEmails;
+    }
 
     await admin.from('navigator_reports').insert({
       submission_id: submissionId,
