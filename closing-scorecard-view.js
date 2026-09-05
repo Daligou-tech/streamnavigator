@@ -94,12 +94,17 @@
       }
       // Checks, not fees. "10 of 14 fees, no rate data" measured a corpus we do
       // not claim to have, and its denominator was never reachable. This one is.
-      if (sc.checks_total) {
-        rows.push(['Checks run', (sc.checks_attempted || sc.checks_run) + ' of ' + (sc.checks_in_scope || sc.checks_total)]);
-      }
-      if (sc.checks_blocked) {
-        rows.push(['Checks needing another document', String(sc.checks_blocked)]);
-      }
+      //
+      // The denominator is now what the customer's OWN documents can reach, not
+      // the whole catalog. "20 of 27" described a complete audit of a Closing
+      // Disclosure as three-quarters finished, because the other 7 needed a Loan
+      // Estimate nobody had asked for. Completeness is one statement and the
+      // upsell is another; the fraction was carrying both and reading as a
+      // failure. The blocked checks are now an addition below, not a shortfall
+      // above.
+      // No "Checks run" row: the sentence under this list states the same
+      // fraction in words, and printing it twice made the page look like it was
+      // arguing with itself.
       if (typeof sc.findings_count === 'number') {
         rows.push(['Findings to review', String(sc.findings_count)]);
       }
@@ -136,6 +141,31 @@
         + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
         + '</ul>';
 
+      // Says what the count means, in a sentence, immediately under it. A bare
+      // fraction invites the reader to supply their own denominator, and the one
+      // they supply is "out of everything you could have checked".
+      if (sc.checks_total) {
+        var reached = sc.checks_reachable || sc.checks_in_scope || sc.checks_total;
+        var didRun = sc.checks_attempted || sc.checks_run || 0;
+        var docLabel = sc.document_label || 'Closing Disclosure';
+        var line = didRun >= reached
+          ? '<strong>' + didRun + ' of ' + reached + ' checks that apply to your '
+            + escH(docLabel) + '.</strong> That is all of them.'
+          : '<strong>' + didRun + ' of ' + reached + ' checks that apply to your '
+            + escH(docLabel) + '.</strong>';
+
+        // The blocked checks are an addition, phrased as what each document buys.
+        var by = sc.checks_blocked_by || [];
+        if (by.length) {
+          line += ' ' + by.map(function (b) {
+            // Documents are added; questions are answered.
+            var verb = /answer/i.test(b.document) ? 'if you ' : 'if you add ';
+            return b.count + ' more ' + verb + escH(b.document);
+          }).join(', and ') + '.';
+        }
+        html += '<p class="scorecard-note">' + line + '</p>';
+      }
+
       // Only meaningful when we added the total up ourselves. A real Closing
       // Disclosure prints Total Closing Costs (J), and J already includes the
       // initial escrow payment in section G — telling the customer those were
@@ -163,7 +193,14 @@
               : sc.tier.has_loan_estimate ? 'a Loan Estimate' : 'a purchase contract')
             + ', but we could not use '
             + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract ? 'them' : 'it')
-            + ' &mdash; the reason is above. Replace the upload and those checks run too, at no '
+            // Said "the reason is above". It is not: this panel is written before
+            // the address-mismatch and unreadable-document notes, so the reason
+            // prints underneath it. Pointing a confused customer in the wrong
+            // direction on the one screen explaining why their upload failed.
+            // Direction removed rather than reordered -- the panels are ordered
+            // most-specific-first on purpose, and "below" would break the moment
+            // one of them moves again.
+            + ' &mdash; see the explanation on this page. Replace the upload and those checks run too, at no '
             + 'extra cost. The price is $59 either way.</p>'
             + '<p class="scorecard-note">You still get every check that runs on the Closing '
             + 'Disclosure alone.</p>'
@@ -187,11 +224,16 @@
             + '</ul>'
             + '</div>';
         } else {
+          // Said "You uploaded Loan Estimates" whether one arrived or five. The
+          // sentence sits beside the price, which is the worst place on the page
+          // to look careless about counting.
+          var leWord = (sc.loan_estimates_read || sc.loan_estimates_uploaded) === 1
+            ? 'a Loan Estimate' : 'Loan Estimates';
           html += '<p class="scorecard-note"><strong>Your audit is $59.</strong> You uploaded '
             + (sc.tier.has_loan_estimate && sc.tier.has_purchase_contract
-                ? 'Loan Estimates and a purchase contract, so tolerance testing and credit reconciliation both apply'
+                ? leWord + ' and a purchase contract, so tolerance testing and credit reconciliation both apply'
                 : sc.tier.has_loan_estimate
-                  ? 'Loan Estimates, so TRID tolerance testing has already run against the correct baseline'
+                  ? leWord + ', so TRID tolerance testing has already run against the correct baseline'
                   : 'a purchase contract, so we have checked your negotiated credits against the closing figures')
             + '.</p>';
         }
@@ -275,9 +317,28 @@
         } else {
           html += '<p class="scorecard-warn"><strong>Contract reconciliation did not run.</strong> '
             + (sc.contract_mismatch && sc.contract_mismatch.length
-                ? 'The contract you uploaded does not match this Closing Disclosure ('
-                  + sc.contract_mismatch.map(function(m){ return m.field; }).join(' and ')
-                  + ' differ), so we did not compare them.'
+                // Read "property address differ" -- one field, plural verb -- on
+                // the screen asking the customer to trust our arithmetic.
+                ? (function () {
+                    var fields = sc.contract_mismatch.map(function (m) { return m.field; });
+                    var addr = null;
+                    for (var i = 0; i < sc.contract_mismatch.length; i++) {
+                      var m = sc.contract_mismatch[i];
+                      if (m.field === 'property address' && m.cd && m.le) { addr = m; break; }
+                    }
+                    return 'The contract you uploaded does not match this Closing Disclosure &mdash; the '
+                      + fields.join(' and ')
+                      + (fields.length === 1 ? ' does not match' : ' do not match') + '. '
+                      // The Loan Estimate version names both addresses; this one
+                      // named neither, so a customer was told their contract was
+                      // for a different house without being told which house --
+                      // no way to tell a wrong file from a misread one.
+                      + (addr
+                          ? 'The Closing Disclosure is for ' + escH(addr.cd)
+                            + ' and the contract is for ' + escH(addr.le) + '. '
+                            + 'Upload the contract for this property and those checks run at no extra cost.'
+                          : 'Upload the contract for this closing and those checks run at no extra cost.');
+                  }())
                 : 'We could not read any credits, concessions or cost allocations from the contract — '
                   + 'it may be missing pages or an addendum.')
             + ' This is not a clean result for those checks.</p>';
@@ -442,14 +503,32 @@
             ? '<p class="scorecard-note">No issues surfaced. That includes tolerance testing against '
               + (sc.loan_estimates_read === 1 ? 'your Loan Estimate' : 'all ' + sc.loan_estimates_read + ' Loan Estimates')
               + ' — we checked whether any fee rose beyond what the lending rules permit, and none did. '
+              // A customer who supplied a contract too was told only about
+              // tolerance testing. They handed over a third document and got no
+              // acknowledgement it was used, which reads as though it was ignored.
+              + (sc.contract_reconciled
+                  ? 'It also includes your purchase contract — we checked the credits and concessions '
+                    + 'the seller agreed to against what the Closing Disclosure actually shows. '
+                  : '')
               + 'The full audit shows you every charge we examined and what we measured it against.</p>'
             : '<p class="scorecard-note">No issues surfaced from the Closing Disclosure alone. '
           + 'The full audit shows every check we ran and what each one was measured against. '
-          + 'Add your Loan Estimate'
-          + (isRefi ? '' : ' or purchase contract')
-          + ' and it also runs tolerance testing'
-          + (isRefi ? '' : ' and credit reconciliation')
-          + ', which is where most recoverable money turns up.</p>');
+          // Offered "Add your Loan Estimate or purchase contract" regardless of
+          // what had already been supplied, so a customer who uploaded a contract
+          // was told to upload a contract. The same mistake the coverage panel was
+          // fixed for; this sentence was written separately and missed.
+          + (function () {
+              var wants = [];
+              if (!sc.loan_estimates_uploaded) wants.push('your Loan Estimate');
+              if (!isRefi && !sc.contract_uploaded) wants.push('your purchase contract');
+              if (!wants.length) return '';
+              var gains = [];
+              if (!sc.loan_estimates_uploaded) gains.push('tolerance testing');
+              if (!isRefi && !sc.contract_uploaded) gains.push('credit reconciliation');
+              return 'Add ' + wants.join(' or ') + ' and it also runs ' + gains.join(' and ')
+                + ', which is where most recoverable money turns up.';
+            }())
+          + '</p>');
 
       panel.innerHTML = html;
 
