@@ -127,10 +127,13 @@ test('benchmarking stays retired', () => {
   // between two documents the customer holds, and one claim about a market
   // sample among them is the one that puts a wrong number in a customer's
   // letter to their lender.
-  // Deliberately NOT asserting the corpus file is absent. A stale data file on
-  // disk that nothing reads is inert; what matters is that no production code
-  // loads it. Testing for absence would also force a pile of file deletions on
-  // anyone shipping through the GitHub web UI, for no gain in safety.
+  // The corpus is deleted, not merely unread. A data file left on disk with
+  // nothing importing it is inert but misleading -- the next person to open the
+  // repo finds a benchmark corpus and five passing test suites exercising it,
+  // and reasonably concludes benchmarking is live.
+  assert.equal(fs.existsSync(path.join(ROOT, 'data', 'benchmarks.json')), false,
+    'a benchmark corpus is back on disk');
+
   for (const rel of ['api/_lib/closing-extract.js', 'api/_lib/closing-service.js']) {
     const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.equal(/require\((?:'|")[^'"]*benchmarks\.json(?:'|")\)/.test(src), false,

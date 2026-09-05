@@ -293,7 +293,12 @@ test('the denominator is what the uploaded documents can reach', () => {
 });
 
 test('a complete audit says so in words', () => {
-  const { html } = render(CD_ONLY);
+  // Only when nothing at all is left. CD_ONLY has seven checks still blocked,
+  // so this fixture is the genuinely-complete one.
+  const { html } = render({
+    ...CD_ONLY, checks_attempted: 27, checks_reachable: 27,
+    checks_blocked: 0, checks_blocked_by: [],
+  });
   assert.match(html, /That is all of them/);
 });
 
@@ -331,6 +336,26 @@ test('nothing is offered when every check has already run', () => {
   });
   assert.match(html, /27 of 27 checks that apply/);
   assert.equal(/more if you/.test(html), false, 'offers an upgrade with nothing left to unlock');
+});
+
+
+test('"that is all of them" is not printed while more are listed', () => {
+  const { html } = render({ ...CD_ONLY });
+  assert.equal(/That is all of them/.test(html), false,
+    'claims completeness one line above listing seven more');
+});
+
+test('a document already uploaded is replaced, not added', () => {
+  // A customer who uploaded a Loan Estimate for the wrong house was told to
+  // "add your Loan Estimate". They had added one.
+  const { html } = render({ ...CD_ONLY, loan_estimates_uploaded: 1 });
+  assert.match(html, /7 more if you replace your Loan Estimate/);
+  assert.equal(/if you add your Loan Estimate/.test(html), false);
+});
+
+test('a document never supplied is still phrased as an addition', () => {
+  const { html } = render({ ...CD_ONLY, loan_estimates_uploaded: 0 });
+  assert.match(html, /7 more if you add your Loan Estimate/);
 });
 
 const total = passed + failures.length;
