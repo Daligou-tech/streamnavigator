@@ -36,23 +36,43 @@ module.exports = async function handler(req, res) {
   const admin = getSupabaseAdmin();
   const stallCutoff = new Date(Date.now() - STAGE_STALL_MS).toISOString();
 
-  // Three kinds of work, in priority order:
+  // Four kinds of work, in priority order:
   //
-  //   1. paid           — nobody has started it yet.
-  //   2. processing     — a stage was claimed but has not reported back
-  //      (stale)          within STAGE_STALL_MS. The platform killed it
-  //                       outside the engine's own try/catch, so the row was
-  //                       never updated. Resumes from job_state, so the
-  //                       documents already read are not re-read.
-  //   3. failed         — a transient API error. job_state is deliberately
+  //   1. mid-package    — a stage finished and released the job
+  //      (continue)       (job_running_since null) with documents still to
+  //                       read. First, so a package in progress finishes
+  //                       rather than every submission starting at once.
+  //   2. paid           — nobody has started it yet.
+  //   3. processing     — job_running_since older than STAGE_STALL_MS. The
+  //      (stale)          platform killed the invocation outside the engine's
+  //                       own try/catch, so nothing updated the row. Resumes
+  //                       from job_state; documents already read are kept.
+  //   4. failed         — a transient API error. job_state is deliberately
   //      (retryable)      kept on failure, so this resumes mid-package rather
   //                       than starting over. Bounded by MAX_JOB_ATTEMPTS so
   //                       a document the model genuinely cannot read does not
   //                       loop forever at Opus prices.
   //
-  // One submission per tick. Two HOA analyses running at once is a cost
-  // spike, and the queue is measured in minutes, not hours.
+  // job_running_since is doing the important work here. Without it, a
+  // submission waiting for its next stage and one currently running a stage
+  // are indistinguishable — both sit at 'processing' with a recent
+  // updated_at. Keying off updated_at alone made a two-document job idle for
+  // the full stall window between documents.
+  //
+  // One submission per tick. Two HOA analyses at once is a cost spike, and
+  // the queue is measured in minutes, not hours.
   async function claimable() {
+    const continuing = await admin
+      .from('navigator_submissions')
+      .select('id, status')
+      .eq('product', 'hoa')
+      .eq('status', 'processing')
+      .not('job_state', 'is', null)
+      .is('job_running_since', null)
+      .order('updated_at', { ascending: true })
+      .limit(1);
+    if (continuing.data && continuing.data.length) return continuing.data[0];
+
     const paid = await admin
       .from('navigator_submissions')
       .select('id, status')
@@ -68,8 +88,8 @@ module.exports = async function handler(req, res) {
       .eq('product', 'hoa')
       .eq('status', 'processing')
       .not('job_state', 'is', null)
-      .lt('updated_at', stallCutoff)
-      .order('updated_at', { ascending: true })
+      .lt('job_running_since', stallCutoff)
+      .order('job_running_since', { ascending: true })
       .limit(1);
     if (stalled.data && stalled.data.length) return stalled.data[0];
 

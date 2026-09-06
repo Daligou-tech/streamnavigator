@@ -802,9 +802,16 @@ async function advanceHoaJob(submissionId) {
     let job = submission.job_state;
     if (!job) job = await startJob(admin, submission);
 
-    // Claim the stage before doing the work, so a worker tick that lands
-    // while this one is running sees a fresh updated_at and leaves it alone.
-    await saveJob(admin, submissionId, job, { status: 'processing' });
+    // Claim the stage before doing any work. job_running_since is what tells
+    // a worker tick landing mid-stage to leave this alone; updated_at cannot,
+    // because a submission waiting for its next stage and one currently
+    // running a stage both sit at 'processing' with a recent updated_at. It
+    // is cleared the moment the stage returns, so the next tick picks the
+    // job straight back up instead of idling for the stall window.
+    await saveJob(admin, submissionId, job, {
+      status: 'processing',
+      job_running_since: new Date().toISOString(),
+    });
 
     const client = anthropicClient();
 
@@ -822,7 +829,8 @@ async function advanceHoaJob(submissionId) {
       job.docIndex += 1;
       if (job.docIndex >= job.docs.length) job.stage = JOB_STAGE_SYNTHESIS;
 
-      await saveJob(admin, submissionId, job);
+      // Released, so the next tick continues immediately.
+      await saveJob(admin, submissionId, job, { job_running_since: null });
       return {
         done: false,
         stage: job.stage,
@@ -842,7 +850,13 @@ async function advanceHoaJob(submissionId) {
 
     await admin
       .from('navigator_submissions')
-      .update({ status: 'complete', job_state: null, error: null, updated_at: new Date().toISOString() })
+      .update({
+        status: 'complete',
+        job_state: null,
+        job_running_since: null,
+        error: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', submissionId);
 
     if (droppedCitationRefs > 0) {
@@ -863,6 +877,8 @@ async function advanceHoaJob(submissionId) {
         status: 'failed',
         error: String(err.message || err).slice(0, 500),
         generation_attempts: (submission.generation_attempts || 0) + 1,
+        // Released so a retry is not mistaken for a stage still in flight.
+        job_running_since: null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', submissionId);

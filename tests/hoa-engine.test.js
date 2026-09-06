@@ -495,6 +495,33 @@ test('generateHoaReport reads each document separately, then synthesises', async
   assert.deepEqual(ctx.deletes.sort(), ctx.uploads.map((u) => u.id).sort());
 });
 
+test('each stage claims and then releases the job, so the next tick continues', async () => {
+  // api/hoa-job.js cannot otherwise tell a submission waiting for its next
+  // stage from one whose stage is running right now — both sit at
+  // 'processing' with a recent updated_at. Keying off updated_at alone made a
+  // two-document job idle for the full 20 minute stall window between
+  // documents, which live testing caught.
+  const ctx = runPipeline({
+    evidenceContents: [
+      [citedBlock('Doc one.', [pageCitation()])],
+      [citedBlock('Doc two.', [pageCitation({ start_page_number: 2, end_page_number: 2, cited_text: 'second' })])],
+    ],
+    reportToolInput: { risk_score: 'Low', findings: [], headline: 'ok' },
+  });
+
+  await ctx.generateHoaReport('sub-1');
+
+  const marks = ctx.submissionUpdates
+    .filter((p) => Object.prototype.hasOwnProperty.call(p, 'job_running_since'))
+    .map((p) => (p.job_running_since === null ? 'released' : 'claimed'));
+
+  // claim -> release for each of the two documents, then claim -> complete.
+  assert.deepEqual(marks.slice(0, 4), ['claimed', 'released', 'claimed', 'released']);
+  assert.equal(ctx.submission.job_running_since, null, 'a finished job must not look in-flight');
+  assert.equal(ctx.submission.job_state, null, 'job_state is cleared once the report exists');
+  assert.equal(ctx.submission.status, 'complete');
+});
+
 test('a failed stage still deletes the document it uploaded', async () => {
   const ctx = runPipeline({
     evidenceContents: [[]], // first document yields no text -> throws
