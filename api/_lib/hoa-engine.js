@@ -528,7 +528,11 @@ function attachCitations(report, evidence) {
 // Runs a request to completion, continuing through pause_turn (which the
 // server-side code execution tool can produce on a long turn) and nudging
 // once if the model ends its turn without calling the report tool.
-async function runToCompletion(client, { system, messages, tools, maxTokens, expectToolName }) {
+// `effort` defaults to the paid report's level. The free check
+// (api/hoa-scorecard.js) passes a lower one: it runs a single pass whose
+// figures are arithmetic the code execution tool does exactly, so the depth
+// that earns its cost on the full analysis is not needed there.
+async function runToCompletion(client, { system, messages, tools, maxTokens, expectToolName, effort }) {
   const working = messages.slice();
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
@@ -537,7 +541,7 @@ async function runToCompletion(client, { system, messages, tools, maxTokens, exp
       max_tokens: maxTokens,
       system,
       thinking: { type: 'adaptive' },
-      output_config: { effort: EFFORT },
+      output_config: { effort: effort || EFFORT },
       messages: working,
     };
     if (tools) {
@@ -902,6 +906,16 @@ module.exports = {
   advanceHoaJob,
   STAGE_STALL_MS,
   MAX_JOB_ATTEMPTS,
+  // Shared with api/hoa-scorecard.js. The free check runs one cheap pass over
+  // two documents, but it must reach the same percent-funded figure the paid
+  // report does — a free number that later disagrees with the paid one would
+  // do the opposite of building trust. So it reuses the same turn loop, the
+  // same rubric and the same grounding rules rather than restating them.
+  runToCompletion,
+  guessMediaType,
+  HOA_RUBRIC,
+  HONESTY_RULES,
+  EFFORT,
   // Exported for tests.
   harvestCitations,
   attachCitations,

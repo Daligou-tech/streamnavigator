@@ -109,11 +109,16 @@ function decide(counts, limits = LIMITS) {
   return { allowed: true, reason: null, message: null, retryAfterMinutes: 0 };
 }
 
-async function countSince(admin, sinceIso, extra) {
+// `product` defaults to 'closing' so the original caller is unchanged. HOA has
+// its own free check (api/hoa-scorecard.js) and must be counted separately:
+// counting both together would let a busy day on one product lock out the
+// other, and their per-call costs are not comparable — an HOA reserve study is
+// a far larger document than a Closing Disclosure.
+async function countSince(admin, sinceIso, extra, product = 'closing') {
   let q = admin
     .from('navigator_submissions')
     .select('id', { count: 'exact', head: true })
-    .eq('product', 'closing')
+    .eq('product', product)
     .gte('created_at', sinceIso);
   if (extra) q = extra(q);
   const { count, error } = await q;
@@ -124,18 +129,18 @@ async function countSince(admin, sinceIso, extra) {
 // Fails OPEN on a database error. A customer blocked by a transient Supabase
 // blip is a worse outcome than a handful of extra model calls — and the global
 // cap still applies on the next successful check.
-async function checkScorecardRateLimit(admin, { email, ipHash }, limits = LIMITS) {
+async function checkScorecardRateLimit(admin, { email, ipHash, product = 'closing' }, limits = LIMITS) {
   const now = Date.now();
   const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
   try {
     const [emailHour, emailDay, ipHour, ipDay, globalDay] = await Promise.all([
-      email ? countSince(admin, hourAgo, (q) => q.eq('email', email)) : 0,
-      email ? countSince(admin, dayAgo, (q) => q.eq('email', email)) : 0,
-      ipHash ? countSince(admin, hourAgo, (q) => q.eq('form_data->>ip_hash', ipHash)) : 0,
-      ipHash ? countSince(admin, dayAgo, (q) => q.eq('form_data->>ip_hash', ipHash)) : 0,
-      countSince(admin, dayAgo, null),
+      email ? countSince(admin, hourAgo, (q) => q.eq('email', email), product) : 0,
+      email ? countSince(admin, dayAgo, (q) => q.eq('email', email), product) : 0,
+      ipHash ? countSince(admin, hourAgo, (q) => q.eq('form_data->>ip_hash', ipHash), product) : 0,
+      ipHash ? countSince(admin, dayAgo, (q) => q.eq('form_data->>ip_hash', ipHash), product) : 0,
+      countSince(admin, dayAgo, null, product),
     ]);
     return decide({ emailHour, emailDay, ipHour, ipDay, globalDay }, limits);
   } catch (err) {

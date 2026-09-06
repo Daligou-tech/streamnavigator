@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Free HOA Reserve Health Check — StreamNavigator AI</title>
+<meta name="description" content="Upload your HOA's reserve study and budget and get a free reserve health check in minutes — percent funded, the funding gap, and the biggest bill ahead. No payment, no card." />
+<link rel="canonical" href="https://streamnavigator.ai/hoa-scorecard" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="shortcut icon" href="/favicon.ico">
+<style>
+/* Same editorial system as /closing and /hoa. Self-contained, like
+   closing-scorecard.html — this page does not load navigator-shared.css. */
+:root{
+  --ink:#1B2A3A; --ink-soft:#5B6570; --paper:#FBFAF7; --panel:#FFFFFF;
+  --rule:#D8DAD5; --rule-soft:#E9EAE6;
+  --flag:#B01F12; --flag-tint:#FBEEEC;
+  --ok:#2C6A57; --ok-tint:#EDF3F0;
+  --hold:#8A6A16; --hold-tint:#FAF3E2;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;font-size:17px;line-height:1.6}
+.wrap{max-width:780px;margin:0 auto;padding:0 28px}
+h1,h2,h3{font-family:"Newsreader",Georgia,serif;font-weight:500;letter-spacing:-0.01em;margin:0}
+h1{font-size:clamp(2.1rem,5vw,3.1rem);line-height:1.1}
+h2{font-size:clamp(1.4rem,3vw,1.9rem);line-height:1.2;margin-bottom:12px}
+h3{font-size:1.08rem;font-weight:600;line-height:1.35}
+p{margin:0 0 16px}
+a{color:inherit}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+header.nav{border-bottom:1px solid var(--rule);background:var(--paper);position:sticky;top:0;z-index:20}
+header.nav .inner{max-width:1080px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
+.brand{font-family:"Newsreader",serif;font-size:1.12rem;font-weight:600;text-decoration:none}
+.brand span{color:var(--ink-soft);font-size:.86rem;margin-left:8px;font-family:"IBM Plex Sans",sans-serif}
+.nav a.back{font-size:.9rem;color:var(--ink-soft);text-decoration:none}
+
+section{padding:44px 0}
+.lede{color:var(--ink-soft);font-size:1.06rem;max-width:620px}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:var(--flag);margin-bottom:10px}
+
+.clock{border-left:3px solid var(--flag);background:var(--flag-tint);padding:14px 18px;margin:26px 0;font-size:.95rem}
+.clock strong{font-weight:600}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:26px;margin-bottom:20px}
+.slot{margin-bottom:22px}
+.slot label{display:block;font-weight:600;margin-bottom:3px}
+.slot .why{color:var(--ink-soft);font-size:.9rem;margin-bottom:10px}
+.drop{border:1px dashed var(--border-strong,#BFC3BC);border-radius:3px;padding:16px;cursor:pointer;background:#FCFCFA;font-size:.94rem;color:var(--ink-soft)}
+.drop:hover{background:#F6F5F1}
+.drop.has{border-style:solid;border-color:var(--ok);background:var(--ok-tint);color:var(--ink)}
+.filelist{margin-top:8px;font-size:.88rem}
+.filerow{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--rule-soft)}
+.filerow.bad{color:var(--flag)}
+.filerow button{background:none;border:0;color:inherit;cursor:pointer;font:inherit;opacity:.6}
+input[type=email]{width:100%;padding:11px 13px;border:1px solid var(--rule);border-radius:2px;font:inherit;background:#fff}
+
+.btn{display:inline-block;background:var(--ink);color:var(--paper);text-decoration:none;font-size:1rem;font-weight:500;padding:14px 26px;border:1px solid var(--ink);border-radius:2px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#0F1D2B}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn-quiet{background:none;color:var(--ink)}
+.err{color:var(--flag);font-weight:600;font-size:.94rem;margin-top:12px;display:none}
+
+/* ---- results ---- */
+.figwrap{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+.fig{font-family:"Newsreader",serif;font-size:3.4rem;line-height:1}
+.band{font-family:"IBM Plex Mono",monospace;font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border:1px solid currentColor;border-radius:2px}
+.band.Weak,.band.Fair{color:var(--flag)}
+.band.Strong{color:var(--ok)}
+.band.Cannot{color:var(--ink-soft)}
+.basis{color:var(--ink-soft);font-size:.92rem}
+.rowline{display:flex;justify-content:space-between;gap:18px;padding:10px 0;border-bottom:1px solid var(--rule-soft)}
+.rowline .amt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right}
+blockquote.src{margin:16px 0 0;padding:12px 16px;border-left:2px solid var(--rule);background:#FCFCFA;font-style:italic;font-size:.93rem;color:var(--ink)}
+blockquote.src .cite{display:block;font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-soft);margin-bottom:6px}
+
+.locked{border:1px solid var(--rule);border-radius:3px;padding:22px;background:linear-gradient(180deg,#FFFFFF 0%,#F6F5F1 100%)}
+.locked ul{list-style:none;padding:0;margin:0 0 18px}
+.locked li{padding:9px 0 9px 26px;position:relative;border-bottom:1px solid var(--rule-soft)}
+.locked li::before{content:"🔒";position:absolute;left:0;top:9px;font-size:.85rem}
+.locked li b{font-weight:600}
+.helpbox{border:1px solid var(--rule);border-radius:3px;padding:20px;background:var(--ok-tint)}
+.helpbox ul{margin:10px 0 0;padding-left:20px}
+.helpbox li{margin-bottom:5px}
+.muted{color:var(--ink-soft);font-size:.9rem}
+footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:40px;font-size:.86rem;color:var(--ink-soft)}
+.hidden{display:none}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--rule);border-top-color:var(--ink);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="inner">
+    <a class="brand" href="/hoa">StreamNavigator<span>HOA Navigator</span></a>
+    <a class="back" href="/hoa">Full report →</a>
+  </div>
+</header>
+
+<main>
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Free · no card</div>
+    <h1>How healthy are your HOA's reserves?</h1>
+    <p class="lede">Upload the reserve study and the budget. We'll calculate what percentage funded the association actually is, what its own study says it should be contributing, and the biggest bill coming. Free, in a few minutes.</p>
+
+    <div class="clock">
+      <strong>Most buyers get three days.</strong> In Virginia the resale certificate must include the reserve study, budget, financials, minutes and litigation disclosure — and the review period is three calendar days. It is 5–7 days in Maryland, 3 business days in DC. Nobody reads two hundred pages in that time.
+    </div>
+  </div>
+</section>
+
+<section id="form-view" style="padding-top:0">
+  <div class="wrap">
+    <div class="panel">
+      <div class="slot">
+        <label>1 · Reserve study <span class="muted">(required)</span></label>
+        <div class="why">The single most useful document. It states the reserve balance and what the association should be contributing each year.</div>
+        <div class="drop" id="drop-study">Click to choose a file, or drop it here</div>
+        <input type="file" id="in-study" accept=".pdf,.jpg,.jpeg,.png,.webp" class="hidden">
+        <div class="filelist" id="list-study"></div>
+      </div>
+
+      <div class="slot">
+        <label>2 · Budget or financial statement <span class="muted">(recommended)</span></label>
+        <div class="why">Shows what the association is <em>actually</em> putting into reserves. The gap between this and the study is where special assessments come from.</div>
+        <div class="drop" id="drop-budget">Click to choose a file, or drop it here</div>
+        <input type="file" id="in-budget" accept=".pdf,.jpg,.jpeg,.png,.webp" class="hidden">
+        <div class="filelist" id="list-budget"></div>
+      </div>
+
+      <div class="slot">
+        <label>3 · Everything else <span class="muted">(optional)</span></label>
+        <div class="why">Minutes, insurance, assessment notices, bylaws. The free check doesn't read these — but attach them now and they're already in place if you go on to the full report, so you never upload twice.</div>
+        <div class="drop" id="drop-extra">Click to choose files, or drop them here</div>
+        <input type="file" id="in-extra" accept=".pdf,.jpg,.jpeg,.png,.webp" multiple class="hidden">
+        <div class="filelist" id="list-extra"></div>
+      </div>
+
+      <div class="slot" style="margin-bottom:18px">
+        <label>Email <span class="muted">(optional)</span></label>
+        <div class="why">Only so we can send you a copy. Leave it blank and the check still runs.</div>
+        <input type="email" id="in-email" placeholder="you@example.com">
+      </div>
+
+      <button class="btn" id="run-btn">Run my free check</button>
+      <p class="err" id="form-err"></p>
+      <p class="muted" style="margin-top:14px;margin-bottom:0">Your documents are private, are never shared, and the copies we send for analysis are deleted straight afterwards.</p>
+    </div>
+  </div>
+</section>
+
+<section id="result-view" class="hidden" style="padding-top:0">
+  <div class="wrap">
+    <div class="panel">
+      <div class="eyebrow">Free reserve health check</div>
+      <h2 id="r-headline"></h2>
+
+      <div class="figwrap" style="margin-top:22px">
+        <div class="fig mono" id="r-pct">—</div>
+        <div class="band" id="r-band"></div>
+      </div>
+      <div class="basis" id="r-basis"></div>
+
+      <div style="margin-top:24px" id="r-rows"></div>
+
+      <blockquote class="src hidden" id="r-quote"><span class="cite" id="r-cite"></span><span id="r-quote-text"></span></blockquote>
+    </div>
+
+    <div class="panel" id="r-concern-panel">
+      <h3 id="r-concern"></h3>
+      <p id="r-concern-detail" style="margin-bottom:0"></p>
+    </div>
+
+    <div class="locked" style="margin-bottom:20px">
+      <h3 style="margin-bottom:14px">What the full report adds</h3>
+      <ul id="r-locked"></ul>
+      <a class="btn" id="buy-btn" href="https://buy.stripe.com/cNi00jaos92s60cfskabK0d">Get the full report — $79</a>
+      <p class="muted" style="margin:14px 0 0">Your documents are already uploaded. Nothing to attach again.</p>
+    </div>
+
+    <div class="helpbox">
+      <h3>Before your contingency expires</h3>
+      <p style="margin:8px 0 0" class="muted">In Virginia, Maryland and DC your resale package must contain the following. Whether or not you buy a report, check you have all of it — you're entitled to it, and the missing pieces are usually where the surprises are.</p>
+      <ul id="r-checklist"></ul>
+    </div>
+
+    <p class="muted" style="margin-top:24px">This is an analysis of the documents you provided, not legal or financial advice. Figures are estimates unless quoted directly from a document.</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">© 2026 StreamNavigator LLC · <a href="/privacy-policy">Privacy</a> · <a href="/terms">Terms</a></div>
+</footer>
+
+<div class="toast" id="toast" style="display:none"><span id="toast-text"></span></div>
+<script src="/navigator-shared.js"></script>
+<script>
+(function(){
+  // navigator-shared.js supplies uploadFileDirect (signed-URL upload straight
+  // to storage, so a 30MB reserve study is fine) and goToStripe.
+  if (typeof uploadFileDirect !== 'function') {
+    document.getElementById('form-err').textContent = 'This page failed to load properly. Please refresh.';
+    document.getElementById('form-err').style.display = 'block';
+    return;
+  }
+
+  var MAX_FILE = 50 * 1024 * 1024;
+  var picked = { study: [], budget: [], extra: [] };
+
+  function wire(key, dropId, inputId, listId, multiple){
+    var drop = document.getElementById(dropId);
+    var input = document.getElementById(inputId);
+    var list = document.getElementById(listId);
+
+    function render(){
+      list.innerHTML = '';
+      picked[key].forEach(function(f, i){
+        var row = document.createElement('div');
+        row.className = 'filerow';
+        var name = document.createElement('span');
+        name.textContent = f.name + ' · ' + (f.size/1024/1024).toFixed(1) + 'MB';
+        var rm = document.createElement('button');
+        rm.type = 'button'; rm.textContent = 'remove';
+        rm.addEventListener('click', function(){ picked[key].splice(i,1); render(); });
+        row.appendChild(name); row.appendChild(rm);
+        list.appendChild(row);
+      });
+      drop.classList.toggle('has', picked[key].length > 0);
+    }
+
+    function add(files){
+      for (var i=0;i<files.length;i++){
+        var f = files[i];
+        if (f.size > MAX_FILE) {
+          // Persistent, not a toast that erases itself.
+          var bad = document.createElement('div');
+          bad.className = 'filerow bad';
+          bad.textContent = '⚠ ' + f.name + ' is ' + (f.size/1024/1024).toFixed(1) + 'MB — the limit is 50MB per file.';
+          list.appendChild(bad);
+          continue;
+        }
+        if (!multiple) picked[key] = [];
+        picked[key].push(f);
+      }
+      render();
+    }
+
+    drop.addEventListener('click', function(){ input.click(); });
+    drop.addEventListener('dragover', function(e){ e.preventDefault(); });
+    drop.addEventListener('drop', function(e){ e.preventDefault(); add(e.dataTransfer.files); });
+    input.addEventListener('change', function(){ add(input.files); });
+  }
+
+  wire('study','drop-study','in-study','list-study',false);
+  wire('budget','drop-budget','in-budget','list-budget',false);
+  wire('extra','drop-extra','in-extra','list-extra',true);
+
+  var btn = document.getElementById('run-btn');
+  var errEl = document.getElementById('form-err');
+
+  function fail(msg){ errEl.textContent = msg; errEl.style.display = 'block'; }
+
+  btn.addEventListener('click', async function(){
+    errEl.style.display = 'none';
+    if (!picked.study.length) { fail('Attach the reserve study to run the free check. It is the one document the check is built around.'); return; }
+
+    var original = btn.textContent;
+    btn.disabled = true;
+
+    try {
+      var analyse = picked.study.concat(picked.budget);
+      var extras = picked.extra;
+      var total = analyse.length + extras.length;
+      var done = 0;
+      var analysePaths = [], extraPaths = [];
+
+      for (var i=0;i<analyse.length;i++){
+        btn.innerHTML = '<span class="spin"></span>Uploading ' + (++done) + ' of ' + total;
+        analysePaths.push(await uploadFileDirect('hoa', analyse[i]));
+      }
+      for (var j=0;j<extras.length;j++){
+        btn.innerHTML = '<span class="spin"></span>Uploading ' + (++done) + ' of ' + total;
+        extraPaths.push(await uploadFileDirect('hoa', extras[j]));
+      }
+
+      btn.innerHTML = '<span class="spin"></span>Reading your reserve study…';
+
+      var resp = await fetch('/api/hoa-scorecard', {
+        method:'POST', headers:{'content-type':'application/json'},
+        body: JSON.stringify({
+          email: document.getElementById('in-email').value.trim(),
+          uploadedPaths: analysePaths,
+          extraPaths: extraPaths
+        })
+      });
+      var data = await resp.json();
+      if (!resp.ok || !data.ok) throw new Error(data.error || 'The free check could not be completed.');
+
+      render(data);
+    } catch (err) {
+      fail(err.message || 'Something went wrong — please try again.');
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+
+  function row(label, value){
+    if (!value) return null;
+    var d = document.createElement('div');
+    d.className = 'rowline';
+    var l = document.createElement('span'); l.textContent = label;
+    var a = document.createElement('span'); a.className = 'amt'; a.textContent = value;
+    d.appendChild(l); d.appendChild(a);
+    return d;
+  }
+
+  function render(data){
+    var s = data.scorecard || {};
+    document.getElementById('form-view').classList.add('hidden');
+    document.getElementById('result-view').classList.remove('hidden');
+    window.scrollTo(0,0);
+
+    document.getElementById('r-headline').textContent = s.headline || 'Your reserve health check';
+    document.getElementById('r-pct').textContent = s.percent_funded || '—';
+    var band = document.getElementById('r-band');
+    band.textContent = s.band || '';
+    band.className = 'band ' + String(s.band || '').split(' ')[0];
+    document.getElementById('r-basis').textContent = s.percent_funded_basis || '';
+
+    var rows = document.getElementById('r-rows');
+    [
+      row('Reserve balance', s.reserve_balance),
+      row('Fully funded balance', s.fully_funded_balance),
+      row('Contributed each year', s.annual_contribution),
+      row('Study recommends', s.recommended_contribution),
+      row('Units', s.units),
+      s.largest_project && s.largest_project.name
+        ? row(s.largest_project.name + (s.largest_project.year ? ' (' + s.largest_project.year + ')' : ''),
+              [s.largest_project.cost, s.largest_project.per_unit ? s.largest_project.per_unit + '/unit' : ''].filter(Boolean).join(' · '))
+        : null
+    ].filter(Boolean).forEach(function(r){ rows.appendChild(r); });
+
+    if (s.funding_gap) {
+      var g = document.createElement('p');
+      g.style.marginTop = '18px';
+      g.style.marginBottom = '0';
+      g.textContent = s.funding_gap;
+      rows.appendChild(g);
+    }
+
+    // Only shown when the server confirmed the quote appears verbatim in the
+    // document. An unverified quote is dropped rather than displayed.
+    if (data.quote_verified && s.quote) {
+      var ev = (data.evidence || [])[0] || {};
+      var pages = ev.page_start ? (' — p. ' + ev.page_start) : '';
+      document.getElementById('r-cite').textContent = (ev.document_title || 'Your document') + pages;
+      document.getElementById('r-quote-text').textContent = '“' + s.quote + '”';
+      document.getElementById('r-quote').classList.remove('hidden');
+    }
+
+    if (s.top_concern && s.top_concern.concern) {
+      document.getElementById('r-concern').textContent = s.top_concern.concern;
+      document.getElementById('r-concern-detail').textContent = s.top_concern.detail || '';
+    } else {
+      document.getElementById('r-concern-panel').classList.add('hidden');
+    }
+
+    // Every locked line is generated from what this run actually found, so
+    // the page never promises something the documents cannot support.
+    var locked = document.getElementById('r-locked');
+    var items = [];
+    var more = Number(s.further_concern_count || 0);
+    if (more > 0) items.push('<b>' + more + ' more concern' + (more===1?'':'s') + '</b> found in these documents, with the page each came from');
+    items.push('<b>Your special-assessment exposure</b> in dollars per unit, short term and mid term');
+    if ((data.not_analysed || []).length) {
+      items.push('<b>' + data.not_analysed.length + ' document' + (data.not_analysed.length===1?'':'s') + ' you already attached</b> that the free check did not read: ' + data.not_analysed.join(', '));
+    } else {
+      items.push('<b>Your minutes read in full</b> — where a board discusses an assessment long before any notice is issued');
+    }
+    items.push('<b>Questions to send the HOA</b>, written from what was actually found');
+    items.push('<b>A pre-contingency checklist</b>, and every finding cited to its page');
+    locked.innerHTML = '';
+    items.forEach(function(t){ var li=document.createElement('li'); li.innerHTML = t; locked.appendChild(li); });
+
+    var cl = document.getElementById('r-checklist');
+    (data.resale_package_checklist || []).forEach(function(t){
+      var li = document.createElement('li'); li.textContent = t; cl.appendChild(li);
+    });
+
+    document.getElementById('buy-btn').addEventListener('click', function(e){
+      e.preventDefault();
+      // Converts THIS submission, so the documents already uploaded are the
+      // ones the paid report reads. The Stripe webhook flips this row to
+      // 'paid' and api/hoa-job.js picks it up within a minute.
+      goToStripe(this.getAttribute('href'),
+        { id: data.id, token: data.token, product: 'hoa' },
+        document.getElementById('in-email').value.trim() || null);
+    });
+  }
+})();
+</script>
+</body>
+</html>
