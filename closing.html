@@ -522,7 +522,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
         <p class="field-hint" style="margin-top:4px;"><strong>Three quick questions.</strong> They decide which checks can run, and they all run in your free scorecard.</p>
         <div class="field-block">
               <label for="q-transaction-type">1. Are you buying or refinancing?</label>
-              <select id="q-transaction-type">
+              <select id="q-transaction-type" autocomplete="off">
                 <option value="">Choose one…</option>
                 <option value="purchase">Buying a home</option>
                 <option value="refinance">Refinancing</option>
@@ -531,7 +531,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
             </div>
         <div class="field-block">
               <label for="q-property-type">2. What is the property type and occupancy?</label>
-              <select id="q-property-type">
+              <select id="q-property-type" autocomplete="off">
                 <option value="">Choose one…</option>
                 <option value="single_family">Single-family residence</option>
                 <option value="condo">Condo</option>
@@ -542,7 +542,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
             </div>
         <div class="field-block" id="q-provider-block">
               <label for="q-provider-list">3. Did your lender give you a written list of service providers?</label>
-              <select id="q-provider-list">
+              <select id="q-provider-list" autocomplete="off">
                 <option value="">Choose one…</option>
                 <option value="yes">Yes</option>
                 <option value="no">No</option>
@@ -753,13 +753,25 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     if (tt) savedAnswers.transaction_type = tt.value;
     persistAnswers();
   }
+  // Every field is set from savedAnswers -- including to the empty
+  // "Choose one..." -- rather than only when there is something to restore.
+  //
+  // The old version left a field alone when savedAnswers held nothing for it,
+  // which quietly trusted whatever was already in the box. On a reload a browser
+  // puts the previous selection back by itself, and that restoration fires no
+  // 'change' event, so rememberAnswers never runs and savedAnswers stays empty.
+  // The result: the page displayed "Buying a home" while the audit was told
+  // nothing about the transaction type. The customer sees an answer they did not
+  // give, cannot tell it was not submitted, and the checks that depend on it are
+  // silently skipped. Assigning unconditionally makes what is on screen and what
+  // gets sent the same thing by construction.
   function restoreAnswers() {
     const pt = document.getElementById('q-property-type');
     const pl = document.getElementById('q-provider-list');
     const tt = document.getElementById('q-transaction-type');
-    if (pt && savedAnswers.property_type) pt.value = savedAnswers.property_type;
-    if (pl && savedAnswers.provider_list) pl.value = savedAnswers.provider_list;
-    if (tt && savedAnswers.transaction_type) tt.value = savedAnswers.transaction_type;
+    if (pt) pt.value = savedAnswers.property_type || '';
+    if (pl) pl.value = savedAnswers.provider_list || '';
+    if (tt) tt.value = savedAnswers.transaction_type || '';
   }
   document.addEventListener('change', function(ev){
     if (ev.target && (ev.target.id === 'q-transaction-type' || ev.target.id === 'q-property-type' || ev.target.id === 'q-provider-list')) {
