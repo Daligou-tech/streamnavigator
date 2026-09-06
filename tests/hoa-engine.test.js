@@ -206,6 +206,68 @@ test('attachCitations strips evidence_ids everywhere so none reach the customer'
 });
 
 // ---------------------------------------------------------------------------
+// Pinpoint quotes — model-written, so only shown if verifiably in the source
+// ---------------------------------------------------------------------------
+
+test('a pinpoint that appears in the cited evidence is kept', () => {
+  const evidence = [{
+    document_title: 'Financials.pdf', page_start: 8, page_end: 8,
+    cited_text: 'Vendor Name Invoice Date Description Amount\r\nLANDPLAN CONSULTING  02/14/2026  Land use study   22,365.62\r\n',
+  }];
+  const report = { findings: [{ concern: 'x', pinpoint: 'LANDPLAN CONSULTING  02/14/2026  Land use study   22,365.62', evidence_ids: [0] }] };
+
+  const { report: out, unverifiedPinpoints } = attachCitations(report, evidence);
+
+  assert.equal(unverifiedPinpoints, 0);
+  assert.match(out.findings[0].pinpoint, /22,365\.62/);
+});
+
+test('a pinpoint the model paraphrased or invented is discarded', () => {
+  const evidence = [{
+    document_title: 'Financials.pdf', page_start: 8, page_end: 8,
+    cited_text: 'LANDPLAN CONSULTING  02/14/2026  Land use study   22,365.62',
+  }];
+  const report = {
+    findings: [{ concern: 'x', pinpoint: 'Paid $22,365.62 to a land-use consultant from reserves', evidence_ids: [0] }],
+  };
+
+  const { report: out, unverifiedPinpoints } = attachCitations(report, evidence);
+
+  assert.equal(unverifiedPinpoints, 1);
+  assert.equal(out.findings[0].pinpoint, '', 'an unverifiable quote must not reach the customer');
+});
+
+test('pinpoint matching tolerates the whitespace a PDF ledger row carries', () => {
+  // Column padding and CRLF in the source must not reject a quote that is
+  // genuinely present — that would discard almost every real citation.
+  const evidence = [{
+    document_title: 'Financials.pdf', page_start: 3, page_end: 3,
+    cited_text: 'RESERVE   INCOME\r\n   Interest    income        4,182.19\r\n',
+  }];
+  const report = { findings: [{ concern: 'x', pinpoint: 'Interest income 4,182.19', evidence_ids: [0] }] };
+
+  const { report: out, unverifiedPinpoints } = attachCitations(report, evidence);
+
+  assert.equal(unverifiedPinpoints, 0);
+  assert.equal(out.findings[0].pinpoint, 'Interest income 4,182.19');
+});
+
+test('a pinpoint is checked only against that finding’s own evidence', () => {
+  const evidence = [
+    { document_title: 'A.pdf', page_start: 1, page_end: 1, cited_text: 'roof replacement 410,000' },
+    { document_title: 'B.pdf', page_start: 2, page_end: 2, cited_text: 'elevator modernization 95,000' },
+  ];
+  const report = {
+    findings: [{ concern: 'roof', pinpoint: 'elevator modernization 95,000', evidence_ids: [0] }],
+  };
+
+  const { report: out, unverifiedPinpoints } = attachCitations(report, evidence);
+
+  assert.equal(unverifiedPinpoints, 1, 'text from an uncited evidence item must not validate');
+  assert.equal(out.findings[0].pinpoint, '');
+});
+
+// ---------------------------------------------------------------------------
 // formatEvidenceTable
 // ---------------------------------------------------------------------------
 
@@ -368,7 +430,13 @@ test('generateHoaReport runs both passes and ships API-generated page numbers', 
       risk_score: 'High',
       findings: [
         // Index 1 is real; index 5 is invented and must be dropped.
-        { concern: 'Roof unfunded', severity: 'High', detail: 'Bids reviewed, no funding in place.', evidence_ids: [1, 5] },
+        {
+          concern: 'Roof unfunded',
+          severity: 'High',
+          detail: 'Bids reviewed, no funding in place.',
+          pinpoint: 'funding options include a special assessment',
+          evidence_ids: [1, 5],
+        },
       ],
       short_term_risk: { likelihood: 'Likely', evidence_ids: [0] },
       headline: 'Reserves are thin and a roof is due.',
@@ -405,6 +473,9 @@ test('generateHoaReport runs both passes and ships API-generated page numbers', 
   assert.equal(report.findings[0].citations[0].page_start, 4);
   assert.equal(report.findings[0].citations[0].document_title, 'Minutes.pdf');
   assert.ok(!JSON.stringify(report).includes('evidence_ids'));
+
+  // The pinpoint is genuinely inside the cited passage, so it survives.
+  assert.equal(report.findings[0].pinpoint, 'funding options include a special assessment');
 
   // Stored, marked complete, and the buyer's documents cleaned up.
   assert.equal(ctx.reportInserts.length, 1);

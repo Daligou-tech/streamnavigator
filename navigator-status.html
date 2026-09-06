@@ -36,6 +36,9 @@
 .hoa-cite{font-size:13px;line-height:1.5;border-left:2px solid rgba(31,27,22,.14);padding-left:12px;margin-top:8px;opacity:.82;}
 .hoa-cite .hoa-cite-src{display:block;font-weight:600;margin-bottom:2px;}
 .hoa-cite blockquote{margin:0;font-style:italic;}
+.hoa-cite-more{display:inline-block;margin-top:6px;padding:0;border:0;background:none;font:inherit;font-size:12px;color:inherit;opacity:.7;text-decoration:underline;cursor:pointer;}
+.hoa-cite-more:hover{opacity:1;}
+.hoa-cite-full{margin-top:8px!important;max-height:320px;overflow:auto;white-space:pre-wrap;font-style:normal!important;font-size:12px;line-height:1.45;background:rgba(31,27,22,.04);border-radius:8px;padding:10px 12px;}
 .hoa-disclaimer{font-size:12.5px;line-height:1.6;opacity:.7;margin-top:28px;}
 </style>
 </head>
@@ -244,7 +247,23 @@
   // the evidence pass — see api/_lib/hoa-engine.js — not from anything the
   // model typed into a report field. That is what lets hoa.html promise
   // "every finding cites the page it came from" honestly.
-  function citationEl(c){
+  function truncateQuote(text, limit){
+    if (text.length <= limit) return text;
+    return text.slice(0, limit).replace(/\s+\S*$/, '') + '…';
+  }
+
+  // opts.quote  — render this instead of the raw cited text (a verified
+  //               pinpoint excerpt; already checked against the source
+  //               server-side, so it is shown in full).
+  // opts.refOnly — show just the document and page, no quoted text.
+  //
+  // Citations on a financial statement come back as whole pages: the first
+  // real HOA package produced 24 citations averaging ~2,500 characters and a
+  // report 165,000 pixels tall, which no customer would read. So only the
+  // leading citation carries text, long text collapses behind a toggle, and
+  // the rest render as page references.
+  function citationEl(c, opts){
+    opts = opts || {};
     var wrap = document.createElement('div');
     wrap.className = 'hoa-cite';
 
@@ -260,12 +279,45 @@
     src.textContent = (c.document_title || 'Source document') + pages;
     wrap.appendChild(src);
 
-    if (c.cited_text) {
-      var quote = document.createElement('blockquote');
-      quote.textContent = '“' + c.cited_text + '”';
-      wrap.appendChild(quote);
+    if (opts.refOnly) return wrap;
+
+    var isPinpoint = typeof opts.quote === 'string' && opts.quote.length > 0;
+    var text = isPinpoint ? opts.quote : (c.cited_text || '');
+    if (!text) return wrap;
+
+    var shown = isPinpoint ? text : truncateQuote(text, 260);
+    var quote = document.createElement('blockquote');
+    quote.textContent = '“' + shown + '”';
+    wrap.appendChild(quote);
+
+    if (!isPinpoint && shown.length < text.length) {
+      var full = document.createElement('blockquote');
+      full.className = 'hoa-cite-full';
+      full.textContent = text;
+      full.hidden = true;
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'hoa-cite-more';
+      btn.textContent = 'Show the full page text';
+      btn.addEventListener('click', function(){
+        full.hidden = !full.hidden;
+        btn.textContent = full.hidden ? 'Show the full page text' : 'Hide the full page text';
+      });
+
+      wrap.appendChild(btn);
+      wrap.appendChild(full);
     }
     return wrap;
+  }
+
+  // Only the first citation carries quoted text; the others become page
+  // references so a finding cites everything it rests on without four pages
+  // of a ledger between the reader and the next concern.
+  function appendCitations(host, cites, pinpoint){
+    (cites || []).forEach(function(c, i){
+      host.appendChild(citationEl(c, i === 0 ? { quote: pinpoint || null } : { refOnly: true }));
+    });
   }
 
   function riskCard(windowLabel, risk){
@@ -302,7 +354,7 @@
       b.textContent = 'Basis: ' + risk.basis;
       card.appendChild(b);
     }
-    (risk.citations || []).forEach(function(c){ card.appendChild(citationEl(c)); });
+    appendCitations(card, risk.citations, null);
     return card;
   }
 
@@ -345,7 +397,7 @@
 
         var cites = f.citations || [];
         if (cites.length) {
-          cites.forEach(function(c){ el.appendChild(citationEl(c)); });
+          appendCitations(el, cites, f.pinpoint);
         } else {
           // Say so rather than letting an uncited finding read as though it
           // were sourced.

@@ -204,6 +204,7 @@ Rules for this pass:
 
 - Do not introduce any new factual claim, number, or concern that is not in the narrative. This is a formatting pass, not further analysis.
 - Every entry in "findings" must cite evidence by index using evidence_ids. Use the indices from the EVIDENCE TABLE exactly. Never invent an index, and never write a page number into any text field — page numbers are attached automatically from the evidence table.
+- Every finding also needs a "pinpoint": the one line or phrase from its cited evidence that most directly supports it. An evidence item is often a whole page of a financial statement, and a customer cannot verify a claim against a wall of text — the pinpoint is what they actually read. Copy it exactly as it appears in the evidence text. It is checked character-for-character against the source and dropped if it does not match, so do not paraphrase, do not tidy the spacing, and do not stitch together text from two different places. If no single short excerpt captures the finding, use an empty string.
 - Order findings by how much they should matter to a buyer deciding whether to waive their contingency, most important first.
 - The customer is an ordinary homebuyer, not an accountant. Write plainly. Keep the specific numbers, drop the jargon.
 - Where a field does not apply, use an empty string or an empty array. Do not invent filler.
@@ -302,8 +303,12 @@ const REPORT_TOOL = {
             severity: { type: 'string', enum: RISK_LEVELS },
             detail: { type: 'string', description: 'What was found and why it matters to this buyer. No page numbers — those attach from the evidence.' },
             evidence_ids: { type: 'array', items: { type: 'integer' } },
+            pinpoint: {
+              type: 'string',
+              description: 'The single line or phrase from the cited evidence that most directly supports this concern — the budget line, the ledger row, the sentence. Copy it EXACTLY as it appears in the evidence text, character for character; it is checked against the source and silently discarded if it does not match. Keep it under about 200 characters. Use an empty string if no single short excerpt captures it.',
+            },
           },
-          required: ['concern', 'severity', 'detail', 'evidence_ids'],
+          required: ['concern', 'severity', 'detail', 'evidence_ids', 'pinpoint'],
         },
       },
       key_numbers: {
@@ -443,8 +448,33 @@ function textOf(content) {
 // citations, dropping any index the model made up. This is what makes the
 // shipped page numbers trustworthy: they are copied out of the harvested
 // table, never read from what the model wrote.
+// Whitespace-insensitive, case-insensitive comparison. Citation text from a
+// PDF arrives with the source's own line breaks and column padding
+// ("$22,365.62" can sit inside a run of spaces in a ledger row), so an exact
+// string compare would reject quotes that are genuinely present.
+function normalizeForMatch(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function attachCitations(report, evidence) {
   let dropped = 0;
+  let unverifiedPinpoints = 0;
+
+  // A pinpoint is the model saying "this exact line is what I mean". It is
+  // model-written, so it is only allowed to reach the customer if it appears
+  // verbatim inside evidence the API itself returned. Anything that fails
+  // that check is discarded rather than shown, which keeps the same guarantee
+  // the page numbers have: nothing quoted was authored by the model.
+  function verifyPinpoint(node) {
+    if (typeof node.pinpoint !== 'string') return;
+    const needle = normalizeForMatch(node.pinpoint);
+    if (!needle) { node.pinpoint = ''; return; }
+    const haystack = (node.citations || []).map((c) => normalizeForMatch(c.cited_text)).join('   ');
+    if (!haystack.includes(needle)) {
+      node.pinpoint = '';
+      unverifiedPinpoints++;
+    }
+  }
 
   function resolve(ids) {
     const out = [];
@@ -462,12 +492,13 @@ function attachCitations(report, evidence) {
     if (Object.prototype.hasOwnProperty.call(node, 'evidence_ids')) {
       node.citations = resolve(node.evidence_ids);
       delete node.evidence_ids;
+      verifyPinpoint(node);
     }
     Object.values(node).forEach(walk);
   }
 
   walk(report);
-  return { report, droppedCitationRefs: dropped };
+  return { report, droppedCitationRefs: dropped, unverifiedPinpoints };
 }
 
 // Runs a request to completion, continuing through pause_turn (which the
@@ -646,7 +677,7 @@ async function generateHoaReport(submissionId) {
       }],
     });
 
-    const { report, droppedCitationRefs } = attachCitations(toolInput, evidence);
+    const { report, droppedCitationRefs, unverifiedPinpoints } = attachCitations(toolInput, evidence);
 
     report.evidence = evidence;
     report.generated_at = new Date().toISOString();
@@ -666,6 +697,9 @@ async function generateHoaReport(submissionId) {
 
     if (droppedCitationRefs > 0) {
       console.warn(`[hoa-engine] submission ${submissionId}: dropped ${droppedCitationRefs} invalid citation reference(s)`);
+    }
+    if (unverifiedPinpoints > 0) {
+      console.warn(`[hoa-engine] submission ${submissionId}: discarded ${unverifiedPinpoints} pinpoint quote(s) that did not appear in the cited evidence`);
     }
 
     return report;
