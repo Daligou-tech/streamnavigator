@@ -63,4 +63,32 @@ attached = [];
 restoreUploads();
 assert.equal(attached.length, 0, 'an hour-old cache must not restore');
 
-console.log('5/5 passed');
+
+// --- the answer on screen must be the answer that gets sent ----------------
+// Reported as "the questions default to Buying a home". The page has no such
+// default; browsers put the previous <select> value back on reload. That
+// restoration fires no change event, so rememberAnswers never ran and
+// savedAnswers stayed empty -- the page showed an answer the audit was never
+// told about, and every check depending on it was skipped in silence.
+
+const pageHtml = fs.readFileSync(path.join(__dirname, '..', 'closing.html'), 'utf8');
+
+for (const id of ['q-transaction-type', 'q-property-type', 'q-provider-list']) {
+  const tag = (pageHtml.match(new RegExp('<select id="' + id + '"[^>]*>')) || [''])[0];
+  assert.ok(tag, id + ' select not found');
+  assert.match(tag, /autocomplete="off"/, id + ' can still be refilled by the browser');
+}
+
+const restoreFn = (pageHtml.match(/function restoreAnswers\(\)[\s\S]*?\n  }/) || [''])[0];
+assert.ok(restoreFn, 'restoreAnswers not found');
+// The conditional form -- `if (tt && savedAnswers.transaction_type)` -- leaves a
+// stale browser value in place whenever nothing is saved, which is exactly the
+// case that misled the customer.
+assert.equal(/&&\s*savedAnswers\./.test(restoreFn), false,
+  'restoreAnswers only assigns when something is saved; a stale value survives');
+for (const key of ['property_type', 'provider_list', 'transaction_type']) {
+  assert.ok(new RegExp('savedAnswers\\.' + key + "\\s*\\|\\|\\s*''").test(restoreFn),
+    key + ' is not reset to the empty choice when nothing is saved');
+}
+
+console.log('7/7 passed');
