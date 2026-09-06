@@ -20,6 +20,23 @@
 .fix-row input{width:140px;padding:8px 10px;border:1px solid #D8D2C4;border-radius:8px;font:inherit;}
 .fixups-note{font-size:12px;opacity:.75;margin-top:10px;}
 #fixups-status{font-size:13px;margin-top:8px;}
+/* HOA Navigator report extras. Scoped here rather than in
+   navigator-shared.css, which twelve other product pages depend on. */
+.hoa-risk-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));}
+.hoa-risk-card{border:1px solid rgba(31,27,22,.14);border-radius:14px;padding:16px 18px;}
+.hoa-risk-card .hoa-window{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.62;}
+.hoa-risk-card .hoa-likelihood{font-family:'Sora',sans-serif;font-weight:700;font-size:20px;margin:6px 0 8px;}
+.hoa-risk-card .hoa-range{font-weight:600;margin-bottom:6px;}
+.hoa-risk-card p{margin:0;font-size:14px;line-height:1.55;}
+.hoa-finding{border-left:3px solid rgba(31,27,22,.18);padding:2px 0 2px 16px;margin-bottom:20px;}
+.hoa-finding.sev-High,.hoa-finding.sev-Critical{border-left-color:#b4442b;}
+.hoa-finding h4{margin:0 0 6px;font-family:'Sora',sans-serif;font-size:17px;}
+.hoa-finding .hoa-sev{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.62;margin-left:8px;}
+.hoa-finding p{margin:0 0 10px;line-height:1.6;}
+.hoa-cite{font-size:13px;line-height:1.5;border-left:2px solid rgba(31,27,22,.14);padding-left:12px;margin-top:8px;opacity:.82;}
+.hoa-cite .hoa-cite-src{display:block;font-weight:600;margin-bottom:2px;}
+.hoa-cite blockquote{margin:0;font-style:italic;}
+.hoa-disclaimer{font-size:12.5px;line-height:1.6;opacity:.7;margin-top:28px;}
 </style>
 </head>
 <body>
@@ -59,6 +76,20 @@
           <div id="numbers-grid" class="report-numbers-grid"></div>
         </div>
 
+        <!-- HOA Navigator only. Populated by renderHoaExtras() when the
+             report carries the HOA-specific fields; stays hidden for every
+             other product, which renders through the generic path below
+             unchanged. -->
+        <div id="hoa-risk-block" class="report-block" hidden>
+          <h3>⚖️ Special-assessment risk</h3>
+          <div id="hoa-risk-grid" class="hoa-risk-grid"></div>
+        </div>
+
+        <div id="hoa-findings-block" class="report-block" hidden>
+          <h3>🔍 Top concerns, with the pages they came from</h3>
+          <div id="hoa-findings"></div>
+        </div>
+
         <div id="report-sections"></div>
 
         <div id="uncertain-block" class="report-block" hidden>
@@ -94,6 +125,8 @@
           </div>
           <p id="pdf-status-msg" style="margin-top:10px;"></p>
         </div>
+
+        <p class="hoa-disclaimer" id="report-disclaimer" hidden></p>
       </div>
     </div>
   </section>
@@ -206,6 +239,128 @@
   // missing_or_uncertain / optional closing block) — used by all 11
   // Navigator products except Contractor, which has its own richer
   // dedicated page at /contractor-report.html.
+  // Renders one API-verified citation. The page range and quoted text come
+  // from the citation the Claude API attached to the source document during
+  // the evidence pass — see api/_lib/hoa-engine.js — not from anything the
+  // model typed into a report field. That is what lets hoa.html promise
+  // "every finding cites the page it came from" honestly.
+  function citationEl(c){
+    var wrap = document.createElement('div');
+    wrap.className = 'hoa-cite';
+
+    var pages = '';
+    if (c.page_start) {
+      pages = (c.page_end && c.page_end !== c.page_start)
+        ? ' — pp. ' + c.page_start + '-' + c.page_end
+        : ' — p. ' + c.page_start;
+    }
+
+    var src = document.createElement('span');
+    src.className = 'hoa-cite-src';
+    src.textContent = (c.document_title || 'Source document') + pages;
+    wrap.appendChild(src);
+
+    if (c.cited_text) {
+      var quote = document.createElement('blockquote');
+      quote.textContent = '“' + c.cited_text + '”';
+      wrap.appendChild(quote);
+    }
+    return wrap;
+  }
+
+  function riskCard(windowLabel, risk){
+    var card = document.createElement('div');
+    card.className = 'hoa-risk-card';
+
+    var w = document.createElement('div');
+    w.className = 'hoa-window';
+    w.textContent = windowLabel;
+    card.appendChild(w);
+
+    var l = document.createElement('div');
+    l.className = 'hoa-likelihood';
+    l.textContent = risk.likelihood || 'Cannot assess';
+    card.appendChild(l);
+
+    var low = risk.estimated_per_unit_low, high = risk.estimated_per_unit_high;
+    if (low || high) {
+      var r = document.createElement('div');
+      r.className = 'hoa-range';
+      r.textContent = (low && high) ? (low + ' – ' + high + ' per unit (estimate)') : ((low || high) + ' per unit (estimate)');
+      card.appendChild(r);
+    }
+
+    if (risk.rationale) {
+      var p = document.createElement('p');
+      p.textContent = risk.rationale;
+      card.appendChild(p);
+    }
+    if (risk.basis) {
+      var b = document.createElement('p');
+      b.style.marginTop = '8px';
+      b.style.opacity = '.72';
+      b.textContent = 'Basis: ' + risk.basis;
+      card.appendChild(b);
+    }
+    (risk.citations || []).forEach(function(c){ card.appendChild(citationEl(c)); });
+    return card;
+  }
+
+  // HOA-specific progressive enhancement. Reports from every other product
+  // have no risk_score and skip this entirely.
+  function renderHoaExtras(report){
+    if (!report || !report.risk_score) return;
+
+    var riskBlock = document.getElementById('hoa-risk-block');
+    var grid = document.getElementById('hoa-risk-grid');
+    grid.innerHTML = '';
+    if (report.short_term_risk) grid.appendChild(riskCard('Next 12 months', report.short_term_risk));
+    if (report.mid_term_risk) grid.appendChild(riskCard('1 – 5 years', report.mid_term_risk));
+    if (grid.children.length) riskBlock.hidden = false;
+
+    var findings = report.findings || [];
+    if (findings.length) {
+      var findingsBlock = document.getElementById('hoa-findings-block');
+      var host = document.getElementById('hoa-findings');
+      host.innerHTML = '';
+      findings.forEach(function(f){
+        var el = document.createElement('div');
+        el.className = 'hoa-finding sev-' + (f.severity || 'Low');
+
+        var h4 = document.createElement('h4');
+        h4.textContent = f.concern || '';
+        if (f.severity) {
+          var sev = document.createElement('span');
+          sev.className = 'hoa-sev';
+          sev.textContent = f.severity;
+          h4.appendChild(sev);
+        }
+        el.appendChild(h4);
+
+        if (f.detail) {
+          var p = document.createElement('p');
+          p.textContent = f.detail;
+          el.appendChild(p);
+        }
+
+        var cites = f.citations || [];
+        if (cites.length) {
+          cites.forEach(function(c){ el.appendChild(citationEl(c)); });
+        } else {
+          // Say so rather than letting an uncited finding read as though it
+          // were sourced.
+          var none = document.createElement('div');
+          none.className = 'hoa-cite';
+          none.textContent = 'No page citation available for this finding — verify it against the documents yourself.';
+          el.appendChild(none);
+        }
+
+        host.appendChild(el);
+      });
+      findingsBlock.hidden = false;
+    }
+  }
+
   function renderGenericReport(report){
     document.getElementById('report-headline').textContent = report.headline || 'Your report';
     document.getElementById('report-summary').textContent = report.summary || '';
@@ -232,6 +387,8 @@
         grid.appendChild(card);
       });
     }
+
+    renderHoaExtras(report);
 
     var sectionsEl = document.getElementById('report-sections');
     sectionsEl.innerHTML = '';
@@ -271,6 +428,12 @@
     }
 
     document.getElementById('pdf-block').hidden = false;
+
+    if (report.disclaimer) {
+      var disc = document.getElementById('report-disclaimer');
+      disc.textContent = report.disclaimer;
+      disc.hidden = false;
+    }
 
     stopWaitingMessages();
     waitingView.hidden = true;

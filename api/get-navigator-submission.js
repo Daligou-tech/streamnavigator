@@ -15,6 +15,12 @@ const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateContractorReport } = require('./_lib/contractor-engine');
 const { generateNavigatorReport, PRODUCT_CONFIGS } = require('./_lib/navigator-engine');
 const { generatePurchaseReport } = require('./_lib/purchase-engine');
+// HOA has been lifted out of the shared generic engine into its own
+// two-pass, citation-verified pipeline — see api/_lib/hoa-engine.js for
+// why. It still stores into navigator_reports and still renders through
+// navigator-status.html, so the fetch path below is unchanged; only
+// generation is routed differently.
+const { generateHoaReport } = require('./_lib/hoa-engine');
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -58,7 +64,16 @@ module.exports = async function handler(req, res) {
   // customer's page polling a status that will never change. Kept a bit
   // above the actual maxDuration so an attempt still legitimately finishing
   // right at the wire isn't raced.
-  const STUCK_PROCESSING_MS = 320 * 1000;
+  //
+  // Raised from 320s to 820s on 2026-09-05 alongside this function's
+  // maxDuration going 300 -> 800 in vercel.json, which HOA Navigator's
+  // two-pass analysis needs. The threshold has to stay above the platform
+  // limit or the invariant inverts: at 320s a buying attempt that is still
+  // legitimately running would be judged abandoned and re-triggered
+  // concurrently with itself. The cost is that a genuinely stuck buying
+  // submission now waits longer for this inline recovery — acceptable
+  // because api/retry-failed-buying.js sweeps every 15 minutes anyway.
+  const STUCK_PROCESSING_MS = 820 * 1000;
   const isStuckProcessing = submission.product === 'buying'
     && submission.status === 'processing'
     && submission.updated_at
@@ -86,6 +101,17 @@ module.exports = async function handler(req, res) {
     } catch (err) {
       // Swallow — status is now 'failed' with an error message via
       // purchase-engine's own catch block, reported back below.
+    }
+  } else if (submission.product === 'hoa' && submission.status === 'paid') {
+    // Same lazy-trigger pattern, routed to the dedicated HOA engine. Note
+    // this runs two Opus 5 passes over the uploaded documents inside this
+    // request, which is why this function's maxDuration in vercel.json is
+    // set well above the 300s the other products need.
+    try {
+      await generateHoaReport(submission.id);
+    } catch (err) {
+      // Swallow — status is now 'failed' with an error message via
+      // hoa-engine's own catch block, reported back below.
     }
   } else if (PRODUCT_CONFIGS[submission.product] && submission.status === 'paid') {
     // Same lazy-trigger pattern as Contractor Navigator, generalized to the

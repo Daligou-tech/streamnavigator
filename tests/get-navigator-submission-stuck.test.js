@@ -100,7 +100,12 @@ function isoSecondsAgo(seconds) {
 test('a buying submission stuck at "processing" past the stuck threshold triggers another generation attempt', async (t) => {
   const submission = {
     id: 'sub-stuck', product: 'buying', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(500), updated_at: isoSecondsAgo(400), generation_attempts: 1,
+    // Ages track STUCK_PROCESSING_MS in api/get-navigator-submission.js,
+    // raised 320s -> 820s on 2026-09-05 when that function's maxDuration
+    // went 300 -> 800 for HOA Navigator's two-pass analysis. The threshold
+    // has to stay above the platform limit, so these fixtures moved with
+    // it; the behaviour under test is unchanged.
+    error: null, created_at: isoSecondsAgo(1000), updated_at: isoSecondsAgo(900), generation_attempts: 1,
   };
   const { generateCalls } = installFakes({ submission });
   t.after(uninstallFakes);
@@ -161,7 +166,8 @@ test('a non-buying product stuck at "processing" is left alone by this check (sc
 test('the handler responds 200 even when the recovered generation attempt itself throws (error already recorded by purchase-engine)', async (t) => {
   const submission = {
     id: 'sub-stuck-2', product: 'buying', status: 'processing', access_token: 'tok',
-    error: null, created_at: isoSecondsAgo(500), updated_at: isoSecondsAgo(400), generation_attempts: 2,
+    // Also tracks STUCK_PROCESSING_MS — see the note on the fixture above.
+    error: null, created_at: isoSecondsAgo(1000), updated_at: isoSecondsAgo(900), generation_attempts: 2,
   };
   const { generateCalls } = installFakes({ submission, generateShouldThrow: true });
   t.after(uninstallFakes);
