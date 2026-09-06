@@ -84,7 +84,25 @@ const MAX_TOTAL_BYTES = Math.floor(
 const MAX_FILE_BYTES = MAX_TOTAL_BYTES; // one document may use the whole budget
 const asMB = (b) => Math.round((b / (1024 * 1024)) * 10) / 10;
 
-function wireUploadZone(zoneEl, inputEl, listEl) {
+// The limits above apply only to pages that still post base64 through a Vercel
+// function — today that is closing.html, which uploads to
+// /api/closing-scorecard. Every page that submits through
+// submitNavigatorIntake now PUTs files straight to Supabase Storage with a
+// signed URL, so the request-body cap does not apply and these much larger
+// ceilings do. Keep in step with api/_lib/upload-limits.js.
+//
+// This is what makes HOA Navigator work as sold: a reserve study runs 5-20MB
+// and could not previously be uploaded at all.
+const DIRECT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+const DIRECT_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
+
+// opts.maxFileBytes / opts.maxTotalBytes let a page that still uses the legacy
+// base64 route keep the smaller ceiling. Defaults are the direct-upload
+// limits, because that is now the common case.
+function wireUploadZone(zoneEl, inputEl, listEl, opts) {
+  opts = opts || {};
+  const maxFileBytes = opts.maxFileBytes || DIRECT_MAX_FILE_BYTES;
+  const maxTotalBytes = opts.maxTotalBytes || DIRECT_MAX_TOTAL_BYTES;
   const selected = [];
   function render() {
     listEl.innerHTML = '';
@@ -105,16 +123,16 @@ function wireUploadZone(zoneEl, inputEl, listEl) {
   function addFiles(fileList) {
     for (const f of fileList) {
       if (selected.length >= MAX_FILES) { showToast(`You can attach up to ${MAX_FILES} files.`); break; }
-      if (f.size > MAX_FILE_BYTES) {
-        showToast(`${f.name} is ${asMB(f.size)}MB — the limit is ${asMB(MAX_FILE_BYTES)}MB. Try the original PDF from your lender rather than a photo, or scan in black and white.`);
+      if (f.size > maxFileBytes) {
+        showToast(`${f.name} is ${asMB(f.size)}MB — the limit is ${asMB(maxFileBytes)}MB. Try the original PDF rather than a photo of it, or scan in black and white.`);
         continue;
       }
       // Checked against the running total, not just per file. Without this the
-      // browser accepts the files, spends time base64-encoding them, and the
-      // request dies at the edge with an error the customer cannot act on.
+      // browser accepts the files, spends time uploading them, and the
+      // submission dies with an error the customer cannot act on.
       const used = selected.reduce((n, x) => n + x.size, 0);
-      if (used + f.size > MAX_TOTAL_BYTES) {
-        showToast(`Adding ${f.name} would take you over the ${asMB(MAX_TOTAL_BYTES)}MB total. Remove a file, or upload the Closing Disclosure now and add the rest afterwards.`);
+      if (used + f.size > maxTotalBytes) {
+        showToast(`Adding ${f.name} would take you over the ${asMB(maxTotalBytes)}MB total. Remove a file, or send the most important documents now and add the rest afterwards.`);
         continue;
       }
       selected.push(f);
@@ -134,15 +152,70 @@ function wireUploadZone(zoneEl, inputEl, listEl) {
 }
 
 // ---------- Intake + payment handoff ----------
-async function submitNavigatorIntake({ product, email, formData, files }) {
-  const encoded = [];
-  for (const f of (files || [])) {
-    encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+
+// Asks the server for a signed URL and PUTs the file straight to Supabase
+// Storage. The file never passes through a Vercel function, which is what
+// lifts the old ~3.17MB ceiling on an entire submission.
+async function uploadFileDirect(product, file) {
+  const resp = await fetch('/api/navigator-upload-url', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      product,
+      filename: file.name,
+      contentType: file.type || '',
+      size: file.size,
+    }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || !data.ok || !data.signedUrl) {
+    throw new Error(data.error || `Could not start the upload for ${file.name}.`);
   }
+
+  const put = await fetch(data.signedUrl, {
+    method: 'PUT',
+    headers: { 'content-type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  if (!put.ok) throw new Error(`Upload of ${file.name} did not complete. Please try again.`);
+
+  return data.path;
+}
+
+// onProgress({ done, total, name }) is optional — pass it to show which file
+// is uploading, which matters now that a submission can legitimately be tens
+// of megabytes rather than three.
+async function submitNavigatorIntake({ product, email, formData, files, onProgress }) {
+  const list = Array.from(files || []);
+  let uploadedPaths = [];
+  let encoded = [];
+
+  try {
+    for (let i = 0; i < list.length; i++) {
+      if (onProgress) onProgress({ done: i, total: list.length, name: list[i].name });
+      uploadedPaths.push(await uploadFileDirect(product, list[i]));
+    }
+    if (onProgress && list.length) onProgress({ done: list.length, total: list.length, name: '' });
+  } catch (directErr) {
+    // Fall back to the legacy base64 route so a customer is not blocked by a
+    // problem with the signed-URL endpoint — but only when everything would
+    // actually fit through it. Above that the legacy route dies at Vercel's
+    // edge with a 413 no error message can explain, so the honest outcome is
+    // the upload error itself.
+    const totalBytes = list.reduce((n, f) => n + f.size, 0);
+    if (totalBytes > MAX_TOTAL_BYTES) throw directErr;
+
+    uploadedPaths = [];
+    encoded = [];
+    for (const f of list) {
+      encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+    }
+  }
+
   const resp = await fetch('/api/navigator-intake', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ product, email, formData, files: encoded }),
+    body: JSON.stringify({ product, email, formData, files: encoded, uploadedPaths }),
   });
   const data = await resp.json();
   if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong saving your submission.');

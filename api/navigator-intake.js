@@ -20,24 +20,33 @@
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 
-// Raised from 4: a full closing file is the CD, the purchase contract, and the
-// complete Loan Estimate sequence. NOTE: MAX_TOTAL_BYTES below still caps the
-// whole request at 9MB, so this ceiling is not yet reachable in practice — see
-// the direct-upload note in the handover.
-// Uploads arrive base64-encoded in a JSON body. Vercel caps a function request
-// body at 4.5MB and returns 413 FUNCTION_PAYLOAD_TOO_LARGE above it — at the
-// edge, before this handler runs, so the friendly errors below never fire for
-// an oversized request. base64 inflates bytes by 4/3, so the real ceiling on
-// raw file bytes is ~3.2MB. The previous 6MB/9MB values were unreachable: a
-// single 5MB scan died with a generic client-side error and no retry could fix
-// it. Keep in step with navigator-shared.js.
-const VERCEL_BODY_LIMIT_BYTES = 4.5 * 1024 * 1024;
-const BASE64_INFLATION = 4 / 3;
-const JSON_ENVELOPE_MARGIN = 0.94;
-const MAX_TOTAL_BYTES = Math.floor((VERCEL_BODY_LIMIT_BYTES / BASE64_INFLATION) * JSON_ENVELOPE_MARGIN);
-const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
-const MAX_TOTAL_MB = Math.round((MAX_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
-const MAX_FILES = 12;
+// Two upload routes reach this handler, and both are supported on purpose.
+//
+//   body.uploadedPaths — the current route. The browser already PUT each file
+//     straight to Supabase Storage using a signed URL from
+//     /api/navigator-upload-url, and sends only the resulting staging paths.
+//     Nothing large passes through this function, so the Vercel body limit
+//     does not apply and files may be up to 25MB each.
+//
+//   body.files — the legacy base64 route, kept because a browser holding a
+//     cached navigator-shared.js will keep using it. Those requests are still
+//     bounded by Vercel's 4.5MB body cap (~3.17MB of real bytes after base64
+//     inflation), enforced below.
+//
+// Limits live in api/_lib/upload-limits.js rather than being restated here;
+// three separate copies of these constants is what let the product pages
+// advertise 24MB against a real ceiling of 3.17MB for months.
+const {
+  MAX_TOTAL_BYTES,
+  MAX_FILE_BYTES,
+  MAX_DIRECT_FILE_BYTES,
+  MAX_DIRECT_TOTAL_BYTES,
+  MAX_FILES,
+  isStagingPath,
+  asMB,
+} = require('./_lib/upload-limits');
+
+const MAX_TOTAL_MB = asMB(MAX_TOTAL_BYTES);
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -65,6 +74,19 @@ module.exports = async function handler(req, res) {
 
   const formData = (body.formData && typeof body.formData === 'object') ? body.formData : {};
   const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES) : [];
+  const uploadedPaths = Array.isArray(body.uploadedPaths)
+    ? body.uploadedPaths.filter((p) => typeof p === 'string').slice(0, MAX_FILES)
+    : [];
+
+  // Only paths this server issued may be claimed. Without this check a caller
+  // could name any key in the bucket — including another customer's completed
+  // submission — and have it copied onto their own row.
+  if (uploadedPaths.some((p) => !isStagingPath(p))) {
+    res.status(400).json({ ok: false, error: 'One of those uploads could not be verified. Please re-attach your files.' });
+    return;
+  }
+
+  const attachmentCount = files.length + uploadedPaths.length;
 
   // Purchase Navigator gets a stricter, structured sufficiency gate instead
   // of the generic D-04 check below: a non-empty description was letting
@@ -93,7 +115,7 @@ module.exports = async function handler(req, res) {
     // client-side in each product page) so it can't be bypassed by calling
     // this endpoint directly.
     const description = typeof formData.description === 'string' ? formData.description.trim() : '';
-    if (!description && files.length === 0) {
+    if (!description && attachmentCount === 0) {
       res.status(400).json({ ok: false, error: 'Please provide a description (or address, situation, etc.) or upload at least one file so we have something to generate your report from.' });
       return;
     }
@@ -147,6 +169,41 @@ module.exports = async function handler(req, res) {
     // A single failed file upload shouldn't sink the whole submission —
     // the customer already has a confirmed record; a missing attachment
     // is something a human can follow up on if needed.
+  }
+
+  // Claim files the browser already uploaded directly to Storage. Sizes are
+  // re-read from the bucket rather than trusted from the request: the size
+  // checked when the signed URL was issued was whatever the client claimed,
+  // and the object is the only authority on what was actually written.
+  let directBytes = 0;
+  for (const stagedPath of uploadedPaths) {
+    const lastSlash = stagedPath.lastIndexOf('/');
+    const folder = stagedPath.slice(0, lastSlash);
+    const objectName = stagedPath.slice(lastSlash + 1);
+
+    const { data: matches } = await admin.storage
+      .from('navigator-uploads')
+      .list(folder, { limit: 100, search: objectName });
+
+    const entry = Array.isArray(matches) ? matches.find((m) => m.name === objectName) : null;
+    if (!entry) continue; // never uploaded, already claimed, or already swept
+
+    const size = Number(entry.metadata && entry.metadata.size) || 0;
+    if (size > MAX_DIRECT_FILE_BYTES) continue;
+    if (directBytes + size > MAX_DIRECT_TOTAL_BYTES) break;
+    directBytes += size;
+
+    // The staging name is "<uuid>__<already sanitized original name>"; keep
+    // the readable half so citations in the report name the document rather
+    // than a UUID.
+    const originalName = objectName.split('__').slice(1).join('__') || objectName;
+    const destination = `${product}/${submission.id}/${Date.now()}-${originalName}`;
+
+    const { error: moveError } = await admin.storage
+      .from('navigator-uploads')
+      .move(stagedPath, destination);
+
+    if (!moveError) filePaths.push(destination);
   }
 
   if (filePaths.length) {

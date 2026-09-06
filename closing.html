@@ -635,7 +635,16 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     return;
   }
 
-  const uploader = wireUploadZone(zone, input, list);
+  // Closing still posts its files base64-encoded to /api/closing-scorecard,
+  // so it keeps the smaller ceiling Vercel's 4.5MB request-body cap imposes.
+  // wireUploadZone now defaults to the much larger direct-upload limits used
+  // by every page that submits through submitNavigatorIntake; without these
+  // explicit values a customer could attach 25MB here and the request would
+  // die at the edge with a 413 no message can explain.
+  const uploader = wireUploadZone(zone, input, list, {
+    maxFileBytes: MAX_FILE_BYTES,
+    maxTotalBytes: MAX_TOTAL_BYTES,
+  });
 
   // Roughly 3.5MB of base64. Chrome and Firefox allow about 5MB per origin and
   // the scorecard payload shares that budget, so anything larger is skipped

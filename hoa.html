@@ -131,11 +131,11 @@
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG or PNG &middot; 3MB total across all files</div>
+            <div class="upload-sub">PDF, JPG or PNG &middot; up to 25MB per file, 50MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">The reserve study and the budget carry the most signal, then recent meeting minutes. If your documents will not fit in 3MB, send those first — the report tells you what was missing and what to request.</p>
+          <p class="field-hint">The reserve study and the budget carry the most signal, then recent meeting minutes. Send the whole package if you have it — anything missing is flagged in the report so you know what to request.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
@@ -255,6 +255,14 @@
         email: email,
         formData: { description: descEl.value.trim() },
         files: files,
+        // A full HOA package can now be tens of megabytes, so a button that
+        // just says "Saving…" for a minute looks broken. Name the file being
+        // sent instead.
+        onProgress: function(p){
+          btn.textContent = p.done >= p.total
+            ? 'Saving your submission…'
+            : `Uploading ${p.done + 1} of ${p.total}: ${p.name}`;
+        },
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'hoa' }, email);
     } catch (err) {
