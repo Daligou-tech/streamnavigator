@@ -934,7 +934,11 @@ async function advanceHoaJob(submissionId) {
       await sendFailureAlert({
         submissionId,
         product: 'hoa',
-        error: `PAUSED — the Anthropic account cannot be billed, so this report is waiting rather than failing. It resumes on its own once credit is restored. ${message}`,
+        error: `The Anthropic account cannot be billed: ${message}`,
+        // The alert's subject, opening line and closing all change on this —
+        // an operator told a paid report "failed" goes and refunds someone
+        // whose report is still coming.
+        paused: true,
       });
       throw err;
     }
@@ -965,9 +969,11 @@ async function advanceHoaJob(submissionId) {
       await sendFailureAlert({
         submissionId,
         product: 'hoa',
-        error: submission.stripe_checkout_session_id
-          ? `${message}\n\nThis submission was paid for and has been marked refund_state='due'.`
-          : message,
+        error: message,
+        // Only when a payment actually exists to return. A free scorecard row
+        // has no checkout session, so nothing was queued and the alert must
+        // not claim otherwise.
+        refundQueued: patch.refund_state === 'due',
       });
     }
 
