@@ -99,10 +99,50 @@ const DIRECT_MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 // opts.maxFileBytes / opts.maxTotalBytes let a page that still uses the legacy
 // base64 route keep the smaller ceiling. Defaults are the direct-upload
 // limits, because that is now the common case.
+// Extensions the analysis engines can actually read. Derived from the input's
+// own `accept` attribute where there is one, so a page that changes what it
+// accepts does not have to remember to change this too.
+//
+// The `accept` attribute alone is not enough. It filters the operating
+// system's file picker and NOTHING else: it does not apply to drag-and-drop,
+// and every upload zone on the site says "or drag files here". A dragged .docx
+// was accepted into the list, uploaded, and failed minutes later with an error
+// about our document reader being unavailable.
+const DEFAULT_ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+
+function acceptedExtensionsFor(inputEl) {
+  const attr = (inputEl && inputEl.getAttribute('accept')) || '';
+  const fromAttr = attr
+    .split(',')
+    .map((s) => s.trim().replace(/^\./, '').toLowerCase())
+    .filter((s) => s && s.indexOf('/') === -1);
+  return fromAttr.length ? fromAttr : DEFAULT_ACCEPTED_EXTENSIONS.slice();
+}
+
+function extensionOf(name) {
+  const parts = String(name || '').toLowerCase().split('.');
+  return parts.length > 1 ? parts.pop() : '';
+}
+
+// HEIC gets its own sentence. It is what an iPhone camera produces by default,
+// this page invites photographing a document, and "unsupported file type" tells
+// someone nothing about a format they never chose.
+function unsupportedReason(ext, accepted) {
+  if (ext === 'heic' || ext === 'heif') {
+    return 'iPhone photos are saved as HEIC, which we cannot read. Open the photo, tap Share, '
+      + 'then Copy Photo and paste it into an email to yourself to get a JPEG — or ask your '
+      + 'lender for the original PDF, which works best.';
+  }
+  const label = accepted.map((e) => e.toUpperCase()).join(', ');
+  return (ext ? 'a .' + ext + ' file' : 'that file type') + ' is not something we can read. '
+    + 'Please upload ' + label + '.';
+}
+
 function wireUploadZone(zoneEl, inputEl, listEl, opts) {
   opts = opts || {};
   const maxFileBytes = opts.maxFileBytes || DIRECT_MAX_FILE_BYTES;
   const maxTotalBytes = opts.maxTotalBytes || DIRECT_MAX_TOTAL_BYTES;
+  const accepted = opts.acceptedExtensions || acceptedExtensionsFor(inputEl);
   const selected = [];
   // Files the browser refused, kept on screen with the reason.
   //
@@ -179,6 +219,13 @@ function wireUploadZone(zoneEl, inputEl, listEl, opts) {
     for (const f of fileList) {
       if (selected.length >= MAX_FILES) {
         reject(f.name, `you can attach up to ${MAX_FILES} files`);
+        continue;
+      }
+      // Type before size: a HEIC photo is usually also small, and being told
+      // "the limit is 3.2MB" about a 900KB file would be nonsense.
+      const ext = extensionOf(f.name);
+      if (accepted.indexOf(ext) === -1) {
+        reject(f.name, unsupportedReason(ext, accepted));
         continue;
       }
       if (f.size > maxFileBytes) {

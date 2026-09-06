@@ -55,6 +55,80 @@ test('a wrong day count is caught and the implied days reverse-solved', () => {
   assert.equal(f.askLender, true);
 });
 
+// A day count printed on the Section F line is the lender's claim, not a fact.
+//
+// This check used to take `daysCharged` at face value and only verify the
+// multiplication, which meant it could not fail in practice: every real Closing
+// Disclosure prints its own day count ("$53.42 per day from 04/15 to 05/07"),
+// and lender software multiplies correctly. A 22-day charge on a loan closing
+// 15 April reconciled, and the customer was told prepaid interest was correct —
+// while the sample report on the marketing page advertised catching exactly
+// that. The arithmetic still has to hold; so does the day count.
+test('a stated day count longer than the closing date supports is caught', () => {
+  // 300,000 at 6.5% = 53.4247/day. Closing 15 April leaves 16 days to month
+  // end, but the line bills 22 — and 22 x 53.4247 = 1175.34, so it "reconciles".
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 1175.24, daysCharged: 22,
+  });
+  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
+  assert.equal(f.actionability, Actionability.CHANGEABLE_BEFORE_CLOSING);
+  assert.equal(f.detail.supportedDays, 16);
+  assert.equal(f.detail.excessDays, 6);
+  assert.equal(f.dollarImpact, 320.45);
+  assert.equal(f.askLender, true);
+  // A deferred first payment is a real and legitimate reason for a longer
+  // period, so this must read as a question, not an accusation.
+  assert.match(f.whyItMatters, /not automatically\s+wrong|deferred/);
+});
+
+test('a stated day count that matches the closing date still reconciles', () => {
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 53.4247 * 16, daysCharged: 16,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
+// Lenders differ on whether the disbursement day and the first of the following
+// month are counted. One day either way is convention, not an overcharge, and
+// flagging it would put a wrong number in a customer's mouth in front of the
+// person about to fund their house.
+test('one day over the supported count is treated as convention, not overcharge', () => {
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 53.4247 * 17, daysCharged: 17,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
+test('two days over is flagged', () => {
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 53.4247 * 18, daysCharged: 18,
+  });
+  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
+  assert.equal(f.detail.excessDays, 2);
+});
+
+test('fewer days than supported is in the customer favour and is not nagged about', () => {
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 53.4247 * 10, daysCharged: 10,
+  });
+  assert.equal(f.severity, Severity.WITHIN_NORMS);
+});
+
+// The stated count does not rescue arithmetic that does not work: a line that
+// neither multiplies out NOR matches the closing date is still a math error.
+test('a stated day count does not excuse a charge that does not multiply out', () => {
+  const f = checkPrepaidInterest({
+    loanAmount: 300000, annualRatePct: 6.5, closingDate: '2026-04-15',
+    chargedAmount: 1500, daysCharged: 22,
+  });
+  assert.equal(f.severity, Severity.CONFIRMED_MATH_ERROR);
+});
+
 // --- escrow -----------------------------------------------------------------
 
 test('escrow cushion exactly at the RESPA cap passes', () => {

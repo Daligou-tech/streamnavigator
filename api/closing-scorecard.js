@@ -54,14 +54,48 @@ const TIERS_BASIC = { id: 'basic', price_cents: 5900, price_label: '$59' };
 // Contract terms read below this confidence are discarded, not used.
 const CONTRACT_CONF_THRESHOLD = 0.85;
 
+// The media types the model can actually read. Anything else has to be turned
+// away HERE, by name, with something the customer can act on.
+//
+// This used to end in `return 'image/jpeg'`, so a .docx was sent to the API
+// labelled as a JPEG and a .heic was sent as image/heic, which the API does not
+// accept either. Both came back as a 400, and a 400 was classed as our fault
+// (see the extraction catch below), so the customer was told "this is on our
+// side, not your document -- try again in a few minutes". Retrying an iPhone
+// photo produces the same 400 forever, and HEIC is what an iPhone camera
+// produces by default on a page that invites photographing the document.
+const SUPPORTED_MEDIA_TYPES = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+};
+
+function fileExtension(filename) {
+  const parts = String(filename).toLowerCase().split('.');
+  return parts.length > 1 ? parts.pop() : '';
+}
+
 function guessMediaType(filename) {
-  const ext = String(filename).toLowerCase().split('.').pop();
-  if (ext === 'pdf') return 'application/pdf';
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  if (ext === 'gif') return 'image/gif';
-  if (ext === 'heic' || ext === 'heif') return 'image/heic';
-  return 'image/jpeg';
+  return SUPPORTED_MEDIA_TYPES[fileExtension(filename)] || null;
+}
+
+// Names the offending file and says what to do about it. HEIC gets its own
+// wording because it is the common case and because "convert your file" is
+// useless advice to someone who does not know their phone chose the format.
+function unsupportedFileMessage(filename) {
+  const ext = fileExtension(filename);
+  const name = String(filename).slice(0, 120);
+  if (ext === 'heic' || ext === 'heif') {
+    return `${name} is an iPhone HEIC photo, which we cannot read. On your iPhone open the photo, `
+      + 'tap Share, choose Copy Photo, and paste it into an email to yourself — that converts it to '
+      + 'JPEG. Or set Settings ▸ Camera ▸ Formats to "Most Compatible" and retake it. Best of all, '
+      + 'ask your lender for the original PDF.';
+  }
+  return `${name} is a ${ext ? '.' + ext + ' file' : 'file type'} we cannot read. Please upload a `
+    + 'PDF, JPG, PNG or WEBP — the original PDF from your lender works best.';
 }
 
 module.exports = async (req, res) => {
@@ -98,6 +132,13 @@ module.exports = async (req, res) => {
   for (const f of files) {
     if (!f || typeof f.dataBase64 !== 'string' || !f.name) {
       res.status(400).json({ ok: false, error: 'Malformed file upload.' });
+      return;
+    }
+    // Turned away here, before the row is inserted and before a single token is
+    // spent. The alternative is a 400 from the API twenty-five seconds later,
+    // dressed up as an outage the customer is invited to wait out.
+    if (!guessMediaType(f.name)) {
+      res.status(400).json({ ok: false, error: unsupportedFileMessage(f.name) });
       return;
     }
     const approxBytes = Math.ceil((f.dataBase64.length * 3) / 4);
@@ -211,13 +252,26 @@ module.exports = async (req, res) => {
     // again, and concludes the product does not work. The extractor puts the
     // HTTP status in the message, so tell them the truth about whose problem
     // it is.
-    // ANY HTTP status back from the API is our problem, 400 included. A 400
+    // Nearly any HTTP status back from the API is our problem. A 400 usually
     // means we sent a malformed request — which is precisely what `temperature:
     // 0` was, and for forty minutes it told customers holding perfect PDFs to
-    // go and find a better scan. Only a failure with no HTTP status at all
-    // (the model returned no tool call) is plausibly about the document.
+    // go and find a better scan.
+    //
+    // But not EVERY 400. A 400 that names the image or document is the API
+    // telling us the bytes the customer sent cannot be decoded: a corrupt PDF,
+    // a truncated scan, a file whose extension lies about its contents.
+    // Sweeping those into "temporarily unavailable, try again in a few minutes"
+    // sends the customer round a loop that cannot terminate — the same file
+    // fails the same way forever, and we told them to keep trying it. That is
+    // what happened to every iPhone HEIC photo uploaded here. Unsupported
+    // formats no longer reach this point (they are refused by name at upload),
+    // so what is left is a bad file rather than a bad file type.
     const msg = String((err && err.message) || '');
-    const ourFault = /Anthropic API error \d{3}/.test(msg);
+    const hadStatus = /Anthropic API error \d{3}/.test(msg);
+    const badRequest = /Anthropic API error 400/.test(msg);
+    const blamesTheFile =
+      /\b(image|document|media[_ ]type|base64|decode|unsupported|could not process)\b/i.test(msg);
+    const ourFault = hadStatus && !(badRequest && blamesTheFile);
 
     res.status(200).json({
       ok: true,
@@ -227,8 +281,9 @@ module.exports = async (req, res) => {
       error_message: ourFault
         ? 'Our document reader is temporarily unavailable. This is on our side, not your '
           + 'document \u2014 please try again in a few minutes. Nothing has been charged.'
-        : 'We could not read that document automatically. It may be a scan quality issue. '
-          + 'Try uploading a clearer copy, or the original PDF from your lender rather than a photo.',
+        : 'We could not read that document automatically. It may be a scan quality issue, or the '
+          + 'file may be damaged. Try uploading a clearer copy, or the original PDF from your '
+          + 'lender rather than a photo. Nothing has been charged.',
     });
     return;
   }

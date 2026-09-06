@@ -178,7 +178,17 @@ function checkPrepaidInterest(opts) {
 
   const charged = toCents(chargedAmount);
   const close = parseDate(closingDate);
-  const days = daysCharged === null ? daysToMonthEndInclusive(close) : daysCharged;
+  // What the closing date itself supports: disbursement day through month end.
+  const supportedDays = daysToMonthEndInclusive(close);
+  // A day count printed on the line is the LENDER'S CLAIM, not a fact. It is
+  // used for the arithmetic below, and then tested against supportedDays --
+  // see the excess-days branch. Trusting it outright was a real hole: every
+  // Closing Disclosure prints its own day count ("$53.42 per day from 04/15
+  // to 05/07"), so this check was only ever confirming that the lender's
+  // software could multiply, which it always can. A 22-day charge on a loan
+  // closing 15 April reconciled and was reported to the customer as correct.
+  const statedDays = typeof daysCharged === 'number' ? daysCharged : null;
+  const days = statedDays === null ? supportedDays : statedDays;
   const actualBasis = isLeap(close.getUTCFullYear()) ? 366 : 365;
   const tol = toCents(toleranceDollars);
 
@@ -189,6 +199,46 @@ function checkPrepaidInterest(opts) {
 
   for (const [basis, expected] of candidates) {
     if (Math.abs(expected - charged) <= tol) {
+      // The line multiplies out. That says the lender did the arithmetic it
+      // set out to do -- it says nothing about whether the day count was the
+      // right one. Test it against the closing date before calling this a pass.
+      //
+      // One day of grace, deliberately. Lenders differ on whether the
+      // disbursement day and the first of the following month are counted, so
+      // a one-day difference is convention, not an overcharge. Flagging it
+      // would put a wrong number in a customer's mouth in front of the person
+      // about to fund their house -- the same reason benchmarking was retired.
+      if (statedDays !== null && statedDays > supportedDays + 1) {
+        const pd = perDiem(loanAmount, annualRatePct, basis);
+        const excessDays = statedDays - supportedDays;
+        const supported = Math.round(toCents(pd * supportedDays));
+        return finding({
+          checkId: 'PREPAID_INTEREST',
+          title: 'Prepaid interest is billed for more days than the closing date supports',
+          severity: Severity.POTENTIAL_OVERCHARGE,
+          evidence: EvidenceKind.INTERNAL_ARITHMETIC,
+          actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
+          dollarImpact: toDollars(charged - supported),
+          charged: toDollars(charged),
+          expected: toDollars(supported),
+          variance: toDollars(charged - supported),
+          basis:
+            `Section F bills ${statedDays} days at ${toDollars(Math.round(toCents(pd)))}/day on a ` +
+            `${basis}-day basis. Closing ${isoDate(close)} leaves ${supportedDays} days to month end, ` +
+            `so ${excessDays} days are unexplained.`,
+          whyItMatters:
+            'Interest is normally collected only from disbursement to the end of the month, because '
+            + 'your first payment covers the month after that. A longer period is not automatically '
+            + 'wrong -- it is correct if your first payment was deferred by a month -- but it is '
+            + 'billed to you either way, so it is worth one question.',
+          recommendedAction:
+            `Ask the lender which period Section F covers and what your first payment date is. If the `
+            + `first payment is the month after next, ${statedDays} days is right. If it is not, the `
+            + `charge should be about ${toDollars(supported)}.`,
+          askLender: true,
+          detail: { days: statedDays, supportedDays, excessDays, basis },
+        });
+      }
       return finding({
         checkId: 'PREPAID_INTEREST',
         title: 'Prepaid interest reconciles',

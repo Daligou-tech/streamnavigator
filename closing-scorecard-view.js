@@ -221,8 +221,18 @@
             // The count comes from the scorecard, not from this copy. A hardcoded
             // number drifts the moment a check is added or retired, and an
             // overstated one is the claim a customer checks first.
-            + '<p class="sc-sub">' + (sc.checks_run || 0) + ' checks already ran. '
-            + 'Paying shows what each one found.</p>'
+            //
+            // It must also be the SAME number the headline above prints. This
+            // said checks_run (12) while the headline said checks_attempted
+            // (20), six lines apart, and the two read as the page contradicting
+            // itself. They were measuring different things: checks_run counts
+            // the ones that produced a figure, checks_attempted also counts the
+            // ones that ran and found nothing to report — no prorations on this
+            // document, no duplicated charge names, no unreadable lines. Those
+            // did run, and a clean result is still a result worth showing.
+            + '<p class="sc-sub">' + (sc.checks_attempted || sc.checks_run || 0)
+            + ' checks already ran on your document. '
+            + 'Paying shows what each one measured and what it found.</p>'
             + '<ul class="sc-list">'
             + '<li><b>Loan Calculations box</b> &mdash; APR, finance charge, TIP, recomputed</li>'
             + '<li><b>Escrow cushion</b> &mdash; against the RESPA legal maximum</li>'
