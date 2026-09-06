@@ -380,6 +380,18 @@ function basename(path) {
   return parts[parts.length - 1] || String(path);
 }
 
+// The document title given to the API ends up in every citation the customer
+// reads, so it cannot be the raw storage key. Uploads are stored as
+// "<epoch-ms>-<original name>", which rendered in the first production run as
+// "1788102669194-hoa_governing_docs_sample.pdf" underneath each quoted
+// passage. Strip the upload timestamp and turn separators back into spaces.
+function displayName(path) {
+  return basename(path)
+    .replace(/^\d{10,}-/, '')
+    .replace(/[_]+/g, ' ')
+    .trim() || basename(path);
+}
+
 // Pull the API-generated citations off the response's text blocks. These
 // are produced by the citation system from the source document — the page
 // numbers and cited_text are not model-authored, which is the entire point
@@ -555,6 +567,8 @@ async function generateHoaReport(submissionId) {
 
       const mediaType = guessMediaType(path);
       const filename = basename(path);
+      // What the customer sees on every citation from this document.
+      const title = displayName(path);
       const buffer = Buffer.from(await fileBlob.arrayBuffer());
 
       const uploaded = await client.files.upload({
@@ -566,7 +580,7 @@ async function generateHoaReport(submissionId) {
         documentBlocks.push({
           type: 'document',
           source: { type: 'file', file_id: uploaded.id },
-          title: filename,
+          title,
           citations: { enabled: true },
         });
       } else {
@@ -595,7 +609,7 @@ async function generateHoaReport(submissionId) {
       formData.description
         ? `What the buyer told us (their words, not verified — check it against the documents): ${formData.description}`
         : 'The buyer did not add any description of the property.',
-      `Documents attached: ${documentBlocks.length} (${filePaths.map(basename).join(', ')})`,
+      `Documents attached: ${documentBlocks.length} (${filePaths.map(displayName).join(', ')})`,
       documentBlocks.some((b) => b.type === 'image')
         ? 'Note: at least one upload is an image rather than a PDF. Images cannot produce page citations — say so if a finding rests on one.'
         : null,
@@ -681,6 +695,7 @@ module.exports = {
   harvestCitations,
   attachCitations,
   formatEvidenceTable,
+  displayName,
   REPORT_TOOL,
   RISK_LEVELS,
   LIKELIHOODS,

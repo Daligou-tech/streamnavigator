@@ -74,7 +74,7 @@ function loadEngine(stub) {
 
 // Loaded with a stub present so the pure helpers are importable.
 const engine = loadEngine(makeSdkStub({ responses: [], calls: [], uploads: [], deletes: [] }));
-const { harvestCitations, attachCitations, formatEvidenceTable, REPORT_TOOL, RISK_LEVELS } = engine;
+const { harvestCitations, attachCitations, formatEvidenceTable, displayName, REPORT_TOOL, RISK_LEVELS } = engine;
 
 function citedBlock(text, citations) {
   return { type: 'text', text, citations };
@@ -126,6 +126,26 @@ test('harvestCitations ignores blocks with no citations and non-text blocks', ()
     { type: 'text', text: 'Also uncited.', citations: [] },
   ]);
   assert.deepEqual(evidence, []);
+});
+
+// ---------------------------------------------------------------------------
+// displayName
+// ---------------------------------------------------------------------------
+
+test('displayName strips the upload timestamp the customer should never see', () => {
+  // The first production run rendered
+  // "1788102669194-hoa_governing_docs_sample.pdf" under every quoted passage,
+  // because the storage key was passed through as the document title.
+  assert.equal(
+    displayName('hoa/11460e6f/1788102669194-hoa_governing_docs_sample.pdf'),
+    'hoa governing docs sample.pdf',
+  );
+});
+
+test('displayName leaves an already-clean filename alone', () => {
+  assert.equal(displayName('hoa/abc/Reserve Study 2026.pdf'), 'Reserve Study 2026.pdf');
+  // A short leading number is part of the name, not an upload timestamp.
+  assert.equal(displayName('hoa/abc/2026 Budget.pdf'), '2026 Budget.pdf');
 });
 
 // ---------------------------------------------------------------------------
