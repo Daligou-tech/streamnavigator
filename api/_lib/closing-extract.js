@@ -279,6 +279,17 @@ const EXTRACTION_TOOL = {
           confidence: { type: 'number', description: CONFIDENCE_DESC },
           page: { type: 'number' },
         },
+        // amount and confidence are REQUIRED because runClosingAudit gates this
+        // check on confident(prepaid_interest), and confident() is false when
+        // confidence is absent — not merely low. Without this, an omitted
+        // confidence silently discards a perfectly good reading.
+        //
+        // That is not hypothetical. On a three-document upload the model
+        // returned {days:22, amount:1175.24, per_diem:53.42} with no
+        // confidence, and a $320 overcharge that the SAME document had
+        // surfaced on a one-document upload went unreported. The customer who
+        // uploaded more got less, and the scorecard still said every check ran.
+        required: ['amount', 'confidence'],
       },
 
       escrow: {
