@@ -128,10 +128,14 @@ function extensionOf(name) {
 // this page invites photographing a document, and "unsupported file type" tells
 // someone nothing about a format they never chose.
 function unsupportedReason(ext, accepted) {
+  // Deliberately says nothing about WHO to ask for the original. This file is
+  // shared by twelve products: "ask your lender" is right on the closing
+  // audit and wrong on the HOA one, where the document comes from the
+  // management company and the buyer has no lender in the conversation.
   if (ext === 'heic' || ext === 'heif') {
     return 'iPhone photos are saved as HEIC, which we cannot read. Open the photo, tap Share, '
-      + 'then Copy Photo and paste it into an email to yourself to get a JPEG — or ask your '
-      + 'lender for the original PDF, which works best.';
+      + 'then Copy Photo and paste it into an email to yourself to get a JPEG — or send the '
+      + 'original PDF of the document, which works best.';
   }
   const label = accepted.map((e) => e.toUpperCase()).join(', ');
   return (ext ? 'a .' + ext + ' file' : 'that file type') + ' is not something we can read. '

@@ -126,7 +126,7 @@ test('a dragged iPhone photo is refused with advice about HEIC specifically', ()
   assert.deepEqual(z.accepted(), []);
   const reason = z.rejectionFor('IMG_4471.HEIC');
   assert.match(reason, /iPhone photos are saved as HEIC/);
-  assert.match(reason, /original PDF/);
+  assert.match(reason, /original PDF of the document/);
 });
 
 test('.heif is treated the same as .heic', () => {
