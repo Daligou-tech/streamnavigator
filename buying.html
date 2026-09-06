@@ -201,6 +201,11 @@
         </div>
 
         <a href="https://buy.stripe.com/5kQfZh1RWdiIgEQgwoabK0f" data-stripe-link="buying" class="btn btn-primary btn-disabled" id="pay-btn" aria-disabled="true">Answer the questions above to unlock checkout</a>
+        <!-- The checks that run before checkout report themselves here rather
+             than through a toast that clears after 3.6 seconds. This page has
+             the most of them — the sufficiency gate can refuse for several
+             reasons — so a message that erases itself is worst here. -->
+        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
         <p class="price-secure">🔒 Secured by Stripe</p>
         <p class="field-hint retry-policy">If we can't deliver the full analysis after payment, we'll regenerate it at no extra charge or refund you in full — see FAQ.</p>
       </div>
@@ -471,18 +476,26 @@
   payBtn.addEventListener('click', async function(e){
     e.preventDefault();
     var btn = e.currentTarget;
+    var errEl = document.getElementById('intake-error');
+    function fail(msg, focusEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+      showToast(msg);
+      if (focusEl) focusEl.focus();
+    }
+    errEl.style.display = 'none';
 
     if (btn.getAttribute('aria-disabled') === 'true') {
       var result = Rules.checkBuyingSufficiency(selectedCategory, fieldValues);
-      if (!result.categoryValid) { showToast('Pick a category above first so we know what to ask.'); return; }
+      if (!result.categoryValid) { fail('Pick a category above first so we know what to ask.'); return; }
       var first = result.missing[0];
-      showToast(first ? ('Still needed: ' + first.label) : 'A few more details are needed before checkout — see above.');
+      fail(first ? ('Still needed: ' + first.label) : 'A few more details are needed before checkout — see above.');
       return;
     }
 
     var emailEl = document.getElementById('intake-email');
     var email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
 
     var files = uploader.getFiles();
     var originalText = btn.textContent;
@@ -498,7 +511,7 @@
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'buying' }, email);
     } catch (err) {
-      showToast(err.message || 'Something went wrong — please try again.');
+      fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;
       btn.style.pointerEvents = 'auto';
     }
