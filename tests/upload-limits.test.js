@@ -97,7 +97,10 @@ test('the direct route is meaningfully larger than the base64 route', () => {
   // The whole point of the direct upload: a reserve study runs 5-20MB and
   // could not fit through the old ~3.17MB request-body ceiling.
   assert.ok(MAX_TOTAL_BYTES < 4 * 1024 * 1024);
-  assert.ok(MAX_DIRECT_FILE_BYTES >= 20 * 1024 * 1024);
-  assert.ok(MAX_DIRECT_TOTAL_BYTES >= MAX_DIRECT_FILE_BYTES);
-  assert.equal(asMB(MAX_DIRECT_FILE_BYTES), 25);
+  assert.ok(MAX_DIRECT_TOTAL_BYTES > MAX_DIRECT_FILE_BYTES, 'a package holds more than one document');
+  assert.equal(asMB(MAX_DIRECT_FILE_BYTES), 50);
+  assert.equal(asMB(MAX_DIRECT_TOTAL_BYTES), 150);
+  // Must not exceed the bucket's own file_size_limit (50MB), which is the
+  // backstop for a client that ignores what this module says.
+  assert.ok(MAX_DIRECT_FILE_BYTES <= 50 * 1024 * 1024);
 });

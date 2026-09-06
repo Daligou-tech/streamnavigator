@@ -93,8 +93,8 @@ const asMB = (b) => Math.round((b / (1024 * 1024)) * 10) / 10;
 //
 // This is what makes HOA Navigator work as sold: a reserve study runs 5-20MB
 // and could not previously be uploaded at all.
-const DIRECT_MAX_FILE_BYTES = 25 * 1024 * 1024;
-const DIRECT_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
+const DIRECT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+const DIRECT_MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 
 // opts.maxFileBytes / opts.maxTotalBytes let a page that still uses the legacy
 // base64 route keep the smaller ceiling. Defaults are the direct-upload
@@ -104,27 +104,85 @@ function wireUploadZone(zoneEl, inputEl, listEl, opts) {
   const maxFileBytes = opts.maxFileBytes || DIRECT_MAX_FILE_BYTES;
   const maxTotalBytes = opts.maxTotalBytes || DIRECT_MAX_TOTAL_BYTES;
   const selected = [];
+  // Files the browser refused, kept on screen with the reason.
+  //
+  // These used to be reported only by a toast that disappears after 3.6
+  // seconds. A customer picking a package that is over the limit saw a
+  // message they may not have caught, an upload box that looked empty, and —
+  // on pressing the button — "please attach at least one file", which
+  // describes the symptom and not the cause. That is a real thing that
+  // happened, twice, to someone who knew what the limits were.
+  const rejected = [];
+
+  function fileRow(text, className, onRemove) {
+    const row = document.createElement('div');
+    row.className = 'upload-file-row';
+    const name = document.createElement('span');
+    name.className = 'upload-file-name';
+    // textContent, not innerHTML: the filename is attacker-controlled and was
+    // previously interpolated into markup.
+    name.textContent = text;
+    if (className === 'rejected') {
+      row.style.borderColor = '#b4442b';
+      name.style.color = '#b4442b';
+      name.style.whiteSpace = 'normal';
+    }
+    row.appendChild(name);
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'upload-file-remove';
+    rm.textContent = '✕';
+    rm.addEventListener('click', onRemove);
+    row.appendChild(rm);
+    return row;
+  }
+
   function render() {
     listEl.innerHTML = '';
+
     selected.forEach((f, idx) => {
-      const row = document.createElement('div');
-      row.className = 'upload-file-row';
-      row.innerHTML = `<span class="upload-file-name">📄 ${f.name}</span>`;
-      const rm = document.createElement('button');
-      rm.type = 'button';
-      rm.className = 'upload-file-remove';
-      rm.textContent = '✕';
-      rm.addEventListener('click', () => { selected.splice(idx, 1); render(); });
-      row.appendChild(rm);
-      listEl.appendChild(row);
+      listEl.appendChild(fileRow(`📄 ${f.name}`, 'ok', () => {
+        selected.splice(idx, 1);
+        render();
+      }));
     });
+
+    rejected.forEach((r, idx) => {
+      listEl.appendChild(fileRow(`⚠ ${r.name} — ${r.reason}`, 'rejected', () => {
+        rejected.splice(idx, 1);
+        render();
+      }));
+    });
+
+    // A running total, so someone assembling a large package can see where
+    // they stand before the last file is the one that gets refused.
+    if (selected.length) {
+      const used = selected.reduce((n, x) => n + x.size, 0);
+      const note = document.createElement('div');
+      note.className = 'upload-file-total';
+      note.style.fontSize = '12px';
+      note.style.opacity = '.7';
+      note.style.marginTop = '6px';
+      note.textContent = `${selected.length} file${selected.length === 1 ? '' : 's'} · ${asMB(used)}MB of ${asMB(maxTotalBytes)}MB`;
+      listEl.appendChild(note);
+    }
+
     zoneEl.classList.toggle('has-files', selected.length > 0);
   }
+
+  function reject(name, reason) {
+    rejected.push({ name, reason });
+    showToast(`${name} — ${reason}`);
+  }
+
   function addFiles(fileList) {
     for (const f of fileList) {
-      if (selected.length >= MAX_FILES) { showToast(`You can attach up to ${MAX_FILES} files.`); break; }
+      if (selected.length >= MAX_FILES) {
+        reject(f.name, `you can attach up to ${MAX_FILES} files`);
+        continue;
+      }
       if (f.size > maxFileBytes) {
-        showToast(`${f.name} is ${asMB(f.size)}MB — the limit is ${asMB(maxFileBytes)}MB. Try the original PDF rather than a photo of it, or scan in black and white.`);
+        reject(f.name, `${asMB(f.size)}MB — the limit is ${asMB(maxFileBytes)}MB per file. Try the original PDF rather than a photo of it, or scan in black and white.`);
         continue;
       }
       // Checked against the running total, not just per file. Without this the
@@ -132,7 +190,7 @@ function wireUploadZone(zoneEl, inputEl, listEl, opts) {
       // submission dies with an error the customer cannot act on.
       const used = selected.reduce((n, x) => n + x.size, 0);
       if (used + f.size > maxTotalBytes) {
-        showToast(`Adding ${f.name} would take you over the ${asMB(maxTotalBytes)}MB total. Remove a file, or send the most important documents now and add the rest afterwards.`);
+        reject(f.name, `this would take you past the ${asMB(maxTotalBytes)}MB total (you are at ${asMB(used)}MB). Remove a file, or send the most important documents now and add the rest afterwards.`);
         continue;
       }
       selected.push(f);

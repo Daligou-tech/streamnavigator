@@ -35,14 +35,16 @@ const MAX_TOTAL_BYTES = Math.floor((VERCEL_BODY_LIMIT_BYTES / BASE64_INFLATION) 
 const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
 
 // --- Direct signed-upload route --------------------------------------------
-// 25MB covers a scanned reserve study with room to spare. It is also enforced
-// by the bucket's own file_size_limit, so a client that ignores this number
-// still cannot write a larger object.
-const MAX_DIRECT_FILE_BYTES = 25 * 1024 * 1024;
+// 50MB is Supabase's own standard-upload ceiling and matches the bucket's
+// file_size_limit, so a client ignoring this number still cannot write a
+// larger object. Raised from 25MB after a real full HOA package was refused:
+// scanned reserve studies are image-heavy and routinely clear 25MB on their
+// own.
+const MAX_DIRECT_FILE_BYTES = 50 * 1024 * 1024;
 // A full HOA package is a reserve study, a budget, financials, minutes and an
-// insurance summary. 50MB holds that without inviting someone to use the
-// bucket as free storage.
-const MAX_DIRECT_TOTAL_BYTES = 50 * 1024 * 1024;
+// insurance summary — several of them scans. 150MB holds that comfortably
+// without inviting someone to use the bucket as free storage.
+const MAX_DIRECT_TOTAL_BYTES = 150 * 1024 * 1024;
 
 const MAX_FILES = 12;
 
