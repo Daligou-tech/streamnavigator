@@ -878,11 +878,26 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     const btn = e.currentTarget;
     const emailEl = document.getElementById('intake-email');
     const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
-    const files = uploader.getFiles();
-    if (files.length === 0) { showToast('Please attach your Closing Disclosure or settlement statement to continue.'); return; }
 
+    // These two checks used showToast, which clears itself after 3.6 seconds.
+    // This page already has a persistent, screen-reader-announced error box
+    // and uses it for every failure AFTER submission — the pre-submit checks
+    // were simply the odd ones out. On hoa the transient version produced
+    // three rounds of "I uploaded it and nothing happened" when the real cause
+    // was an empty email box after a reload.
     clearError();
+
+    if (!email || email.indexOf('@') === -1) {
+      showError('Enter your email address', 'We need it to send you the scorecard — reloading the page clears this box.');
+      emailEl.focus();
+      return;
+    }
+    const files = uploader.getFiles();
+    if (files.length === 0) {
+      showError('No document is attached', 'Attach your Closing Disclosure or settlement statement. If a file was refused, the reason is shown next to it above.');
+      return;
+    }
+
     const originalText = btn.textContent;
     btn.textContent = 'Reading your document…';
     btn.style.pointerEvents = 'none';

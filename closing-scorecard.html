@@ -462,8 +462,23 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     const btn = e.currentTarget;
     const propertyType = savedAnswers.property_type || '';
     const providerList = savedAnswers.provider_list || 'dont_know';
-    if (!propertyType) { showToast('Please answer the property type question.'); return; }
-    if (!submissionRef) { showToast('Please upload your Closing Disclosure first.'); return; }
+    // Same box the unreadable-figures confirmation below already uses, rather
+    // than a toast that erases itself. Clearing first means the acknowledgement
+    // message disappears on the second click, as the submission proceeds.
+    clearError('pay-error');
+
+    if (!propertyType) {
+      showError('One question still needs answering',
+        'Tell us the property type above — the audit uses it to decide which checks apply.',
+        'pay-error');
+      return;
+    }
+    if (!submissionRef) {
+      showError('No document on this scorecard',
+        'Upload your Closing Disclosure first; this page needs the scorecard that produces.',
+        'pay-error');
+      return;
+    }
 
     // Stop someone paying $59 for an audit with known holes without being told.
     // One explicit confirmation, not a hard block.
