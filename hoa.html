@@ -147,6 +147,16 @@
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
         <a href="https://buy.stripe.com/cNi00jaos92s60cfskabK0d" data-stripe-link="hoa" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <!-- Why this exists rather than a toast: the checks that run before
+             the upload starts (missing email, no files attached) used to
+             report themselves only through a message that clears itself after
+             3.6 seconds. Someone who reloads the page — which empties the
+             email box — then attaches files and presses the button sees a
+             brief flash and nothing else, and no request is ever sent. That
+             happened repeatedly during testing and looked from the outside
+             exactly like a broken upload. This stays on screen until it is
+             resolved. -->
+        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
         <p class="price-secure">🔒 Secured by Stripe</p>
       </div>
     </div>
@@ -243,9 +253,24 @@
     const emailEl = document.getElementById('intake-email');
     const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { showToast('Enter a valid email so we can reach you.'); emailEl.focus(); return; }
+    const errEl = document.getElementById('intake-error');
+    function fail(msg, focusEl) {
+      errEl.textContent = msg;
+      errEl.style.display = 'block';
+      showToast(msg);
+      if (focusEl) focusEl.focus();
+    }
+    errEl.style.display = 'none';
+
+    if (!email || email.indexOf('@') === -1) {
+      fail('Enter your email address above so we can send the report — reloading the page clears this box.', emailEl);
+      return;
+    }
     const files = uploader.getFiles();
-    if (files.length === 0) { showToast('Please attach at least one file to continue.'); return; }
+    if (files.length === 0) {
+      fail('No documents are attached. If a file was refused, the reason is shown above the upload box.');
+      return;
+    }
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
@@ -266,7 +291,9 @@
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'hoa' }, email);
     } catch (err) {
-      showToast(err.message || 'Something went wrong — please try again.');
+      // Persistent for the same reason as the checks above: an upload that
+      // fails halfway must not be reported by a message that erases itself.
+      fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;
       btn.style.pointerEvents = 'auto';
     }
