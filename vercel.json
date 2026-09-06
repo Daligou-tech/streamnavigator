@@ -31,6 +31,10 @@
     {
       "path": "/api/cleanup-staging-uploads",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/hoa-job",
+      "schedule": "* * * * *"
     }
   ],
   "headers": [
@@ -46,12 +50,15 @@
   ],
   "functions": {
     "api/get-navigator-submission.js": {
-      "maxDuration": 800
+      "maxDuration": 300
     },
     "api/generate-contractor-report.js": {
       "maxDuration": 300
     },
     "api/generate-hoa-report.js": {
+      "maxDuration": 800
+    },
+    "api/hoa-job.js": {
       "maxDuration": 800
     },
     "api/retry-failed-buying.js": {

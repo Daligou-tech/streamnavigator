@@ -376,7 +376,10 @@ function makeFakeAdmin({ submission, reportInserts, submissionUpdates }) {
   };
 }
 
-function runPipeline({ reportToolInput, evidenceContent }) {
+// evidenceContents is one response per document, because the evidence pass is
+// now staged per document — each runs in its own invocation with its own time
+// budget, which is what removed the 800s wall.
+function runPipeline({ reportToolInput, evidenceContents }) {
   const submission = {
     id: 'sub-1',
     product: 'hoa',
@@ -391,7 +394,7 @@ function runPipeline({ reportToolInput, evidenceContent }) {
   const deletes = [];
 
   const responses = [
-    { stop_reason: 'end_turn', content: evidenceContent },
+    ...evidenceContents.map((content) => ({ stop_reason: 'end_turn', content })),
     {
       stop_reason: 'tool_use',
       content: [{ type: 'tool_use', name: 'submit_hoa_report', input: reportToolInput }],
@@ -414,17 +417,19 @@ function runPipeline({ reportToolInput, evidenceContent }) {
   return { generateHoaReport, calls, uploads, deletes, reportInserts, submissionUpdates, submission };
 }
 
-test('generateHoaReport runs both passes and ships API-generated page numbers', async () => {
+test('generateHoaReport reads each document separately, then synthesises', async () => {
   const ctx = runPipeline({
-    evidenceContent: [
-      citedBlock('The association is badly underfunded.', [pageCitation()]),
-      citedBlock('A roof replacement is coming.', [pageCitation({
+    evidenceContents: [
+      // Document 1: the reserve study.
+      [citedBlock('The association is badly underfunded.', [pageCitation()])],
+      // Document 2: the minutes.
+      [citedBlock('A roof replacement is coming.', [pageCitation({
         document_title: 'Minutes.pdf',
-        document_index: 1,
+        document_index: 0,
         start_page_number: 4,
         end_page_number: 4,
         cited_text: 'Board reviewed roof bids; funding options include a special assessment.',
-      })]),
+      })])],
     ],
     reportToolInput: {
       risk_score: 'High',
@@ -445,27 +450,32 @@ test('generateHoaReport runs both passes and ships API-generated page numbers', 
 
   const report = await ctx.generateHoaReport('sub-1');
 
-  // Two passes, in order.
-  assert.equal(ctx.calls.length, 2);
+  // Two documents means two evidence stages plus one synthesis stage.
+  assert.equal(ctx.calls.length, 3);
 
-  const evidencePass = ctx.calls[0];
-  const reportPass = ctx.calls[1];
+  const [docPass1, docPass2, synthesis] = ctx.calls;
 
-  // Pass 1: documents attached by file_id with citations enabled, and a
-  // calculator available. No report tool.
-  const docBlocks = evidencePass.messages[0].content.filter((b) => b.type === 'document');
-  assert.equal(docBlocks.length, 2);
-  for (const block of docBlocks) {
-    assert.deepEqual(block.citations, { enabled: true }, 'citations must be enabled or no page numbers exist to harvest');
-    assert.equal(block.source.type, 'file');
+  // Each evidence stage carries exactly ONE document. This is the property
+  // that removed the time ceiling: a package of any size never puts more than
+  // one document through a single invocation.
+  for (const pass of [docPass1, docPass2]) {
+    const docBlocks = pass.messages[0].content.filter((b) => b.type === 'document');
+    assert.equal(docBlocks.length, 1, 'one document per evidence stage');
+    assert.deepEqual(docBlocks[0].citations, { enabled: true }, 'citations must be enabled or no page numbers exist to harvest');
+    assert.equal(docBlocks[0].source.type, 'file');
+    assert.ok(pass.tools.some((t) => t.type === 'code_execution_20260521'));
+    assert.ok(!pass.tools.some((t) => t.name === 'submit_hoa_report'));
   }
-  assert.ok(evidencePass.tools.some((t) => t.type === 'code_execution_20260521'));
-  assert.ok(!evidencePass.tools.some((t) => t.name === 'submit_hoa_report'));
 
-  // Pass 2: the report tool, never forced (forcing conflicts with thinking).
-  assert.equal(reportPass.tools[0].name, 'submit_hoa_report');
-  assert.deepEqual(reportPass.tool_choice, { type: 'auto' });
-  assert.match(reportPass.messages[0].content, /EVIDENCE TABLE/);
+  // Synthesis: no documents attached, which is why it is fast; the report
+  // tool, never forced (forcing conflicts with thinking); and a calculator,
+  // because the cross-document arithmetic happens here.
+  assert.equal(typeof synthesis.messages[0].content, 'string', 'synthesis works from narratives, not documents');
+  assert.ok(synthesis.tools.some((t) => t.name === 'submit_hoa_report'));
+  assert.ok(synthesis.tools.some((t) => t.type === 'code_execution_20260521'));
+  assert.deepEqual(synthesis.tool_choice, { type: 'auto' });
+  assert.match(synthesis.messages[0].content, /EVIDENCE TABLE/);
+  assert.match(synthesis.messages[0].content, /PER-DOCUMENT ANALYSES/);
 
   // The shipped finding carries the API's page number, and the invented
   // index is gone.
@@ -485,22 +495,43 @@ test('generateHoaReport runs both passes and ships API-generated page numbers', 
   assert.deepEqual(ctx.deletes.sort(), ctx.uploads.map((u) => u.id).sort());
 });
 
-test('generateHoaReport deletes uploaded documents even when the run fails', async () => {
+test('a failed stage still deletes the document it uploaded', async () => {
   const ctx = runPipeline({
-    evidenceContent: [], // no text -> engine throws after uploading
+    evidenceContents: [[]], // first document yields no text -> throws
     reportToolInput: {},
   });
 
   await assert.rejects(ctx.generateHoaReport('sub-1'), /produced no analysis text/);
 
-  assert.equal(ctx.uploads.length, 2);
-  assert.deepEqual(ctx.deletes.sort(), ctx.uploads.map((u) => u.id).sort());
+  // Only the first document was ever uploaded, and it was cleaned up.
+  assert.equal(ctx.uploads.length, 1);
+  assert.deepEqual(ctx.deletes, ctx.uploads.map((u) => u.id));
   assert.equal(ctx.submission.status, 'failed');
   assert.match(ctx.submission.error, /produced no analysis text/);
 });
 
+test('a failure keeps job_state so a retry resumes instead of restarting', async () => {
+  // The whole point of staging: 10 minutes of completed document reads must
+  // not be thrown away because the next call failed.
+  const ctx = runPipeline({
+    evidenceContents: [
+      [citedBlock('Doc one read fine.', [pageCitation()])],
+      [], // second document fails
+    ],
+    reportToolInput: {},
+  });
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'), /produced no analysis text/);
+
+  assert.equal(ctx.submission.status, 'failed');
+  assert.ok(ctx.submission.job_state, 'job_state must survive a failure');
+  assert.equal(ctx.submission.job_state.docIndex, 1, 'resumes at the document that failed');
+  assert.equal(ctx.submission.job_state.parts.length, 1, 'the completed document is kept');
+  assert.equal(ctx.submission.generation_attempts, 1);
+});
+
 test('generateHoaReport refuses a submission with no documents', async () => {
-  const ctx = runPipeline({ evidenceContent: [], reportToolInput: {} });
+  const ctx = runPipeline({ evidenceContents: [], reportToolInput: {} });
   ctx.submission.file_paths = [];
 
   await assert.rejects(ctx.generateHoaReport('sub-1'), /requires at least one uploaded document/);

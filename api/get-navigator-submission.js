@@ -15,12 +15,11 @@ const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateContractorReport } = require('./_lib/contractor-engine');
 const { generateNavigatorReport, PRODUCT_CONFIGS } = require('./_lib/navigator-engine');
 const { generatePurchaseReport } = require('./_lib/purchase-engine');
-// HOA has been lifted out of the shared generic engine into its own
-// two-pass, citation-verified pipeline — see api/_lib/hoa-engine.js for
-// why. It still stores into navigator_reports and still renders through
-// navigator-status.html, so the fetch path below is unchanged; only
-// generation is routed differently.
-const { generateHoaReport } = require('./_lib/hoa-engine');
+// HOA has been lifted out of the shared generic engine into its own staged,
+// citation-verified pipeline — see api/_lib/hoa-engine.js for why. Nothing
+// is imported from it here: generation is driven by api/hoa-job.js on a cron,
+// not by this request. HOA reports still land in navigator_reports and still
+// render through navigator-status.html, so the fetch path below is unchanged.
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -65,15 +64,12 @@ module.exports = async function handler(req, res) {
   // above the actual maxDuration so an attempt still legitimately finishing
   // right at the wire isn't raced.
   //
-  // Raised from 320s to 820s on 2026-09-05 alongside this function's
-  // maxDuration going 300 -> 800 in vercel.json, which HOA Navigator's
-  // two-pass analysis needs. The threshold has to stay above the platform
-  // limit or the invariant inverts: at 320s a buying attempt that is still
-  // legitimately running would be judged abandoned and re-triggered
-  // concurrently with itself. The cost is that a genuinely stuck buying
-  // submission now waits longer for this inline recovery — acceptable
-  // because api/retry-failed-buying.js sweeps every 15 minutes anyway.
-  const STUCK_PROCESSING_MS = 820 * 1000;
+  // Briefly 820s while HOA's analysis ran inside this function and its
+  // maxDuration was raised to 800. HOA now runs in its own staged worker
+  // (api/hoa-job.js), so this function is back to 300s and this threshold is
+  // back to the 320s that matches it — which also restores the faster inline
+  // recovery for a stuck buying submission.
+  const STUCK_PROCESSING_MS = 320 * 1000;
   const isStuckProcessing = submission.product === 'buying'
     && submission.status === 'processing'
     && submission.updated_at
@@ -102,17 +98,16 @@ module.exports = async function handler(req, res) {
       // Swallow — status is now 'failed' with an error message via
       // purchase-engine's own catch block, reported back below.
     }
-  } else if (submission.product === 'hoa' && submission.status === 'paid') {
-    // Same lazy-trigger pattern, routed to the dedicated HOA engine. Note
-    // this runs two Opus 5 passes over the uploaded documents inside this
-    // request, which is why this function's maxDuration in vercel.json is
-    // set well above the 300s the other products need.
-    try {
-      await generateHoaReport(submission.id);
-    } catch (err) {
-      // Swallow — status is now 'failed' with an error message via
-      // hoa-engine's own catch block, reported back below.
-    }
+  } else if (submission.product === 'hoa') {
+    // Deliberately does no work. HOA generation is staged across separate
+    // invocations and driven by the cron in api/hoa-job.js — a single reserve
+    // study took 654 seconds of the 800 this function is allowed, and a full
+    // package would not have finished at all. The cron picks a 'paid'
+    // submission up within a minute and advances it one document at a time.
+    //
+    // This branch still has to exist: 'hoa' is in PRODUCT_CONFIGS, so without
+    // it the submission falls through to the generic engine below and gets
+    // the old uncited Sonnet report instead of the one it paid for.
   } else if (PRODUCT_CONFIGS[submission.product] && submission.status === 'paid') {
     // Same lazy-trigger pattern as Contractor Navigator, generalized to the
     // other 11 products (see api/_lib/navigator-engine.js) — this used to
