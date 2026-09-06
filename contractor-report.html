@@ -99,14 +99,14 @@
       <div class="status-shell" id="failed-view" hidden>
         <div class="status-card reveal in">
           <h2>We hit a snag generating your report</h2>
-          <p id="failed-body">Our team has been notified — email info@streamnavigator.ai and we'll sort it out personally, no charge lost.</p>
+          <p id="failed-body">Our team has been notified — email hello@streamnavigator.ai and we'll sort it out personally, no charge lost.</p>
         </div>
       </div>
 
       <div class="status-shell" id="missing-view" hidden>
         <div class="status-card reveal in">
           <h2>We couldn't find that submission</h2>
-          <p>This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.</p>
+          <p>This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.</p>
         </div>
       </div>
 
@@ -138,7 +138,7 @@
   <div class="footer-grid">
     <div class="footer-col">
       <h5>Contact</h5>
-      <ul><li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li></ul>
+      <ul><li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li></ul>
     </div>
   </div>
   <p class="footer-disclaimer">Contractor Navigator provides an independent, AI-generated second opinion for informational purposes — it is not a licensed contractor, engineer, or legal service, and its assessment is not a guarantee of price, quality, or workmanship.</p>
@@ -236,7 +236,7 @@
         // failure detail meant for us to debug from the database, not for
         // a customer to read.
         document.getElementById('failed-body').textContent =
-          "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.";
+          "Our team has been notified and we're on it — no charge is lost. Email hello@streamnavigator.ai if you'd like us to follow up directly.";
         show('failed-view');
       } else {
         document.getElementById('wait-title').textContent =

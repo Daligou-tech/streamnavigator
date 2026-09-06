@@ -155,7 +155,7 @@
   <div class="footer-grid">
     <div class="footer-col">
       <h5>Contact</h5>
-      <ul><li><a href="mailto:info@streamnavigator.ai">info@streamnavigator.ai</a></li></ul>
+      <ul><li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li></ul>
     </div>
   </div>
   <div class="footer-bottom">
@@ -690,7 +690,7 @@
 
   // (stored is hoisted above the PDF handlers)
   if (!stored || !stored.id || !stored.token) {
-    showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.", false);
+    showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.", false);
     return;
   }
 
@@ -716,7 +716,7 @@
     maxTries: 60,
     onUpdate: function(data){
       if (!data.ok) {
-        showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to info@streamnavigator.ai.", false);
+        showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.", false);
         return;
       }
       if (data.product === 'contractor' && (data.status === 'paid' || data.status === 'processing' || data.status === 'complete')) {
@@ -733,15 +733,15 @@
         // Don't surface data.error verbatim here — it's an internal/API
         // failure detail (e.g. a raw error from the model provider) meant
         // for us to debug from the database, not for a customer to read.
-        var failMsg = "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.";
+        var failMsg = "Our team has been notified and we're on it — no charge is lost. Email hello@streamnavigator.ai if you'd like us to follow up directly.";
         if (data.product === 'buying') {
-          failMsg = "We couldn't produce your total-cost-of-ownership analysis on our end this time — this is a delivery problem, not an information problem, since your submission already had everything needed. No charge is lost: email info@streamnavigator.ai with your confirmation email and we'll regenerate your report at no extra charge, or refund you in full, whichever you'd prefer.";
+          failMsg = "We couldn't produce your total-cost-of-ownership analysis on our end this time — this is a delivery problem, not an information problem, since your submission already had everything needed. No charge is lost: email hello@streamnavigator.ai with your confirmation email and we'll regenerate your report at no extra charge, or refund you in full, whichever you'd prefer.";
         }
         if (data.product === 'hoa') {
           // Says the refund is already in motion rather than asking the
           // customer to chase it — the engine marks refund_state='due' on the
           // submission at the same moment it gives up, so this is true.
-          failMsg = "We couldn't produce your HOA analysis this time, and that's on us — your documents were fine. Your refund has already been queued automatically; you don't need to ask for it. If you'd rather we retried instead, email info@streamnavigator.ai and we'll run it again at no charge.";
+          failMsg = "We couldn't produce your HOA analysis this time, and that's on us — your documents were fine. Your refund has already been queued automatically; you don't need to ask for it. If you'd rather we retried instead, email hello@streamnavigator.ai and we'll run it again at no charge.";
         }
         showWaiting('Something went wrong on our end', failMsg, false);
       }
