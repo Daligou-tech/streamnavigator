@@ -31,6 +31,7 @@ const {
 } = require('./_lib/closing-extract');
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 const { runDocumentAudit } = require('./_lib/closing-service');
+const { isTestEmail } = require('./_lib/test-submissions');
 
 // Uploads arrive base64-encoded in a JSON body. Vercel caps a function request
 // body at 4.5MB and returns 413 FUNCTION_PAYLOAD_TOO_LARGE above it — at the
@@ -176,6 +177,10 @@ module.exports = async (req, res) => {
     .insert({
       product: 'closing',
       email: email || null,
+      // Analytics marker only — see api/_lib/test-submissions.js. Nothing
+      // downstream reads it, and nothing may: the moment a test row takes a
+      // different path it stops describing reality.
+      is_test: isTestEmail(email),
       form_data: {
         stage: 'scorecard',
         ip_hash: ipHash,

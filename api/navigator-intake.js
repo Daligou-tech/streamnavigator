@@ -18,6 +18,7 @@
 // (see api/_lib/contractor-engine.js for the one product wired up so far).
 
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
+const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 
 // Two upload routes reach this handler, and both are supported on purpose.
@@ -143,7 +144,9 @@ module.exports = async function handler(req, res) {
 
   const { data: submission, error: insertError } = await admin
     .from('navigator_submissions')
-    .insert({ product, email: email || null, form_data: formData })
+    // is_test is an analytics marker only — see api/_lib/test-submissions.js.
+    // This one insert covers the ten Navigator products that share the intake.
+    .insert({ product, email: email || null, is_test: isTestEmail(email), form_data: formData })
     .select('id, access_token')
     .single();
 

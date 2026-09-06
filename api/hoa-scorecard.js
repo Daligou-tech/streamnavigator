@@ -45,6 +45,8 @@ const {
   HONESTY_RULES,
 } = require('./_lib/hoa-engine');
 
+const { isTestEmail } = require('./_lib/test-submissions');
+
 const AnthropicSDK = require('@anthropic-ai/sdk');
 const Anthropic = AnthropicSDK.default || AnthropicSDK;
 const { toFile } = AnthropicSDK;
@@ -249,6 +251,8 @@ module.exports = async function handler(req, res) {
     .insert({
       product: 'hoa',
       email: email || null,
+      // Analytics marker only — see api/_lib/test-submissions.js.
+      is_test: isTestEmail(email),
       // stage:'scorecard' keeps this row out of the paid pipeline. The HOA
       // job worker only claims rows at status 'paid', and this row stays at
       // its default, so the cron will never pick it up and bill for it.
