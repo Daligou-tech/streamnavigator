@@ -62,16 +62,27 @@ module.exports = async function handler(req, res) {
   // One submission per tick. Two HOA analyses at once is a cost spike, and
   // the queue is measured in minutes, not hours.
   async function claimable() {
+    // A few candidates rather than one, because a job paused for billing is
+    // still 'processing' with job_state set and would otherwise sit at the
+    // front of the queue blocking everything behind it. Filtered here in JS
+    // rather than in the query: paused_until lives inside job_state, and a
+    // nested-jsonb comparison expressed as a PostgREST filter string is far
+    // easier to get subtly wrong than a date compare.
     const continuing = await admin
       .from('navigator_submissions')
-      .select('id, status')
+      .select('id, status, job_state')
       .eq('product', 'hoa')
       .eq('status', 'processing')
       .not('job_state', 'is', null)
       .is('job_running_since', null)
       .order('updated_at', { ascending: true })
-      .limit(1);
-    if (continuing.data && continuing.data.length) return continuing.data[0];
+      .limit(5);
+
+    const ready = (continuing.data || []).find((row) => {
+      const until = row.job_state && row.job_state.paused_until;
+      return !until || Date.parse(until) <= Date.now();
+    });
+    if (ready) return { id: ready.id, status: ready.status };
 
     const paid = await admin
       .from('navigator_submissions')

@@ -40,6 +40,9 @@
 .hoa-cite-more:hover{opacity:1;}
 .hoa-cite-full{margin-top:8px!important;max-height:320px;overflow:auto;white-space:pre-wrap;font-style:normal!important;font-size:12px;line-height:1.45;background:rgba(31,27,22,.04);border-radius:8px;padding:10px 12px;}
 .hoa-disclaimer{font-size:12.5px;line-height:1.6;opacity:.7;margin-top:28px;}
+.hoa-bar{height:6px;border-radius:999px;background:rgba(31,27,22,.10);overflow:hidden;margin:18px auto 10px;max-width:340px;}
+.hoa-bar-fill{height:100%;width:0;border-radius:999px;background:var(--ink,#1F1B16);transition:width .6s ease;}
+.hoa-progress-note{font-size:13.5px;line-height:1.55;opacity:.75;margin:0;}
 </style>
 </head>
 <body>
@@ -63,6 +66,13 @@
           <div class="status-spinner" id="status-spinner"></div>
           <h2 id="status-title">Checking your submission…</h2>
           <p id="status-body">One moment.</p>
+          <!-- HOA reads each document in its own stage, so progress is a real
+               fact we can show instead of a spinner. A full package can take
+               40 minutes; someone who has just paid needs to see it moving. -->
+          <div id="hoa-progress" hidden>
+            <div class="hoa-bar"><div class="hoa-bar-fill" id="hoa-bar-fill"></div></div>
+            <p class="hoa-progress-note" id="hoa-progress-note"></p>
+          </div>
         </div>
       </div>
 
@@ -229,12 +239,57 @@
   function stopWaitingMessages(){
     if (waitingMessageTimer) { clearInterval(waitingMessageTimer); waitingMessageTimer = null; }
   }
-  function showGeneratingReport(){
+  // `progress` is supplied for HOA only (see api/get-navigator-submission.js).
+  // When it is present the rotating messages are switched off entirely: real
+  // per-document progress is better than reassuring copy, and the two
+  // together would be noise.
+  function showGeneratingReport(progress){
     reportView.hidden = true;
     waitingView.hidden = false;
-    titleEl.textContent = 'Generating your report…';
     spinnerEl.style.display = 'block';
-    startWaitingMessages();
+
+    var bar = document.getElementById('hoa-progress');
+    if (!progress || !progress.documents_total) {
+      bar.hidden = true;
+      titleEl.textContent = 'Generating your report…';
+      startWaitingMessages();
+      return;
+    }
+
+    stopWaitingMessages();
+    bar.hidden = false;
+
+    var total = progress.documents_total;
+    var read = Math.min(progress.documents_read || 0, total);
+    var synth = progress.stage === 'synthesis';
+
+    // The synthesis stage is real work with no document counter of its own,
+    // so it holds at the last notch rather than showing a finished bar over
+    // an unfinished job.
+    var pct = synth ? 92 : Math.round((read / total) * 90);
+    document.getElementById('hoa-bar-fill').style.width = pct + '%';
+
+    var note = document.getElementById('hoa-progress-note');
+
+    if (progress.paused) {
+      titleEl.textContent = 'Paused on our end';
+      bodyEl.textContent = 'Your report is queued and will resume automatically — nothing you uploaded is lost, and you do not need to do anything.';
+      note.textContent = read + ' of ' + total + ' documents already read.';
+      return;
+    }
+
+    if (synth) {
+      titleEl.textContent = 'Comparing your documents';
+      bodyEl.textContent = 'All ' + total + ' documents read. This last step checks them against each other — what the study recommends against what the budget funds, and whether the minutes mention either.';
+      note.textContent = 'This is the step that finds what no single document says. A few minutes.';
+      return;
+    }
+
+    titleEl.textContent = 'Reading document ' + (read + 1) + ' of ' + total;
+    bodyEl.textContent = progress.current_document
+      ? 'Currently reading: ' + progress.current_document
+      : 'Reading your documents one at a time.';
+    note.textContent = 'Each document is read on its own, so a full package takes longer than a single file — usually 10 to 40 minutes. You can close this page; your report will be here when you come back.';
   }
 
   // Generic renderer for the shared report shape produced by
@@ -671,7 +726,7 @@
       if (data.status === 'complete' && data.report) {
         renderGenericReport(data.report);
       } else if (data.status === 'paid' || data.status === 'processing') {
-        showGeneratingReport();
+        showGeneratingReport(data.progress);
       } else if (data.status === 'pending_payment') {
         showWaiting('Almost there…', "We have your submission but haven't seen a payment yet. If you just paid, refresh this page in a moment.", true);
       } else if (data.status === 'failed') {
@@ -681,6 +736,12 @@
         var failMsg = "Our team has been notified and we're on it — no charge is lost. Email info@streamnavigator.ai if you'd like us to follow up directly.";
         if (data.product === 'buying') {
           failMsg = "We couldn't produce your total-cost-of-ownership analysis on our end this time — this is a delivery problem, not an information problem, since your submission already had everything needed. No charge is lost: email info@streamnavigator.ai with your confirmation email and we'll regenerate your report at no extra charge, or refund you in full, whichever you'd prefer.";
+        }
+        if (data.product === 'hoa') {
+          // Says the refund is already in motion rather than asking the
+          // customer to chase it — the engine marks refund_state='due' on the
+          // submission at the same moment it gives up, so this is true.
+          failMsg = "We couldn't produce your HOA analysis this time, and that's on us — your documents were fine. Your refund has already been queued automatically; you don't need to ask for it. If you'd rather we retried instead, email info@streamnavigator.ai and we'll run it again at no charge.";
         }
         showWaiting('Something went wrong on our end', failMsg, false);
       }

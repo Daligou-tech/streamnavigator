@@ -124,11 +124,32 @@ module.exports = async function handler(req, res) {
 
   const { data: fresh } = await admin
     .from('navigator_submissions')
-    .select('id, product, status, error')
+    .select('id, product, status, error, job_state')
     .eq('id', id)
     .single();
 
   const result = { ok: true, status: fresh.status, product: fresh.product, error: fresh.error || null };
+
+  // HOA reads each document in its own stage, so how far along it is is a
+  // real, knowable fact rather than a guess. Showing it beats a spinner and a
+  // rotating message written for a two-minute job: a full package takes up to
+  // 40 minutes, and someone who has just paid $79 needs to see the thing
+  // moving. Named documents, because "reading your minutes, 4 of 7" tells a
+  // customer their upload arrived and is being used.
+  if (fresh.product === 'hoa' && fresh.job_state) {
+    const job = fresh.job_state;
+    const docs = Array.isArray(job.docs) ? job.docs : [];
+    const read = Number(job.docIndex || 0);
+    result.progress = {
+      stage: job.stage || null,
+      documents_read: read,
+      documents_total: docs.length,
+      current_document: job.stage === 'synthesis' ? null : (docs[read] && docs[read].title) || null,
+      // A billing pause is not a stall, and the page should say so rather
+      // than let the customer watch a number that has stopped moving.
+      paused: Boolean(job.paused_until && Date.parse(job.paused_until) > Date.now()),
+    };
+  }
 
   if (fresh.product === 'contractor' && fresh.status === 'complete') {
     const { data: report } = await admin

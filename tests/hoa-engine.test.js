@@ -55,6 +55,10 @@ function makeSdkStub({ responses, calls, uploads, deletes }) {
           calls.push(request);
           const response = responses[calls.length - 1];
           if (!response) throw new Error(`No stubbed response for call ${calls.length}`);
+          // An Error in the response list is thrown from the API call, which
+          // is how the failure-classification tests reproduce a billing
+          // refusal or a transient outage.
+          if (response instanceof Error) return { finalMessage: async () => { throw response; } };
           return { finalMessage: async () => response };
         },
       };
@@ -394,7 +398,11 @@ function runPipeline({ reportToolInput, evidenceContents }) {
   const deletes = [];
 
   const responses = [
-    ...evidenceContents.map((content) => ({ stop_reason: 'end_turn', content })),
+    // An Error entry is thrown from the API call rather than returned as a
+    // response, so a test can reproduce a billing refusal or an outage.
+    ...evidenceContents.map((content) => (
+      content instanceof Error ? content : { stop_reason: 'end_turn', content }
+    )),
     {
       stop_reason: 'tool_use',
       content: [{ type: 'tool_use', name: 'submit_hoa_report', input: reportToolInput }],
@@ -555,6 +563,84 @@ test('a failure keeps job_state so a retry resumes instead of restarting', async
   assert.equal(ctx.submission.job_state.docIndex, 1, 'resumes at the document that failed');
   assert.equal(ctx.submission.job_state.parts.length, 1, 'the completed document is kept');
   assert.equal(ctx.submission.generation_attempts, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Failure handling
+// ---------------------------------------------------------------------------
+
+const BILLING_ERROR = () => new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}');
+
+test('a billing refusal pauses the job instead of failing it', async () => {
+  // This is the real 2026-09-06 failure. Nothing was wrong with the
+  // submission; the account had run out of credit. Treating it as the
+  // submission's fault spent all three attempts on something no retry could
+  // fix and then abandoned a customer's paid report.
+  const ctx = runPipeline({ evidenceContents: [BILLING_ERROR()], reportToolInput: {} });
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'), /credit balance is too low/);
+
+  assert.equal(ctx.submission.status, 'processing', 'still going to happen, so not "failed"');
+  assert.ok(!ctx.submission.generation_attempts, 'a retry budget must not be spent on this');
+  assert.ok(ctx.submission.job_state.paused_until, 'paused rather than abandoned');
+  assert.equal(ctx.submission.job_state.paused_reason, 'billing');
+  assert.ok(Date.parse(ctx.submission.job_state.paused_until) > Date.now(), 'paused into the future');
+  assert.equal(ctx.submission.refund_state, undefined, 'nothing is owed back — the report is still coming');
+});
+
+test('a paused job clears its pause when the next stage is claimed', async () => {
+  const ctx = runPipeline({
+    evidenceContents: [
+      BILLING_ERROR(),
+      // The fixture has two documents, so the resumed run reads both.
+      [citedBlock('Read on the retry.', [pageCitation()])],
+      [citedBlock('Second document.', [pageCitation({ start_page_number: 2, end_page_number: 2, cited_text: 'second' })])],
+    ],
+    reportToolInput: { risk_score: 'Low', findings: [], headline: 'ok' },
+  });
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'));
+  assert.ok(ctx.submission.job_state.paused_until);
+
+  // Credit restored; the worker picks it up again.
+  await ctx.generateHoaReport('sub-1');
+
+  assert.equal(ctx.submission.status, 'complete');
+  assert.equal(ctx.submission.job_state, null, 'a finished job carries no stale pause');
+});
+
+test('an ordinary failure spends an attempt, and does not owe a refund yet', async () => {
+  const ctx = runPipeline({ evidenceContents: [new Error('overloaded_error')], reportToolInput: {} });
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'), /overloaded/);
+
+  assert.equal(ctx.submission.status, 'failed');
+  assert.equal(ctx.submission.generation_attempts, 1);
+  assert.equal(ctx.submission.refund_state, undefined, 'two attempts remain — nothing is owed yet');
+});
+
+test('exhausting every attempt on a PAID submission queues a refund', async () => {
+  const ctx = runPipeline({ evidenceContents: [new Error('overloaded_error')], reportToolInput: {} });
+  ctx.submission.generation_attempts = 2; // one attempt left
+  ctx.submission.stripe_checkout_session_id = 'cs_test_123';
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'));
+
+  assert.equal(ctx.submission.generation_attempts, 3);
+  assert.equal(ctx.submission.refund_state, 'due', 'paid and undeliverable means the money goes back');
+});
+
+test('a free scorecard row is never marked for refund', async () => {
+  // Scorecard submissions have no checkout session. Marking one refund-due
+  // would queue a refund for a payment that never happened.
+  const ctx = runPipeline({ evidenceContents: [new Error('overloaded_error')], reportToolInput: {} });
+  ctx.submission.generation_attempts = 2;
+  ctx.submission.stripe_checkout_session_id = null;
+
+  await assert.rejects(ctx.generateHoaReport('sub-1'));
+
+  assert.equal(ctx.submission.generation_attempts, 3);
+  assert.equal(ctx.submission.refund_state, undefined);
 });
 
 test('generateHoaReport refuses a submission with no documents', async () => {

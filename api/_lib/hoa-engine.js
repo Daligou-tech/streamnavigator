@@ -63,6 +63,7 @@ const AnthropicSDK = require('@anthropic-ai/sdk');
 const Anthropic = AnthropicSDK.default || AnthropicSDK;
 const { toFile } = AnthropicSDK;
 const { getSupabaseAdmin } = require('./supabaseAdmin');
+const { sendFailureAlert } = require('./alerts');
 
 // Opus 5 rather than the Sonnet 5 the shared engine uses. On a $79 report
 // backing a six-figure purchase decision the model-cost delta is roughly a
@@ -628,6 +629,28 @@ const MAX_JOB_ATTEMPTS = 3;
 // on a bug that fails to advance the stage.
 const MAX_STAGES = 16;
 
+// How long to wait before trying again after the API refuses on billing.
+const BILLING_PAUSE_MS = 15 * 60 * 1000;
+
+// Not every failure means the same thing, and treating them alike is how a
+// customer's report got marked dead on 2026-09-06 because the Anthropic
+// account had run out of credit. That submission was fine; the account was
+// not, and no number of retries could have helped — but three were spent
+// anyway and the report was then abandoned.
+//
+//   billing    nothing is wrong with this submission and no retry can fix it,
+//              but it WILL succeed once credit is restored. Pause, keep the
+//              work, do not spend the retry budget.
+//   otherwise  a real failure of this attempt. Retry until the budget runs
+//              out, then stop and owe the customer their money back.
+function classifyFailure(err) {
+  const message = String((err && err.message) || err || '');
+  if (/credit balance is too low|insufficient[_ ]quota|billing|payment required|402/i.test(message)) {
+    return 'billing';
+  }
+  return 'attempt';
+}
+
 function anthropicClient() {
   const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY env var');
@@ -802,8 +825,14 @@ async function advanceHoaJob(submissionId) {
   const admin = getSupabaseAdmin();
   const submission = await fetchSubmission(admin, submissionId);
 
+  // Hoisted so the catch block can see the job as it stands NOW rather than
+  // as it was when the row was read. On the very first stage those differ:
+  // submission.job_state is still null while `job` holds the document list
+  // startJob just built, and merging a pause into the stale value wiped it.
+  let job = null;
+
   try {
-    let job = submission.job_state;
+    job = submission.job_state;
     if (!job) job = await startJob(admin, submission);
 
     // Claim the stage before doing any work. job_running_since is what tells
@@ -812,6 +841,12 @@ async function advanceHoaJob(submissionId) {
     // running a stage both sit at 'processing' with a recent updated_at. It
     // is cleared the moment the stage returns, so the next tick picks the
     // job straight back up instead of idling for the stall window.
+    // Claiming clears any billing pause: the worker only reaches here once
+    // the pause has expired, and leaving the marker set would pause the job
+    // again after every subsequent stage.
+    delete job.paused_until;
+    delete job.paused_reason;
+
     await saveJob(admin, submissionId, job, {
       status: 'processing',
       job_running_since: new Date().toISOString(),
@@ -872,20 +907,70 @@ async function advanceHoaJob(submissionId) {
 
     return { done: true, stage: 'complete', report };
   } catch (err) {
-    // job_state is deliberately left in place. A transient API failure should
-    // cost the one document that was in flight, not the documents already
-    // read — the next attempt resumes at the same docIndex.
-    await admin
-      .from('navigator_submissions')
-      .update({
-        status: 'failed',
-        error: String(err.message || err).slice(0, 500),
-        generation_attempts: (submission.generation_attempts || 0) + 1,
-        // Released so a retry is not mistaken for a stage still in flight.
-        job_running_since: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', submissionId);
+    // job_state is deliberately left in place in every branch below. A failure
+    // should cost the one document that was in flight, not the documents
+    // already read — the next attempt resumes at the same docIndex.
+    const message = String(err.message || err).slice(0, 500);
+
+    if (classifyFailure(err) === 'billing') {
+      // Stays at 'processing' because that is the truth: this report is still
+      // going to be produced. Attempts are not incremented — spending the
+      // retry budget on something no retry can fix is what killed a real
+      // submission — and the pause keeps the worker from burning a tick a
+      // minute against an API that will keep refusing.
+      const paused = Object.assign({}, job || submission.job_state || {}, {
+        paused_until: new Date(Date.now() + BILLING_PAUSE_MS).toISOString(),
+        paused_reason: 'billing',
+      });
+      await admin
+        .from('navigator_submissions')
+        .update({
+          job_state: paused,
+          job_running_since: null,
+          error: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', submissionId);
+      await sendFailureAlert({
+        submissionId,
+        product: 'hoa',
+        error: `PAUSED — the Anthropic account cannot be billed, so this report is waiting rather than failing. It resumes on its own once credit is restored. ${message}`,
+      });
+      throw err;
+    }
+
+    const attempts = (submission.generation_attempts || 0) + 1;
+    const exhausted = attempts >= MAX_JOB_ATTEMPTS;
+
+    const patch = {
+      status: 'failed',
+      error: message,
+      generation_attempts: attempts,
+      // Released so a retry is not mistaken for a stage still in flight.
+      job_running_since: null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Out of attempts on a submission that was paid for. The customer has
+    // given money and received nothing, so the money is owed back — recorded
+    // as state the system holds rather than something a person has to
+    // remember. Rows with no checkout session are free scorecards.
+    if (exhausted && submission.stripe_checkout_session_id) {
+      patch.refund_state = 'due';
+    }
+
+    await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
+
+    if (exhausted) {
+      await sendFailureAlert({
+        submissionId,
+        product: 'hoa',
+        error: submission.stripe_checkout_session_id
+          ? `${message}\n\nThis submission was paid for and has been marked refund_state='due'.`
+          : message,
+      });
+    }
+
     throw err;
   }
 }
