@@ -8,8 +8,81 @@
 <link rel="canonical" href="https://streamnavigator.ai/hoa" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<style>
+/* ---------------------------------------------------------------------------
+   Editorial theme, ported from /closing.
+   ---------------------------------------------------------------------------
+   closing.html is a standalone page: it does not load navigator-shared.css and
+   carries its own component rules. This page does load the shared stylesheet
+   and uses its components, so rather than fork 600 lines of CSS, this block
+   re-points the shared stylesheet's own variables at closing's palette and
+   swaps the typography. The shared components then render in the editorial
+   style with no markup changes.
+
+   Palette values are copied verbatim from closing.html so the two pages
+   cannot drift apart on colour.
+   ------------------------------------------------------------------------ */
+:root{
+  --ink:#1B2A3A; --ink-soft:#5B6570; --paper:#FBFAF7; --panel:#FFFFFF;
+  --rule:#D8DAD5; --rule-soft:#E9EAE6;
+  --flag:#B01F12; --flag-tint:#FBEEEC;
+  --ok:#2C6A57; --ok-tint:#EDF3F0;
+  --hold:#8A6A16; --hold-tint:#FAF3E2;
+}
+:root{
+  --bg:var(--paper); --bg-alt:#F4F2ED; --surface:var(--panel); --surface-2:#F4F2ED;
+  --bg-gradient:var(--paper);
+  --text:var(--ink); --text-dim:var(--ink-soft); --text-dimmer:#7C8791;
+  --border:var(--rule); --border-strong:#BFC3BC;
+  --accent:#FFFFFF; --accent-deep:var(--flag); --accent-2:var(--ok); --accent-2-deep:#22513F;
+  --accent-3:var(--flag); --accent-3-deep:var(--flag); --yellow:var(--hold-tint);
+  --status-active:var(--ok); --status-active-deep:#22513F; --status-paused:var(--ink-soft);
+  --gradient:var(--ink); --gradient-text:none; --gradient-warm:var(--ink);
+  --radius:3px; --radius-sm:2px;
+  --shadow-hard:5px 5px 0 rgba(27,42,58,.10);
+  --shadow-hard-sm:4px 4px 0 rgba(27,42,58,.09);
+  --shadow-hard-xs:3px 3px 0 rgba(27,42,58,.08);
+  --shadow-soft:0 24px 60px -32px rgba(27,42,58,.16);
+  --shadow-glow:0 0 0 1px rgba(27,42,58,.14);
+}
+
+body{ font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif; font-size:17px; line-height:1.6; }
+h1,h2,h3,h4{ font-family:"Newsreader",Georgia,serif; font-weight:500; letter-spacing:-0.01em; }
+h3,h4{ font-weight:600; }
+.logo,.nav-subbrand{ font-family:"Newsreader",Georgia,serif; font-weight:600; letter-spacing:0; }
+
+/* The shared stylesheet paints this headline span with --gradient-text and
+   sets color:transparent. That variable is `none` in this theme, so without
+   this rule the hero headline renders transparent over nothing and vanishes. */
+.hero h1 .grad{
+  background:none; -webkit-background-clip:border-box; background-clip:border-box;
+  color:var(--flag);
+}
+
+/* --gradient collapses to solid ink here, and both of these draw ink on ink. */
+.logo-mark{ background:var(--ink); }
+.logo-mark svg{ stroke:var(--paper); }
+.pill span.dot{ color:var(--paper); }
+
+/* Figures set in mono with tabular numerals, as /closing sets its amounts;
+   the headline price stays in the serif, as its .fig does. */
+.stat-value,.report-number-card .num-value,.quote-card .qprice{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
+  font-variant-numeric:tabular-nums;
+}
+.price-amount{ font-family:"Newsreader",Georgia,serif; font-weight:500; }
+
+/* /closing's primary action is a solid ink block with a square edge, not a
+   white card on a hard shadow. */
+.btn{ border-radius:2px; font-weight:500; }
+.btn-primary{ background:var(--ink); color:var(--paper); border-color:var(--ink); box-shadow:none; }
+.btn-primary:hover{ background:#0F1D2B; color:var(--paper); }
+
+/* A violet-and-teal wash belongs to the old palette, not to newsprint. */
+.bg-noise{ display:none; }
+</style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -144,7 +217,12 @@
         <ul class="price-feats">
           <li><span class="tick">✓</span> Covers reserves, capital projects, assessments, insurance, and governance</li>
           <li><span class="tick">✓</span> Every finding cites the page it came from</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
+          <!-- Was "usually within a couple of minutes". A measured seven-document
+               package (reserve study, budget, five sets of minutes) took 35
+               minutes end to end on 2026-09-06; a single document took 11. Each
+               document is read separately, so the honest promise scales with the
+               size of the package rather than quoting a best case. -->
+          <li><span class="tick">✓</span> Delivered automatically — usually 10–15 minutes, up to about 40 for a full document package</li>
         </ul>
         <a href="https://buy.stripe.com/cNi00jaos92s60cfskabK0d" data-stripe-link="hoa" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- Why this exists rather than a toast: the checks that run before
