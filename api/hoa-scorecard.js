@@ -129,7 +129,7 @@ const SCORECARD_TOOL = {
           name: { type: 'string' },
           year: { type: 'string' },
           cost: { type: 'string' },
-          per_unit: { type: 'string', description: 'Cost divided by units, or empty if units are unknown.' },
+          per_unit: { type: 'string', description: 'Cost divided by units, as a bare dollar figure like "$10,682". Do not include the words "per unit" — the page adds that label itself.' },
         },
         required: ['name', 'year', 'cost', 'per_unit'],
       },

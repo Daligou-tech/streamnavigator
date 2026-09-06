@@ -341,8 +341,14 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:40px;font-size
       row('Study recommends', s.recommended_contribution),
       row('Units', s.units),
       s.largest_project && s.largest_project.name
+        // The model is asked for a bare figure, but it sometimes writes
+        // "$10,682 per unit" anyway — appending the label unconditionally
+        // produced "$10,682 per unit/unit" on the first live run.
         ? row(s.largest_project.name + (s.largest_project.year ? ' (' + s.largest_project.year + ')' : ''),
-              [s.largest_project.cost, s.largest_project.per_unit ? s.largest_project.per_unit + '/unit' : ''].filter(Boolean).join(' · '))
+              [s.largest_project.cost,
+               s.largest_project.per_unit
+                 ? (/unit/i.test(s.largest_project.per_unit) ? s.largest_project.per_unit : s.largest_project.per_unit + '/unit')
+                 : ''].filter(Boolean).join(' · '))
         : null
     ].filter(Boolean).forEach(function(r){ rows.appendChild(r); });
 
