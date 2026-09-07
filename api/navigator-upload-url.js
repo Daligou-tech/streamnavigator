@@ -65,15 +65,28 @@ module.exports = async function handler(req, res) {
   const ext = extensionOf(rawName);
   const contentType = String(body.contentType || '').toLowerCase();
 
-  // Extension and MIME are checked independently: a browser reports an empty
-  // or wrong type often enough (HEIC from iOS, PDFs from some scanners) that
-  // trusting either one alone rejects real customer documents.
+  // Extension and MIME are checked independently, and an empty contentType is
+  // allowed through the second check: browsers report the type inconsistently
+  // for scanner PDFs, so trusting MIME alone would refuse real documents. The
+  // extension check is the one that always applies.
+  //
+  // Both lists dropped HEIC and HEIF. This endpoint used to accept them, and
+  // said so in the message below, while nothing downstream could read one —
+  // the engines hand image/heic to an API that takes jpeg, png, gif and webp.
+  // On the direct-upload products the file was therefore accepted, stored, and
+  // failed during analysis, which for HOA is after the customer has paid.
   if (!ALLOWED_UPLOAD_EXT.includes(ext)) {
-    res.status(400).json({ ok: false, error: 'That file type is not supported — send a PDF, JPG, PNG or HEIC.' });
+    res.status(400).json({ ok: false, error: 'That file type is not supported. Send a PDF, JPG, PNG or WEBP. '
+        + 'iPhone photos save as HEIC, which we cannot read — open the photo, tap '
+        + 'Share, then Copy Photo and paste it into an email to yourself to get a JPEG, '
+        + 'or send the original PDF of the document, which works best.' });
     return;
   }
   if (contentType && !ALLOWED_UPLOAD_MIME.includes(contentType)) {
-    res.status(400).json({ ok: false, error: 'That file type is not supported — send a PDF, JPG, PNG or HEIC.' });
+    res.status(400).json({ ok: false, error: 'That file type is not supported. Send a PDF, JPG, PNG or WEBP. '
+        + 'iPhone photos save as HEIC, which we cannot read — open the photo, tap '
+        + 'Share, then Copy Photo and paste it into an email to yourself to get a JPEG, '
+        + 'or send the original PDF of the document, which works best.' });
     return;
   }
 

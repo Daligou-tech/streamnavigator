@@ -60,16 +60,26 @@ const STAGING_TTL_HOURS = 24;
 // approaches it, and a script filling the bucket hits it quickly.
 const MAX_STAGED_PER_IP = 60;
 
+// HEIC and HEIF are deliberately absent, and their absence is the point.
+//
+// This endpoint used to accept them and say so: "send a PDF, JPG, PNG or
+// HEIC". Nothing downstream can read one. Every engine maps .heic to
+// image/heic and hands it to an API that accepts jpeg, png, gif and webp only,
+// so the upload succeeded, the document sat in storage, and the analysis died
+// on it later. On the direct-upload products — HOA among them — later means
+// after payment.
+//
+// Accepting a file we cannot read is worse than refusing it. A refusal at the
+// upload is one clear sentence and a customer who can act on it; the same file
+// accepted becomes a failed report, an alert, and a refund.
 const ALLOWED_UPLOAD_MIME = [
   'application/pdf',
   'image/jpeg',
   'image/png',
   'image/webp',
-  'image/heic',
-  'image/heif',
 ];
 
-const ALLOWED_UPLOAD_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+const ALLOWED_UPLOAD_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
 const asMB = (bytes) => Math.round((bytes / (1024 * 1024)) * 10) / 10;
 
