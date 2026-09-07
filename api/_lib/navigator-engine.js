@@ -27,7 +27,7 @@ const {
   runClosingAudit, extractLoanEstimate, toLoanEstimateRecord,
 } = require('./closing-extract');
 const { buildEmails } = require('./closing-emails');
-const { rankFindings } = require('./closing-audit');
+const { rankFindings, Severity } = require('./closing-audit');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -220,10 +220,11 @@ The deterministic audit engine has already run every check and produced a ranked
 
 Hard rules:
 - Never state a dollar figure, benchmark, expected amount, or regulatory citation that is not present in the findings you were given. If a fee is not covered by a finding, it is not in the report.
-- Never upgrade a severity. Reproduce the engine's language exactly: a confirmed mathematical error, a potential TRID violation, a potential overcharge, above the available benchmark, a potential duplicate, requires documentation, cannot benchmark, or informational. Never say a fee is illegal, never promise a refund, never call a charge excessive unless the finding says so.
+- Never upgrade a severity. Reproduce the engine's language exactly: a confirmed mathematical error, a potential TRID violation, a potential overcharge, a potential duplicate, requires documentation, or informational. Never say a fee is illegal, never promise a refund, never call a charge excessive unless the finding says so.
+- THE DOCUMENTS ARE ATTACHED SO YOU CAN QUOTE THEM, NOT SO YOU CAN AUDIT THEM. You will see charges on the Closing Disclosure that no finding mentions. That is the normal case and it needs no explanation: a fee with no finding simply does not appear in the report. Do not list it, do not total it, do not account for its absence, and do not create a section to hold it. Quote the documents only to support a finding you were given — the wording of a contract provision, a date, a line label.
 - Distinguish hard rules from market norms exactly as the finding's evidence basis does. A published rate table or a statute is a requirement. A market range is not.
 - Carry each finding's actionability through: still changeable before closing, likely locked in, a possible post-closing remedy, or needing another document.
-- Where a finding says cannot benchmark, say that in those words rather than filling the gap.
+- There is no benchmarking. Do not use the words "benchmark", "cannot benchmark", "market rate" or "market data" anywhere in the report. No finding will ask you to.
 - A finding with basedOnCustomerInput true rests on a figure the customer typed in because we could not read it. Say so wherever you present it, and never describe it as verified or confirmed. The document has not been shown to be wrong; their typing might be.
 
 HEADLINE AND ORDERING — this determines whether the report reads as work delivered or work not done.
@@ -234,8 +235,6 @@ Lead with the strongest TRUE statement available, in this order of preference:
 3. If there are none of the above: lead with WHAT WAS VERIFIED. Name the specific checks that passed and the numbers behind them — Cash to Close reconciling to the cent, prepaid interest matching the note rate and day count, an escrow cushion sitting below the federal maximum with the margin stated. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on this document was independently reproduced and holds.
 
 Never open with what could not be done. Fields that could not be read are real and must be reported honestly — but they belong AFTER the verified results, not in the headline. A customer who receives a clean audit has bought confirmation that the numbers are right, and the report must deliver that rather than apologise for the gaps around it.
-
-This product does not compare fees against market rates — not here, not anywhere, not for anyone. It checks arithmetic, statutory limits, and the customer's own documents against each other. If that limit needs stating, state it ONCE in one sentence: we name a fee as high only when we can show the schedule or filing behind it, and we do not hold that data. Never write a per-fee "cannot benchmark" line, never list fees under such a heading, and never say the gap is specific to this jurisdiction or county — it is not, and implying we hold rate data somewhere else is a claim we cannot support. If no finding mentions benchmarking, the report must not mention it either.
 
 ALWAYS include a section naming what was independently verified, whether or not anything was flagged. Every finding marked "within norms" is a check that ran and passed, and every one is work the customer paid for: Cash to Close reconciling to the cent, the APR agreeing with the disclosure's own amount financed and payment, the finance charge and total of payments consistent with the payment schedule, the monthly escrow matching the disclosed annual costs, discount points matching the percentage printed beside them. Name them and give the numbers behind them. A report that flags four issues and mentions one of ten passed checks has quietly thrown away most of the work it did — and on a clean document that work is the entire product.
 
@@ -408,11 +407,42 @@ async function generateNavigatorReport(submissionId) {
         settlementName: stored.extraction.settlement_agent_name,
       });
 
+      // Flagged and passed are handed over SEPARATELY, and that is deliberate.
+      //
+      // They used to go as one ranked array. Severity order puts within-norms
+      // last, so ten passed checks sat at the bottom of a long JSON blob behind
+      // the four that needed action — and the report named exactly one of them,
+      // even after the instruction to name them all was added. The writer was
+      // not disobeying so much as summarising the tail of a list.
+      //
+      // Those ten are not filler. Each is a figure the lender printed and we
+      // reproduced independently: the APR against the amount financed, the
+      // finance charge against the payment stream, the escrow against the
+      // disclosed annual costs. On a document with nothing wrong they are the
+      // entire product, and a customer who paid $59 to be told "your lender's
+      // arithmetic is correct" deserves to see which arithmetic was checked.
+      const passed = ranked.filter((f) => f.severity === Severity.WITHIN_NORMS);
+      const flagged = ranked.filter((f) => f.severity !== Severity.WITHIN_NORMS);
+
       auditBlock = [
         '',
         'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
         'recompute them, and do not soften or escalate any severity.',
-        JSON.stringify(ranked, null, 1),
+        JSON.stringify(flagged, null, 1),
+        '',
+        passed.length
+          ? [
+            `CHECKS THAT RAN AND PASSED — ${passed.length} of them, listed below.`,
+            'These belong in the "what was independently verified" section. Name EVERY ONE,',
+            'each with the figure behind it, in the engine\'s own words. Do not compress them',
+            'into "other checks passed", do not pick a representative few, and do not drop any',
+            'for length — this list is the work the customer paid for.',
+            JSON.stringify(
+              passed.map((f) => ({ title: f.title, basis: f.basis, charged: f.charged })),
+              null, 1
+            ),
+          ].join('\n')
+          : '',
         skipped.length
           ? `Checks that could not be run because the required values were missing or unreadable: ${skipped.join(', ')}. Say so plainly rather than implying they passed.`
           : '',
