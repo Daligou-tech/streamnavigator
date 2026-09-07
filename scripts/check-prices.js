@@ -142,9 +142,35 @@ function checkPage(file, spec) {
   }
 
   // 2. checkout link
-  const links = extractCheckoutLinkIds(html);
-  if (links.length === 0) {
-    problems.push('No Stripe checkout button found on the page.');
+  //
+  // Usually on the page itself. Closing is the exception: closing.html sells a
+  // FREE scorecard, and the customer only meets a Stripe button one step later,
+  // on /closing-scorecard. spec.checkoutPage says where to look.
+  //
+  // Without it this check failed for closing on every run -- "No Stripe checkout
+  // button found" -- and since the script ends in "Do not deploy", the honest
+  // reading is that it was being ignored. A deploy gate nobody believes is worse
+  // than no gate: the price on the page and the amount Stripe charges were going
+  // unchecked on the one product where they sit furthest apart.
+  const checkoutFile = spec.checkoutPage || file;
+  const where = checkoutFile === file ? 'the page' : checkoutFile;
+  let checkoutHtml = html;
+  if (checkoutFile !== file) {
+    const checkoutFull = path.join(ROOT, checkoutFile);
+    checkoutHtml = fs.existsSync(checkoutFull)
+      ? fs.readFileSync(checkoutFull, 'utf8')
+      : null;
+  }
+
+  let links = [];
+  if (checkoutHtml === null) {
+    problems.push('Checkout page not found: ' + checkoutFile);
+  } else {
+    links = extractCheckoutLinkIds(checkoutHtml);
+  }
+
+  if (checkoutHtml !== null && links.length === 0) {
+    problems.push('No Stripe checkout button found on ' + where + '.');
   } else {
     for (const l of links) {
       if (l.id !== spec.stripeLinkId) {
@@ -153,6 +179,27 @@ function checkPage(file, spec) {
             `THIS IS THE DANGEROUS ONE — the page and the charge disagree.`
         );
       }
+    }
+  }
+
+  // 2b. Any OTHER payment link in that page's markup, on a button or not.
+  //
+  // closing-scorecard.html carried data-link-basic pointing at the retired $29
+  // document-only tier. Nothing read it, so the check above could not see it --
+  // and it sat one edit away from charging $29 again for the audit whose whole
+  // point is that a thinner upload finds less money. The config already says
+  // "if $29 shows up on the page again, this check should fail"; it could not,
+  // because it was only ever looking at hrefs on marked buttons.
+  if (checkoutHtml !== null) {
+    const strays = [...new Set(
+      (checkoutHtml.match(/buy\.stripe\.com\/([A-Za-z0-9]+)/g) || [])
+        .map((u) => u.split('/').pop())
+    )].filter((id) => id !== spec.stripeLinkId);
+    if (strays.length) {
+      problems.push(
+        checkoutFile + ' still references payment link(s) ' + strays.join(', ')
+          + '. Remove them — an unused link is one edit away from being the live one.'
+      );
     }
   }
 

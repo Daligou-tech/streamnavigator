@@ -11,6 +11,8 @@
       "label": "Closing Navigator",
       "expectedPriceCents": 5900,
       "stripeLinkId": "28EdR90NS7Yo0FS0xqabK0e",
+      "checkoutPage": "closing-scorecard.html",
+      "_checkoutPage": "Closing is the only product whose checkout is not on its own page. closing.html sells a FREE scorecard; the customer meets a Stripe button one step later, on /closing-scorecard. Without this the checker looked for a button on closing.html, found none, and failed the whole deploy gate -- so the price on the page and the amount Stripe charges were going unchecked on the one product where they are furthest apart.",
       "_tiers": "Flat $59. The retired $29 document-only tier is deliberately no longer listed as an allowed price: charging less for a thinner upload gave customers a reason to withhold the Loan Estimate and purchase contract, which are the documents that find recoverable money. Extra documents now add checks at no extra cost. If $29 shows up on the page again, this check should fail."
     },
     "contractor.html": {
