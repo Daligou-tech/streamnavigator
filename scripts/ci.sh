@@ -49,10 +49,17 @@ done
 # main. Fail loudly rather than let the working tree silently differ from what
 # is deployed. Skipped where there is no git checkout — the Vercel build
 # container is not guaranteed to have one.
+#
+# --untracked-files=no matters. Plain `git status --porcelain` also lists
+# untracked files, which no patch script creates and which say nothing about
+# whether one has been applied. Seven stray .patch files left in the working
+# tree made this step fail on every single run, whatever the change — so the
+# one signal it exists to give became noise, and "ci.sh exits 1" stopped
+# meaning anything. It is only asking whether a TRACKED file moved.
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if [ -n "$(git status --porcelain)" ]; then
+  if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     echo "::error::A patch script modified tracked files — it had not been applied on main:"
-    git status --porcelain
+    git status --porcelain --untracked-files=no
     git --no-pager diff
     exit 1
   fi
