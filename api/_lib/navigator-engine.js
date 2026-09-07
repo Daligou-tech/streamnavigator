@@ -233,11 +233,13 @@ Lead with the strongest TRUE statement available, in this order of preference:
 2. Potential overcharges or duplicates, with the dollar figure.
 3. If there are none of the above: lead with WHAT WAS VERIFIED. Name the specific checks that passed and the numbers behind them — Cash to Close reconciling to the cent, prepaid interest matching the note rate and day count, an escrow cushion sitting below the federal maximum with the margin stated. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on this document was independently reproduced and holds.
 
-Never open with what could not be done. Fees that could not be benchmarked and fields that could not be read are real and must be reported honestly — but they belong AFTER the verified results, not in the headline. A customer who receives a clean audit has bought confirmation that the numbers are right, and the report must deliver that rather than apologise for the gaps around it.
+Never open with what could not be done. Fields that could not be read are real and must be reported honestly — but they belong AFTER the verified results, not in the headline. A customer who receives a clean audit has bought confirmation that the numbers are right, and the report must deliver that rather than apologise for the gaps around it.
 
-When reporting unbenchmarkable fees, say once and plainly why: we name a fee as high only when we can show the schedule or filing behind it, and for these we hold no reliable data for this jurisdiction. Do not repeat that sentence per fee. Make clear it is a limit on our data, not a clean bill of health for those fees.
+This product does not compare fees against market rates — not here, not anywhere, not for anyone. It checks arithmetic, statutory limits, and the customer's own documents against each other. If that limit needs stating, state it ONCE in one sentence: we name a fee as high only when we can show the schedule or filing behind it, and we do not hold that data. Never write a per-fee "cannot benchmark" line, never list fees under such a heading, and never say the gap is specific to this jurisdiction or county — it is not, and implying we hold rate data somewhere else is a claim we cannot support. If no finding mentions benchmarking, the report must not mention it either.
 
-Structure and length. One to two pages. Open with the headline as above. Then the top five findings by rank, two or three lines each: what the charge is, what it should be, the basis, the dollar impact, whether it can still be changed. Then every remaining material finding as a single compact line. Then a short section for checks that could not be run at all, and one for anything unreadable. Do not omit findings to save space; keep the basis to a short phrase rather than a full citation.
+ALWAYS include a section naming what was independently verified, whether or not anything was flagged. Every finding marked "within norms" is a check that ran and passed, and every one is work the customer paid for: Cash to Close reconciling to the cent, the APR agreeing with the disclosure's own amount financed and payment, the finance charge and total of payments consistent with the payment schedule, the monthly escrow matching the disclosed annual costs, discount points matching the percentage printed beside them. Name them and give the numbers behind them. A report that flags four issues and mentions one of ten passed checks has quietly thrown away most of the work it did — and on a clean document that work is the entire product.
+
+Structure and length. One to two pages. Open with the headline as above. Then the top five findings by rank, two or three lines each: what the charge is, what it should be, the basis, the dollar impact, whether it can still be changed. Then every remaining material finding as a single compact line. Then the verified section described above. Then a short section for checks that could not be run at all, and one for anything unreadable. Do not omit findings to save space; keep the basis to a short phrase rather than a full citation.
 
 Close with two short ready-to-send emails, one to the lender and one to the settlement agent, each covering only the findings flagged for that recipient. If no findings are flagged for a recipient, omit that email entirely and say so in one line rather than writing a placeholder.
 
@@ -398,6 +400,12 @@ async function generateNavigatorReport(submissionId) {
           ? stored.extraction.borrower_names.filter(Boolean).join(' and ')
           : null,
         lenderName: stored.extraction.lender_name,
+        // Without this the settlement agent's letter was addressed to nobody —
+        // `to: null` — even though the agent is named on the first page of every
+        // Closing Disclosure. The model's own draft named them correctly because
+        // it reads the document; the structured letter could not, because the
+        // name was never extracted.
+        settlementName: stored.extraction.settlement_agent_name,
       });
 
       auditBlock = [

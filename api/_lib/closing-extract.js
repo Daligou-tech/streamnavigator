@@ -84,6 +84,7 @@ const EXTRACTION_TOOL = {
       },
       property_address: { type: 'string' },
       lender_name: { type: 'string', description: 'The lender named on the document.' },
+      settlement_agent_name: { type: 'string', description: 'The settlement agent, title company or closing agent named in the Closing Information box or the Contact Information table.' },
       borrower_names: {
         type: 'array', items: { type: 'string' },
         description: 'Borrower name(s) exactly as printed.',

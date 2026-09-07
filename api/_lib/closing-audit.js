@@ -26,6 +26,18 @@
 const toCents = (d) => Math.round(Number(d) * 100);
 const toDollars = (c) => Math.round(c) / 100;
 
+// toDollars returns a NUMBER, which is right for the charged/expected/impact
+// fields — callers compare and total them. It is wrong inside a sentence:
+// interpolated into prose it renders "Contract provides 6000" and "a shortfall
+// of 3000". Those strings are not internal. They are printed in the report and
+// pasted verbatim into the letter the customer sends their lender, where bare
+// integers read as a machine's output rather than a buyer's question.
+//
+// usd() is for prose only. Never use it where a number is expected.
+const usd = (cents) => '$' + (Math.round(cents) / 100).toLocaleString('en-US', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+
 // ---------------------------------------------------------------------------
 // taxonomy
 // ---------------------------------------------------------------------------
@@ -274,7 +286,7 @@ function checkPrepaidInterest(opts) {
     expected: toDollars(expected),
     variance: toDollars(variance),
     basis:
-      `${loanAmount} at ${annualRatePct}% = ${toDollars(Math.round(toCents(pd)))}/day on a ` +
+      `${usd(toCents(loanAmount))} at ${annualRatePct}% = ${usd(toCents(pd))}/day on a ` +
       `${actualBasis}-day basis; ${days} days from ${isoDate(close)} to month end`,
     whyItMatters:
       'Prepaid interest is a no-tolerance item under Reg Z, so a Loan Estimate comparison will ' +
@@ -355,7 +367,7 @@ function checkEscrowCushion(annualDisbursements, cushionCharged) {
     expected: toDollars(maxCushion),
     variance: toDollars(variance),
     basis:
-      `Annual disbursements ${toDollars(annualCents)} / 6 = ${toDollars(maxCushion)} permitted ` +
+      `Annual disbursements ${usd(annualCents)} / 6 = ${usd(maxCushion)} permitted ` +
       'cushion (12 CFR 1024.17(c)(1)(ii)).',
     whyItMatters: "Excess cushion is your cash sitting in the servicer's account at closing.",
     recommendedAction: 'Ask the lender to re-run the initial escrow account statement.',
@@ -1181,8 +1193,8 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
           'Zero-tolerance charges may not increase at all unless a documented changed circumstance ' +
           'supported a valid revised Loan Estimate.',
         recommendedAction:
-          `Ask the lender to either restore ${toDollars(leAmt)} or produce the changed circumstance ` +
-          `documentation. Estimated cure: ${toDollars(delta)}.`,
+          `Ask the lender to either restore ${usd(leAmt)} or produce the changed circumstance ` +
+          `documentation. Estimated cure: ${usd(delta)}.`,
         askLender: true,
         detail: { bucket, matchedBy },
       })
@@ -1295,7 +1307,7 @@ function reconcileContract(terms, cdCredits) {
   const shortfall = agreedCents - onCdCents;
 
   const breakdown = list
-    .map((t) => `${t.label} ${toDollars(toCents(t.amount))} (${t.provision})`)
+    .map((t) => `${t.label} ${usd(toCents(t.amount))} (${t.provision})`)
     .join('; ');
 
   if (shortfall <= 0) {
@@ -1308,14 +1320,17 @@ function reconcileContract(terms, cdCredits) {
       charged: toDollars(onCdCents),
       expected: toDollars(agreedCents),
       variance: toDollars(-shortfall),
-      basis: `Contract provides ${toDollars(agreedCents)} — ${breakdown}. The Closing Disclosure `
-        + `shows ${toDollars(onCdCents)} in credits.`,
+      basis: `Contract provides ${usd(agreedCents)} — ${breakdown}. The Closing Disclosure `
+        + `shows ${usd(onCdCents)} in credits.`,
     })];
   }
 
   return [finding({
     checkId: 'CONTRACT_RECON',
-    title: `${toDollars(shortfall)} of your negotiated credits does not appear at closing`,
+    // No "your" here. This title is printed in the report AND used as the
+    // numbered heading in the letter to the settlement agent, where "your"
+    // stops meaning the customer and starts meaning the recipient.
+    title: `${usd(shortfall)} of the negotiated seller credit does not appear at closing`,
     severity: Severity.POTENTIAL_OVERCHARGE,
     evidence: EvidenceKind.CONTRACT,
     actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
@@ -1323,8 +1338,8 @@ function reconcileContract(terms, cdCredits) {
     charged: toDollars(onCdCents),
     expected: toDollars(agreedCents),
     variance: toDollars(-shortfall),
-    basis: `Contract provides ${toDollars(agreedCents)} — ${breakdown}. The Closing Disclosure `
-      + `shows ${toDollars(onCdCents)} in credits, a shortfall of ${toDollars(shortfall)}.`,
+    basis: `Contract provides ${usd(agreedCents)} — ${breakdown}. The Closing Disclosure `
+      + `shows ${usd(onCdCents)} in credits, a shortfall of ${usd(shortfall)}.`,
     whyItMatters:
       'A missing negotiated credit is the most recoverable error we look for, and no comparison of '
       + 'lender documents can find it — only the contract says what was agreed.',

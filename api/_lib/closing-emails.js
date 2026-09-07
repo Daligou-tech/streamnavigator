@@ -74,15 +74,44 @@ function renderItem(f, index) {
     lines.push('   This affects about ' + variance + '.');
   }
 
+  // The basis is the derivation, stated in the third person — "12 CFR
+  // 1026.19(e)(3)(i); origination is a zero-tolerance charge". It is the one
+  // engine field addressed to nobody in particular, so it survives being put
+  // in front of the recipient.
   if (hasText(f.basis)) lines.push('   ' + f.basis.trim());
 
-  // whyItMatters explains the stake to the customer. It is useful context for
-  // the recipient too, but only when it is not restating the basis.
-  if (hasText(f.whyItMatters) && f.whyItMatters.trim() !== (f.basis || '').trim()) {
-    lines.push('   ' + f.whyItMatters.trim());
+  // whyItMatters and recommendedAction are DELIBERATELY not printed here.
+  //
+  // Both are written by the audit engine TO THE CUSTOMER, in the second person,
+  // and this letter is written BY the customer to a third party. Pasting them in
+  // inverted every one of them:
+  //
+  //   "Excess cushion is YOUR cash sitting in the servicer's account"
+  //      -> in a letter to the lender, "your" becomes the lender's.
+  //   "ASK THE LENDER to show the day count"
+  //      -> addressed to the lender, instructing them to ask themselves.
+  //   "A missing negotiated credit is the most recoverable error WE look for"
+  //      -> StreamNavigator's voice, in a letter signed by the customer.
+  //
+  // The letter does not lose anything by dropping them. The charge, the
+  // expected figure, the difference and the basis are all still here, and the
+  // ask the recommendedAction was making is already made once, properly, in the
+  // closing paragraph. The customer still gets both fields — in the report,
+  // where they are addressed to the right person.
+  // The one case where the recommended action carried a fact the recipient
+  // genuinely needs, rather than an instruction aimed at the customer. Both day
+  // counts are on the finding already; only the sentence around them was wrong.
+  // (daysAssumed is what the closing date supports; impliedDays is what the
+  // charge works out to.)
+  const d = f.detail || {};
+  const supported = typeof d.daysAssumed === 'number' ? d.daysAssumed : d.supportedDays;
+  if (typeof d.impliedDays === 'number' && typeof supported === 'number') {
+    lines.push('   The charge works out to about ' + d.impliedDays.toFixed(1)
+      + ' days rather than the ' + supported + ' I make it.');
+  } else if (typeof d.excessDays === 'number' && typeof d.supportedDays === 'number') {
+    lines.push('   That is ' + d.excessDays + ' days more than the ' + d.supportedDays
+      + ' I make it from the closing date.');
   }
-
-  if (hasText(f.recommendedAction)) lines.push('   ' + f.recommendedAction.trim());
 
   if (f.basedOnCustomerInput) {
     lines.push('   (I supplied one of the figures behind this myself, so please ' +
