@@ -139,6 +139,13 @@ module.exports = async (req, res) => {
   // each file to Storage with a signed URL and sends only the resulting staging
   // path. files[] is the legacy base64 fallback, kept because a browser holding
   // a cached copy of navigator-shared.js will keep using it.
+  // Which affiliate sent them, if any. Stored on the submission so a paid row
+  // can be attributed later; validated to the same narrow shape the browser
+  // uses, because this arrives from a request body like everything else here.
+  const referralCode = /^[A-Za-z0-9_-]{2,32}$/.test(String(body.referral_code || ''))
+    ? String(body.referral_code)
+    : null;
+
   const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES) : [];
   const uploadedPaths = Array.isArray(body.uploadedPaths)
     ? body.uploadedPaths.filter((p) => typeof p === 'string').slice(0, MAX_FILES)
@@ -222,6 +229,7 @@ module.exports = async (req, res) => {
       form_data: {
         stage: 'scorecard',
         ip_hash: ipHash,
+        referral_code: referralCode,
       },
     })
     .select('id, access_token')
@@ -403,7 +411,10 @@ module.exports = async (req, res) => {
     await admin
       .from('navigator_submissions')
       .update({
-        form_data: { stage: 'scorecard', ip_hash: ipHash, extraction, wrong_document: true },
+        // referral_code is repeated in every one of these writes because they
+        // REPLACE form_data rather than merge into it. Drop it from one and the
+        // affiliate stops being paid for that customer, silently.
+        form_data: { stage: 'scorecard', ip_hash: ipHash, referral_code: referralCode, extraction, wrong_document: true },
         updated_at: new Date().toISOString(),
       })
       .eq('id', submission.id);
@@ -666,6 +677,7 @@ module.exports = async (req, res) => {
       form_data: {
         stage: 'scorecard',
         ip_hash: ipHash,
+        referral_code: referralCode,
         extraction,
         scorecard,
         documents: classified,

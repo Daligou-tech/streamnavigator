@@ -103,6 +103,55 @@ const DIRECT_MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 const CLOSING_MAX_FILE_BYTES = 20 * 1024 * 1024;
 const CLOSING_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 
+// ---------- Referral attribution -------------------------------------------
+//
+// An affiliate sends traffic with ?ref=THEIRCODE. The code is captured on
+// whatever page it lands on, kept for 90 days, and attached to whichever
+// submission the visitor eventually makes -- the page someone lands on and the
+// page they buy from are rarely the same, and almost never the same visit.
+//
+// This is the BACKSTOP, not the primary record. The primary record is the
+// Stripe promotion code the affiliate's audience types at checkout: Stripe
+// counts those itself, they survive a cleared browser and a different device,
+// and they cannot drift out of step with what was actually charged. This
+// catches the people who followed the link and never typed the code.
+const REFERRAL_KEY = 'sn_referral';
+const REFERRAL_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+// Deliberately narrow. This value is written onto a submission row and read
+// back out into a payout report, so anything that is not a plain code is not a
+// code -- there is no reason for a referral tag to contain punctuation.
+const REFERRAL_CODE_RE = /^[A-Za-z0-9_-]{2,32}$/;
+
+function captureReferralCode() {
+  try {
+    const param = new URLSearchParams(window.location.search).get('ref');
+    if (!param || !REFERRAL_CODE_RE.test(param)) return;
+    // Last touch wins. If someone arrives through a second affiliate weeks
+    // later, that is the one whose recommendation actually produced the sale.
+    localStorage.setItem(REFERRAL_KEY, JSON.stringify({ code: param, ts: Date.now() }));
+  } catch (err) {
+    // Private browsing, or storage disabled. Attribution is lost; the sale is
+    // not, and nothing about the purchase depends on this succeeding.
+  }
+}
+
+function getReferralCode() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REFERRAL_KEY) || 'null');
+    if (!raw || !raw.code || !REFERRAL_CODE_RE.test(raw.code)) return null;
+    // Re-checked on read as well as on write. A code stored by an older
+    // version of this file has not been through the pattern above.
+    if (!raw.ts || Date.now() - raw.ts > REFERRAL_TTL_MS) return null;
+    return raw.code;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Guarded: this file is read as text by the test suite, and window does not
+// exist there.
+if (typeof window !== 'undefined') captureReferralCode();
+
 // opts.maxFileBytes / opts.maxTotalBytes let a page that still uses the legacy
 // base64 route keep the smaller ceiling. Defaults are the direct-upload
 // limits, because that is now the common case.
@@ -303,6 +352,13 @@ async function uploadFileDirect(product, file) {
 // of megabytes rather than three.
 async function submitNavigatorIntake({ product, email, formData, files, onProgress }) {
   const list = Array.from(files || []);
+
+  // Attached here rather than on each of the eleven pages that call this, so a
+  // new product page cannot ship without attribution and quietly cost an
+  // affiliate their share.
+  const intakeFormData = Object.assign({}, formData || {});
+  const referralCode = getReferralCode();
+  if (referralCode) intakeFormData.referral_code = referralCode;
   let uploadedPaths = [];
   let encoded = [];
 
@@ -331,7 +387,7 @@ async function submitNavigatorIntake({ product, email, formData, files, onProgre
   const resp = await fetch('/api/navigator-intake', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ product, email, formData, files: encoded, uploadedPaths }),
+    body: JSON.stringify({ product, email, formData: intakeFormData, files: encoded, uploadedPaths }),
   });
   const data = await resp.json();
   if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong saving your submission.');

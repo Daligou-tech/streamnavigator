@@ -965,7 +965,8 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(Object.assign(
-          { email: email, files: encoded, uploadedPaths: uploadedPaths },
+          { email: email, files: encoded, uploadedPaths: uploadedPaths,
+            referral_code: getReferralCode() },
           answerPayload()
         )),
       });
