@@ -32,6 +32,11 @@ const {
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 const { runDocumentAudit } = require('./_lib/closing-service');
 const { isTestEmail } = require('./_lib/test-submissions');
+const {
+  MAX_CLOSING_FILE_BYTES,
+  MAX_CLOSING_TOTAL_BYTES,
+  isStagingPath,
+} = require('./_lib/upload-limits');
 
 // Uploads arrive base64-encoded in a JSON body. Vercel caps a function request
 // body at 4.5MB and returns 413 FUNCTION_PAYLOAD_TOO_LARGE above it — at the
@@ -47,6 +52,13 @@ const MAX_TOTAL_BYTES = Math.floor((VERCEL_BODY_LIMIT_BYTES / BASE64_INFLATION) 
 const MAX_FILE_BYTES = MAX_TOTAL_BYTES;
 const MAX_TOTAL_MB = Math.round((MAX_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
 const MAX_FILES = 12;
+
+// What the page actually advertises now. Uploads take the direct route to
+// Storage, so the constants above bound only the legacy fallback; this is the
+// ceiling a customer meets, and it comes from the size of the single
+// classification request every attached document is read in. See
+// api/_lib/upload-limits.js.
+const MAX_CLOSING_TOTAL_MB = Math.round((MAX_CLOSING_TOTAL_BYTES / (1024 * 1024)) * 10) / 10;
 
 // Mirrors TIERS.basic in _lib/closing-extract.js. Pricing is flat: the id says
 // which analysis ran, not what the customer is charged.
@@ -123,10 +135,36 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Two routes in. uploadedPaths is the current one: the browser already PUT
+  // each file to Storage with a signed URL and sends only the resulting staging
+  // path. files[] is the legacy base64 fallback, kept because a browser holding
+  // a cached copy of navigator-shared.js will keep using it.
   const files = Array.isArray(body.files) ? body.files.slice(0, MAX_FILES) : [];
-  if (!files.length) {
+  const uploadedPaths = Array.isArray(body.uploadedPaths)
+    ? body.uploadedPaths.filter((p) => typeof p === 'string').slice(0, MAX_FILES)
+    : [];
+
+  if (!files.length && !uploadedPaths.length) {
     res.status(400).json({ ok: false, error: 'Please attach your Closing Disclosure to continue.' });
     return;
+  }
+
+  // Only paths this server issued may be claimed -- anything else is a
+  // traversal attempt or a pointer at someone else's submission.
+  if (uploadedPaths.some((p) => !isStagingPath(p))) {
+    res.status(400).json({ ok: false, error: 'We could not verify that upload. Please attach your documents again.' });
+    return;
+  }
+
+  // Turned away by name here, before the row is inserted and before a token is
+  // spent -- the same courtesy the base64 route below gets.
+  for (const p of uploadedPaths) {
+    const objectName = p.slice(p.lastIndexOf('/') + 1);
+    const originalName = objectName.split('__').slice(1).join('__') || objectName;
+    if (!guessMediaType(originalName)) {
+      res.status(400).json({ ok: false, error: unsupportedFileMessage(originalName) });
+      return;
+    }
   }
 
   let totalBytes = 0;
@@ -215,10 +253,73 @@ module.exports = async (req, res) => {
     );
   }
 
+  // Claim the files the browser uploaded straight to Storage. Sizes are read
+  // back from the bucket rather than trusted from the request: what the client
+  // declared when it asked for a signed URL is a claim, and the stored object is
+  // the only authority on what was actually written.
+  let directBytes = 0;
+  const tooLarge = [];
+  for (const stagedPath of uploadedPaths) {
+    const objectName = stagedPath.slice(stagedPath.lastIndexOf('/') + 1);
+    // The staging name is "<uuid>__<already sanitized original name>"; keep the
+    // readable half so citations name the document rather than a UUID.
+    const originalName = objectName.split('__').slice(1).join('__') || objectName;
+    const destination = `closing/${submission.id}/${Date.now()}-${originalName}`;
+
+    const { error: moveError } = await admin.storage
+      .from('navigator-uploads')
+      .move(stagedPath, destination);
+    if (moveError) continue; // never uploaded, already claimed, or already swept
+    filePaths.push(destination);
+
+    const { data: blob, error: downloadError } = await admin.storage
+      .from('navigator-uploads')
+      .download(destination);
+    if (downloadError || !blob) continue;
+
+    const buffer = Buffer.from(await blob.arrayBuffer());
+
+    // Named, not silently dropped. A customer whose purchase contract vanished
+    // from the analysis with no explanation cannot act on that, and the checks
+    // it unlocks would simply be reported as "needs another document" -- for a
+    // document they did upload.
+    if (buffer.length > MAX_CLOSING_FILE_BYTES
+      || directBytes + buffer.length > MAX_CLOSING_TOTAL_BYTES) {
+      tooLarge.push(originalName);
+      continue;
+    }
+    directBytes += buffer.length;
+
+    const mediaType = guessMediaType(originalName);
+    const dataBase64 = buffer.toString('base64');
+    contentBlocks.push(
+      mediaType === 'application/pdf'
+        ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: dataBase64 } }
+        : { type: 'image', source: { type: 'base64', media_type: mediaType, data: dataBase64 } }
+    );
+  }
+
   await admin
     .from('navigator_submissions')
     .update({ file_paths: filePaths, updated_at: new Date().toISOString() })
     .eq('id', submission.id);
+
+  // Nothing readable survived. The files are still on the record, so say what
+  // happened rather than letting extraction fail on an empty message.
+  if (!contentBlocks.length) {
+    res.status(200).json({
+      ok: true,
+      id: submission.id,
+      token: submission.access_token,
+      scorecard: null,
+      error_message: tooLarge.length
+        ? `${tooLarge.join(', ')} ${tooLarge.length === 1 ? 'is' : 'are'} too large to audit — the `
+          + `limit is ${MAX_CLOSING_TOTAL_MB}MB across everything you attach. Upload your Closing `
+          + 'Disclosure on its own first, then add the rest. Nothing has been charged.'
+        : 'We could not retrieve the documents you uploaded. Please attach them again — nothing has been charged.',
+    });
+    return;
+  }
 
   // With several files we classify first — one small call — then fully extract
   // only the Closing Disclosure. Extracting every document at the free stage

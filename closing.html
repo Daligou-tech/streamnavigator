@@ -509,7 +509,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 3MB total across all files</div>
+            <div class="upload-sub">All your documents go in this one box &middot; PDF, JPG or PNG &middot; 20MB total across all files</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
@@ -635,15 +635,17 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     return;
   }
 
-  // Closing still posts its files base64-encoded to /api/closing-scorecard,
-  // so it keeps the smaller ceiling Vercel's 4.5MB request-body cap imposes.
-  // wireUploadZone now defaults to the much larger direct-upload limits used
-  // by every page that submits through submitNavigatorIntake; without these
-  // explicit values a customer could attach 25MB here and the request would
-  // die at the edge with a 413 no message can explain.
+  // Closing now PUTs its files straight to Storage with a signed URL, like
+  // every other product, so Vercel's 4.5MB request-body cap no longer sets the
+  // ceiling -- only the paths travel in the request body.
+  //
+  // What sets the ceiling instead is the audit: every attached document is
+  // base64'd into a single classification call, and that request has its own
+  // size limit. Hence closing's own constants rather than the 150MB
+  // wireUploadZone defaults to. See api/_lib/upload-limits.js.
   const uploader = wireUploadZone(zone, input, list, {
-    maxFileBytes: MAX_FILE_BYTES,
-    maxTotalBytes: MAX_TOTAL_BYTES,
+    maxFileBytes: CLOSING_MAX_FILE_BYTES,
+    maxTotalBytes: CLOSING_MAX_TOTAL_BYTES,
   });
 
   // Roughly 3.5MB of base64. Chrome and Firefox allow about 5MB per origin and
@@ -652,8 +654,24 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   const UPLOAD_CACHE_LIMIT = 3500000;
   const UPLOAD_CACHE_KEY = 'closing_uploads';
 
-  function rememberUploads(encoded, email) {
+  // Takes the File objects and encodes only what will actually fit.
+  //
+  // It used to be handed the base64 the submission had already produced, which
+  // was free. Now that uploads go straight to Storage there is no base64 lying
+  // around, and a 20MB package encoded purely to discover it is six times too
+  // big for sessionStorage would cost the customer a visible pause on the one
+  // click that matters. Measure first, encode only what can be kept.
+  async function rememberUploads(files, email) {
     try {
+      const rawBytes = files.reduce((n, f) => n + f.size, 0);
+      if (Math.ceil((rawBytes * 4) / 3) > UPLOAD_CACHE_LIMIT) {
+        sessionStorage.removeItem(UPLOAD_CACHE_KEY);
+        return;
+      }
+      const encoded = [];
+      for (const f of files) {
+        encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+      }
       const blob = JSON.stringify({ files: encoded, email: email, saved_at: Date.now() });
       if (blob.length > UPLOAD_CACHE_LIMIT) {
         sessionStorage.removeItem(UPLOAD_CACHE_KEY);
@@ -903,24 +921,53 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     btn.style.pointerEvents = 'none';
 
     try {
-      const encoded = [];
-      for (const f of files) {
-        encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+      // The documents go to Storage first and only their paths are posted. This
+      // is what lifted the ceiling from 3.17MB: on the old route the files
+      // themselves had to fit inside a Vercel function's 4.5MB request body,
+      // and a scanned Closing Disclosure often does not -- never mind the Loan
+      // Estimate and the contract this page asks for in the same box.
+      let uploadedPaths = [];
+      let encoded = [];
+      try {
+        for (let i = 0; i < files.length; i += 1) {
+          btn.textContent = files.length > 1
+            ? `Uploading ${i + 1} of ${files.length}: ${files[i].name}`
+            : 'Uploading your document…';
+          uploadedPaths.push(await uploadFileDirect('closing', files[i]));
+        }
+      } catch (directErr) {
+        // Fall back to the legacy base64 route so a problem with the signed-URL
+        // endpoint does not block a customer -- but only when everything would
+        // actually fit through it. Above that the request dies at Vercel's edge
+        // with a 413 no message can explain, so the upload error is the honest
+        // thing to show. Same rule as submitNavigatorIntake.
+        const rawBytes = files.reduce((n, f) => n + f.size, 0);
+        if (rawBytes > MAX_TOTAL_BYTES) throw directErr;
+        uploadedPaths = [];
+        encoded = [];
+        for (const f of files) {
+          encoded.push({ name: f.name, type: f.type, dataBase64: await fileToBase64(f) });
+        }
       }
+
+      btn.textContent = 'Reading your document…';
 
       // Held so that coming back from the scorecard does not throw away files
       // the customer already chose. A customer told to replace one bad document
       // was being sent to an empty upload box and made to find the Closing
       // Disclosure again -- the file that was never the problem.
       //
-      // Guarded on size: sessionStorage is a few megabytes and a full 3MB upload
-      // base64s to more than that. If it does not fit, the box comes up empty as
-      // before rather than the whole submission failing.
-      rememberUploads(encoded, email);
+      // Guarded on size inside: sessionStorage is a few megabytes and a full
+      // upload is now far larger than that. If it does not fit, the box comes up
+      // empty as before rather than the whole submission failing.
+      await rememberUploads(files, email);
       const resp = await fetch('/api/closing-scorecard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(Object.assign({ email: email, files: encoded }, answerPayload())),
+        body: JSON.stringify(Object.assign(
+          { email: email, files: encoded, uploadedPaths: uploadedPaths },
+          answerPayload()
+        )),
       });
       const data = await readJson(resp);
       if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong reading your document.');

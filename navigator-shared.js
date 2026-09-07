@@ -96,6 +96,13 @@ const asMB = (b) => Math.round((b / (1024 * 1024)) * 10) / 10;
 const DIRECT_MAX_FILE_BYTES = 50 * 1024 * 1024;
 const DIRECT_MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 
+// closing.html now takes the direct route as well, but it does not get the
+// ceiling above: its documents are all read in one model call, so its limit
+// comes from that call's request-size cap rather than from Supabase. Keep in
+// step with api/_lib/upload-limits.js, which carries the arithmetic.
+const CLOSING_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const CLOSING_MAX_TOTAL_BYTES = 20 * 1024 * 1024;
+
 // opts.maxFileBytes / opts.maxTotalBytes let a page that still uses the legacy
 // base64 route keep the smaller ceiling. Defaults are the direct-upload
 // limits, because that is now the common case.

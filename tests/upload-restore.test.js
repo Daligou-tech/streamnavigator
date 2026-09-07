@@ -14,10 +14,23 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'closing.html'), 'utf8');
 
+// rememberUploads became async when closing.html moved its uploads straight to
+// Storage: there is no base64 lying around any more, so it has to encode for
+// the cache itself. Match either shape rather than silently grabbing nothing --
+// an indexOf miss returns -1 and slices garbage that fails later as a syntax
+// error with no hint about which helper moved.
 const grab = (name) => {
-  const i = src.indexOf('  function ' + name + '(');
-  const j = src.indexOf('\n  }\n', i) + 4;
-  return src.slice(i, j);
+  const i = ['  async function ' + name + '(', '  function ' + name + '(']
+    .map((m) => src.indexOf(m))
+    .find((n) => n >= 0);
+  assert.ok(i !== undefined, name + ' not found in closing.html');
+  // \r?\n, not '\n': git hands Windows checkouts a CRLF working copy of
+  // closing.html, and an indexOf for '\n  }\n' finds nothing there. It failed
+  // as "Unexpected token )" from an eval of the empty string -- which names
+  // neither the file nor the reason.
+  const end = /\r?\n {2}\}\r?\n/.exec(src.slice(i));
+  assert.ok(end, name + ' has no closing brace at function indent');
+  return src.slice(i, i + end.index + end[0].length);
 };
 
 const store = {};
@@ -35,14 +48,21 @@ class DataTransfer { constructor(){ this.files = []; this.items = { add: (f) => 
 const document = { getElementById: () => null };
 const atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
 const File = class { constructor(parts, name, opts){ this.name = name; this.type = opts.type; } };
+// rememberUploads encodes the files itself now, so it needs the helper
+// navigator-shared.js supplies to the page.
+const fileToBase64 = async (f) => f.dataBase64;
 
 // eval in a scope where the helpers land as locals of this module
-const rememberUploads = eval('(' + grab('rememberUploads').replace(/^\s*function rememberUploads/, 'function') + ')');
-const restoreUploads = eval('(' + grab('restoreUploads').replace(/^\s*function restoreUploads/, 'function') + ')');
+const rememberUploads = eval('(' + grab('rememberUploads').replace(/^\s*(async )?function rememberUploads/, '$1function') + ')');
+const restoreUploads = eval('(' + grab('restoreUploads').replace(/^\s*(async )?function restoreUploads/, '$1function') + ')');
 
-const files = [{ name: 'CD-health.PDF', type: 'application/pdf', dataBase64: 'aGVsbG8=' }];
+// Real File objects carry a size, and rememberUploads reads it before deciding
+// whether encoding is worth doing at all.
+const files = [{ name: 'CD-health.PDF', type: 'application/pdf', size: 5, dataBase64: 'aGVsbG8=' }];
 
-rememberUploads(files, 'a@b.com');
+async function main() {
+
+await rememberUploads(files, 'a@b.com');
 restoreUploads();
 assert.equal(attached.length, 1, 'first restore should attach the file');
 
@@ -53,7 +73,7 @@ assert.equal(attached.length, 0, 'a refresh must NOT re-attach the file');
 restoreUploads();
 assert.equal(attached.length, 0, 'still gone on a third load');
 
-rememberUploads(files, 'a@b.com');
+await rememberUploads(files, 'a@b.com');
 attached = [];
 restoreUploads();
 assert.equal(attached.length, 1, 'a new submission re-arms the restore');
@@ -62,6 +82,30 @@ store[UPLOAD_CACHE_KEY] = JSON.stringify({ files, email: 'a@b.com', saved_at: Da
 attached = [];
 restoreUploads();
 assert.equal(attached.length, 0, 'an hour-old cache must not restore');
+
+// --- a package too big to keep must leave nothing behind -------------------
+// The upload ceiling is 20MB now and sessionStorage holds a few. The old guard
+// encoded everything first and measured the result, which on a 20MB package
+// means a visible pause on the submit click for a cache that is then thrown
+// away. So the size check has to come BEFORE the encode -- and a package over
+// the limit has to clear any earlier cache rather than leave a stale one for
+// restoreUploads to put back.
+await rememberUploads(files, 'a@b.com');
+assert.ok(store[UPLOAD_CACHE_KEY], 'a small package should be cached');
+
+let encodeCalls = 0;
+const bigFiles = [{ name: 'contract.pdf', type: 'application/pdf', size: 20 * 1024 * 1024,
+  get dataBase64() { encodeCalls += 1; return 'aGVsbG8='; } }];
+await rememberUploads(bigFiles, 'a@b.com');
+assert.equal(encodeCalls, 0, 'an oversized package must not be encoded at all');
+assert.equal(store[UPLOAD_CACHE_KEY], undefined, 'an oversized package must clear the cache');
+
+attached = [];
+restoreUploads();
+assert.equal(attached.length, 0, 'nothing to restore after an oversized package');
+
+}
+main().catch((err) => { console.error(err); process.exit(1); });
 
 
 // --- the answer on screen must be the answer that gets sent ----------------

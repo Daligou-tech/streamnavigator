@@ -46,6 +46,26 @@ const MAX_DIRECT_FILE_BYTES = 50 * 1024 * 1024;
 // without inviting someone to use the bucket as free storage.
 const MAX_DIRECT_TOTAL_BYTES = 150 * 1024 * 1024;
 
+// --- Closing Disclosure Audit ----------------------------------------------
+// Closing takes the direct route too, but it cannot have the 150MB ceiling
+// above. Every document attached to a closing submission is base64'd into a
+// SINGLE classification request, and the Messages API caps one request at 32MB
+// with the base64 counted -- and base64 inflates raw bytes by 4/3. 20MB of real
+// bytes encodes to ~26.7MB and leaves room for the JSON around it.
+//
+// So this ceiling is set by what the audit can read in one call, not by what
+// the bucket will hold. Raising it further means uploading the documents to the
+// Files API and sending file ids instead of bytes, the way api/hoa-scorecard.js
+// already does -- a bigger change than moving the transport, and not one to
+// make blind.
+//
+// It is still 6x the 3.17MB the base64 route allowed, which is the number that
+// mattered: a scanned Closing Disclosure alone routinely cleared the old limit,
+// and the page was asking for the Loan Estimate and the purchase contract in
+// the same box.
+const MAX_CLOSING_FILE_BYTES = 20 * 1024 * 1024;
+const MAX_CLOSING_TOTAL_BYTES = 20 * 1024 * 1024;
+
 const MAX_FILES = 12;
 
 // Files land here first, under a hash of the uploader's IP, and are moved to
@@ -116,6 +136,8 @@ module.exports = {
   MAX_FILE_BYTES,
   MAX_DIRECT_FILE_BYTES,
   MAX_DIRECT_TOTAL_BYTES,
+  MAX_CLOSING_FILE_BYTES,
+  MAX_CLOSING_TOTAL_BYTES,
   MAX_FILES,
   STAGING_PREFIX,
   STAGING_TTL_HOURS,
