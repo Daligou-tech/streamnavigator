@@ -126,12 +126,13 @@
         </div>
 
         <div id="pdf-block" class="report-block" hidden>
-          <h3>📄 Want a PDF copy?</h3>
+          <h3 id="pdf-heading">📄 Want a PDF copy?</h3>
           <div id="pdf-prompt">
             <p>We can email you a PDF version of this report to keep or share.</p>
             <button class="btn btn-primary btn-sm" id="pdf-yes-btn">Yes, email me a PDF</button>
             <button class="btn btn-ghost btn-sm" id="pdf-no-btn">No thanks</button>
           </div>
+          <button class="btn btn-ghost btn-sm" id="pdf-resend-btn" hidden>Send it to a different address</button>
           <div id="pdf-form" hidden>
             <input type="email" id="pdf-email-input" placeholder="you@example.com" style="padding:10px 14px; border-radius:10px; border:1px solid #D8D2C4; font-size:14px; margin-right:8px; min-width:220px;" />
             <button class="btn btn-primary btn-sm" id="pdf-send-btn">Send PDF</button>
@@ -535,6 +536,7 @@
     }
 
     document.getElementById('pdf-block').hidden = false;
+    maybeAutoSendPdf();
 
     if (report.disclaimer) {
       var disc = document.getElementById('report-disclaimer');
@@ -562,6 +564,7 @@
   // navigator-shared.js), never the customer's email, so there's nothing
   // to prefill here without a separate round trip just to check.
   var pdfPromptEl = document.getElementById('pdf-prompt');
+  var pdfHeadingEl = document.getElementById('pdf-heading');
   var pdfFormEl = document.getElementById('pdf-form');
   var pdfStatusEl = document.getElementById('pdf-status-msg');
   var pdfEmailInput = document.getElementById('pdf-email-input');
@@ -654,7 +657,8 @@
       });
   });
 
-  function sendPdf(email) {
+  function sendPdf(email, opts) {
+    opts = opts || {};
     if (!email || email.indexOf('@') === -1) {
       pdfStatusEl.textContent = 'Please enter a valid email address.';
       pdfFormEl.hidden = false;
@@ -662,7 +666,9 @@
       return;
     }
     pdfSendBtn.disabled = true;
-    pdfStatusEl.textContent = 'Sending your PDF…';
+    pdfStatusEl.textContent = opts.auto
+      ? 'Emailing your report to ' + email + '…'
+      : 'Sending your PDF…';
     fetch('/api/email-report-pdf', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -673,19 +679,80 @@
         pdfSendBtn.disabled = false;
         if (result.ok && result.data.ok) {
           pdfFormEl.hidden = true;
-          pdfStatusEl.textContent = 'Sent! Check your inbox (and spam folder, just in case).';
+          markPdfSent();
+          if (opts.auto) {
+            pdfHeadingEl.textContent = '📧 Your report is on its way';
+            pdfStatusEl.textContent = 'Sent to ' + email
+              + '. Check your inbox, and your spam folder just in case.';
+            showResendOption();
+          } else {
+            pdfStatusEl.textContent = 'Sent! Check your inbox (and spam folder, just in case).';
+          }
         } else {
-          pdfStatusEl.textContent = (result.data && result.data.error) || 'Something went wrong sending that — please try again.';
+          // An automatic send that fails must not leave the customer thinking a
+          // copy is coming. Put the manual controls back and say what happened.
+          pdfPromptEl.hidden = !opts.auto ? pdfPromptEl.hidden : false;
+          pdfStatusEl.textContent = (result.data && result.data.error)
+            || 'Something went wrong sending that — please try again.';
         }
       })
       .catch(function(){
         pdfSendBtn.disabled = false;
+        if (opts.auto) pdfPromptEl.hidden = false;
         pdfStatusEl.textContent = 'Something went wrong sending that — please try again.';
       });
   }
 
+  // The page promises "delivered automatically, usually within 5 minutes", so
+  // the report is emailed the moment it is ready, without waiting for a click.
+  //
+  // It used to require one: the report rendered on screen and a prompt offered
+  // to email a PDF. A customer who read the report and closed the tab — the
+  // ordinary thing to do — never received the copy the intake page told them
+  // was coming automatically, and had nothing to forward to their lender.
+  //
+  // Guarded so a reload does not send it twice. The customer can still send it
+  // to a different address, which is the case the prompt now covers.
+  function pdfSentKey() { return 'sn_pdf_sent_' + (stored && stored.id); }
+
+  function markPdfSent() {
+    try { localStorage.setItem(pdfSentKey(), '1'); } catch (e) { /* private mode */ }
+  }
+
+  function alreadySentPdf() {
+    try { return localStorage.getItem(pdfSentKey()) === '1'; } catch (e) { return false; }
+  }
+
+  function showResendOption() {
+    var link = document.getElementById('pdf-resend-btn');
+    if (link) link.hidden = false;
+  }
+
+  function maybeAutoSendPdf() {
+    var known = stored && stored.email;
+    // No address on file — this is the path where the prompt is still the right
+    // behaviour, because we have nowhere to send it.
+    if (!known || known.indexOf('@') === -1) return;
+
+    pdfPromptEl.hidden = true;
+    if (alreadySentPdf()) {
+      pdfHeadingEl.textContent = '📧 Your report was emailed to you';
+      pdfStatusEl.textContent = 'Sent to ' + known
+        + '. Check your inbox, and your spam folder just in case.';
+      showResendOption();
+      return;
+    }
+    sendPdf(known, { auto: true });
+  }
+
   pdfSendBtn.addEventListener('click', function(){
     sendPdf((pdfEmailInput.value || '').trim());
+  });
+
+  document.getElementById('pdf-resend-btn').addEventListener('click', function(){
+    this.hidden = true;
+    pdfFormEl.hidden = false;
+    pdfEmailInput.focus();
   });
 
   // (stored is hoisted above the PDF handlers)

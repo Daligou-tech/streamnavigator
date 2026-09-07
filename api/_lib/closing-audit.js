@@ -1007,13 +1007,53 @@ function selectBaseline(les, consummationDate, holidays = []) {
 // Token overlap rather than edit distance: "Settlement Agent Fee" and
 // "Title - Settlement Fee" share the token that matters, while a character
 // metric would score them poorly because of the "Title - " prefix.
+// Single-character tokens are dropped, and they are not a rounding detail.
+//
+// NOISE strips punctuation, so every possessive leaves a bare "s" behind:
+// "Title - Lender's Title Insurance" tokenises to [title, lender, s, insurance]
+// and "Title - Owner's Title Insurance" to [title, owner, s, insurance]. The
+// meaningless "s" is counted as evidence they are the same charge, taking two
+// distinct products — a buyer is routinely charged for both — from 2/3 = 0.667
+// up to 3/4 = 0.75. The one token that actually distinguishes them, lender
+// against owner, is outvoted by the one that means nothing.
+function meaningfulTokens(label) {
+  return new Set(norm(feeNameOnly(label)).split(' ').filter((t) => t.length > 1));
+}
+
 function nameSimilarity(a, b) {
-  const ta = new Set(norm(feeNameOnly(a)).split(' ').filter(Boolean));
-  const tb = new Set(norm(feeNameOnly(b)).split(' ').filter(Boolean));
+  const ta = meaningfulTokens(a);
+  const tb = meaningfulTokens(b);
   if (!ta.size || !tb.size) return 0;
   let shared = 0;
   for (const t of ta) if (tb.has(t)) shared++;
   return shared / Math.min(ta.size, tb.size);
+}
+
+// Categories the extractor routinely swaps WITHIN, because the two documents
+// print the same charge differently: a Closing Disclosure files everything the
+// title company touches under a "Title -" prefix, while a Loan Estimate lists
+// the same line as an ordinary settlement service. One real package had
+// "Title - Settlement Agent Fee" read as settlement_service on the Loan
+// Estimate and title_insurance_lenders on the Closing Disclosure.
+//
+// Grouped rather than ignored. Category is genuinely good evidence: a plain
+// "Property Taxes" line appears in Section F as a prepaid AND in Section G as
+// an escrow deposit, and those two names are identical, so a category-blind
+// name match would pair a prepaid with a deposit. Only categories describing
+// the same KIND of charge belong in a family; prepaids, escrow deposits, taxes
+// and government fees are deliberately left out.
+const CATEGORY_FAMILIES = [
+  // Everything a settlement or title office bills for.
+  ['settlement_service', 'title_insurance_lenders', 'title_insurance_owners',
+    'attorney', 'affiliate_service', 'unshoppable_service', 'non_required_service'],
+  // Everything the lender bills for.
+  ['origination', 'lender_fee', 'rate_lock_fee'],
+];
+
+function sameChargeFamily(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return CATEGORY_FAMILIES.some((fam) => fam.indexOf(a) !== -1 && fam.indexOf(b) !== -1);
 }
 
 // Pairs Loan Estimate charges with Closing Disclosure charges.
@@ -1057,8 +1097,25 @@ function matchCharges(baselineCharges, cdCharges) {
     // identical amount and a similar name, for a miscategorised line
     (cd, le) => Math.abs(toCents(le.amount) - toCents(cd.amount)) <= 1
       && nameSimilarity(cd.label, le.label) >= 0.34,
+    // Same family of charge and a near-identical name, WHATEVER THE AMOUNT.
+    //
+    // The pass above rescues a miscategorised line only when its amount did not
+    // change -- which is precisely the line that does not matter. A fee that
+    // was miscategorised AND went up escaped tolerance testing altogether and
+    // was reported as "does not appear on the Loan Estimate under a name we
+    // recognise", so the increase was never measured. That is the wrong way
+    // round: an unchanged fee is harmless, and a changed one is the whole point
+    // of holding the Loan Estimate.
+    //
+    // 0.75 is deliberate. "Title - Lender's Title Insurance" against
+    // "Title - Owner's Title Insurance" scores 0.667 -- two distinct products
+    // that must never be paired -- while a fee printed identically on both
+    // documents scores 1.0, and "Settlement Agent Fee" against
+    // "Title - Settlement Agent Fee" also scores 1.0.
+    (cd, le) => sameChargeFamily(le.category, cd.category)
+      && nameSimilarity(cd.label, le.label) >= 0.75,
   ];
-  const passNames = ['category+amount', 'category+payee', 'category+name', 'amount+name'];
+  const passNames = ['category+amount', 'category+payee', 'category+name', 'amount+name', 'family+name'];
 
   let pool = remaining;
   passes.forEach((test, i) => {

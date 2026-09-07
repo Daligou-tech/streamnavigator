@@ -542,6 +542,90 @@ test('unrelated charges do not get force-matched', () => {
   assert.equal(unmatchedCd.length, 1);
 });
 
+// nameSimilarity is shared by charge matching AND duplicate detection, so a
+// meaningless token inflating it is a defect in both.
+test('a possessive apostrophe does not manufacture a shared token', () => {
+  // NOISE strips punctuation, so "Lender's" tokenises to [lender, s]. Counting
+  // that bare "s" as evidence took two distinct title products from 0.667 to
+  // 0.75 — over the matching threshold — on the strength of the one token that
+  // carries no meaning, while the tokens that distinguish them did not change.
+  const lenders = "Title - Lender's Title Insurance";
+  const owners = "Title - Owner's Title Insurance";
+  assert.ok(nameSimilarity(lenders, owners) < 0.75,
+    `expected under 0.75, got ${nameSimilarity(lenders, owners)}`);
+  assert.equal(Number(nameSimilarity(lenders, owners).toFixed(3)), 0.667);
+
+  // and the genuine rename still scores perfectly
+  assert.equal(nameSimilarity('Title - Settlement Agent Fee', 'Settlement Agent Fee'), 1);
+});
+
+// A fee that was miscategorised AND went up used to escape matching entirely.
+//
+// The amount+name pass rescues a miscategorised line only when its amount is
+// unchanged — which is exactly the line that does not matter. On a real
+// package "Title - Settlement Agent Fee" was read as settlement_service on the
+// Loan Estimate and title_insurance_lenders on the Closing Disclosure, and it
+// rose $600 -> $650. Every pass missed it, the charge was reported as absent
+// from the baseline, and the increase was never measured — on the one document
+// the customer supplied specifically so that increases could be measured.
+test('a fee miscategorised across the two documents still matches when it changed', () => {
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'settlement_service:title_settlement_agent_fee':
+      { label: 'Title - Settlement Agent Fee', amount: 600, category: 'settlement_service' } },
+    { 'title_insurance_lenders:title_settlement_agent_fee':
+      { label: 'Title - Settlement Agent Fee', amount: 650, category: 'title_insurance_lenders' } }
+  );
+  assert.equal(unmatchedCd.length, 0);
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].matchedBy, 'family+name');
+  assert.equal(pairs[0].le.amount, 600);
+  assert.equal(pairs[0].cd.amount, 650);
+});
+
+test('a lender fee renamed between the documents matches within its family', () => {
+  const { pairs } = matchCharges(
+    { 'origination:underwriting_fee': { label: 'Underwriting Fee', amount: 795, category: 'origination' } },
+    { 'lender_fee:underwriting_fee': { label: 'Underwriting Fee', amount: 1095, category: 'lender_fee' } }
+  );
+  assert.equal(pairs.length, 1);
+  assert.equal(pairs[0].matchedBy, 'family+name');
+});
+
+// The guard rails. Each of these would be a wrong number in a customer's mouth.
+test("lender's and owner's title insurance are never paired", () => {
+  // Both sit in the same family and share two of three tokens (0.667), which is
+  // why the threshold is 0.75 and not lower. They are distinct products and a
+  // buyer is routinely charged for both.
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'title_insurance_lenders:lenders':
+      { label: "Title - Lender's Title Insurance", amount: 1000, category: 'title_insurance_lenders' } },
+    { 'title_insurance_owners:owners':
+      { label: "Title - Owner's Title Insurance", amount: 1400, category: 'title_insurance_owners' } }
+  );
+  assert.equal(pairs.length, 0);
+  assert.equal(unmatchedCd.length, 1);
+});
+
+test('a prepaid is never paired with an escrow deposit of the same name', () => {
+  // "Property Taxes" is printed identically in Section F (a prepaid) and
+  // Section G (an escrow deposit) — a 1.0 name match. They are in different
+  // families precisely so that a perfect name match cannot join them.
+  const { pairs, unmatchedCd } = matchCharges(
+    { 'property_tax:property_taxes': { label: 'Property Taxes', amount: 2100, category: 'property_tax' } },
+    { 'escrow_deposit:property_taxes': { label: 'Property Taxes', amount: 700, category: 'escrow_deposit' } }
+  );
+  assert.equal(pairs.length, 0);
+  assert.equal(unmatchedCd.length, 1);
+});
+
+test('a settlement fee is never paired with a title product of a different name', () => {
+  const { pairs } = matchCharges(
+    { 'settlement_service:cpl': { label: 'Title - Closing Protection Letter', amount: 50, category: 'settlement_service' } },
+    { 'title_insurance_lenders:agent': { label: 'Title - Settlement Agent Fee', amount: 650, category: 'title_insurance_lenders' } }
+  );
+  assert.equal(pairs.length, 0);
+});
+
 test('the 10% bucket only aggregates matched charges', () => {
   // An unmatched charge added to the total with a zero baseline would inflate the
   // cumulative test and produce a phantom cure.
