@@ -416,7 +416,11 @@ function runDocumentAudit(input = {}) {
   // Ranked once, then reused. The emails must list findings in the same order
   // the report shows them, or a customer reading both sees two different
   // priorities for the same document.
-  const rankedFindings = audit.rank ? audit.rank(findings) : findings;
+  // audit.rank does not exist — the export is rankFindings — so this guard was
+  // always false and the sort it promises never ran. The comment above says the
+  // scorecard and the report must not show two different priorities for the
+  // same document; until now only the report was ordered.
+  const rankedFindings = audit.rankFindings(findings);
 
   // Drafts for the customer to send. Routing is not decided here: every finding
   // already carries askLender / askSettlement, set by the check that produced
@@ -439,6 +443,10 @@ function runDocumentAudit(input = {}) {
     findings: rankedFindings,
     emails,
     skipped,
+    // Passed through so the paid report can print the lender's 60-day cure
+    // deadline. Only runClosingAudit returned it, which was one of the reasons
+    // the report was calling that directly instead of coming through here.
+    cureNote: engine.cureNote || null,
     coverage,
     coverage_by_group: groupCoverage(coverage),
     scorecard,

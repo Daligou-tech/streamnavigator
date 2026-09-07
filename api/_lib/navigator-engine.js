@@ -24,8 +24,9 @@
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const {
-  runClosingAudit, extractLoanEstimate, toLoanEstimateRecord,
+  extractLoanEstimate, toLoanEstimateRecord,
 } = require('./closing-extract');
+const { runDocumentAudit } = require('./closing-service');
 const { buildEmails } = require('./closing-emails');
 const { rankFindings, Severity } = require('./closing-audit');
 
@@ -364,7 +365,31 @@ async function generateNavigatorReport(submissionId) {
         if (dated.length) loanEstimates = dated;
       }
 
-      const { findings, skipped, cureNote } = runClosingAudit(stored.extraction, {
+      // runDocumentAudit, NOT runClosingAudit — the same entry point the free
+      // scorecard uses. This was the single most damaging defect in the product.
+      //
+      // runClosingAudit is the raw engine. runDocumentAudit is the engine PLUS
+      // the document-intrinsic loan maths — APR against the amount financed,
+      // finance charge against the payment stream, total of payments, amount
+      // financed, TIP, monthly principal and interest, monthly escrow, discount
+      // points — and MINUS the retired cannot-benchmark findings.
+      //
+      // Calling the raw engine here meant the paid report was built from a
+      // SMALLER audit than the free scorecard. Not merely fewer reassurances:
+      // fewer errors. An APR disclosed below the note rate — a confirmed
+      // mathematical error and a potential TRID violation, checks 03 and 04 of
+      // the twenty-seven the page enumerates — was caught by the free scorecard
+      // and did not appear anywhere in the report the customer paid $59 for.
+      // Verified by planting exactly that error and running both paths.
+      //
+      // It also explains two things that looked like the model ignoring its
+      // instructions. Told to name every passed check, it named one, because
+      // one was all it was given. Told never to mention benchmarking, it kept
+      // producing a section about it, because six cannot-benchmark findings
+      // were in the findings it was told to write up and not omit. Both were
+      // this call.
+      const audited = runDocumentAudit({
+        extraction: stored.extraction,
         answers: stored.answers || {},
         loanEstimates,
         // Extracted at the free scorecard stage and reused here, like the Loan
@@ -372,6 +397,8 @@ async function generateNavigatorReport(submissionId) {
         // an identical result.
         contractTerms: stored.contract_terms || null,
       });
+      const { skipped, cureNote } = audited;
+      const findings = audited.findings;
 
       if (leIndexes.length && !loanEstimates) {
         findings.unshift({
