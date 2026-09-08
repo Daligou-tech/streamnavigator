@@ -1,9 +1,22 @@
 // The letters the customer actually sends, checked for whose voice they are in.
 //
-// The report renders one set of emails on screen (written by the model) and the
-// PDF renders another (assembled here, in code). Only the PDF version is
-// emailed, and since the report is now delivered automatically, the assembled
-// version is the one every customer receives.
+// The report used to render one set of emails on screen (written by the model)
+// and another in the PDF (assembled here, in code), and this header used to
+// note that only the PDF version was emailed. That was true and still missed
+// the point: the on-screen copy is a letter with a Subject line and the
+// customer's name at the bottom, sitting under a heading that says
+// "Ready-to-send emails". Nothing stops them sending that one.
+//
+// On the paid report for submission c764be16 the two differed in subject, tone
+// and wording — the assembled letter opened "I may well be reading something
+// wrong, so I would appreciate your help squaring these up"; the model's opened
+// "I've had my Closing Disclosure independently audited", under a subject
+// reading "Three Items Requiring Correction Before Closing". The voice fix
+// below reached only one of them, because nobody had noticed there were two.
+//
+// navigator-engine.js now renders the assembled letters into closing_body as
+// well, so the page and the PDF carry the same words. The last three tests
+// here hold that.
 //
 // It was pasting three engine fields straight into the letter. Two of them —
 // whyItMatters and recommendedAction — are written BY the audit TO the
@@ -121,4 +134,46 @@ test('the letters still ask rather than allege', () => {
     assert.match(m.body, /I may well be reading something wrong/i, who);
     assert.doesNotMatch(m.body, /\b(illegal|overcharged me|you overcharged|violation by you)\b/i, who);
   }
+});
+
+// --- one set of letters, not two ------------------------------------------
+
+const { __internal: engineInternal } = require('../api/_lib/navigator-engine');
+
+test('the letters shown on the page are the assembled ones, verbatim', () => {
+  const emails = buildEmails(FINDINGS, CTX);
+  const rendered = engineInternal.renderLettersAsText(emails);
+
+  for (const key of ['lender', 'settlement']) {
+    if (!emails[key] || !emails[key].body) continue;
+    // The letter is joined into a block that is trimmed, so its own
+    // trailing newline goes; the words are what must survive.
+    assert.ok(
+      rendered.includes(emails[key].body.trim()),
+      `the ${key} letter's body must reach the page unaltered`
+    );
+    assert.ok(rendered.includes(emails[key].subject), `and its subject`);
+  }
+});
+
+test('the page copy carries the same voice fix as the PDF copy', () => {
+  // The whole point of the merge. If the assembled letters ever regress, both
+  // surfaces regress together and the tests above catch it — rather than one
+  // surface being quietly correct while the other is not.
+  const rendered = engineInternal.renderLettersAsText(buildEmails(FINDINGS, CTX));
+  for (const inverted of [
+    /\byour cash\b/i,
+    /\bask the lender\b/i,
+    /\bwe look for\b/i,
+  ]) {
+    assert.equal(inverted.test(rendered), false, `page copy must not contain ${inverted}`);
+  }
+  assert.match(rendered, /I may well be reading something wrong/, 'and must keep the customer\'s own voice');
+});
+
+test('a clean audit renders no letters rather than an empty heading', () => {
+  const { __internal } = require('../api/_lib/navigator-engine');
+  assert.equal(__internal.renderLettersAsText({}), '');
+  assert.equal(__internal.renderLettersAsText({ lender: null, settlement: null }), '');
+  assert.equal(__internal.renderLettersAsText(null), '');
 });

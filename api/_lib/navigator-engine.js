@@ -257,6 +257,19 @@ function guessMediaType(filename) {
   return 'image/jpeg';
 }
 
+// Renders the drafted letters as the plain text navigator-status.html shows
+// in its closing block, so the page and the PDF carry the same words.
+function renderLettersAsText(emails) {
+  const blocks = [];
+  for (const [key, label] of [['lender', 'LENDER'], ['settlement', 'SETTLEMENT AGENT']]) {
+    const email = emails && emails[key];
+    if (!email || !email.body) continue;
+    const heading = `EMAIL TO ${label}${email.to ? ` (${email.to})` : ''}`;
+    blocks.push(`${heading}\n\nSubject: ${email.subject}\n\n${email.body}`.trim());
+  }
+  return blocks.join('\n\n---\n\n');
+}
+
 async function generateNavigatorReport(submissionId) {
   const admin = getSupabaseAdmin();
 
@@ -559,6 +572,28 @@ async function generateNavigatorReport(submissionId) {
     // check above, which is looking for model output, not our own text.
     if (draftedEmails && (draftedEmails.lender || draftedEmails.settlement)) {
       report.emails = draftedEmails;
+
+      // And they replace closing_body, for exactly the reason above.
+      //
+      // The customer was getting two different versions of the same letters:
+      // api/_lib/pdf-report.js renders report.emails into the PDF, while
+      // navigator-status.html renders closing_body, which the model writes
+      // itself. On the paid report for submission c764be16 the two differed
+      // in subject, tone and wording — the deterministic letter opened "I may
+      // well be reading something wrong, so I would appreciate your help
+      // squaring these up", the model's opened "I've had my Closing
+      // Disclosure independently audited" under a subject reading "Three
+      // Items Requiring Correction".
+      //
+      // Both are letters the customer signs their name to and sends to their
+      // own lender, and the tone of those is not a detail. The voice fix made
+      // to closing-emails.js on 2026-09-08 reached only the PDF copy, because
+      // nobody had noticed there were two.
+      const rendered = renderLettersAsText(draftedEmails);
+      if (rendered) {
+        report.closing_title = 'Ready-to-send emails';
+        report.closing_body = rendered;
+      }
     }
 
     await admin.from('navigator_reports').insert({
@@ -583,4 +618,4 @@ async function generateNavigatorReport(submissionId) {
   }
 }
 
-module.exports = { generateNavigatorReport, PRODUCT_CONFIGS };
+module.exports = { generateNavigatorReport, PRODUCT_CONFIGS, __internal: { renderLettersAsText } };
