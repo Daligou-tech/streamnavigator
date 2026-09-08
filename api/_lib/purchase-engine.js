@@ -1061,6 +1061,12 @@ const PROSE_TOTAL_FIELDS = {
   'alternative_comparison.explanation': {
     get: (r) => r.alternative_comparison && r.alternative_comparison.explanation,
     label: 'the comparison against the alternative',
+    alsoAllows: (r) => {
+      const alt = r.alternative_comparison || {};
+      return isNum(alt.alternative_total_low) && isNum(alt.alternative_total_high)
+        ? [{ low: alt.alternative_total_low, high: alt.alternative_total_high }]
+        : [];
+    },
   },
   'financing_impact.explanation': {
     get: (r) => r.financing_impact && r.financing_impact.explanation,
@@ -1091,8 +1097,9 @@ function proseTotalConflicts(report) {
     MONEY_RE.lastIndex = 0;
     let match;
     while ((match = MONEY_RE.exec(text)) !== null) {
-      const window = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
-      if (!(spec.claims || CLAIMS_A_TOTAL).test(window) || NOT_THE_TOTAL.test(window)) continue;
+      const claimWindow = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
+      const attached = text.slice(Math.max(0, match.index - EXCLUSION_LOOK_BEHIND), match.index + match[0].length + EXCLUSION_LOOK_AHEAD);
+      if (!(spec.claims || CLAIMS_A_TOTAL).test(claimWindow) || NOT_THE_TOTAL.test(attached)) continue;
       const stated = parseMoneyRange(match[0]);
       if (!stated) continue;
       // A figure far smaller than the computed total is a component being
@@ -1102,18 +1109,29 @@ function proseTotalConflicts(report) {
     }
     if (!claims.length) continue;
 
-    // A field that states the total correctly is not contradicting
+    // Figures that are correct statements about something else — the
+    // alternative's own whole-period cost, in the section written to compare
+    // it — are not claims about this item at all, and must be set aside
+    // before anything else is judged. Leaving them in let the alternative's
+    // correct total excuse a wrong one for this item in the same sentence.
+    const elsewhere = spec.alsoAllows ? spec.alsoAllows(report) : [];
+    const aboutThisItem = claims.filter(
+      (c) => !elsewhere.some((t) => t && proseFigureMatches(c.stated, t))
+    );
+    if (!aboutThisItem.length) continue;
+
+    // A field that states this item's total correctly is not contradicting
     // anything, and the other large figures near it are something else.
     // Without this, a headline reading "$47,000-$57,700 total 7-year cost
     // — the $32,400 price looks fair" reported the $32,400 as a rival
     // total, purely because it sat close to the words "total cost".
-    const anyCorrect = claims.some((c) => proseFigureMatches(c.stated, derived.total));
+    const anyCorrect = aboutThisItem.some((c) => proseFigureMatches(c.stated, derived.total));
     if (anyCorrect) continue;
     conflicts.push({
       path,
       label: spec.label,
       // Every qualifying figure, not a guess at which one is the claim.
-      quoted: claims.map((c) => c.quoted).join(' and '),
+      quoted: aboutThisItem.map((c) => c.quoted).join(' and '),
     });
   }
 
@@ -1138,6 +1156,24 @@ function proseTotalConflicts(report) {
 // exclusions below only tell them apart at close range.
 const RESALE_LOOK_BEHIND = 60;
 const RESALE_LOOK_AHEAD = 30;
+
+// The words that make a figure a claim can sit a sentence away, so
+// CLAIMS_A_TOTAL is tested against 150 characters. The words that DISQUALIFY
+// one are attached to it — "$1,100/year", "$13,000 of the total" — so they
+// are tested against a few characters either side.
+//
+// Sharing the wide window let an unrelated phrase silence a real claim. On
+// submission a9655d25 the alternative section said
+//
+//   "...roughly $90-$120/year in electricity) total cost lands around
+//    $3,400-$3,900, versus an estimated $4,900-$5,900 for the LRFXC2416S"
+//
+// and that "/year", 90 characters away and attached to a different figure,
+// excluded a rival total for the reviewed product that was 17% out at the top
+// end. Widening the claim window to 150 is what made this likely: the fix for
+// one miss created the conditions for another.
+const EXCLUSION_LOOK_BEHIND = 25;
+const EXCLUSION_LOOK_AHEAD = 25;
 
 const CLAIMS_A_RESALE = /resale|trade-?in|worth|retain|residual/i;
 

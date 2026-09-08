@@ -2598,3 +2598,95 @@ test('the ownership period comes from the customer, not the model', async (t) =>
   const report = await generatePurchaseReport('sub-1');
   assert.match(report.key_numbers[0].label, /\(8yr\)/, 'the form says 8 years, so the report does');
 });
+
+// --- an exclusion belongs to the figure, not the paragraph -----------------
+//
+// Submission a9655d25's alternative section quoted a rival total for the
+// REVIEWED product — "$4,900-$5,900 for the LRFXC2416S" against a computed
+// $4,624-$7,099, 17% out at the top end — and the check passed it, because
+// a "/year" attached to a different figure 90 characters away sat inside the
+// same 150-character window and disqualified it.
+
+function dispenserReport(overrides) {
+  return completeReportInput({
+    headline: 'Skip this unit — it has the external door dispenser you said was a deal-breaker',
+    // fakeSubmission lists no must-haves, so an empty set is the right answer.
+    must_have_checks: [],
+    total_cost_of_ownership: {
+      time_horizon_years: 12,
+      cost_breakdown: [
+        { label: 'Purchase price', kind: 'purchase', low: 2899, high: 2899, per_year_low: 0, per_year_high: 0, basis: 'quoted big-box price' },
+        { label: 'Energy, filters and prorated repairs', kind: 'running', low: 0, high: 0, per_year_low: 150, per_year_high: 350, basis: '650-700 kWh/yr plus filters and an out-of-warranty allowance' },
+        { label: 'Salvage value at year 12', kind: 'resale_recovery', low: -75, high: 0, per_year_low: 0, per_year_high: 0, basis: 'scrap or give-away only' },
+      ],
+      explanation: 'Purchase price plus twelve years of running costs, less a token salvage value.',
+    },
+    financing_impact: { applicable: false, explanation: 'Paying cash, so no interest applies.' },
+    maintenance_running_costs: { annual_low: 150, annual_high: 350, explanation: 'Energy, filters and an allowance for out-of-warranty repairs.' },
+    depreciation_resale: { resale_low: 0, resale_high: 75, expected_resale_note: 'scrap value only', explanation: 'Refrigerators are worth essentially nothing after twelve years.' },
+    alternative_comparison: {
+      alternative_name: 'LG LRFDS3006S, internal-only dispenser',
+      alternative_price_low: 2299,
+      alternative_price_high: 2599,
+      alternative_total_low: 3400,
+      alternative_total_high: 3900,
+      explanation: 'It keeps dispensing inside the compartment, so it meets all three must-haves. Over 12 years of ownership (purchase price plus roughly $90-$120/year in electricity) total cost lands around $3,400-$3,900.',
+    },
+    ...overrides,
+  });
+}
+
+test('the computed total for the eighth appliance run is what the strip shows', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const d = __internal.deriveNumbers(dispenserReport());
+  assert.equal(__internal.moneyRange(d.total.low, d.total.high), '$4,624 – $7,099');
+  assert.equal(__internal.tcoArithmeticProblem(dispenserReport()), null);
+});
+
+test('a per-year figure elsewhere in the sentence no longer silences a real total claim', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const alt = dispenserReport().alternative_comparison;
+  const conflicts = __internal.proseTotalConflicts(dispenserReport({
+    alternative_comparison: {
+      ...alt,
+      explanation: alt.explanation + ', versus an estimated $4,900-$5,900 for the LRFXC2416S over the same period — a saving of roughly $1,500-$2,000.',
+    },
+  }));
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, 'alternative_comparison.explanation');
+  assert.match(conflicts[0].quoted, /\$4,900-\$5,900/);
+});
+
+test('an exclusion still works when it is attached to the figure itself', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  // Each of these is a real sentence the check must NOT fire on.
+  for (const explanation of [
+    'Insurance alone runs $5,000-$6,000 per year, which dominates the total cost of ownership.',
+    'Depreciation is only about $4,700-$5,000 of the total cost across the period.',
+  ]) {
+    assert.deepEqual(
+      __internal.proseTotalConflicts(dispenserReport({
+        alternative_comparison: { ...dispenserReport().alternative_comparison, explanation },
+      })),
+      [],
+      explanation
+    );
+  }
+});
+
+test('the alternative may quote its own total without being called a contradiction', () => {
+  // That section exists to compare two whole-period costs. The alternative's
+  // is a different number from this item's by design, and before this it was
+  // reported as a rival claim about the reviewed product.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(__internal.proseTotalConflicts(dispenserReport()), []);
+  assert.equal(__internal.isReportComplete(dispenserReport(), fakeSubmission()), true);
+
+  // But a figure matching neither total is still caught.
+  const alt = dispenserReport().alternative_comparison;
+  const conflicts = __internal.proseTotalConflicts(dispenserReport({
+    alternative_comparison: { ...alt, explanation: 'Its total cost of ownership over 12 years lands around $8,800-$9,400.' },
+  }));
+  assert.equal(conflicts.length, 1);
+  assert.match(conflicts[0].quoted, /\$8,800-\$9,400/);
+});
