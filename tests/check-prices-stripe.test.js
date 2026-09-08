@@ -223,3 +223,16 @@ test('a recurring orphan is flagged as recurring', async () => {
     assert.equal(res.orphans[0].recurring, true);
   });
 });
+
+test('_comment keys in the allow-list are documentation, not entries', async () => {
+  // Counting the comment reported "4 active link(s) deliberately unreferenced"
+  // against three real ones, sending you looking for a fourth.
+  await withStripe([link('USED'), link('SUBS')], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {
+      _comment: 'why this list exists',
+      plink_SUBS: 'documented',
+    });
+    assert.equal(res.allowedCount, 1);
+    assert.deepEqual(res.orphans, []);
+  });
+});

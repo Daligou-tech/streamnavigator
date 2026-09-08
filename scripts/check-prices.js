@@ -358,7 +358,13 @@ async function checkStripeLinks(entries, allowedUnreferenced) {
   // this config deliberately skips — so they are allow-listed by id WITH A
   // REASON rather than pattern-matched away. Writing the reason down is the
   // point: an unexplained sellable link is the thing being hunted.
-  const allowed = allowedUnreferenced || {};
+  // Underscore keys are documentation, not entries. Counting _comment as an
+  // allow-listed link reported "4 active link(s) deliberately unreferenced"
+  // against three real ones — a number that invites you to go looking for a
+  // fourth that does not exist.
+  const allowed = Object.fromEntries(
+    Object.entries(allowedUnreferenced || {}).filter(([k]) => !k.startsWith('_'))
+  );
   const referenced = new Set(
     entries.map(([, spec]) => spec.stripeLinkId).filter(Boolean)
   );
