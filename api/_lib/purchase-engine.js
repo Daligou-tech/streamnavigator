@@ -672,7 +672,14 @@ function withinTolerance(actual, expected) {
 // first attempt at this check. The floor now only guards against dividing
 // attention over pocket change.
 function withinProseTolerance(actual, expected) {
-  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.03, 25);
+  // The absolute floor has now been wrong twice in the same direction. It
+  // started at $200, which is rounding noise on a $49,000 car and the entire
+  // quantity on a $155/yr running cost. It became $25, which is fine against
+  // a running total and still the entire quantity against a $100/yr filter
+  // line — $40-$60 was accepted as matching $100 on submission 9109cb06.
+  // Three percent is the real rule; the floor exists only so that figures of
+  // a few dollars do not trip it, and $5 is enough for that.
+  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.03, 5);
 }
 
 // Prose quotes a range two ways, and they need judging differently. A range
@@ -976,14 +983,21 @@ ${JSON.stringify({
 // cost" is a share of it, not a claim about it.
 
 // $12,000 or $12,000-$15,000 or $12,000 – $15,000.
-const MONEY_RE = /\$\s?[\d,]+(?:\.\d+)?(?:\s*(?:[–—-]|to)\s*\$?\s?[\d,]+(?:\.\d+)?)?/g;
+const MONEY_RE = /\$\s?\d+(?:,\d{3})*(?:\.\d+)?(?:\s*(?:[–—-]|to)\s*\$?\s?\d+(?:,\d{3})*(?:\.\d+)?)?/g;
 
-// Windows are deliberately tight. Widening the "before" window to 90
-// characters made "Total 7-year cost of ownership is estimated at roughly
-// $52,000-$68,000. That includes the $32,400 purchase price" flag the
-// purchase price too.
-const LOOK_BEHIND = 60;
-const LOOK_AHEAD = 30;
+// These were 60 and 30, tightened at a point when a field quoting the total
+// correctly was still reported as a conflict. That is no longer possible —
+// a field containing the right figure is exempt outright (see anyCorrect
+// below) — and 60 characters turned out to be nowhere near enough reach. On
+// submission 9109cb06 three sections said "$4,900-$6,300" against a computed
+// $5,323-$5,995 and every one slipped through, because the phrase that makes
+// it a claim sat further back than the window went:
+//
+//   "over 12 years the total cost of ownership including energy, filters,
+//    and repairs would likely land near $4,900-$6,300"
+//                                       ^ 103 characters from "total cost"
+const LOOK_BEHIND = 150;
+const LOOK_AHEAD = 60;
 
 // A whole-period cost claim does not have to contain the word "total".
 // This required it, and the live report of 2026-09-08 walked straight
@@ -992,10 +1006,17 @@ const LOOK_AHEAD = 30;
 // one word the pattern was looking for. The qualifiers below are the ways
 // the same sentence gets written — total, true, all-in, or just the
 // number of years.
+// A whole-period cost claim does not have to contain the word "total", and
+// it does not have to contain the word "cost" either. Submission a62f2dd1
+// led with "About $5,300-$7,100 total over 12 years" and stated "brings the
+// all-in total to about $5,300-$7,100"; both are exactly the claim being
+// policed and neither says "cost", so neither was looked at.
 const CLAIMS_A_TOTAL = new RegExp(
   [
     String.raw`(?:total|true|all-?in|lifetime|\d+-year)[\s\w-]{0,25}cost`,
     String.raw`cost\s+of\s+ownership`,
+    String.raw`\btotal\s+over\s+\d+\s+years?`,
+    String.raw`\ball-?in\s+total\b`,
   ].join('|'),
   'i'
 );
@@ -1089,7 +1110,12 @@ function proseTotalConflicts(report) {
     // total, purely because it sat close to the words "total cost".
     const anyCorrect = claims.some((c) => proseFigureMatches(c.stated, derived.total));
     if (anyCorrect) continue;
-    conflicts.push({ path, label: spec.label, quoted: claims[0].quoted });
+    conflicts.push({
+      path,
+      label: spec.label,
+      // Every qualifying figure, not a guess at which one is the claim.
+      quoted: claims.map((c) => c.quoted).join(' and '),
+    });
   }
 
   const resale = proseResaleConflict(report);
@@ -1108,6 +1134,12 @@ function proseTotalConflicts(report) {
 // breakdown took $6,000-$8,000 off the total and the assumptions list said
 // 22-31% of $32,400. Two of the three agreed; the one written in prose,
 // in the section titled for exactly this number, did not.
+// Deliberately short. The depreciation section quotes percentages, the
+// purchase price and a resale figure within a sentence of each other, so the
+// exclusions below only tell them apart at close range.
+const RESALE_LOOK_BEHIND = 60;
+const RESALE_LOOK_AHEAD = 30;
+
 const CLAIMS_A_RESALE = /resale|trade-?in|worth|retain|residual/i;
 
 // Percentages and per-year figures are not the resale figure, and the
@@ -1126,7 +1158,7 @@ function proseResaleConflict(report) {
     MONEY_RE.lastIndex = 0;
     let match;
     while ((match = MONEY_RE.exec(text)) !== null) {
-      const window = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
+      const window = text.slice(Math.max(0, match.index - RESALE_LOOK_BEHIND), match.index + match[0].length + RESALE_LOOK_AHEAD);
       if (!CLAIMS_A_RESALE.test(window) || NOT_THE_RESALE.test(window)) continue;
       const stated = parseMoneyRange(match[0]);
       if (!stated) continue;
@@ -1145,47 +1177,90 @@ function proseResaleConflict(report) {
   return null;
 }
 
-// $X/yr, $X-$Y a year, $X per year, $X annually.
+// A money figure carrying an explicit scale: per year, or across the whole
+// ownership period. Figures with no scale attached ("$150-$600 per incident",
+// "$50 each") are not claims about a line item and are left alone.
 const PER_YEAR_MONEY_RE = new RegExp(
-  MONEY_RE.source + String.raw`\s*(?:\(\s*\)\s*)?(?:/\s?yr\b|/\s?year\b|per\s+year|a\s+year|annually|/year)`,
+  MONEY_RE.source + String.raw`\s*(?:/\s?yr\b|/\s?year\b|per\s+year|a\s+year|annually|each\s+year)`,
   'gi'
 );
+const WHOLE_PERIOD_MONEY_RE = new RegExp(
+  MONEY_RE.source + String.raw`\s*(?:over|across|during)\s+(?:the\s+)?(?:full\s+|entire\s+)?\d+[\s-]*year`,
+  'gi'
+);
+
+// Which line item is this figure describing?
+//
+// The check used to ask only "is this per-year figure one the report uses
+// anywhere", and that is how "$40-$60 a year" for water filters passed on
+// submission 9109cb06: the filter line says $100/yr flat, but $40-$60 is
+// near enough the ELECTRICITY line's $60-$75 to satisfy set membership. A
+// number can be right about the wrong thing and still clear a check that
+// only looks at the set of numbers.
+function nearestNamedLine(text, at, runningLines) {
+  const lower = text.toLowerCase();
+  let best = null;
+  let bestDistance = Infinity;
+  for (const line of runningLines) {
+    for (const word of meaningfulWords(line.label)) {
+      const needle = word.replace(/s$/, '');
+      if (needle.length < 4) continue;
+      for (let i = lower.indexOf(needle); i !== -1; i = lower.indexOf(needle, i + 1)) {
+        // A label after the figure is still a label, just weaker evidence.
+        const distance = i <= at ? at - i : (i - at) * 1.5;
+        if (distance < bestDistance && distance <= 140) {
+          bestDistance = distance;
+          best = line;
+        }
+      }
+    }
+  }
+  return best;
+}
 
 // The running lines each state a cost per year, and the maintenance section
 // talks about the same costs in prose. On 2026-09-08 that section said
 // "$10-$15/month in electricity (about $120-$180/year)" while the
 // electricity line said $50-$70 a year. Both were about the same fridge.
 //
-// Every per-year figure in that section now has to be one the report
-// actually uses: a running line's own per-year range, or the aggregate.
-// That is a set membership test rather than an attempt to understand the
-// sentence, which is why it is tractable at all.
+// So every scaled figure in that section has to agree with the line it is
+// describing — matched by label, falling back to "any line, or the total"
+// only when the sentence names none of them.
 function proseRunningConflict(report) {
   const maint = report && report.maintenance_running_costs;
   if (!maint || !nonEmpty(maint.explanation)) return null;
   if (!isNum(maint.annual_low) || !isNum(maint.annual_high)) return null;
   const items = validBreakdown(report.total_cost_of_ownership);
   if (!items) return null;
+  const years = report.total_cost_of_ownership.time_horizon_years;
+  if (!isNum(years) || years <= 0) return null;
 
-  const allowed = items
+  const runningLines = items
     .filter((i) => i.kind === 'running' && isNum(i.per_year_low) && isNum(i.per_year_high))
-    .map((i) => ({ low: i.per_year_low, high: i.per_year_high }))
-    .concat([{ low: maint.annual_low, high: maint.annual_high }]);
-  if (!allowed.length) return null;
+    .map((i) => ({ label: i.label, low: i.per_year_low, high: i.per_year_high }));
+  if (!runningLines.length) return null;
+  const aggregate = { label: 'all running costs together', low: maint.annual_low, high: maint.annual_high };
 
-  PER_YEAR_MONEY_RE.lastIndex = 0;
-  let match;
-  while ((match = PER_YEAR_MONEY_RE.exec(maint.explanation)) !== null) {
-    const stated = parseMoneyRange(match[0]);
-    if (!stated) continue;
-    if (allowed.some((a) => proseFigureMatches(stated, a))) continue;
-    const list = allowed.map((a) => moneyRange(a.low, a.high) + '/yr').join(', ');
-    return {
-      path: 'maintenance_running_costs.explanation',
-      label: 'the maintenance and running costs section',
-      quoted: match[0].trim(),
-      correct: 'one of the per-year figures this report actually uses (' + list + ')',
-    };
+  const text = maint.explanation;
+  for (const [re, scale] of [[PER_YEAR_MONEY_RE, 1], [WHOLE_PERIOD_MONEY_RE, years]]) {
+    re.lastIndex = 0;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      const moneyOnly = String(match[0]).match(new RegExp(MONEY_RE.source));
+      const stated = parseMoneyRange(moneyOnly ? moneyOnly[0] : match[0]);
+      if (!stated) continue;
+      const named = nearestNamedLine(text, match.index, runningLines);
+      const targets = named ? [named] : runningLines.concat([aggregate]);
+      const scaled = targets.map((t) => ({ label: t.label, low: t.low * scale, high: t.high * scale }));
+      if (scaled.some((t) => proseFigureMatches(stated, t))) continue;
+      const should = scaled[0];
+      return {
+        path: 'maintenance_running_costs.explanation',
+        label: 'the maintenance and running costs section',
+        quoted: match[0].trim(),
+        correct: `${moneyRange(should.low, should.high)}${scale === 1 ? '/yr' : ` over ${years} years`}, which is what the "${should.label}" line says`,
+      };
+    }
   }
   return null;
 }
@@ -1224,14 +1299,14 @@ async function repairProseTotals({ apiKey, systemPrompt, candidate, submissionId
   const correct = moneyRange(derived.total.low, derived.total.high);
 
   const quoted = conflicts
-    .map((c) => `- ${c.label} says ${c.quoted}, which should be ${c.correct || correct}`)
+    .map((c) => `- ${c.label} quotes ${c.quoted}; the right figure is ${c.correct || correct}`)
     .join('\n');
   const repairPrompt = `Your cost breakdown for this purchase adds up to ${correct} over ${derived.years} years. That figure is arithmetic over your own line items and is the one the customer is shown, so it is the only total that may appear anywhere in the report.
 
 These parts of your write-up quote a figure that disagrees with your own numbers:
 ${quoted}
 
-Please rewrite just those, using the correct figure named against each. Keep your reasoning, your emphasis and everything else you said — only the number changes. Plain prose, no tool-call or parameter-tag syntax.
+Please rewrite just those. Where a field quotes more than one figure, only the one being presented as the whole-period total is wrong — correct that and leave the others exactly as they are. Keep your reasoning, your emphasis and everything else you said; only the number changes. Plain prose, no tool-call or parameter-tag syntax.
 
 Your line items, for reference:
 ${JSON.stringify(derived.items, null, 2)}`;

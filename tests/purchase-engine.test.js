@@ -1149,7 +1149,9 @@ test('a total invented in the prose is caught in every place the live report put
   ]);
   // The quoted figure goes into the repair prompt, so it has to be the
   // actual text and not just the field name.
-  assert.equal(__internal.proseTotalConflicts(bad)[0].quoted, '$52,000–$68,000');
+  // Every figure in the field that reads as a total claim, since which one
+  // the sentence means is not reliably recoverable from word order.
+  assert.match(__internal.proseTotalConflicts(bad)[0].quoted, /\$52,000–\$68,000/);
   assert.equal(__internal.isReportComplete(bad), false);
   assert.equal(__internal.firstIncompleteField(bad), 'total_cost_of_ownership.prose');
 });
@@ -1529,8 +1531,11 @@ test('a per-year figure in the prose must be one the report actually uses', () =
   }));
   assert.equal(conflict.path, 'maintenance_running_costs.explanation');
   assert.equal(conflict.quoted, '$120–$180/year');
-  assert.match(conflict.correct, /\$50 – \$70\/yr/, 'the repair prompt lists the figures that were available');
-  assert.match(conflict.correct, /\$155 – \$248\/yr/);
+  // It names the line the figure was describing, not a menu of every
+  // figure in the report — being right about the wrong line is the
+  // failure mode this check exists to catch.
+  assert.match(conflict.correct, /\$50 – \$70\/yr/);
+  assert.match(conflict.correct, /Electricity. line says/);
 });
 
 test('the per-year check tolerates the figures the report does use', () => {
@@ -2285,4 +2290,201 @@ test('a repair that supplies a verdict with no reasoning is rejected', async (t)
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
   assert.equal(await generatePurchaseReport('sub-1'), null);
   assert.equal(reportInserts.length, 0);
+});
+
+// --- the three that survived the reorder -----------------------------------
+//
+// Submission 9109cb06 got the must-haves right and the arithmetic exact, and
+// still stated a total of $4,900-$6,300 in three sections against a computed
+// $5,323-$5,995, and put "$40-$60 a year" for water filters against a line
+// item reading $100/yr. Each slipped through for its own reason.
+
+function lgReport(overrides) {
+  return completeReportInput({
+    headline: 'Fails your stated deal-breaker: this LG has an external door dispenser',
+    total_cost_of_ownership: {
+      time_horizon_years: 12,
+      cost_breakdown: [
+        { label: 'Purchase price', kind: 'purchase', low: 2899, high: 2899, per_year_low: 0, per_year_high: 0, basis: 'quoted big-box price' },
+        { label: 'Electricity', kind: 'running', low: 0, high: 0, per_year_low: 60, per_year_high: 75, basis: 'EnergyGuide estimate' },
+        { label: 'Water filter replacements', kind: 'running', low: 0, high: 0, per_year_low: 100, per_year_high: 100, basis: 'two filters a year at about $50' },
+        { label: 'Repairs after warranty', kind: 'running', low: 0, high: 0, per_year_low: 42, per_year_high: 83, basis: '$500-$1,000 over 12 years, averaged' },
+      ],
+      explanation: 'Purchase price plus twelve years of electricity, filters and repairs.',
+    },
+    financing_impact: { applicable: false, explanation: 'Paying cash, so no interest applies.' },
+    maintenance_running_costs: {
+      annual_low: 202,
+      annual_high: 258,
+      explanation: 'Electricity runs about $60–$75 a year, water filters about $100 per year, and repairs average $42–$83 annually once the warranty lapses.',
+    },
+    depreciation_resale: { resale_low: 0, resale_high: 0, expected_resale_note: 'negligible after 12 years', explanation: 'Appliances fetch essentially nothing at this age.' },
+    ...overrides,
+  });
+}
+
+test('the computed total for the live report is what the strip shows', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const d = __internal.deriveNumbers(lgReport());
+  assert.equal(__internal.moneyRange(d.total.low, d.total.high), '$5,323 – $5,995');
+  assert.equal(__internal.tcoArithmeticProblem(lgReport()), null);
+  assert.deepEqual(__internal.proseTotalConflicts(lgReport()), []);
+});
+
+test('a total claim is caught however far back the words that make it one sit', () => {
+  // The exact sentence that got through: the phrase "total cost of ownership"
+  // is 103 characters before the figure, and the window reached 60.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(lgReport({
+    recommendation: {
+      verdict: 'reconsider',
+      reasoning: 'Setting the dispenser aside, the $2,899 quote is fair, and over 12 years the total cost of ownership including energy, filters, and repairs would likely land near $4,900-$6,300, which is reasonable long-term value.',
+    },
+  }));
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, 'recommendation.reasoning');
+  assert.match(conflicts[0].quoted, /\$4,900-\$6,300$/, 'and no trailing comma from the clause it sat in');
+});
+
+test('a total claim is caught when it never says the word "cost"', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  for (const headline of [
+    'About $4,900–$6,300 total over 12 years for a fairly priced fridge',
+    'Budgeting a repair reserve brings the all-in total to about $4,900-$6,300',
+  ]) {
+    const conflicts = __internal.proseTotalConflicts(lgReport({ headline }));
+    assert.equal(conflicts.length, 1, headline);
+    assert.equal(conflicts[0].path, 'headline');
+  }
+});
+
+test('a per-year figure is matched against the line it is describing', () => {
+  // "$40-$60 a year" for water filters used to pass because it is near enough
+  // the ELECTRICITY line's $60-$75 to satisfy set membership. Being right
+  // about the wrong line is the failure this now catches.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflict = __internal.proseRunningConflict(lgReport({
+    maintenance_running_costs: {
+      annual_low: 202,
+      annual_high: 258,
+      explanation: 'Expect about $70-$95 a year in electricity, plus water filter replacements every six months (roughly $40–$60 a year).',
+    },
+  }));
+  assert.ok(conflict);
+  assert.equal(conflict.quoted, '$70-$95 a year', 'the first wrong figure is reported');
+  assert.match(conflict.correct, /Electricity. line says/);
+  assert.match(conflict.correct, /\$60 – \$75\/yr/);
+
+  // And the filter figure on its own, so the wrong-line case is covered
+  // rather than shadowed by the electricity one.
+  const filtersOnly = __internal.proseRunningConflict(lgReport({
+    maintenance_running_costs: {
+      annual_low: 202,
+      annual_high: 258,
+      explanation: 'Water filter replacements run roughly $40–$60 a year, which is the main recurring cost besides power.',
+    },
+  }));
+  assert.equal(filtersOnly.quoted, '$40–$60 a year');
+  assert.match(filtersOnly.correct, /Water filter replacements. line says/);
+  assert.match(filtersOnly.correct, /\$100\/yr/);
+});
+
+test('naming two lines in one sentence still attributes each figure correctly', () => {
+  // Both labels sit within a few words of both figures, so a check that only
+  // asks whether the window contains a label gets half of them wrong.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(
+    __internal.proseRunningConflict(lgReport({
+      maintenance_running_costs: {
+        annual_low: 202, annual_high: 258,
+        explanation: 'Electricity is about $60–$75/year and water filters about $100 per year.',
+      },
+    })),
+    null,
+    'both figures match their own line, so nothing is wrong here'
+  );
+  const swapped = __internal.proseRunningConflict(lgReport({
+    maintenance_running_costs: {
+      annual_low: 202, annual_high: 258,
+      explanation: 'Electricity is about $100/year and water filters about $60–$75 per year.',
+    },
+  }));
+  assert.ok(swapped, 'the same two figures against the wrong lines is a real contradiction');
+});
+
+test('a whole-period figure in the maintenance section is checked too', () => {
+  // Not only per-year ones. On submission a62f2dd1 the filter cost was
+  // stated as "$960-$1,320 over 12 years" against a line of $156-$252, and
+  // nothing looked at it because it carried no per-year marker.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflict = __internal.proseRunningConflict(lgReport({
+    maintenance_running_costs: {
+      annual_low: 202, annual_high: 258,
+      explanation: 'Water filter replacements come to roughly $960–$1,320 over 12 years.',
+    },
+  }));
+  assert.ok(conflict);
+  assert.match(conflict.correct, /over 12 years/);
+  assert.match(conflict.correct, /\$1,200/, '100/yr across 12 years is $1,200');
+
+  assert.equal(
+    __internal.proseRunningConflict(lgReport({
+      maintenance_running_costs: {
+        annual_low: 202, annual_high: 258,
+        explanation: 'Water filter replacements come to roughly $1,200 over 12 years.',
+      },
+    })),
+    null
+  );
+});
+
+test('a figure with no scale attached is left alone', () => {
+  // "$150-$600 per incident" and "$50 each" are not claims about a line item.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(
+    __internal.proseRunningConflict(lgReport({
+      maintenance_running_costs: {
+        annual_low: 202, annual_high: 258,
+        explanation: 'A service call runs $150–$600 per incident, and filters are about $50 each. Coil cleaning is free.',
+      },
+    })),
+    null
+  );
+});
+
+test('the tolerance floor no longer swallows a per-year quantity whole', () => {
+  // $200 then $25; both were larger than the figures they were guarding.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.proseFigureMatches({ low: 40, high: 60 }, { low: 100, high: 100 }), false);
+  assert.equal(__internal.proseFigureMatches({ low: 70, high: 95 }, { low: 60, high: 75 }), false);
+  // A genuine round still passes, at both scales.
+  assert.equal(__internal.proseFigureMatches({ low: 60, high: 75 }, { low: 60, high: 75 }), true);
+  assert.equal(__internal.proseFigureMatches({ low: 49000, high: 62000 }, { low: 49280, high: 61880 }), true);
+});
+
+test('the resale check still works with the wider total window', () => {
+  // Widening the shared window to 150 swept "retain roughly 50-55%" into the
+  // resale window, where a "%" is an exclusion, and silenced the check. It
+  // has its own tighter window now.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflict = __internal.proseResaleConflict(completeReportInput({
+    total_cost_of_ownership: {
+      time_horizon_years: 7,
+      cost_breakdown: [
+        { label: 'Purchase price', kind: 'purchase', low: 32400, high: 32400, per_year_low: 0, per_year_high: 0, basis: 'quoted' },
+        { label: 'Running costs', kind: 'running', low: 0, high: 0, per_year_low: 2600, per_year_high: 3500, basis: 'insurance and fuel' },
+        { label: 'Resale at year 7', kind: 'resale_recovery', low: -8000, high: -6000, per_year_low: 0, per_year_high: 0, basis: 'retained value' },
+      ],
+      explanation: 'x',
+    },
+    maintenance_running_costs: { annual_low: 2600, annual_high: 3500, explanation: 'Running costs.' },
+    depreciation_resale: {
+      resale_low: 6000,
+      resale_high: 8000,
+      expected_resale_note: '20-25% retained',
+      explanation: 'Expect it to retain roughly 50-55% of its current value after 7 years, meaning a resale value in the ballpark of $16,000-$18,000 at trade-in.',
+    },
+  }));
+  assert.ok(conflict, 'the resale contradiction must still be caught');
+  assert.equal(conflict.quoted, '$16,000-$18,000');
 });
