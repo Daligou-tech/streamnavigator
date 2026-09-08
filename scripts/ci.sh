@@ -30,6 +30,18 @@ step "render check"
 node tests/render-check.js
 node tests/render-check.js closing-scorecard.html
 
+# The price gate. It existed for six days before this line did, and in that
+# window it never ran once outside a manual `npm run check-prices` — which is
+# why /buying spent six days pointing at a payment link Stripe had deactivated,
+# unbuyable, while every deploy went green. A gate nothing runs is not a gate.
+#
+# It now also asks Stripe directly whether each link is active and charges what
+# its page advertises. That half needs STRIPE_SECRET_KEY: with the key it
+# verifies, without it it skips and says loudly that it skipped, so a missing
+# key on a laptop cannot masquerade as a pass.
+step "prices match the pages, and Stripe agrees"
+node scripts/check-prices.js
+
 # The corpus freshness step is gone with the corpus. Benchmarking was retired,
 # so there are no dated rows left to go stale. Removing the data and the script
 # without removing this line is what stopped every deploy: this file is run by

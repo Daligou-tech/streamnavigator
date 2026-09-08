@@ -229,9 +229,126 @@ function checkPage(file, spec) {
   return { file, spec, problems, notes, displayed, links };
 }
 
+// ---------- the live Stripe check ----------
+//
+// Everything above this line compares files to other files. That is exactly
+// how a dead checkout survived: on 2026-09-07 the button on buying.html
+// pointed at a payment link Stripe had deactivated six days earlier, and
+// loading it returned "The link is no longer active." Purchase Navigator could
+// not be bought at all. This script passed every run, because buying.html and
+// prices.config.json carried the same stale link ID — they agreed with each
+// other and disagreed with Stripe, and nothing here had ever asked Stripe.
+//
+// So this section asks. For each configured link it checks three things that
+// file comparison cannot see:
+//
+//   1. the link still exists in this account
+//   2. it is active
+//   3. it charges the amount the page advertises
+//
+// STRICTLY READ-ONLY. It issues GETs and nothing else. A price checker must
+// never be able to change a price.
+
+const STRIPE_API = 'https://api.stripe.com/v1';
+
+// The config stores the public URL suffix ("28E00jaosceEcoA93WabK0j"), not the
+// API id ("plink_..."), because the suffix is what goes in the page's href.
+// The API cannot look a link up by suffix, so the whole list is fetched and
+// matched on the url field.
+async function fetchAllPaymentLinks(key) {
+  const links = [];
+  let startingAfter = null;
+  for (let page = 0; page < 20; page++) {
+    const qs = new URLSearchParams({ limit: '100' });
+    qs.append('expand[]', 'data.line_items');
+    if (startingAfter) qs.set('starting_after', startingAfter);
+
+    const resp = await fetch(`${STRIPE_API}/payment_links?${qs}`, {
+      headers: { Authorization: `Bearer ${key}` },
+    });
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => '');
+      throw new Error(`Stripe API ${resp.status}: ${body.slice(0, 200)}`);
+    }
+    const body = await resp.json();
+    links.push(...(body.data || []));
+    if (!body.has_more || !body.data.length) return links;
+    startingAfter = body.data[body.data.length - 1].id;
+  }
+  return links;
+}
+
+const linkSuffix = (url) => String(url || '').split('/').filter(Boolean).pop();
+
+async function checkStripeLinks(entries) {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    return {
+      skipped:
+        'STRIPE_SECRET_KEY is not set, so the live check did not run. The '
+        + 'checks above compare the page to prices.config.json only — they '
+        + 'cannot tell whether the link works or what it charges.',
+    };
+  }
+
+  const links = await fetchAllPaymentLinks(key);
+  const bySuffix = new Map(links.map((l) => [linkSuffix(l.url), l]));
+  const rows = [];
+
+  for (const [file, spec] of entries) {
+    if (!spec.stripeLinkId) continue;
+    const link = bySuffix.get(spec.stripeLinkId);
+    const row = { file, spec, problems: [] };
+
+    if (!link) {
+      row.problems.push(
+        `no payment link in this Stripe account has the URL buy.stripe.com/${spec.stripeLinkId}. `
+        + 'The button points at a link that does not exist here.'
+      );
+      rows.push(row);
+      continue;
+    }
+
+    row.link = link;
+    if (!link.active) {
+      row.problems.push(
+        `payment link ${link.id} is DEACTIVATED in Stripe. A customer clicking `
+        + 'checkout gets "The link is no longer active." and cannot buy.'
+      );
+    }
+
+    // A link can carry several line items; the page advertises one price, so
+    // anything other than a single item is reported rather than guessed at.
+    const items = (link.line_items && link.line_items.data) || [];
+    if (items.length !== 1) {
+      row.problems.push(
+        `expected exactly one line item, found ${items.length}. The page shows a `
+        + 'single price, so what Stripe would charge is not what the page says.'
+      );
+    } else {
+      const price = items[0].price || {};
+      const qty = items[0].quantity == null ? 1 : items[0].quantity;
+      const charged = (price.unit_amount || 0) * qty;
+      if (charged !== spec.expectedPriceCents) {
+        row.problems.push(
+          `Stripe charges ${money(charged)} but the page advertises `
+          + `${money(spec.expectedPriceCents)}. The customer sees one number and pays another.`
+        );
+      }
+      if (price.currency && price.currency !== 'usd') {
+        row.problems.push(`price is in ${price.currency.toUpperCase()}, not USD.`);
+      }
+      row.charged = charged;
+    }
+    rows.push(row);
+  }
+
+  return { rows };
+}
+
 // ---------- main ----------
 
-function main() {
+async function main() {
   if (!fs.existsSync(CONFIG_PATH)) {
     console.error(red(`Missing ${path.relative(ROOT, CONFIG_PATH)}`));
     process.exit(1);
@@ -255,6 +372,41 @@ function main() {
     console.log(
       `  ${mark}  ${r.spec.label.padEnd(w)} ${String(shown).padStart(7)}   ${linkCell}`
     );
+  }
+
+  // ---- live Stripe verification -------------------------------------------
+  console.log(bold('\nLive Stripe check\n'));
+  let stripe;
+  try {
+    stripe = await checkStripeLinks(entries);
+  } catch (err) {
+    // A network failure or a bad key must not be reported as "prices are fine".
+    // It is not a price mismatch either, so it is its own outcome.
+    console.log(`  ${red('ERROR')}  could not reach Stripe: ${err.message}`);
+    console.log(red(bold('\nThe live check could not run. Not safe to call this a pass.\n')));
+    process.exit(1);
+  }
+
+  if (stripe.skipped) {
+    console.log(`  ${yellow('SKIPPED')}  ${stripe.skipped}`);
+  } else {
+    for (const r of stripe.rows) {
+      const ok = r.problems.length === 0;
+      const mark = ok ? green('PASS') : red('FAIL');
+      const charged = r.charged == null ? '—' : money(r.charged);
+      const state = !r.link ? red('missing') : r.link.active ? green('active') : red('DEACTIVATED');
+      console.log(
+        `  ${mark}  ${r.spec.label.padEnd(w)} ${String(charged).padStart(7)}   ${state}`
+      );
+    }
+    // Fold Stripe problems into the same list the page checks use, so one
+    // failure anywhere is one non-zero exit.
+    for (const r of stripe.rows) {
+      if (!r.problems.length) continue;
+      const existing = results.find((x) => x.file === r.file);
+      if (existing) existing.problems.push(...r.problems);
+      else results.push({ file: r.file, spec: r.spec, problems: r.problems, notes: [] });
+    }
   }
 
   // detail
@@ -285,8 +437,32 @@ function main() {
   if (skipped.length) {
     console.log(dim(`\nSkipped: ${skipped.join(', ')}`));
   }
-  console.log(green(bold(`\nAll ${results.length} pages consistent.\n`)));
+  if (stripe.skipped) {
+    // Deliberately not a silent pass. Reporting "all consistent" when the only
+    // check that can see a dead checkout never ran is how the last one shipped.
+    console.log(green(bold(`\nAll ${results.length} pages consistent with prices.config.json.`)));
+    console.log(yellow(bold('Stripe was NOT checked — see SKIPPED above.\n')));
+    process.exit(0);
+  }
+
+  console.log(green(bold(
+    `\nAll ${results.length} pages consistent, and all ${stripe.rows.length} `
+    + 'Stripe links are active and charge what their page advertises.\n'
+  )));
   process.exit(0);
 }
 
-main();
+// Only run the CLI when invoked directly. Without this guard, requiring the
+// file from a test executes main() and calls process.exit, killing the runner.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(red(`\ncheck-prices crashed: ${err && err.stack ? err.stack : err}\n`));
+    process.exit(1);
+  });
+}
+
+// Exported for tests. The live Stripe path cannot be exercised in CI without a
+// secret key, so the logic is tested against a stubbed fetch instead — which is
+// the part that has to be right: a dead link, a missing link and a wrong amount
+// must each fail, and a healthy one must pass.
+module.exports = { checkStripeLinks, fetchAllPaymentLinks, linkSuffix };
