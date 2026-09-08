@@ -1807,6 +1807,25 @@ test('notes are still used when the model says it actually found something', asy
 
 const MUST_HAVES = 'internal ice maker, no external door dispenser, must fit a 36-inch opening';
 
+// The must-haves are graded in their own request now (see verifyMustHaves),
+// so a fake has to answer two different calls.
+function isVerifyCall(opts) {
+  const body = JSON.parse((opts && opts.body) || '{}');
+  return (body.tools || []).some((t) => t.name === 'submit_must_have_checks');
+}
+
+function mustHaveResponse(checks, rounds) {
+  const content = [];
+  for (let i = 0; i < (rounds || 0); i++) {
+    content.push({ type: 'server_tool_use', name: 'web_search', id: 'srv_' + i, input: { query: 'spec' } });
+  }
+  content.push({ type: 'tool_use', name: 'submit_must_have_checks', input: { must_have_checks: checks } });
+  return {
+    ok: true,
+    json: async () => ({ content, usage: { server_tool_use: { web_search_requests: rounds || 0 } } }),
+  };
+}
+
 function fridgeSubmission() {
   return fakeSubmission({
     form_data: { ...fakeSubmission().form_data, must_have_features: MUST_HAVES },
@@ -1902,7 +1921,9 @@ test('with no research behind them, every spec verdict is downgraded to unverifi
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
-  global.fetch = async () => toolUseResponse(checkedReport());
+  // Verification answers with confident verdicts and no searches behind them.
+  global.fetch = async (url, opts) =>
+    (isVerifyCall(opts) ? mustHaveResponse(LG_CHECKS(), 0) : toolUseResponse(checkedReport()));
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
@@ -1922,7 +1943,9 @@ test('a graded verdict survives when research did run', async (t) => {
   installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
-  global.fetch = async () => searchedToolUseResponse(checkedReport({ research_notes: ['LG product page lists a Tall Ice & Water Dispenser.'] }), 4);
+  global.fetch = async (url, opts) => (isVerifyCall(opts)
+    ? mustHaveResponse(LG_CHECKS(), 3)
+    : searchedToolUseResponse(checkedReport({ research_notes: ['LG product page lists a Tall Ice & Water Dispenser.'] }), 4));
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
@@ -1942,7 +1965,9 @@ test('anything left unverified is put in front of the customer as a thing to che
   const originalFetch = global.fetch;
   const partly = LG_CHECKS();
   partly[2] = { requirement: 'must fit a 36-inch opening', verdict: 'unverified', finding: 'Could not find a published width.', source: 'not checked' };
-  global.fetch = async () => searchedToolUseResponse(checkedReport({ must_have_checks: partly }), 4);
+  global.fetch = async (url, opts) => (isVerifyCall(opts)
+    ? mustHaveResponse(partly, 3)
+    : searchedToolUseResponse(checkedReport(), 4));
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
@@ -1961,6 +1986,9 @@ test('an unanswered must-have is repaired rather than costing a whole attempt', 
   let promptSeen = '';
   global.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
+    // Verification comes back a requirement short, which is a thing the
+    // repair can fix without another full report.
+    if (isVerifyCall(opts)) return mustHaveResponse(LG_CHECKS().slice(0, 2), 3);
     const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
     if (props.must_have_checks) {
       promptSeen = body.messages[0].content;
@@ -1973,8 +2001,7 @@ test('an unanswered must-have is repaired rather than costing a whole attempt', 
     }
     mainCalls++;
     return searchedToolUseResponse(completeReportInput({
-      must_have_checks: [],
-      recommendation: { verdict: 'buy', reasoning: 'It matches everything you asked for.' },
+      recommendation: { verdict: 'buy', reasoning: 'It looks like a good fit.' },
     }), 4);
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
@@ -2000,6 +2027,7 @@ test('a repair that still recommends buying a failed deal-breaker is rejected', 
 
   global.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
+    if (isVerifyCall(opts)) return mustHaveResponse(LG_CHECKS(), 3);
     const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
     if (props.must_have_checks) {
       return {
@@ -2009,7 +2037,7 @@ test('a repair that still recommends buying a failed deal-breaker is rejected', 
         }),
       };
     }
-    return searchedToolUseResponse(completeReportInput({ must_have_checks: [], recommendation: { verdict: 'buy', reasoning: 'r' } }), 4);
+    return searchedToolUseResponse(completeReportInput({ recommendation: { verdict: 'buy', reasoning: 'r' } }), 4);
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
@@ -2028,4 +2056,105 @@ test('a submission with no must-haves is not held to a check it cannot fail', ()
   const generic = __internal.mapToGenericReport(completeReportInput({ must_have_checks: [] }));
   assert.equal(generic.sections.some((x) => /must-haves/i.test(x.title)), false);
   assert.equal(generic.key_numbers.some((n) => /must-haves/i.test(n.label)), false);
+});
+
+// --- and why it is a separate request -------------------------------------
+//
+// Grading the must-haves inside submit_purchase_report meant one request had
+// to research prices, research rates, look up the product's specification for
+// each requirement, do the arithmetic and write six sections. The first live
+// run after that shipped had two consecutive attempts killed by Vercel at the
+// 300-second ceiling, with no engine output at all — the model call never
+// returned. Three earlier runs of the same submission finished a first
+// attempt in about 160 seconds, and the spec lookups were the only change.
+
+test('the report call is not asked to check the specification', () => {
+  // The report tool used to carry must_have_checks, which is what put the
+  // lookups on the critical path. It must not come back.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(
+    __internal.REPORT_TOOL.input_schema.properties.must_have_checks,
+    undefined,
+    'grading the must-haves belongs in its own request, not on the report call'
+  );
+  assert.equal(__internal.REPORT_TOOL.input_schema.required.includes('must_have_checks'), false);
+  const prompt = __internal.buildSystemPrompt(fridgeSubmission());
+  assert.match(prompt, /checked separately and is not your job here/i);
+});
+
+test('verification is one small request that searches and grades', async (t) => {
+  const originalFetch = global.fetch;
+  const bodies = [];
+  global.fetch = async (url, opts) => {
+    bodies.push(JSON.parse(opts.body));
+    return mustHaveResponse(LG_CHECKS(), 2);
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const result = await __internal.verifyMustHaves({
+    apiKey: 'test-key', submission: fridgeSubmission(), submissionId: 'sub-1', allowSearch: true,
+  });
+
+  assert.equal(bodies.length, 1, 'one request, not a conversation');
+  const body = bodies[0];
+  assert.ok((body.tools || []).some((x) => String(x.type || '').startsWith('web_search')), 'it has to be able to look things up');
+  assert.equal(body.thinking, undefined, 'no extended thinking — this is a lookup, not a calculation');
+  assert.ok(body.max_tokens <= 3000, 'kept small enough to fit beside a full report call');
+  // The buyer's own words reach it, so the entries come back matchable.
+  assert.match(body.messages[0].content, /no external door dispenser/);
+  assert.match(body.system, /LG 33-inch French door refrigerator/, 'and the product it is meant to look up');
+  assert.match(body.system, /33-inch opening/, 'with the size constraint, which is often the thing that decides it');
+  assert.equal(result.searchRounds, 2);
+  assert.equal(result.checks.length, 3);
+});
+
+test('a verification that fails leaves the requirements marked unchecked, not answered', async (t) => {
+  // A failure here must cost the customer certainty, never their report —
+  // and must never leave a must-have looking satisfied.
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) return { ok: false, status: 500, text: async () => 'upstream exploded' };
+    return searchedToolUseResponse(completeReportInput(), 4);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(reportInserts.length, 1, 'the customer still gets their analysis');
+  const section = report.sections[0];
+  assert.equal(section.items.length, 3, 'every requirement they typed is still listed');
+  for (const line of section.items) assert.match(line, /^\?/, line);
+  assert.equal(report.key_numbers.find((n) => /must-haves/i.test(n.label)).value, '0 of 3 confirmed');
+  assert.equal(
+    report.missing_or_uncertain.filter((m) => /could not be verified/i.test(m)).length,
+    3,
+    'and each one is put in front of them as something to confirm before buying'
+  );
+});
+
+test('__internal.unverifiedChecks turns the buyer\'s own words into honest placeholders', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const checks = __internal.unverifiedChecks(fridgeSubmission());
+  assert.deepEqual(checks.map((c) => c.requirement), ['internal ice maker', 'no external door dispenser', 'must fit a 36-inch opening']);
+  assert.ok(checks.every((c) => c.verdict === 'unverified' && c.source === 'not checked'));
+  assert.deepEqual(__internal.unverifiedChecks(fakeSubmission()), []);
+});
+
+test('no must-haves means no verification request at all', async (t) => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => { calls++; return mustHaveResponse([], 0); };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const result = await __internal.verifyMustHaves({
+    apiKey: 'test-key', submission: fakeSubmission(), submissionId: 'sub-1', allowSearch: true,
+  });
+  assert.equal(calls, 0, 'nothing to check is not a reason to spend a request');
+  assert.deepEqual(result, { checks: [], searchRounds: 0 });
 });

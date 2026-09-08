@@ -157,24 +157,6 @@ const REPORT_TOOL = {
         },
         required: ['verdict', 'reasoning'],
       },
-      must_have_checks: {
-        type: 'array',
-        description: 'Required whenever the customer listed must-have features or deal-breakers: exactly one entry for each thing they named, in their words. Empty array only if they named none. Check the item\'s actual published specification before you answer — a feature you remember it having is not a feature you have checked.',
-        items: {
-          type: 'object',
-          properties: {
-            requirement: { type: 'string', description: 'The must-have or deal-breaker as the customer stated it.' },
-            verdict: {
-              type: 'string',
-              enum: ['confirmed', 'contradicted', 'unverified'],
-              description: 'confirmed = you checked the specification and the item has this. contradicted = you checked and it does NOT, or has the thing they said was a deal-breaker. unverified = you could not check it. Recalling that a model has a feature is NOT checking; if you did not look it up in this conversation, the honest answer is unverified.',
-            },
-            finding: { type: 'string', description: 'Required. What the specification actually says about this, in one sentence. For unverified, say what you were unable to establish.' },
-            source: { type: 'string', description: 'Required. Where the finding came from — the manufacturer page, a retailer listing, the spec sheet. Write "not checked" when the verdict is unverified. Never name a source you did not actually read.' },
-          },
-          required: ['requirement', 'verdict', 'finding', 'source'],
-        },
-      },
       assumptions: {
         type: 'array',
         items: { type: 'string' },
@@ -189,7 +171,7 @@ const REPORT_TOOL = {
     required: [
       'headline', 'summary', 'total_cost_of_ownership', 'financing_impact',
       'maintenance_running_costs', 'depreciation_resale', 'alternative_comparison',
-      'recommendation', 'must_have_checks', 'assumptions', 'missing_or_uncertain',
+      'recommendation', 'assumptions', 'missing_or_uncertain',
     ],
   },
 };
@@ -244,7 +226,7 @@ ${brief}
 
 Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed — cost it out over the same ownership period so the two totals sit side by side, and make sure everything you say about it is about the product you named rather than a differently-configured version of it. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
 
-Before anything else: if the customer listed must-have features or deal-breakers, look up the item's actual specification and check each one against it. Do not answer from memory about what a given model has or does not have — that is the single most damaging thing you can get wrong here, because a customer told that an item meets their deal-breaker will buy it. If you cannot verify a feature, say so; "unverified" costs the customer nothing and a confident wrong answer costs them the purchase.
+Whether the item meets the customer's must-haves is checked separately and is not your job here — do not assert that it does or does not have a given feature anywhere in this report.
 
 Two rules about the numbers, because this product is bought for its arithmetic:
 
@@ -1480,6 +1462,10 @@ ${problem ? 'Something is wrong with how the report answers them: ' + problem : 
 
 Give one entry per item above. For each, say what the product's actual specification says and where you read it. If you did not look it up, the verdict is "unverified" and the source is "not checked" — that is an honest, useful answer, and far better than a confident guess: a customer told their deal-breaker is satisfied will buy the thing. If any item comes back contradicted, the recommendation cannot be "buy".
 
+What was already established about each, which you should keep unless you
+have a reason to change it:
+${JSON.stringify(candidate.must_have_checks || [], null, 2)}
+
 Your analysis, for reference:
 ${JSON.stringify({ headline: candidate.headline, recommendation: candidate.recommendation }, null, 2)}`;
 
@@ -1513,6 +1499,122 @@ ${JSON.stringify({ headline: candidate.headline, recommendation: candidate.recom
     return null;
   }
   return patched;
+}
+
+
+const MUST_HAVE_TOOL = {
+  name: 'submit_must_have_checks',
+  description: 'Submit one graded verdict for each must-have the customer named.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      must_have_checks: {
+        type: 'array',
+        description: 'Exactly one entry per requirement listed, in the customer\'s words.',
+        items: {
+          type: 'object',
+          properties: {
+            requirement: { type: 'string', description: 'The must-have or deal-breaker as the customer stated it.' },
+            verdict: {
+              type: 'string',
+              enum: ['confirmed', 'contradicted', 'unverified'],
+              description: 'confirmed = you looked the specification up and the item has this. contradicted = you looked it up and it does NOT, or it has the thing they called a deal-breaker. unverified = you could not establish it. Recalling that a model has a feature is NOT checking; if you did not look it up in this conversation, the honest answer is unverified.',
+            },
+            finding: { type: 'string', description: 'What the specification actually says, in one sentence. For unverified, what you were unable to establish.' },
+            source: { type: 'string', description: 'Where you read it — the manufacturer page, a retailer listing, the spec sheet. "not checked" when unverified. Never a source you did not actually read.' },
+          },
+          required: ['requirement', 'verdict', 'finding', 'source'],
+        },
+      },
+    },
+    required: ['must_have_checks'],
+  },
+};
+
+// Its own request, with its own search budget and one job. Returns the
+// graded checks and — separately — how many searches actually ran, because
+// the caller downgrades every verdict when the answer is none.
+async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch }) {
+  const fragments = mustHaveFragments(submission);
+  if (!fragments.length) return { checks: [], searchRounds: 0 };
+
+  const formData = submission.form_data || {};
+  const system = `You check whether one specific product meets a buyer's stated requirements, for StreamNavigator AI. You do one thing: look up what the product actually is, and grade each requirement against it.
+
+The product, as the buyer described it: ${formData.item_description || '(not given)'}
+${formData.configuration ? `Configuration they want: ${formData.configuration}\n` : ''}${formData.size_constraints ? `Size constraints: ${formData.size_constraints}\n` : ''}
+Search for the product's published specification before answering. Do not answer from memory about what a given model has or does not have — that is the single most damaging thing you can get wrong, because a buyer told their deal-breaker is satisfied will go and buy the thing. If a search does not settle it, "unverified" is the right answer and costs the buyer nothing; a confident wrong answer costs them the purchase.
+
+${noLeakRule('submit_must_have_checks')}
+
+Respond ONLY by calling the submit_must_have_checks tool.`;
+
+  const userText = `Grade each of these requirements against the product's actual specification:
+
+${fragments.map((f) => '  - ' + f).join('\n')}
+
+Give exactly one entry per line above, using the buyer's own wording for the requirement.`;
+
+  const messages = [{ role: 'user', content: userText }];
+  const searchTool = { ...WEB_SEARCH_TOOL, max_uses: 3 };
+
+  let data;
+  try {
+    data = await callAnthropic({
+      apiKey,
+      system,
+      tools: allowSearch ? [searchTool, MUST_HAVE_TOOL] : [MUST_HAVE_TOOL],
+      toolChoice: { type: 'auto' },
+      messages,
+      maxTokens: 3000,
+    });
+  } catch (err) {
+    if (allowSearch && looksLikeUnsupportedToolError(err)) {
+      return verifyMustHaves({ apiKey, submission, submissionId, allowSearch: false });
+    }
+    // A failed verification must not cost the customer their report. The
+    // caller falls back to unverified entries, which is honest and still
+    // tells them what to go and check.
+    console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} failed: ${String((err && err.message) || err)}`);
+    return null;
+  }
+
+  const searchRounds = countSearchRounds(data);
+  let toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_must_have_checks');
+  if (!toolUse) {
+    const replay = (data.content || []).filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
+    const followData = await callAnthropic({
+      apiKey,
+      system,
+      tools: [MUST_HAVE_TOOL],
+      toolChoice: { type: 'tool', name: 'submit_must_have_checks' },
+      messages: messages.concat([
+        { role: 'assistant', content: replay },
+        { role: 'user', content: 'Now call submit_must_have_checks with one entry per requirement, using anything you found above.' },
+      ]),
+      maxTokens: 2000,
+    });
+    toolUse = (followData.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_must_have_checks');
+  }
+  if (!toolUse || !Array.isArray(toolUse.input && toolUse.input.must_have_checks)) {
+    console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} returned no usable checks.`);
+    return null;
+  }
+  return { checks: sanitizeReportTags(toolUse.input.must_have_checks), searchRounds };
+}
+
+// What the report carries when verification could not run at all: the
+// requirements the customer typed, each honestly marked as unchecked. A
+// customer who is told "we could not confirm this, go and look" is far
+// better served than one shown nothing, and immeasurably better served
+// than one told it is fine.
+function unverifiedChecks(submission) {
+  return mustHaveFragments(submission).map((requirement) => ({
+    requirement,
+    verdict: 'unverified',
+    finding: 'This could not be checked against the product specification for this report.',
+    source: 'not checked',
+  }));
 }
 
 // Defense in depth: the tool schema's `required` arrays lean on the model
@@ -2099,23 +2201,39 @@ async function generatePurchaseReport(submissionId) {
       // required field it didn't cover.
       if (!Array.isArray(candidate.assumptions)) candidate.assumptions = [];
       if (!Array.isArray(candidate.missing_or_uncertain)) candidate.missing_or_uncertain = [];
-      if (!Array.isArray(candidate.must_have_checks)) candidate.must_have_checks = [];
+      // The must-haves are graded in their own request rather than inside
+      // the report call — see verifyMustHaves for the timeout that forced
+      // that. A failure here costs the customer nothing but certainty: they
+      // get the requirements back marked unchecked, with instructions to
+      // confirm before buying.
+      let verification = null;
+      try {
+        verification = await verifyMustHaves({
+          apiKey: ANTHROPIC_API_KEY,
+          submission,
+          submissionId,
+          allowSearch: ENABLE_WEB_SEARCH,
+        });
+      } catch (err) {
+        console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+      }
+      candidate.must_have_checks = (verification && verification.checks) || unverifiedChecks(submission);
 
       // A spec verdict is only as good as the lookup behind it, and with no
-      // searches this attempt there was no lookup — whatever the model
-      // believes about the product, it is remembering rather than checking.
-      // This is the deterministic half of the fix: the report of 2026-09-08
+      // searches on the verification call there was no lookup — whatever the
+      // model believes about the product, it is remembering rather than
+      // checking. This is the deterministic half: the report of 2026-09-08
       // that told a customer their deal-breaker was satisfied was confident,
       // consistent and wrong, and no amount of asking it to be careful would
-      // have stopped that. Downgrading here cannot invent a problem; it can
-      // only stop one being ruled out on nothing.
-      if (!searchRounds) {
-        const downgraded = candidate.must_have_checks.filter((c) => c && c.verdict !== 'unverified');
-        if (downgraded.length) {
+      // have stopped that. Downgrading cannot invent a problem; it can only
+      // stop one being ruled out on nothing.
+      if (!verification || !verification.searchRounds) {
+        const graded = candidate.must_have_checks.filter((c) => c && c.verdict !== 'unverified');
+        if (graded.length) {
           console.warn(
-            `[purchase-engine] Submission ${submissionId} graded ${downgraded.length} must-have(s) with no web_search behind them; downgrading to unverified.`
+            `[purchase-engine] Submission ${submissionId} graded ${graded.length} must-have(s) with no web_search behind them; downgrading to unverified.`
           );
-          for (const check of downgraded) {
+          for (const check of graded) {
             check.verdict = 'unverified';
             check.source = 'not checked — no live lookup ran for this report';
           }
@@ -2390,6 +2508,9 @@ module.exports = {
     repairAssumptions,
     repairResearchNotes,
     repairMustHaveChecks,
+    verifyMustHaves,
+    unverifiedChecks,
+    MUST_HAVE_TOOL,
     mustHaveProblem,
     mustHaveFragments,
     MUST_HAVE_REPAIR_TOOL,
