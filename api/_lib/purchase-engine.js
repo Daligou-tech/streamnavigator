@@ -92,13 +92,13 @@ const REPORT_TOOL = {
                   enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'],
                   description: 'purchase = the price paid for the item itself. financing = interest and loan fees. running = fuel/energy, insurance, maintenance, repairs, taxes and fees, everything recurring. resale_recovery = money expected BACK at the end (enter it as a negative number). other = anything genuinely none of the above.',
                 },
-                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line. IGNORED on a "running" line — give per_year_low there instead and the period figure is worked out from it.' },
-                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period. Ignored on a "running" line.' },
-                per_year_low: { type: 'number', description: 'REQUIRED on a "running" line, ignored on every other kind. Low end of this cost PER YEAR, in whole dollars. The whole-period figure is this multiplied by the ownership period — you are not asked for it and should not work it out. A cost that is lumpy rather than steady (repairs that only start in year 6, say) goes in as its average per year across the whole period.' },
-                per_year_high: { type: 'number', description: 'Required on a "running" line. High end of this cost per year, in whole dollars.' },
+                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line. On a "running" line this is ignored entirely — write 0 and give per_year_low instead.' },
+                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period. Write 0 on a "running" line.' },
+                per_year_low: { type: 'number', description: 'Low end of this cost PER YEAR, in whole dollars, on a "running" line. Write 0 on every other kind. The whole-period figure is this multiplied by the ownership period — you are not asked for it and should not work it out. A cost that is lumpy rather than steady (repairs that only start in year 6, say) goes in as its average per year across the whole period.' },
+                per_year_high: { type: 'number', description: 'High end of this cost per year on a "running" line. Write 0 on every other kind.' },
                 basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal". Do not restate the figure itself here in different numbers.' },
               },
-              required: ['label', 'kind', 'low', 'high', 'basis'],
+              required: ['label', 'kind', 'low', 'high', 'per_year_low', 'per_year_high', 'basis'],
             },
           },
           explanation: { type: 'string', description: 'Required, non-empty. What drives the total and how confident you are. Do NOT restate the total or re-derive individual line items here in different numbers — the breakdown above is the single source of truth and this text sits directly beneath it.' },
@@ -779,13 +779,13 @@ const COST_MODEL_REPAIR_TOOL = {
           properties: {
             label: { type: 'string' },
             kind: { type: 'string', enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'] },
-            low: { type: 'number', description: 'Whole-period figure. Ignored on a "running" line.' },
-            high: { type: 'number', description: 'Whole-period figure. Ignored on a "running" line.' },
-            per_year_low: { type: 'number', description: 'Required on a "running" line: the cost PER YEAR. The period figure is worked out from it.' },
-            per_year_high: { type: 'number', description: 'Required on a "running" line.' },
+            low: { type: 'number', description: 'Whole-period figure. Write 0 on a "running" line — it is ignored there.' },
+            high: { type: 'number', description: 'Whole-period figure. Write 0 on a "running" line.' },
+            per_year_low: { type: 'number', description: 'The cost PER YEAR on a "running" line; the period figure is worked out from it. Write 0 on every other kind.' },
+            per_year_high: { type: 'number', description: 'The cost per year on a "running" line. Write 0 on every other kind.' },
             basis: { type: 'string', description: 'One short clause on where the number comes from.' },
           },
-          required: ['label', 'kind', 'low', 'high', 'basis'],
+          required: ['label', 'kind', 'low', 'high', 'per_year_low', 'per_year_high', 'basis'],
         },
       },
       annual_low: { type: 'number', description: 'Low end of running costs PER YEAR. Multiplied by the ownership period, this must match the running lines above.' },
@@ -1255,13 +1255,17 @@ const RESEARCH_NOTES_REPAIR_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
+      found_nothing_usable: {
+        type: 'boolean',
+        description: 'true if the searches did not turn up anything you actually relied on, so your figures came from general knowledge instead. That is a perfectly good answer — set this and leave research_notes empty rather than describing findings you are not confident of.',
+      },
       research_notes: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Two to five short notes, each saying what you found and roughly where it came from, e.g. "Experian Q1 2026 puts the average used-car loan APR at 11.43%". Only things you actually looked up.',
+        description: 'Empty when found_nothing_usable is true. Otherwise two to five short notes, each saying what you found and roughly where it came from, e.g. "Experian Q1 2026 puts the average used-car loan APR at 11.43%". Only things you actually looked up and used.',
       },
     },
-    required: ['research_notes'],
+    required: ['found_nothing_usable', 'research_notes'],
   },
 };
 
@@ -1278,9 +1282,12 @@ const RESEARCH_NOTES_REPAIR_TOOL = {
 // report: an absent research section is a lesser wrong than losing a
 // customer's whole analysis over it.
 async function repairResearchNotes({ apiKey, systemPrompt, candidate, submissionId, searchRounds }) {
-  const repairPrompt = `You ran ${searchRounds} web search${searchRounds === 1 ? '' : 'es'} while producing the analysis below, but the notes on what they turned up did not reach us, so the customer's report currently shows none of it.
+  const repairPrompt = `${searchRounds} web search${searchRounds === 1 ? '' : 'es'} ran while you produced the analysis below, but no notes on them reached us, so the customer's report currently shows nothing about the research.
 
-Please provide ONLY those notes: two to five short lines, each saying what you found and roughly what kind of source it came from. Only things you actually looked up — if a figure came from general knowledge rather than a search, leave it out.
+Two answers are equally acceptable and you should give whichever is true:
+
+  - If those searches turned up things you actually relied on, write two to five short lines saying what you found and roughly what kind of source it came from, and leave found_nothing_usable false.
+  - If they did not turn up anything usable, and your figures really came from general knowledge, set found_nothing_usable to true and leave the notes empty. Do NOT reconstruct findings you are not confident you actually saw. An honest "the search did not help" is worth more here than a plausible-sounding list.
 
 Your analysis, for reference:
 ${JSON.stringify({
@@ -1297,13 +1304,17 @@ ${JSON.stringify({
     maxTokens: 1024,
   });
   const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
-  const list = toolUse && toolUse.input && toolUse.input.research_notes;
-  if (!Array.isArray(list)) {
+  const input = (toolUse && toolUse.input) || {};
+  if (input.found_nothing_usable === true) {
+    console.warn(`[purchase-engine] Submission ${submissionId} searched ${searchRounds} time(s) and reported finding nothing it relied on.`);
+    return { foundNothing: true };
+  }
+  if (!Array.isArray(input.research_notes)) {
     console.warn(`[purchase-engine] Research-notes repair for submission ${submissionId} returned no usable list.`);
     return null;
   }
-  const cleaned = list.filter((v) => nonEmpty(v) && !String(v).match(TAG_LEAK_PATTERN)).map((v) => v.trim());
-  return cleaned.length ? cleaned : null;
+  const cleaned = input.research_notes.filter((v) => nonEmpty(v) && !String(v).match(TAG_LEAK_PATTERN)).map((v) => v.trim());
+  return cleaned.length ? { notes: cleaned } : null;
 }
 
 // Defense in depth: the tool schema's `required` arrays lean on the model
@@ -2026,8 +2037,13 @@ async function generatePurchaseReport(submissionId) {
       } catch (err) {
         console.warn(`[purchase-engine] Research-notes repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
       }
-      if (notes) {
-        report.research_notes = notes;
+      if (notes && notes.notes) {
+        report.research_notes = notes.notes;
+      } else if (notes && notes.foundNothing) {
+        // The searches ran and came back empty-handed. Say that, rather
+        // than either inventing a research section or silently implying
+        // the figures are better sourced than they are.
+        report.missing_or_uncertain.unshift('The web searches run for this report did not turn up anything that sharpened the figures, so they rest on general knowledge and the details you supplied rather than verified current listings.');
       } else {
         // Not a reason to fail an otherwise-good report, but the customer
         // should not be left assuming a section they paid for is missing

@@ -1680,3 +1680,105 @@ test('if the notes cannot be recovered the customer is told, not left guessing',
   assert.ok(report.headline, 'the report still ships');
   assert.ok(report.missing_or_uncertain.some((m) => /could not be summarised/i.test(m)));
 });
+
+// --- what the second appliance run found ----------------------------------
+
+test('both tools that build a breakdown actually require the per-year fields', () => {
+  // Not a style point. On submission 50921a02 the cost-model repair omitted
+  // per_year on its running lines — the schema only mentioned they were
+  // needed in a description, while the required array still listed the old
+  // five fields — so validBreakdown rejected the repair, the loop broke, and
+  // a whole generation attempt was spent proving that the schema and the
+  // validator disagreed with each other. The log line was "Cost-model repair
+  // returned an unusable breakdown".
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const itemSchemaOf = (tool) => {
+    const props = tool.input_schema.properties;
+    const breakdown = props.cost_breakdown || props.total_cost_of_ownership.properties.cost_breakdown;
+    return breakdown.items;
+  };
+  for (const [name, tool] of [['submit_purchase_report', __internal.REPORT_TOOL], ['the cost-model repair', __internal.COST_MODEL_REPAIR_TOOL]]) {
+    const item = itemSchemaOf(tool);
+    for (const field of ['label', 'kind', 'low', 'high', 'per_year_low', 'per_year_high', 'basis']) {
+      assert.ok(
+        item.required.includes(field),
+        `${name} must require ${field} on a line item — a field the description calls required and the schema does not is how the repair produced a breakdown the validator threw away`
+      );
+    }
+  }
+});
+
+test('searching and finding nothing usable is an answer the model can give', async (t) => {
+  // The repair added earlier that day told the model "you ran 5 searches,
+  // the notes did not reach us", which leaves no room for the honest reply.
+  // The report that came back said in its own prose that "a fresh price
+  // check could not be completed this session" AND carried five notes
+  // describing retailer listings and utility rates. The logs showed five
+  // real search rounds and no notes recorded from them, so at least one of
+  // those two statements was written to fill the gap the prompt left.
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let promptSeen = '';
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.research_notes) {
+      promptSeen = body.messages[0].content;
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { found_nothing_usable: true, research_notes: [] } }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({ research_notes: [] }), 5);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.match(promptSeen, /Do NOT reconstruct findings/i, 'the prompt has to offer the honest answer, not just ask for notes');
+  assert.equal(
+    report.sections.some((x) => /live research/i.test(x.title)),
+    false,
+    'no research section may be conjured out of searches that found nothing'
+  );
+  assert.match(report.missing_or_uncertain[0], /did not turn up anything that sharpened the figures/i);
+});
+
+test('notes are still used when the model says it actually found something', async (t) => {
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.research_notes) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: { found_nothing_usable: false, research_notes: ['Dominion Energy residential rates run $0.13-$0.15/kWh.'] },
+          }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({ research_notes: [] }), 5);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  const section = report.sections.find((x) => /live research/i.test(x.title));
+  assert.match(section.items[0], /Dominion/);
+  assert.equal(report.missing_or_uncertain.some((m) => /did not turn up/i.test(m)), false);
+});
