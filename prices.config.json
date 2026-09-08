@@ -3,7 +3,7 @@
   "pages": {
     "buying.html": {
       "label": "Purchase Navigator",
-      "expectedPriceCents": 3900,
+      "expectedPriceCents": 2900,
       "stripeLinkId": "5kQfZh1RWdiIgEQgwoabK0f",
       "alsoCheckMetaDescription": true
     },
