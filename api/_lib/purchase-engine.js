@@ -2830,12 +2830,27 @@ async function generatePurchaseReport(submissionId) {
     // research_notes the model wrote anyway are dropped, since with zero
     // server_tool_use blocks in the response they cannot describe research
     // that happened.
+    //
+    // searchRounds counts the REPORT call's searches only. The must-have
+    // verification is a separate request with its own searching, and on
+    // submission 2a2b3a24 it succeeded — the spec checks cite Peloton's own
+    // product pages three times — while the report call searched seven times,
+    // hit its usage limit and reported finding nothing it relied on. Both
+    // things were true, and the disclaimer said "the web searches run for
+    // this report did not turn up anything", which reads as covering the
+    // whole page including the citations directly above it. It is scoped to
+    // the figures it actually describes now, and says so when the
+    // specification was looked up separately.
+    const specWasLookedUp = (mustHaveChecks || []).some((c) => c && c.verdict !== 'unverified');
+    const specNote = specWasLookedUp
+      ? ' Your must-haves were checked separately and cite what they were checked against.'
+      : '';
     if (!searchRounds) {
       console.warn(
         `[purchase-engine] Submission ${submissionId} produced a report with zero web_search rounds${ENABLE_WEB_SEARCH ? '' : ' (search disabled by PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH)'}.`
       );
       report.research_notes = [];
-      const note = 'No live web research ran for this report. Every figure here is a directional estimate built from general knowledge and the details you supplied, not a verified current price or rate.';
+      const note = 'No live research ran behind the cost figures in this report, so they are directional estimates built from general knowledge and the details you supplied rather than verified current prices or rates.' + specNote;
       if (!report.missing_or_uncertain.includes(note)) report.missing_or_uncertain.unshift(note);
     } else if (!Array.isArray(report.research_notes) || !report.research_notes.length) {
       console.warn(
@@ -2853,12 +2868,14 @@ async function generatePurchaseReport(submissionId) {
         // The searches ran and came back empty-handed. Say that, rather
         // than either inventing a research section or silently implying
         // the figures are better sourced than they are.
-        report.missing_or_uncertain.unshift('The web searches run for this report did not turn up anything that sharpened the figures, so they rest on general knowledge and the details you supplied rather than verified current listings.');
+        report.missing_or_uncertain.unshift(
+          'The searches run for the cost figures did not turn up anything that sharpened them, so those numbers rest on general knowledge and the details you supplied rather than verified current listings.' + specNote
+        );
       } else {
         // Not a reason to fail an otherwise-good report, but the customer
         // should not be left assuming a section they paid for is missing
         // because nothing was found.
-        report.missing_or_uncertain.push('The live research behind these figures could not be summarised for this report. The numbers were researched; the notes on what was found did not survive.');
+        report.missing_or_uncertain.push('The research behind the cost figures could not be summarised for this report. The numbers were researched; the notes on what was found did not survive.' + specNote);
       }
     }
 

@@ -963,7 +963,7 @@ test('a report generated without any live research says so, and its research not
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
   const report = await generatePurchaseReport('sub-1');
 
-  assert.match(report.missing_or_uncertain[0], /No live web research ran/);
+  assert.match(report.missing_or_uncertain[0], /No live research ran behind the cost figures/);
   assert.ok(
     !report.sections.some((s) => /live research/i.test(s.title)),
     'a research section must not appear when no search ran, whatever the model wrote in research_notes'
@@ -1760,7 +1760,7 @@ test('searching and finding nothing usable is an answer the model can give', asy
     false,
     'no research section may be conjured out of searches that found nothing'
   );
-  assert.match(report.missing_or_uncertain[0], /did not turn up anything that sharpened the figures/i);
+  assert.match(report.missing_or_uncertain[0], /searches run for the cost figures did not turn up anything/i);
 });
 
 test('notes are still used when the model says it actually found something', async (t) => {
@@ -2845,4 +2845,68 @@ test('a row with no cached verification reads as none, not as an empty result', 
   assert.equal(__internal.readCachedVerification(fakeSubmission()), null);
   assert.equal(__internal.readCachedVerification({ job_state: {} }), null);
   assert.equal(__internal.readCachedVerification({ job_state: { must_have_verification: {} } }), null);
+});
+
+// --- what the disclaimer actually covers ----------------------------------
+//
+// searchRounds counts the REPORT call's searches. The must-have verification
+// is a separate request with its own searching, and on submission 2a2b3a24 it
+// succeeded — the spec checks cite Peloton's own product pages three times —
+// while the report call searched seven times, hit its usage limit and
+// reported finding nothing it relied on. Both were true. The disclaimer said
+// "the web searches run for this report did not turn up anything", which
+// reads as covering the whole page, including the citations directly above
+// it.
+
+async function reportWithNoUsableResearch(t, mustHaveChecks) {
+  const submission = mustHaveChecks.length ? fridgeSubmission() : fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) return mustHaveResponse(mustHaveChecks, mustHaveChecks.length ? 3 : 0);
+    const props = (((JSON.parse(opts.body).tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.research_notes) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { found_nothing_usable: true, research_notes: [] } }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({
+      research_notes: [],
+      recommendation: { verdict: 'reconsider', reasoning: 'The dispenser is a deal-breaker.' },
+    }), 7);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+  return require('../api/_lib/purchase-engine').generatePurchaseReport('sub-1');
+}
+
+test('the disclaimer covers the cost figures, not the spec checks that did get looked up', async (t) => {
+  const report = await reportWithNoUsableResearch(t, LG_CHECKS());
+  const note = report.missing_or_uncertain[0];
+  assert.match(note, /searches run for the cost figures/i, 'it has to name what it covers');
+  assert.match(note, /checked separately/i, 'and say the must-haves were not part of it');
+  // The spec checks are still there, still citing their sources.
+  const section = report.sections[0];
+  assert.match(section.title, /must-haves/i);
+  assert.match(section.items[0], /LG's product page/);
+});
+
+test('with nothing looked up anywhere, the disclaimer claims no separate check', async (t) => {
+  const report = await reportWithNoUsableResearch(t, []);
+  const note = report.missing_or_uncertain[0];
+  assert.match(note, /cost figures/i);
+  assert.equal(
+    /checked separately/i.test(note),
+    false,
+    'there was no separate check to point at, so it must not claim one'
+  );
+});
+
+test('an unverified spec check does not count as having been looked up', async (t) => {
+  const unverified = LG_CHECKS().map((c) => ({ ...c, verdict: 'unverified', source: 'not checked' }));
+  const report = await reportWithNoUsableResearch(t, unverified);
+  assert.equal(/checked separately/i.test(report.missing_or_uncertain[0]), false);
 });
