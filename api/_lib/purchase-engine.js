@@ -157,6 +157,24 @@ const REPORT_TOOL = {
         },
         required: ['verdict', 'reasoning'],
       },
+      must_have_checks: {
+        type: 'array',
+        description: 'Required whenever the customer listed must-have features or deal-breakers: exactly one entry for each thing they named, in their words. Empty array only if they named none. Check the item\'s actual published specification before you answer — a feature you remember it having is not a feature you have checked.',
+        items: {
+          type: 'object',
+          properties: {
+            requirement: { type: 'string', description: 'The must-have or deal-breaker as the customer stated it.' },
+            verdict: {
+              type: 'string',
+              enum: ['confirmed', 'contradicted', 'unverified'],
+              description: 'confirmed = you checked the specification and the item has this. contradicted = you checked and it does NOT, or has the thing they said was a deal-breaker. unverified = you could not check it. Recalling that a model has a feature is NOT checking; if you did not look it up in this conversation, the honest answer is unverified.',
+            },
+            finding: { type: 'string', description: 'Required. What the specification actually says about this, in one sentence. For unverified, say what you were unable to establish.' },
+            source: { type: 'string', description: 'Required. Where the finding came from — the manufacturer page, a retailer listing, the spec sheet. Write "not checked" when the verdict is unverified. Never name a source you did not actually read.' },
+          },
+          required: ['requirement', 'verdict', 'finding', 'source'],
+        },
+      },
       assumptions: {
         type: 'array',
         items: { type: 'string' },
@@ -171,7 +189,7 @@ const REPORT_TOOL = {
     required: [
       'headline', 'summary', 'total_cost_of_ownership', 'financing_impact',
       'maintenance_running_costs', 'depreciation_resale', 'alternative_comparison',
-      'recommendation', 'assumptions', 'missing_or_uncertain',
+      'recommendation', 'must_have_checks', 'assumptions', 'missing_or_uncertain',
     ],
   },
 };
@@ -225,6 +243,8 @@ Customer-provided details:
 ${brief}
 
 Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed — cost it out over the same ownership period so the two totals sit side by side, and make sure everything you say about it is about the product you named rather than a differently-configured version of it. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
+
+Before anything else: if the customer listed must-have features or deal-breakers, look up the item's actual specification and check each one against it. Do not answer from memory about what a given model has or does not have — that is the single most damaging thing you can get wrong here, because a customer told that an item meets their deal-breaker will buy it. If you cannot verify a feature, say so; "unverified" costs the customer nothing and a confident wrong answer costs them the purchase.
 
 Two rules about the numbers, because this product is bought for its arithmetic:
 
@@ -1317,12 +1337,190 @@ ${JSON.stringify({
   return cleaned.length ? { notes: cleaned } : null;
 }
 
+
+// --- the must-haves -------------------------------------------------------
+//
+// Three runs of the same appliance submission (an LG LRFXC2416S, whose
+// must-haves included "no external door dispenser") produced three
+// different verdicts. One returned WAIT over the fridge's height, one
+// returned RECONSIDER having found the external dispenser, and one returned
+// BUY — asserting in its recommendation that the model has "no external
+// dispenser" and "already matches your must-haves".
+//
+// That last one is the reason this exists. LG's own product page lists a
+// Tall Ice & Water Dispenser on that model, so the report told a customer
+// their deal-breaker was satisfied when it was not, as a reason to buy. It
+// was internally consistent, its arithmetic reconciled perfectly, and every
+// numeric check in this file passed it. No amount of further validation
+// would have caught it, because the defect was not a contradiction — it was
+// a confident memory.
+//
+// So compliance stops being an aside in prose and becomes one graded verdict
+// per requirement, each having to name what it rests on. And a verdict may
+// only be "confirmed" or "contradicted" if research actually ran this
+// attempt (see the searchRounds downgrade at the call site) — recalling that
+// a model has a feature is not checking that it does.
+
+// Splits the customer's free-text must-haves into the individual things they
+// asked for. Deliberately generous about separators: people write these as
+// "AWD, Apple CarPlay and roof rails" as often as a clean list.
+function mustHaveFragments(submission) {
+  const raw = ((submission && submission.form_data) || {}).must_have_features;
+  if (!nonEmpty(raw)) return [];
+  return String(raw)
+    .split(/[,;\n]|\band\b|\bplus\b/i)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 2);
+}
+
+// Same idea as the token matching in closing-audit.js: single characters and
+// filler words carry no signal, so a fragment counts as covered when the
+// words that actually mean something are present.
+const FILLER = new Set(['must', 'have', 'has', 'with', 'the', 'a', 'an', 'no', 'not', 'and', 'or', 'of', 'for', 'be', 'is', 'it', 'that', 'this', 'any', 'all', 'my', 'i', 'want', 'need', 'needs', 'deal', 'breaker', 'dealbreaker', 'fit', 'fits']);
+
+function meaningfulWords(text) {
+  return String(text || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length > 1 && !FILLER.has(w));
+}
+
+function fragmentCovered(fragment, checks) {
+  const wanted = meaningfulWords(fragment);
+  if (!wanted.length) return true;
+  return checks.some((c) => {
+    const got = new Set(meaningfulWords(c.requirement));
+    const hits = wanted.filter((w) => got.has(w)).length;
+    return hits >= Math.max(1, Math.ceil(wanted.length / 2));
+  });
+}
+
+// Returns null when the must-have section is sound, or a sentence naming
+// what is wrong with it — used both as the log line and as the repair prompt.
+function mustHaveProblem(report, submission) {
+  if (!submission) return null;
+  const fragments = mustHaveFragments(submission);
+  const checks = report && report.must_have_checks;
+  if (!Array.isArray(checks)) return 'The must-have checks are missing entirely.';
+  if (!fragments.length) return null;
+
+  if (!checks.length) {
+    return `The customer named ${fragments.length} must-have${fragments.length === 1 ? '' : 's'} (${fragments.join('; ')}) and the report checks none of them.`;
+  }
+
+  for (const check of checks) {
+    if (!check || typeof check !== 'object') return 'A must-have check is not a usable entry.';
+    if (!nonEmpty(check.requirement) || !nonEmpty(check.finding) || !nonEmpty(check.source)) {
+      return `The must-have check for "${(check && check.requirement) || '(unnamed)'}" is missing its finding or its source.`;
+    }
+    if (!['confirmed', 'contradicted', 'unverified'].includes(check.verdict)) {
+      return `The must-have check for "${check.requirement}" has no usable verdict.`;
+    }
+    // A verdict about a specification has to say where the specification was
+    // read. "not checked" is the honest answer and is allowed, but only
+    // alongside the unverified verdict.
+    if (check.verdict !== 'unverified' && /^\s*(not checked|n\/?a|none|unknown|general knowledge|training data)\s*$/i.test(check.source)) {
+      return `The must-have check for "${check.requirement}" says "${check.verdict}" but names no source it was checked against.`;
+    }
+  }
+
+  const uncovered = fragments.filter((f) => !fragmentCovered(f, checks));
+  if (uncovered.length) {
+    return `The customer asked for "${uncovered.join('" and "')}" and the report never says whether the item has ${uncovered.length === 1 ? 'it' : 'them'}.`;
+  }
+
+  // The failure that prompted all this, in its final form: a report that
+  // recommends buying something it has just said does not meet a stated
+  // deal-breaker.
+  const broken = checks.filter((c) => c.verdict === 'contradicted');
+  if (broken.length && report.recommendation && report.recommendation.verdict === 'buy') {
+    return `The report says the item fails "${broken[0].requirement}" and then recommends buying it. A contradicted deal-breaker means wait or reconsider.`;
+  }
+  return null;
+}
+
+
+const MUST_HAVE_REPAIR_TOOL = {
+  name: 'submit_field_repair',
+  description: 'Submit one verdict for each must-have the customer named.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      must_have_checks: {
+        type: 'array',
+        description: 'One entry per must-have, in the customer\'s words.',
+        items: {
+          type: 'object',
+          properties: {
+            requirement: { type: 'string' },
+            verdict: { type: 'string', enum: ['confirmed', 'contradicted', 'unverified'] },
+            finding: { type: 'string', description: 'What the specification actually says, in one sentence.' },
+            source: { type: 'string', description: 'Where you read it. "not checked" when unverified. Never a source you did not read.' },
+          },
+          required: ['requirement', 'verdict', 'finding', 'source'],
+        },
+      },
+      verdict: { type: 'string', enum: ['buy', 'wait', 'reconsider'], description: 'The buy/wait/reconsider call, restated. If any must-have came back contradicted this cannot be "buy".' },
+    },
+    required: ['must_have_checks', 'verdict'],
+  },
+};
+
+// Takes the recommendation as well as the checks, because the two are not
+// separable: the failure this exists for was a report that graded a
+// deal-breaker and then recommended buying anyway. Repairing the grades
+// without letting the verdict move would just produce the same conflict.
+async function repairMustHaveChecks({ apiKey, systemPrompt, candidate, submission, submissionId, problem }) {
+  const fragments = mustHaveFragments(submission);
+  const repairPrompt = `The customer named these as must-haves or deal-breakers:
+
+${fragments.map((f) => '  - ' + f).join('\n')}
+
+${problem ? 'Something is wrong with how the report answers them: ' + problem : 'The report does not answer them.'}
+
+Give one entry per item above. For each, say what the product's actual specification says and where you read it. If you did not look it up, the verdict is "unverified" and the source is "not checked" — that is an honest, useful answer, and far better than a confident guess: a customer told their deal-breaker is satisfied will buy the thing. If any item comes back contradicted, the recommendation cannot be "buy".
+
+Your analysis, for reference:
+${JSON.stringify({ headline: candidate.headline, recommendation: candidate.recommendation }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [MUST_HAVE_REPAIR_TOOL],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 2048,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  if (!toolUse || !toolUse.input || !Array.isArray(toolUse.input.must_have_checks)) {
+    console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} returned no usable checks.`);
+    return null;
+  }
+  if (reportLooksContaminated(toolUse.input.must_have_checks)) {
+    console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} came back with a leaked formatting artifact.`);
+    return null;
+  }
+  const patched = {
+    ...candidate,
+    must_have_checks: toolUse.input.must_have_checks,
+    recommendation: { ...candidate.recommendation, verdict: toolUse.input.verdict },
+  };
+  // Checked against the same rule the report has to pass, so a repair can
+  // never install something that fails the next round and burns it.
+  const stillWrong = mustHaveProblem(patched, submission);
+  if (stillWrong) {
+    console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} still does not answer them: ${stillWrong}`);
+    return null;
+  }
+  return patched;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
 // outputs made it into the report — checked in code, not just implied by a
 // prompt — before a customer ever sees it.
-function isReportComplete(report) {
+function isReportComplete(report, submission) {
   if (!report || typeof report !== 'object') return false;
   if (!nonEmpty(report.headline) || !nonEmpty(report.summary)) return false;
 
@@ -1370,6 +1568,8 @@ function isReportComplete(report) {
   if (tcoArithmeticProblem(report)) return false;
   // And the prose must not quote a total the line items do not support.
   if (proseTotalConflicts(report).length) return false;
+  // And every must-have the customer named has to have been answered.
+  if (submission && mustHaveProblem(report, submission)) return false;
 
   return true;
 }
@@ -1379,7 +1579,7 @@ function isReportComplete(report) {
 // says WHICH of the six sections was empty rather than making that a
 // mystery every time (this is exactly the gap that made the 2026-08-31
 // leaked-tag incident take 3 live rounds to narrow down instead of 1).
-function firstIncompleteField(report) {
+function firstIncompleteField(report, submission) {
   if (!report || typeof report !== 'object') return '(no report object)';
   if (!nonEmpty(report.headline)) return 'headline';
   if (!nonEmpty(report.summary)) return 'summary';
@@ -1425,6 +1625,7 @@ function firstIncompleteField(report) {
   // still says two different things about the same money.
   if (tcoArithmeticProblem(report)) return 'total_cost_of_ownership.arithmetic';
   if (proseTotalConflicts(report).length) return 'total_cost_of_ownership.prose';
+  if (submission && mustHaveProblem(report, submission)) return 'must_have_checks';
   return '(unknown — isReportComplete said false but firstIncompleteField found nothing; these two have drifted apart)';
 }
 
@@ -1435,6 +1636,19 @@ function firstIncompleteField(report) {
 // already verified every source field is non-empty before this ever runs.
 function mapToGenericReport(report) {
   const keyNumbers = [];
+  // Built up here so it can sit in the strip beside the money; the section
+  // itself is assembled further down.
+  const allChecks = Array.isArray(report.must_have_checks) ? report.must_have_checks : [];
+  const failed = allChecks.filter((c) => c && c.verdict === 'contradicted').length;
+  const confirmed = allChecks.filter((c) => c && c.verdict === 'confirmed').length;
+  const checksSummary = allChecks.length
+    ? {
+      label: 'Your must-haves',
+      value: failed
+        ? `${failed} of ${allChecks.length} NOT met`
+        : `${confirmed} of ${allChecks.length} confirmed`,
+    }
+    : null;
   const tco = report.total_cost_of_ownership || {};
   // Every figure here is computed from the cost breakdown rather than read
   // off a field the model filled in separately. That is the whole point:
@@ -1474,11 +1688,28 @@ function mapToGenericReport(report) {
       value: moneyRange(dep.resale_low, dep.resale_high),
     });
   }
+  if (checksSummary) keyNumbers.push(checksSummary);
   if (report.recommendation && report.recommendation.verdict) {
     keyNumbers.push({ label: 'Recommendation', value: report.recommendation.verdict.toUpperCase() });
   }
 
-  const sections = [
+  const checks = Array.isArray(report.must_have_checks) ? report.must_have_checks : [];
+  const MARK = { confirmed: '✓', contradicted: '✗', unverified: '?' };
+
+  const sections = [];
+  // First, above the money. A deal-breaker the item fails is the most
+  // important thing in the report and used to be a clause inside a
+  // paragraph three screens down.
+  if (checks.length) {
+    sections.push({
+      icon: '📋',
+      title: 'Your must-haves, checked against the actual specification',
+      items: checks.map((c) => `${MARK[c.verdict] || '?'} ${c.requirement} — ${c.finding}${
+        nonEmpty(c.source) ? ` (${c.source})` : ''
+      }`),
+    });
+  }
+  sections.push(
     {
       icon: '💰',
       title: 'True total cost of ownership',
@@ -1534,8 +1765,8 @@ function mapToGenericReport(report) {
       icon: '✅',
       title: `Recommendation: ${report.recommendation ? report.recommendation.verdict.toUpperCase() : ''}`,
       items: [report.recommendation && report.recommendation.reasoning].filter(Boolean),
-    },
-  ];
+    }
+  );
 
   if (Array.isArray(report.assumptions) && report.assumptions.length) {
     sections.push({ icon: '📐', title: 'Assumptions used in this analysis', items: report.assumptions });
@@ -1868,6 +2099,28 @@ async function generatePurchaseReport(submissionId) {
       // required field it didn't cover.
       if (!Array.isArray(candidate.assumptions)) candidate.assumptions = [];
       if (!Array.isArray(candidate.missing_or_uncertain)) candidate.missing_or_uncertain = [];
+      if (!Array.isArray(candidate.must_have_checks)) candidate.must_have_checks = [];
+
+      // A spec verdict is only as good as the lookup behind it, and with no
+      // searches this attempt there was no lookup — whatever the model
+      // believes about the product, it is remembering rather than checking.
+      // This is the deterministic half of the fix: the report of 2026-09-08
+      // that told a customer their deal-breaker was satisfied was confident,
+      // consistent and wrong, and no amount of asking it to be careful would
+      // have stopped that. Downgrading here cannot invent a problem; it can
+      // only stop one being ruled out on nothing.
+      if (!searchRounds) {
+        const downgraded = candidate.must_have_checks.filter((c) => c && c.verdict !== 'unverified');
+        if (downgraded.length) {
+          console.warn(
+            `[purchase-engine] Submission ${submissionId} graded ${downgraded.length} must-have(s) with no web_search behind them; downgrading to unverified.`
+          );
+          for (const check of downgraded) {
+            check.verdict = 'unverified';
+            check.source = 'not checked — no live lookup ran for this report';
+          }
+        }
+      }
       // The array shape is coerced here as before, but an EMPTY assumptions
       // list is no longer treated as a valid answer — see isReportComplete.
       // It now routes to repairAssumptions instead of shipping a total whose
@@ -1893,7 +2146,7 @@ async function generatePurchaseReport(submissionId) {
       const postSanitizeHits = [];
       if (reportLooksContaminated(candidate, postSanitizeHits)) {
         recoverableError = new Error(`Model output contained malformed/leaked formatting artifacts that survived sanitization in field(s): ${postSanitizeHits.map((h) => h.field).join(', ')}`);
-      } else if (!isReportComplete(candidate)) {
+      } else if (!isReportComplete(candidate, submission)) {
         // A LOOP, not a single check: live evidence (2026-08-31/09-01)
         // showed a single response can have several repairable problems
         // at once — up to four explanation fields empty in the same
@@ -1909,9 +2162,9 @@ async function generatePurchaseReport(submissionId) {
         // +2 for the two numeric repairs (cost model, assumptions), which
         // are labelled by firstIncompleteField rather than living in either
         // of the two REPAIRABLE_* maps.
-        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length + 3;
-        for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate); round++) {
-          const emptyField = firstIncompleteField(candidate);
+        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length + 4;
+        for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate, submission); round++) {
+          const emptyField = firstIncompleteField(candidate, submission);
           if (emptyField === 'total_cost_of_ownership.cost_model' || emptyField === 'total_cost_of_ownership.arithmetic') {
             const problem = tcoArithmeticProblem(candidate);
             let patched = null;
@@ -1942,6 +2195,20 @@ async function generatePurchaseReport(submissionId) {
             console.warn(
               `[purchase-engine] Corrected a total quoted in prose for submission ${submissionId} on attempt ${attemptNumber}: ${conflicts.map((c) => c.label + ' said ' + c.quoted).join('; ')}`
             );
+            continue;
+          }
+          if (emptyField === 'must_have_checks') {
+            const problem = mustHaveProblem(candidate, submission);
+            let patched = null;
+            try {
+              patched = await repairMustHaveChecks({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submission, submissionId, problem });
+            } catch (err) {
+              console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+              patched = null;
+            }
+            if (!patched) break;
+            candidate = patched;
+            console.warn(`[purchase-engine] Re-checked the customer's must-haves for submission ${submissionId} on attempt ${attemptNumber}: ${problem}`);
             continue;
           }
           if (emptyField === 'assumptions') {
@@ -1987,8 +2254,8 @@ async function generatePurchaseReport(submissionId) {
             `[purchase-engine] Repaired empty field "${emptyField}" for submission ${submissionId} on attempt ${attemptNumber} via a targeted follow-up instead of spending a full retry.`
           );
         }
-        if (!isReportComplete(candidate)) {
-          const emptyField = firstIncompleteField(candidate);
+        if (!isReportComplete(candidate, submission)) {
+          const emptyField = firstIncompleteField(candidate, submission);
           recoverableError = new Error(
             wasContaminated
               ? `Missing required field "${emptyField}" — was emptied by stripping a leaked formatting artifact that was its entire content`
@@ -2050,6 +2317,13 @@ async function generatePurchaseReport(submissionId) {
         // because nothing was found.
         report.missing_or_uncertain.push('The live research behind these figures could not be summarised for this report. The numbers were researched; the notes on what was found did not survive.');
       }
+    }
+
+    const unverified = (report.must_have_checks || []).filter((c) => c && c.verdict === 'unverified');
+    for (const check of unverified) {
+      report.missing_or_uncertain.push(
+        `Whether this item meets "${check.requirement}" could not be verified here — check the manufacturer's specification before buying.`
+      );
     }
 
     const genericReport = mapToGenericReport(report);
@@ -2115,6 +2389,10 @@ module.exports = {
     repairCostModel,
     repairAssumptions,
     repairResearchNotes,
+    repairMustHaveChecks,
+    mustHaveProblem,
+    mustHaveFragments,
+    MUST_HAVE_REPAIR_TOOL,
     COST_MODEL_REPAIR_TOOL,
     ASSUMPTIONS_REPAIR_TOOL,
     REPORT_TOOL,

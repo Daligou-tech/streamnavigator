@@ -1782,3 +1782,250 @@ test('notes are still used when the model says it actually found something', asy
   assert.match(section.items[0], /Dominion/);
   assert.equal(report.missing_or_uncertain.some((m) => /did not turn up/i.test(m)), false);
 });
+
+// --- the must-haves -------------------------------------------------------
+//
+// Three runs of one appliance submission — an LG LRFXC2416S whose stated
+// must-haves included "no external door dispenser" — produced three
+// different verdicts:
+//
+//   WAIT        over the fridge's 70.25" height against a 70" clearance
+//   RECONSIDER  having found the external door dispenser
+//   BUY         asserting the model has "no external dispenser" and
+//               "already matches your must-haves"
+//
+// The first two are true and checkable. The third is false: LG's own
+// product page lists a Tall Ice & Water Dispenser on that model, and Lowe's
+// sells it as "with Dual Ice Maker, Water and Ice Dispenser". That report
+// told a customer their deal-breaker was satisfied, as a reason to buy.
+//
+// It passed every check in this file. Its arithmetic reconciled to the
+// dollar, its prose quoted no rival totals, its assumptions matched its
+// line items. The defect was not a contradiction — it was a confident
+// memory — so no further validation of the kind above would ever have
+// caught it.
+
+const MUST_HAVES = 'internal ice maker, no external door dispenser, must fit a 36-inch opening';
+
+function fridgeSubmission() {
+  return fakeSubmission({
+    form_data: { ...fakeSubmission().form_data, must_have_features: MUST_HAVES },
+  });
+}
+
+const LG_CHECKS = () => ([
+  { requirement: 'internal ice maker', verdict: 'confirmed', finding: 'Ships with a Dual Ice Maker including Craft Ice.', source: "LG's product page" },
+  { requirement: 'no external door dispenser', verdict: 'contradicted', finding: 'Has a Tall Ice & Water Dispenser built into the door.', source: "LG's product page" },
+  { requirement: 'must fit a 36-inch opening', verdict: 'confirmed', finding: 'Listed at 35.75 inches wide.', source: 'LG spec sheet' },
+]);
+
+function checkedReport(overrides) {
+  return completeReportInput({
+    must_have_checks: LG_CHECKS(),
+    recommendation: { verdict: 'reconsider', reasoning: 'The model has the door dispenser you called a deal-breaker.' },
+    ...overrides,
+  });
+}
+
+test('__internal.mustHaveFragments splits the ways people actually write a list', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(
+    __internal.mustHaveFragments(fridgeSubmission()),
+    ['internal ice maker', 'no external door dispenser', 'must fit a 36-inch opening']
+  );
+  assert.deepEqual(
+    __internal.mustHaveFragments(fakeSubmission({ form_data: { must_have_features: 'AWD, Apple CarPlay and roof rails' } })),
+    ['AWD', 'Apple CarPlay', 'roof rails']
+  );
+  assert.deepEqual(__internal.mustHaveFragments(fakeSubmission()), [], 'no must-haves is not a problem to report');
+});
+
+test('a report that claims compliance without checking anything is incomplete', () => {
+  // Exactly what shipped: must_have_checks empty, and the recommendation
+  // asserting in prose that the item matches.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const claimed = completeReportInput({
+    must_have_checks: [],
+    recommendation: { verdict: 'buy', reasoning: 'It has an internal ice maker, no external dispenser, and fits a 36-inch opening.' },
+  });
+  const problem = __internal.mustHaveProblem(claimed, fridgeSubmission());
+  assert.match(problem, /named 3 must-haves/);
+  assert.match(problem, /checks none of them/);
+  assert.equal(__internal.isReportComplete(claimed, fridgeSubmission()), false);
+  assert.equal(__internal.firstIncompleteField(claimed, fridgeSubmission()), 'must_have_checks');
+});
+
+test('a failed deal-breaker cannot sit under a BUY', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const buying = checkedReport({ recommendation: { verdict: 'buy', reasoning: 'r' } });
+  assert.match(
+    __internal.mustHaveProblem(buying, fridgeSubmission()),
+    /fails "no external door dispenser" and then recommends buying it/
+  );
+  assert.equal(__internal.isReportComplete(buying, fridgeSubmission()), false);
+  // The same finding under a reconsider is the correct report.
+  assert.equal(__internal.mustHaveProblem(checkedReport(), fridgeSubmission()), null);
+  assert.equal(__internal.isReportComplete(checkedReport(), fridgeSubmission()), true);
+});
+
+test('a graded verdict has to name what it was checked against', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  for (const source of ['general knowledge', 'not checked', 'n/a', 'unknown', 'training data']) {
+    const checks = LG_CHECKS();
+    checks[0].source = source;
+    assert.match(
+      __internal.mustHaveProblem(checkedReport({ must_have_checks: checks }), fridgeSubmission()),
+      /names no source it was checked against/,
+      source
+    );
+  }
+  // "not checked" is the honest answer, and is fine alongside unverified.
+  const honest = LG_CHECKS();
+  honest[0] = { requirement: 'internal ice maker', verdict: 'unverified', finding: 'Could not confirm the ice maker location.', source: 'not checked' };
+  assert.equal(__internal.mustHaveProblem(checkedReport({ must_have_checks: honest }), fridgeSubmission()), null);
+});
+
+test('every must-have the customer named has to be answered', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.match(
+    __internal.mustHaveProblem(checkedReport({ must_have_checks: LG_CHECKS().slice(0, 2) }), fridgeSubmission()),
+    /asked for "must fit a 36-inch opening" and the report never says/
+  );
+});
+
+test('with no research behind them, every spec verdict is downgraded to unverified', async (t) => {
+  // The deterministic half. A model that remembers a product having a
+  // feature is not a model that checked, and the BUY report was confident,
+  // consistent and wrong. This cannot invent a problem — it can only stop
+  // one being ruled out on nothing.
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async () => toolUseResponse(checkedReport());
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  const section = report.sections[0];
+  assert.match(section.title, /must-haves/i, 'the must-haves come before the money');
+  for (const line of section.items) {
+    assert.match(line, /^\?/, 'every verdict must be unverified when nothing was looked up: ' + line);
+    assert.match(line, /no live lookup ran/);
+  }
+  assert.equal(reportInserts.length, 1);
+});
+
+test('a graded verdict survives when research did run', async (t) => {
+  const submission = fridgeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async () => searchedToolUseResponse(checkedReport({ research_notes: ['LG product page lists a Tall Ice & Water Dispenser.'] }), 4);
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  const section = report.sections[0];
+  assert.equal(section.items[0], '✓ internal ice maker — Ships with a Dual Ice Maker including Craft Ice. (LG\'s product page)');
+  assert.equal(section.items[1], '✗ no external door dispenser — Has a Tall Ice & Water Dispenser built into the door. (LG\'s product page)');
+  const strip = report.key_numbers.find((n) => /must-haves/i.test(n.label));
+  assert.equal(strip.value, '1 of 3 NOT met', 'a failed deal-breaker belongs in the strip, not three screens down');
+});
+
+test('anything left unverified is put in front of the customer as a thing to check', async (t) => {
+  const submission = fridgeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  const partly = LG_CHECKS();
+  partly[2] = { requirement: 'must fit a 36-inch opening', verdict: 'unverified', finding: 'Could not find a published width.', source: 'not checked' };
+  global.fetch = async () => searchedToolUseResponse(checkedReport({ must_have_checks: partly }), 4);
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.ok(report.missing_or_uncertain.some((m) => /must fit a 36-inch opening.*could not be verified/i.test(m)));
+});
+
+test('an unanswered must-have is repaired rather than costing a whole attempt', async (t) => {
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let mainCalls = 0;
+  let promptSeen = '';
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.must_have_checks) {
+      promptSeen = body.messages[0].content;
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { must_have_checks: LG_CHECKS(), verdict: 'reconsider' } }],
+        }),
+      };
+    }
+    mainCalls++;
+    return searchedToolUseResponse(completeReportInput({
+      must_have_checks: [],
+      recommendation: { verdict: 'buy', reasoning: 'It matches everything you asked for.' },
+    }), 4);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(mainCalls, 1, 'an unchecked must-have must not cost a whole regenerated report');
+  assert.match(promptSeen, /no external door dispenser/, 'the repair has to be told what the customer actually asked for');
+  assert.match(promptSeen, /unverified/, 'and that not knowing is an allowed answer');
+  // The repair moved the verdict off "buy", which is the point: grading the
+  // deal-breaker without letting the recommendation follow would just
+  // reproduce the conflict.
+  assert.match(report.sections.find((x) => /^Recommendation/.test(x.title)).title, /RECONSIDER/);
+  assert.equal(reportInserts.length, 1);
+});
+
+test('a repair that still recommends buying a failed deal-breaker is rejected', async (t) => {
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.must_have_checks) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { must_have_checks: LG_CHECKS(), verdict: 'buy' } }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({ must_have_checks: [], recommendation: { verdict: 'buy', reasoning: 'r' } }), 4);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const result = await generatePurchaseReport('sub-1');
+
+  assert.equal(result, null, 'must hand back for another attempt rather than ship it');
+  assert.equal(reportInserts.length, 0);
+});
+
+test('a submission with no must-haves is not held to a check it cannot fail', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.mustHaveProblem(completeReportInput({ must_have_checks: [] }), fakeSubmission()), null);
+  assert.equal(__internal.isReportComplete(completeReportInput({ must_have_checks: [] }), fakeSubmission()), true);
+  // And the section is omitted rather than rendered empty.
+  const generic = __internal.mapToGenericReport(completeReportInput({ must_have_checks: [] }));
+  assert.equal(generic.sections.some((x) => /must-haves/i.test(x.title)), false);
+  assert.equal(generic.key_numbers.some((n) => /must-haves/i.test(n.label)), false);
+});
