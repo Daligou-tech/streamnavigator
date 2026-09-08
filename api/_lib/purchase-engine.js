@@ -41,7 +41,7 @@ const ANTHROPIC_MODEL = 'claude-sonnet-5';
 const ENABLE_WEB_SEARCH = process.env.PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH !== 'true';
 
 const WEB_SEARCH_HONESTY_RULE = `
-You have access to a web_search tool — use it when it would let you ground the analysis in something more current or specific than your general knowledge (typical current prices for this size/category, typical current financing rates, typical resale patterns). Use your judgment about when a search is worth it; you don't need to search for everything, and a handful of searches is plenty. When you do search and use what you find, say so briefly in research_notes and reflect it in the relevant explanation. When you have not searched, or a search did not turn up anything useful, that's fine — rely on general knowledge instead — but never present a specific current price, rate, or figure as verified when it is really a directional estimate from training knowledge. Ground every specific claim in one of: (a) something you found via web_search in this conversation, (b) the customer's own submitted details, or (c) general knowledge you are genuinely confident is still directionally accurate. Never invent a specific current price, interest rate, or resale percentage presented as verified fact when you are not confident it is both real and current — a clearly-labeled directional estimate is always better than a confident-sounding fabrication.
+You have access to a web_search tool, and the customer has been told in writing that this analysis uses live web research. Search before you write. At minimum, search for what this item currently sells for and — when the customer is financing — what rates are currently typical for this kind of borrowing; search for current running costs (fuel or energy prices, insurance, typical repair costs) wherever a figure would otherwise be a guess. A handful of searches is plenty, but zero is not acceptable when the tool is available to you. When you do search and use what you find, say so briefly in research_notes and reflect it in the relevant explanation. When you have not searched, or a search did not turn up anything useful, that's fine — rely on general knowledge instead — but never present a specific current price, rate, or figure as verified when it is really a directional estimate from training knowledge. Ground every specific claim in one of: (a) something you found via web_search in this conversation, (b) the customer's own submitted details, or (c) general knowledge you are genuinely confident is still directionally accurate. Never invent a specific current price, interest rate, or resale percentage presented as verified fact when you are not confident it is both real and current — a clearly-labeled directional estimate is always better than a confident-sounding fabrication.
 `.trim();
 
 // Parameterized by tool name so this can be reused, correctly, for both
@@ -77,22 +77,38 @@ const REPORT_TOOL = {
       },
       total_cost_of_ownership: {
         type: 'object',
-        description: 'Required. The true total cost over the ownership period the customer gave you, not just the purchase price.',
+        description: 'Required. The true total cost over the ownership period the customer gave you, not just the purchase price. Give the LINE ITEMS; the total is computed from them, so do not state a separate total that could disagree with its own parts.',
         properties: {
-          low_end: { type: 'string', description: 'Low end of the total cost range over the ownership period, e.g. "$3,200".' },
-          high_end: { type: 'string', description: 'High end of the total cost range, e.g. "$4,100".' },
-          time_horizon_years: { type: 'number' },
-          explanation: { type: 'string', description: 'Required, non-empty. What is included (purchase price, financing cost, running costs, etc.) and how you arrived at these numbers.' },
+          time_horizon_years: { type: 'number', description: 'Required. The ownership period in years, matching what the customer told you.' },
+          cost_breakdown: {
+            type: 'array',
+            description: 'Required. Every cost that makes up the total, each as its own line item covering the WHOLE ownership period (not per year). At least three items. Include a purchase line always, a financing line whenever the customer is financing, and a running-costs line whenever there are any. These numbers are summed to produce the headline total, so each quantity must appear exactly ONCE across the whole array.',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string', description: 'Short plain-English name for this cost, e.g. "Fuel" or "Insurance" or "Interest over 60 months".' },
+                kind: {
+                  type: 'string',
+                  enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'],
+                  description: 'purchase = the price paid for the item itself. financing = interest and loan fees. running = fuel/energy, insurance, maintenance, repairs, taxes and fees, everything recurring. resale_recovery = money expected BACK at the end (enter it as a negative number). other = anything genuinely none of the above.',
+                },
+                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line.' },
+                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period.' },
+                basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal".' },
+              },
+              required: ['label', 'kind', 'low', 'high', 'basis'],
+            },
+          },
+          explanation: { type: 'string', description: 'Required, non-empty. What drives the total and how confident you are. Do NOT restate the total or re-derive individual line items here in different numbers — the breakdown above is the single source of truth and this text sits directly beneath it.' },
         },
-        required: ['explanation'],
+        required: ['time_horizon_years', 'cost_breakdown', 'explanation'],
       },
       financing_impact: {
         type: 'object',
         description: 'Required even when the customer is paying cash — say so explicitly rather than omitting this section.',
         properties: {
           applicable: { type: 'boolean', description: 'true if financing changes the cost picture (the customer is financing), false if paying cash.' },
-          extra_cost_estimate: { type: 'string', description: 'Estimated total interest/financing cost over the term, when applicable.' },
-          explanation: { type: 'string', description: 'Required, non-empty. If not financing, say plainly that the cash price is the cost (optionally note opportunity cost of tying up cash). If financing, explain the estimated extra cost and what drives it.' },
+          explanation: { type: 'string', description: 'Required, non-empty. If not financing, say plainly that the cash price is the cost (optionally note opportunity cost of tying up cash). If financing, explain what drives the interest cost — the figure itself comes from the financing line of cost_breakdown, so do not state a different one here.' },
         },
         required: ['applicable', 'explanation'],
       },
@@ -100,10 +116,11 @@ const REPORT_TOOL = {
         type: 'object',
         description: 'Required. Expected maintenance and running costs over the ownership period.',
         properties: {
-          annual_estimate: { type: 'string', description: 'e.g. "$150-$300/year".' },
-          explanation: { type: 'string', description: 'Required, non-empty. What drives these costs for this specific item/category, and how confident you are.' },
+          annual_low: { type: 'number', description: 'Required. Low end in whole dollars PER YEAR, covering the same things as the running-costs line(s) of cost_breakdown. These must agree: annual_low multiplied by the ownership period is checked against that line.' },
+          annual_high: { type: 'number', description: 'Required. High end in whole dollars per year, on the same basis.' },
+          explanation: { type: 'string', description: 'Required, non-empty. What drives these costs for this specific item/category, and how confident you are. Do not restate the annual figure in different numbers.' },
         },
-        required: ['explanation'],
+        required: ['annual_low', 'annual_high', 'explanation'],
       },
       depreciation_resale: {
         type: 'object',
@@ -135,7 +152,7 @@ const REPORT_TOOL = {
       assumptions: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Required. The specific assumptions you made (e.g. an assumed regional electricity rate, a typical repair cost for this category) so the customer can sanity-check them. Use an empty array only if there truly were none.',
+        description: 'Required, and never empty — give at least three. Every number in cost_breakdown rests on something assumed (a fuel or electricity price, an interest rate, an insurance premium, an annual usage figure), and the customer cannot sanity-check a total whose inputs are invisible. State each assumption with its value, e.g. "gasoline at $3.10-$3.30/gal" or "an APR of 6.5-7.5% for a used-car loan at this credit tier".',
       },
       missing_or_uncertain: {
         type: 'array',
@@ -157,7 +174,18 @@ const REPORT_TOOL = {
 // 60s, which two live tests showed didn't reliably work anyway (see
 // MAX_ATTEMPTS below). More search rounds means fresher pricing data for
 // the alternative-comparison and depreciation/resale sections.
-const WEB_SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
+// 20260209 is the current server-tool version for Sonnet 5, which is the
+// model this engine runs on. It was pinned at 20250305 — the variant that
+// predates this model — and a paid report generated 2026-09-07 came back
+// with research_notes empty and zero server_tool_use blocks in the
+// response, i.e. no search ran at all, while buying.html's FAQ told the
+// customer the analysis "uses live web research where it can sharpen a
+// figure". LEGACY is kept as a real fallback rather than a straight
+// replacement: runOneAttempt now steps 20260209 -> 20250305 -> no search,
+// so an account that only has the older variant enabled still searches
+// instead of silently dropping to knowledge-only.
+const WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5 };
+const WEB_SEARCH_TOOL_LEGACY = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 
 function categoryLabel(category) {
   const found = CATEGORIES.filter((c) => c.value === category)[0];
@@ -183,12 +211,18 @@ function buildIntakeBrief(submission) {
 
 function buildSystemPrompt(submission) {
   const brief = buildIntakeBrief(submission);
-  return `You are the analysis engine behind Purchase Navigator, a StreamNavigator AI product. A customer paid $39 for a true total-cost-of-ownership analysis on something they're considering buying, and confirmed the details below before paying — treat this as sufficient to work with; do not respond by asking for more information or declaring the input insufficient.
+  return `You are the analysis engine behind Purchase Navigator, a StreamNavigator AI product. A customer paid $29 for a true total-cost-of-ownership analysis on something they're considering buying, and confirmed the details below before paying — treat this as sufficient to work with; do not respond by asking for more information or declaring the input insufficient.
 
 Customer-provided details:
 ${brief}
 
 Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
+
+Two rules about the numbers, because this product is bought for its arithmetic:
+
+1. Give the cost breakdown as line items and let the total follow from them. You are not asked for a total anywhere, and you should not state one — it is computed from your line items and printed above your own explanation, so a total you write separately can only ever contradict it.
+
+2. Each quantity gets stated once, in one place. Running costs go in maintenance_running_costs as a per-year figure and in cost_breakdown as a whole-period line; those two are checked against each other in code and the report is sent back to you if they disagree. Do not restate either of them, in different numbers, inside any explanation.
 
 ${HONESTY_RULES}
 
@@ -463,6 +497,297 @@ ${JSON.stringify({ headline: candidate.headline, summary: candidate.summary }, n
   return result;
 }
 
+// --- the cost model -------------------------------------------------------
+//
+// Everything below exists because of one defect in a real paid report
+// (submission 29e81bc7, 2026-09-07, a 2023 RAV4 Hybrid over 7 years). Its
+// "true total cost of ownership" section put fuel at $9,000-$11,000 over
+// the period. Its "maintenance & running costs" section, three sections
+// later, put ALL running costs at $900-$1,100 a year — $6,300-$7,700 over
+// the same seven years. The two disagreed by roughly $3,000 on the same
+// line item, and the larger of them fed the headline range the customer
+// read first.
+//
+// Nothing was broken in the sense of throwing. Both paragraphs were fluent
+// and plausible; they were simply generated as independent prose, each
+// free to restate a quantity the other had already fixed. In a product
+// whose entire premise is "we did the arithmetic you didn't", that is the
+// worst possible failure mode, because it is invisible unless you sit down
+// and do the arithmetic yourself.
+//
+// The fix is structural rather than a prompt asking more nicely for
+// consistency. Each quantity now has exactly one home:
+//   - the model gives line items (cost_breakdown), never a total;
+//   - the TOTAL is summed here, in code, so it cannot disagree with its
+//     own parts;
+//   - running costs are given once as a per-year number, and the
+//     breakdown's running line is checked against annual x years;
+//   - the financing figure is read off the breakdown rather than asked
+//     for separately.
+// A contradiction that survives all that is caught by
+// tcoArithmeticProblem below and sent back for a targeted repair, with
+// the specific numbers that disagree quoted back to the model.
+
+const COST_KINDS = ['purchase', 'financing', 'running', 'resale_recovery', 'other'];
+
+function isNum(v) {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+function money(n) {
+  const rounded = Math.round(Math.abs(n));
+  const withCommas = String(rounded).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '-$' : '$') + withCommas;
+}
+
+function moneyRange(low, high) {
+  return Math.round(low) === Math.round(high) ? money(low) : money(low) + ' – ' + money(high);
+}
+
+// Returns the validated line items, or null if the breakdown is unusable.
+// Deliberately strict: a total summed from items that were never checked
+// is a confident-looking number with nothing behind it, which is exactly
+// what this whole section exists to stop.
+function validBreakdown(tco) {
+  if (!tco || !Array.isArray(tco.cost_breakdown) || tco.cost_breakdown.length < 3) return null;
+  for (const item of tco.cost_breakdown) {
+    if (!item || typeof item !== 'object') return null;
+    if (!nonEmpty(item.label) || !nonEmpty(item.basis)) return null;
+    if (!COST_KINDS.includes(item.kind)) return null;
+    if (!isNum(item.low) || !isNum(item.high) || item.high < item.low) return null;
+    // Only money coming back at the end may be negative. A negative fuel
+    // cost is not a modelling choice, it is a mistake.
+    if (item.kind !== 'resale_recovery' && (item.low < 0 || item.high < 0)) return null;
+    if (item.kind === 'resale_recovery' && item.high > 0) return null;
+  }
+  if (!tco.cost_breakdown.some((i) => i.kind === 'purchase')) return null;
+  return tco.cost_breakdown;
+}
+
+function sumBreakdown(items) {
+  return items.reduce(
+    (acc, i) => ({ low: acc.low + i.low, high: acc.high + i.high }),
+    { low: 0, high: 0 }
+  );
+}
+
+// Ranges are estimates, so this is not an equality test. The slack is the
+// greater of 10% or $200 — wide enough that ordinary rounding inside a
+// range never trips it, narrow enough that the $3,000 fuel contradiction
+// that prompted all this would have been caught on the spot.
+function withinTolerance(actual, expected) {
+  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.1, 200);
+}
+
+// Returns null when the report is internally consistent, or a plain-English
+// description of the contradiction otherwise. The text is written to be
+// useful in two places at once: a Vercel log line, and the repair prompt
+// handed back to the model, which is why it quotes the actual figures
+// rather than just naming the fields.
+function tcoArithmeticProblem(report) {
+  const tco = report && report.total_cost_of_ownership;
+  const items = validBreakdown(tco);
+  if (!items) return null; // shape problems are isReportComplete's job, not this one's
+  const years = tco.time_horizon_years;
+  const maint = report.maintenance_running_costs;
+  if (!isNum(years) || years <= 0) return null;
+  if (!maint || !isNum(maint.annual_low) || !isNum(maint.annual_high)) return null;
+
+  if (report.financing_impact && report.financing_impact.applicable === true
+    && !items.some((i) => i.kind === 'financing')) {
+    return 'The customer is financing this purchase, so the financing section has to have a cost behind it, but the cost breakdown contains no line of kind "financing" — the interest is either missing from the total or buried inside another line. Add it as its own line (0 to 0 if the loan genuinely carries no interest).';
+  }
+
+  const running = items.filter((i) => i.kind === 'running');
+  const expectedLow = maint.annual_low * years;
+  const expectedHigh = maint.annual_high * years;
+
+  if (!running.length) {
+    if (maint.annual_high <= 0) return null;
+    return `The maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over ${years} years, but the cost breakdown contains no line of kind "running" at all — so those costs are missing from the total.`;
+  }
+
+  const actual = sumBreakdown(running);
+  if (withinTolerance(actual.low, expectedLow) && withinTolerance(actual.high, expectedHigh)) return null;
+  const labels = running.map((i) => i.label).join(', ');
+  return `The running-cost lines in the cost breakdown (${labels}) come to ${moneyRange(actual.low, actual.high)} over ${years} years, but the maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over the same period. Those two describe the same costs and must agree.`;
+}
+
+// The single place a total is allowed to come from. Called by
+// mapToGenericReport, so the customer-facing total is arithmetic over the
+// line items printed directly above it and cannot drift from them.
+function deriveNumbers(report) {
+  const tco = (report && report.total_cost_of_ownership) || {};
+  const items = validBreakdown(tco) || [];
+  const totals = sumBreakdown(items);
+  const financing = items.filter((i) => i.kind === 'financing');
+  const maint = report.maintenance_running_costs || {};
+  return {
+    items,
+    years: isNum(tco.time_horizon_years) ? tco.time_horizon_years : null,
+    total: items.length ? totals : null,
+    financingCost: financing.length ? sumBreakdown(financing) : null,
+    annual: isNum(maint.annual_low) && isNum(maint.annual_high)
+      ? { low: maint.annual_low, high: maint.annual_high }
+      : null,
+  };
+}
+
+
+// --- repairing the numbers ------------------------------------------------
+//
+// The two repair mechanisms above rewrite prose. Neither can fix a total
+// that disagrees with its own line items, or a breakdown that never
+// arrived, so these two handle the numeric half. Same economics as the
+// prose repairs: a small forced call costs a fraction of a full retry, and
+// there are only MAX_ATTEMPTS of those before a paying customer gets
+// nothing.
+
+const COST_MODEL_REPAIR_TOOL = {
+  name: 'submit_field_repair',
+  description: 'Submit a corrected cost model: the line items that make up the total, and the per-year running cost, in numbers that agree with each other.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      time_horizon_years: { type: 'number', description: 'The ownership period in years, as the customer gave it.' },
+      cost_breakdown: {
+        type: 'array',
+        description: 'At least three line items, each covering the WHOLE ownership period in whole dollars. Include a purchase line always, a financing line if the customer is financing, and a running line for recurring costs. Each quantity appears exactly once across the array.',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string' },
+            kind: { type: 'string', enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'] },
+            low: { type: 'number' },
+            high: { type: 'number' },
+            basis: { type: 'string', description: 'One short clause on where the number comes from.' },
+          },
+          required: ['label', 'kind', 'low', 'high', 'basis'],
+        },
+      },
+      annual_low: { type: 'number', description: 'Low end of running costs PER YEAR. Multiplied by the ownership period, this must match the running lines above.' },
+      annual_high: { type: 'number', description: 'High end of running costs per year, on the same basis.' },
+    },
+    required: ['time_horizon_years', 'cost_breakdown', 'annual_low', 'annual_high'],
+  },
+};
+
+// The `problem` argument is tcoArithmeticProblem's sentence: the specific
+// figures that contradict each other, quoted back. Naming the contradiction
+// is the difference between "try again" and a correction, because the live
+// evidence for this failure mode was two fluent paragraphs, each of which
+// looked entirely right on its own.
+async function repairCostModel({ apiKey, systemPrompt, candidate, submissionId, problem }) {
+  const framing = problem
+    ? 'It is internally inconsistent and needs correcting.\n\nThe contradiction: ' + problem
+    : 'Its cost breakdown did not reach us in a usable form.';
+  const repairPrompt = `Your previous analysis of this purchase is below. ${framing}
+
+Please provide ONLY a corrected cost model: the line items making up the total over the whole ownership period, and the running cost per year. The two must agree — the running lines, over the ownership period, must come to the per-year figure multiplied by the number of years. Give whole dollars. Decide which of the figures is the right one and make everything follow from it; do not split the difference.
+
+Your analysis so far, for context:
+${JSON.stringify({
+    headline: candidate.headline,
+    summary: candidate.summary,
+    total_cost_of_ownership: candidate.total_cost_of_ownership,
+    maintenance_running_costs: candidate.maintenance_running_costs,
+  }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [COST_MODEL_REPAIR_TOOL],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 2048,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  if (!toolUse || !toolUse.input) {
+    console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} returned no usable tool_use.`);
+    return null;
+  }
+  // Validated against exactly the same rules the report itself must pass,
+  // so a repair can never install a breakdown that fails the next check
+  // and burns another repair round proving it.
+  const patched = {
+    ...candidate,
+    total_cost_of_ownership: {
+      ...candidate.total_cost_of_ownership,
+      time_horizon_years: toolUse.input.time_horizon_years,
+      cost_breakdown: toolUse.input.cost_breakdown,
+    },
+    maintenance_running_costs: {
+      ...candidate.maintenance_running_costs,
+      annual_low: toolUse.input.annual_low,
+      annual_high: toolUse.input.annual_high,
+    },
+  };
+  if (reportLooksContaminated(patched.total_cost_of_ownership)) {
+    console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} came back with a leaked formatting artifact.`);
+    return null;
+  }
+  const horizon = patched.total_cost_of_ownership.time_horizon_years;
+  if (!validBreakdown(patched.total_cost_of_ownership) || !isNum(horizon) || horizon <= 0) {
+    console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} returned an unusable breakdown.`);
+    return null;
+  }
+  const stillWrong = tcoArithmeticProblem(patched);
+  if (stillWrong) {
+    console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} still does not reconcile: ${stillWrong}`);
+    return null;
+  }
+  return patched;
+}
+
+const ASSUMPTIONS_REPAIR_TOOL = {
+  name: 'submit_field_repair',
+  description: 'Submit the list of assumptions the analysis rests on.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      assumptions: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Three to six plain sentences, each naming an assumption and its value — a fuel or energy price, an interest rate, an insurance premium, an annual usage level. These must be the values the numbers in the analysis were actually built on.',
+      },
+    },
+    required: ['assumptions'],
+  },
+};
+
+async function repairAssumptions({ apiKey, systemPrompt, candidate, submissionId }) {
+  const repairPrompt = `Your analysis of this purchase is below, but the list of assumptions it rests on did not reach us.
+
+Please provide ONLY that list: three to six plain sentences, each naming one assumption and the value you used for it, consistent with the numbers below. Plain prose, no tool-call or parameter-tag syntax.
+
+${JSON.stringify({
+    total_cost_of_ownership: candidate.total_cost_of_ownership,
+    maintenance_running_costs: candidate.maintenance_running_costs,
+    financing_impact: candidate.financing_impact,
+  }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [ASSUMPTIONS_REPAIR_TOOL],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 1024,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  const list = toolUse && toolUse.input && toolUse.input.assumptions;
+  if (!Array.isArray(list)) {
+    console.warn(`[purchase-engine] Assumptions repair for submission ${submissionId} returned no usable list.`);
+    return null;
+  }
+  const cleaned = list.filter((v) => nonEmpty(v) && !String(v).match(TAG_LEAK_PATTERN)).map((v) => v.trim());
+  if (cleaned.length < 2) {
+    console.warn(`[purchase-engine] Assumptions repair for submission ${submissionId} returned ${cleaned.length} usable entries, needs at least 2.`);
+    return null;
+  }
+  return cleaned;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -474,12 +799,16 @@ function isReportComplete(report) {
 
   const tco = report.total_cost_of_ownership;
   if (!tco || !nonEmpty(tco.explanation)) return false;
+  if (!isNum(tco.time_horizon_years) || tco.time_horizon_years <= 0) return false;
+  if (!validBreakdown(tco)) return false;
 
   const financing = report.financing_impact;
   if (!financing || typeof financing.applicable !== 'boolean' || !nonEmpty(financing.explanation)) return false;
 
   const maintenance = report.maintenance_running_costs;
   if (!maintenance || !nonEmpty(maintenance.explanation)) return false;
+  if (!isNum(maintenance.annual_low) || !isNum(maintenance.annual_high)) return false;
+  if (maintenance.annual_low < 0 || maintenance.annual_high < maintenance.annual_low) return false;
 
   const depreciation = report.depreciation_resale;
   if (!depreciation || !nonEmpty(depreciation.explanation)) return false;
@@ -490,7 +819,19 @@ function isReportComplete(report) {
   const rec = report.recommendation;
   if (!rec || !['buy', 'wait', 'reconsider'].includes(rec.verdict) || !nonEmpty(rec.reasoning)) return false;
 
-  if (!Array.isArray(report.assumptions) || !Array.isArray(report.missing_or_uncertain)) return false;
+  if (!Array.isArray(report.missing_or_uncertain)) return false;
+  // Two, not zero. An empty assumptions list used to pass here, on the
+  // reasoning that "there truly were none" is sometimes an honest answer.
+  // For this product it never is: every figure in the cost breakdown rests
+  // on an assumed fuel or energy price, an assumed rate, an assumed usage
+  // level. A paid report on 2026-09-07 came back with the list empty, so a
+  // customer was shown a seven-year total with none of its inputs stated
+  // and no way to sanity-check any of it.
+  if (!Array.isArray(report.assumptions) || report.assumptions.filter(nonEmpty).length < 2) return false;
+
+  // Last: the two sections must not contradict each other on the same
+  // costs. See tcoArithmeticProblem for the incident this comes from.
+  if (tcoArithmeticProblem(report)) return false;
 
   return true;
 }
@@ -505,6 +846,8 @@ function firstIncompleteField(report) {
   if (!nonEmpty(report.headline)) return 'headline';
   if (!nonEmpty(report.summary)) return 'summary';
   if (!report.total_cost_of_ownership || !nonEmpty(report.total_cost_of_ownership.explanation)) return 'total_cost_of_ownership.explanation';
+  if (!isNum(report.total_cost_of_ownership.time_horizon_years) || report.total_cost_of_ownership.time_horizon_years <= 0) return 'total_cost_of_ownership.cost_model';
+  if (!validBreakdown(report.total_cost_of_ownership)) return 'total_cost_of_ownership.cost_model';
   // Split into two distinct checks/labels (was one combined check under a
   // single label) — a real bug found via live evidence (2026-09-01): when
   // financing_impact.applicable was missing or not a proper boolean (not a
@@ -522,10 +865,18 @@ function firstIncompleteField(report) {
   if (!report.financing_impact || typeof report.financing_impact.applicable !== 'boolean') return 'financing_impact.applicable';
   if (!nonEmpty(report.financing_impact.explanation)) return 'financing_impact.explanation';
   if (!report.maintenance_running_costs || !nonEmpty(report.maintenance_running_costs.explanation)) return 'maintenance_running_costs.explanation';
+  if (!isNum(report.maintenance_running_costs.annual_low) || !isNum(report.maintenance_running_costs.annual_high)
+    || report.maintenance_running_costs.annual_low < 0
+    || report.maintenance_running_costs.annual_high < report.maintenance_running_costs.annual_low) return 'total_cost_of_ownership.cost_model';
   if (!report.depreciation_resale || !nonEmpty(report.depreciation_resale.explanation)) return 'depreciation_resale.explanation';
   if (!report.alternative_comparison || !nonEmpty(report.alternative_comparison.alternative_name) || !nonEmpty(report.alternative_comparison.explanation)) return 'alternative_comparison';
   if (!report.recommendation || !['buy', 'wait', 'reconsider'].includes(report.recommendation.verdict) || !nonEmpty(report.recommendation.reasoning)) return 'recommendation';
-  if (!Array.isArray(report.assumptions) || !Array.isArray(report.missing_or_uncertain)) return 'assumptions/missing_or_uncertain';
+  if (!Array.isArray(report.missing_or_uncertain)) return 'missing_or_uncertain';
+  if (!Array.isArray(report.assumptions) || report.assumptions.filter(nonEmpty).length < 2) return 'assumptions';
+  // Reported last, and under its own label, so it can never be confused
+  // with a merely-empty field: the report is structurally complete and
+  // still says two different things about the same money.
+  if (tcoArithmeticProblem(report)) return 'total_cost_of_ownership.arithmetic';
   return '(unknown — isReportComplete said false but firstIncompleteField found nothing; these two have drifted apart)';
 }
 
@@ -537,17 +888,36 @@ function firstIncompleteField(report) {
 function mapToGenericReport(report) {
   const keyNumbers = [];
   const tco = report.total_cost_of_ownership || {};
-  if (tco.low_end || tco.high_end) {
+  // Every figure here is computed from the cost breakdown rather than read
+  // off a field the model filled in separately. That is the whole point:
+  // the strip at the top of the report and the line items below it are the
+  // same arithmetic, so they cannot disagree.
+  //
+  // The old version read low_end/high_end, extra_cost_estimate and
+  // annual_estimate — all optional strings. On the paid report of
+  // 2026-09-07 the model wrote its numbers into the prose and left every
+  // one of those blank, so this loop produced a summary strip containing a
+  // single entry, the word "BUY", above a report whose prose talked about
+  // $55,000-$66,000. Nothing failed; the most-read part of the page was
+  // just empty.
+  const derived = deriveNumbers(report);
+  if (derived.total) {
     keyNumbers.push({
-      label: `Total cost of ownership${tco.time_horizon_years ? ` (${tco.time_horizon_years}yr)` : ''}`,
-      value: [tco.low_end, tco.high_end].filter(Boolean).join(' – ') || '—',
+      label: `Total cost of ownership${derived.years ? ` (${derived.years}yr)` : ''}`,
+      value: moneyRange(derived.total.low, derived.total.high),
     });
   }
-  if (report.financing_impact && report.financing_impact.applicable && report.financing_impact.extra_cost_estimate) {
-    keyNumbers.push({ label: 'Estimated financing cost', value: report.financing_impact.extra_cost_estimate });
+  if (report.financing_impact && report.financing_impact.applicable && derived.financingCost) {
+    keyNumbers.push({
+      label: 'Interest and financing cost',
+      value: moneyRange(derived.financingCost.low, derived.financingCost.high),
+    });
   }
-  if (report.maintenance_running_costs && report.maintenance_running_costs.annual_estimate) {
-    keyNumbers.push({ label: 'Est. annual maintenance/running cost', value: report.maintenance_running_costs.annual_estimate });
+  if (derived.annual) {
+    keyNumbers.push({
+      label: 'Running cost per year',
+      value: moneyRange(derived.annual.low, derived.annual.high) + '/yr',
+    });
   }
   if (report.recommendation && report.recommendation.verdict) {
     keyNumbers.push({ label: 'Recommendation', value: report.recommendation.verdict.toUpperCase() });
@@ -557,7 +927,14 @@ function mapToGenericReport(report) {
     {
       icon: '💰',
       title: 'True total cost of ownership',
-      items: [tco.explanation].filter(Boolean),
+      // Line items first, then the total they add up to, then the prose.
+      // A customer who reads nothing else can still check the sum.
+      items: derived.items
+        .map((i) => `${i.label} — ${moneyRange(i.low, i.high)}${nonEmpty(i.basis) ? ` · ${i.basis}` : ''}`)
+        .concat(derived.total
+          ? [`Total over ${derived.years} year${derived.years === 1 ? '' : 's'} — ${moneyRange(derived.total.low, derived.total.high)}`]
+          : [])
+        .concat([tco.explanation].filter(Boolean)),
     },
     {
       icon: '🏦',
@@ -649,6 +1026,18 @@ async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxT
   return response.json();
 }
 
+// The one trustworthy answer to "did research actually happen". Reads the
+// response's own record of server-side tool calls rather than asking the
+// model to report on itself.
+function countSearchRounds(data) {
+  const blocks = ((data && data.content) || []).filter(
+    (b) => b && b.type === 'server_tool_use' && b.name === 'web_search'
+  ).length;
+  const usage = data && data.usage && data.usage.server_tool_use;
+  const reported = usage && isNum(usage.web_search_requests) ? usage.web_search_requests : 0;
+  return Math.max(blocks, reported);
+}
+
 function looksLikeUnsupportedToolError(err) {
   const msg = String((err && err.message) || '').toLowerCase();
   return msg.includes('web_search') || msg.includes('tool') && msg.includes('not') && (msg.includes('support') || msg.includes('enabled') || msg.includes('available'));
@@ -658,14 +1047,21 @@ function looksLikeUnsupportedToolError(err) {
 // that may use web_search, and — only if the model didn't call our submit
 // tool on that first turn (e.g. it searched and then just summarized in
 // text) — exactly one forced follow-up call so this always terminates in a
-// bounded number of requests. Falls back to a no-search call if the
-// search-augmented call fails in a way that looks like the tool isn't
-// available on this API key, rather than failing the whole report over a
-// feature that may simply not be enabled — the resulting report's
-// research_notes/assumptions will honestly reflect that no search happened.
-async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch }) {
+// bounded number of requests. If the search-augmented call fails in a way that
+// looks like the tool isn't available on this API key, this steps down —
+// current tool version, then the legacy one, then no search at all —
+// rather than failing the whole report over a feature that may simply not
+// be enabled on the account.
+//
+// Returns the number of searches that actually ran alongside the report,
+// because the model's own research_notes are not evidence: an empty list
+// is equally consistent with "searched and found nothing worth noting" and
+// with "never searched", and those need different handling from the
+// caller. server_tool_use blocks in the response are the real signal.
+async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch, searchTool }) {
   const baseMessages = [{ role: 'user', content: contentBlocks }];
-  const tools = allowSearch ? [WEB_SEARCH_TOOL, REPORT_TOOL] : [REPORT_TOOL];
+  const activeSearchTool = searchTool || WEB_SEARCH_TOOL;
+  const tools = allowSearch ? [activeSearchTool, REPORT_TOOL] : [REPORT_TOOL];
 
   let data;
   try {
@@ -683,14 +1079,28 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
     });
   } catch (err) {
     if (allowSearch && looksLikeUnsupportedToolError(err)) {
+      if (activeSearchTool.type !== WEB_SEARCH_TOOL_LEGACY.type) {
+        console.warn(
+          `[purchase-engine] The ${activeSearchTool.type} server tool was rejected; retrying with ${WEB_SEARCH_TOOL_LEGACY.type} before giving up on live research. (${String((err && err.message) || err).slice(0, 200)})`
+        );
+        return runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch: true, searchTool: WEB_SEARCH_TOOL_LEGACY });
+      }
+      // Loud on purpose. buying.html tells the customer this analysis uses
+      // live web research; dropping to knowledge-only is a downgrade of
+      // what was sold, not a routine fallback, and it used to happen
+      // without leaving a trace anywhere.
+      console.warn(
+        `[purchase-engine] No web_search variant is available on this API key — falling back to a knowledge-only report, which is less than buying.html promises. (${String((err && err.message) || err).slice(0, 200)})`
+      );
       return runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch: false });
     }
     throw err;
   }
 
   const content = data.content || [];
+  const searchRounds = countSearchRounds(data);
   let toolUse = content.find((b) => b.type === 'tool_use' && b.name === 'submit_purchase_report');
-  if (toolUse) return toolUse.input;
+  if (toolUse) return { report: toolUse.input, searchRounds };
 
   // Model didn't call the submit tool on the first turn — force it on a
   // bounded follow-up instead of looping indefinitely. The follow-up call
@@ -715,7 +1125,9 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch 
   });
   toolUse = (followData.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_purchase_report');
   if (!toolUse) throw new Error('Model did not return a structured report after a forced follow-up');
-  return toolUse.input;
+  // The follow-up carries no search tool, so any research came from the
+  // first turn — count it from there.
+  return { report: toolUse.input, searchRounds };
 }
 
 // Raised from 2 to 4 on 2026-08-31: live testing after the Vercel Pro
@@ -835,14 +1247,17 @@ async function generatePurchaseReport(submissionId) {
     contentBlocks.push({ type: 'text', text: 'Analyze the purchase described in the system prompt and produce the report.' });
 
     let candidate;
+    let searchRounds = 0;
     let recoverableError = null;
     try {
-      candidate = await runOneAttempt({
+      const attempt = await runOneAttempt({
         apiKey: ANTHROPIC_API_KEY,
         systemPrompt,
         contentBlocks,
         allowSearch: ENABLE_WEB_SEARCH,
       });
+      candidate = attempt.report;
+      searchRounds = attempt.searchRounds;
     } catch (err) {
       recoverableError = err;
     }
@@ -882,6 +1297,10 @@ async function generatePurchaseReport(submissionId) {
       // required field it didn't cover.
       if (!Array.isArray(candidate.assumptions)) candidate.assumptions = [];
       if (!Array.isArray(candidate.missing_or_uncertain)) candidate.missing_or_uncertain = [];
+      // The array shape is coerced here as before, but an EMPTY assumptions
+      // list is no longer treated as a valid answer — see isReportComplete.
+      // It now routes to repairAssumptions instead of shipping a total whose
+      // inputs the customer cannot see.
 
       const preSanitizeHits = [];
       const wasContaminated = reportLooksContaminated(candidate, preSanitizeHits);
@@ -916,9 +1335,41 @@ async function generatePurchaseReport(submissionId) {
         // indefinitely — each successful repair fixes a specific,
         // different field, so the loop can only run that many times
         // before either completing or hitting something it can't repair.
-        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length;
+        // +2 for the two numeric repairs (cost model, assumptions), which
+        // are labelled by firstIncompleteField rather than living in either
+        // of the two REPAIRABLE_* maps.
+        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length + 2;
         for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate); round++) {
           const emptyField = firstIncompleteField(candidate);
+          if (emptyField === 'total_cost_of_ownership.cost_model' || emptyField === 'total_cost_of_ownership.arithmetic') {
+            const problem = tcoArithmeticProblem(candidate);
+            let patched = null;
+            try {
+              patched = await repairCostModel({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId, problem });
+            } catch (err) {
+              console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+              patched = null;
+            }
+            if (!patched) break;
+            candidate = patched;
+            console.warn(
+              `[purchase-engine] Rebuilt the cost model for submission ${submissionId} on attempt ${attemptNumber}${problem ? ` — the report contradicted itself: ${problem}` : ' — the breakdown was unusable'}`
+            );
+            continue;
+          }
+          if (emptyField === 'assumptions') {
+            let repairedList = null;
+            try {
+              repairedList = await repairAssumptions({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId });
+            } catch (err) {
+              console.warn(`[purchase-engine] Assumptions repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+              repairedList = null;
+            }
+            if (!repairedList) break;
+            candidate.assumptions = repairedList;
+            console.warn(`[purchase-engine] Refilled an empty assumptions list for submission ${submissionId} on attempt ${attemptNumber}.`);
+            continue;
+          }
           if (REPAIRABLE_COMPOUND_FIELDS[emptyField]) {
             let repaired = null;
             try {
@@ -975,6 +1426,26 @@ async function generatePurchaseReport(submissionId) {
     }
 
     const report = candidate;
+
+    // buying.html's FAQ tells the customer this analysis "uses live web
+    // research where it can sharpen a figure". When none ran, the report
+    // says so instead of leaving the customer to assume it did — and any
+    // research_notes the model wrote anyway are dropped, since with zero
+    // server_tool_use blocks in the response they cannot describe research
+    // that happened.
+    if (!searchRounds) {
+      console.warn(
+        `[purchase-engine] Submission ${submissionId} produced a report with zero web_search rounds${ENABLE_WEB_SEARCH ? '' : ' (search disabled by PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH)'}.`
+      );
+      report.research_notes = [];
+      const note = 'No live web research ran for this report. Every figure here is a directional estimate built from general knowledge and the details you supplied, not a verified current price or rate.';
+      if (!report.missing_or_uncertain.includes(note)) report.missing_or_uncertain.unshift(note);
+    } else if (!Array.isArray(report.research_notes) || !report.research_notes.length) {
+      console.warn(
+        `[purchase-engine] Submission ${submissionId} ran ${searchRounds} web_search round(s) but returned no research_notes, so the report cannot show the customer what the research found.`
+      );
+    }
+
     const genericReport = mapToGenericReport(report);
 
     await admin.from('navigator_reports').insert({
@@ -1021,8 +1492,20 @@ module.exports = {
     repairCompoundField,
     REPAIRABLE_COMPOUND_FIELDS,
     runOneAttempt,
+    countSearchRounds,
+    validBreakdown,
+    sumBreakdown,
+    tcoArithmeticProblem,
+    deriveNumbers,
+    money,
+    moneyRange,
+    repairCostModel,
+    repairAssumptions,
+    COST_MODEL_REPAIR_TOOL,
+    ASSUMPTIONS_REPAIR_TOOL,
     REPORT_TOOL,
     WEB_SEARCH_TOOL,
+    WEB_SEARCH_TOOL_LEGACY,
     MAX_ATTEMPTS,
   },
 };
