@@ -168,3 +168,58 @@ test('the URL suffix is what gets matched, not the plink id', async () => {
   assert.equal(linkSuffix('https://buy.stripe.com/28E00jaosceEcoA93WabK0j'), '28E00jaosceEcoA93WabK0j');
   assert.equal(linkSuffix('https://buy.stripe.com/abc/'), 'abc');
 });
+
+// --- the other direction: sellable links nothing advertises -----------------
+//
+// The tests above walk from the config outwards, and can only see links a page
+// points at. They are blind to the opposite failure, which also happened: a
+// retired $29 Closing tier stayed ACTIVE for six days after the product moved
+// to $59. No page linked it, so nothing looked at it, and anyone holding the
+// URL could have bought a $59 report for $29. It was found by hand.
+
+test('an active link no page references is reported', async () => {
+  await withStripe([link('USED'), link('ORPHAN', { cents: 5900 })], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {});
+    assert.equal(res.orphans.length, 1);
+    assert.equal(res.orphans[0].id, 'plink_ORPHAN');
+    assert.equal(res.orphans[0].amount, 5900);
+  });
+});
+
+test('a DEACTIVATED unreferenced link is not reported', async () => {
+  // Switching it off is the fix. It must then stop being nagged about.
+  await withStripe([link('USED'), link('OLD', { active: false })], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {});
+    assert.deepEqual(res.orphans, []);
+  });
+});
+
+test('an allow-listed link is not reported', async () => {
+  await withStripe([link('USED'), link('SUBS', { cents: 499 })], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {
+      plink_SUBS: 'streaming subscription, sold from a page this config skips',
+    });
+    assert.deepEqual(res.orphans, []);
+    assert.equal(res.allowedCount, 1);
+  });
+});
+
+test('the allow-list only excuses the ids it names', async () => {
+  // An allow-list that swallows everything is worse than no check at all.
+  await withStripe([link('USED'), link('SUBS'), link('SNEAKY')], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {
+      plink_SUBS: 'documented',
+    });
+    assert.deepEqual(res.orphans.map((o) => o.id), ['plink_SNEAKY']);
+  });
+});
+
+test('a recurring orphan is flagged as recurring', async () => {
+  // A stray subscription bills every month until someone notices.
+  const l = link('SUB');
+  l.line_items.data[0].price.recurring = { interval: 'month' };
+  await withStripe([link('USED'), l], async () => {
+    const res = await checkStripeLinks([ENTRY('a.html', 'A', 2900, 'USED')], {});
+    assert.equal(res.orphans[0].recurring, true);
+  });
+});

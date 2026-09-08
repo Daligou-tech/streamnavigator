@@ -280,7 +280,7 @@ async function fetchAllPaymentLinks(key) {
 
 const linkSuffix = (url) => String(url || '').split('/').filter(Boolean).pop();
 
-async function checkStripeLinks(entries) {
+async function checkStripeLinks(entries, allowedUnreferenced) {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) {
     return {
@@ -343,7 +343,41 @@ async function checkStripeLinks(entries) {
     rows.push(row);
   }
 
-  return { rows };
+  // ---- the other direction: anything sellable that nothing advertises ------
+  //
+  // The loop above walks from the config outwards and can only see links a page
+  // points at. It is blind to the opposite failure: a link that is ACTIVE in
+  // Stripe and referenced by nothing.
+  //
+  // That is not hypothetical either. A retired $29 Closing tier sat active for
+  // six days after the product moved to $59. No page linked it, so nothing here
+  // looked at it, and anyone holding the URL could have bought a $59 report for
+  // $29. It was found by reading the Stripe dashboard by hand.
+  //
+  // Legitimate cases exist — the streaming subscriptions are sold from a page
+  // this config deliberately skips — so they are allow-listed by id WITH A
+  // REASON rather than pattern-matched away. Writing the reason down is the
+  // point: an unexplained sellable link is the thing being hunted.
+  const allowed = allowedUnreferenced || {};
+  const referenced = new Set(
+    entries.map(([, spec]) => spec.stripeLinkId).filter(Boolean)
+  );
+  const orphans = links
+    .filter((l) => l.active)
+    .filter((l) => !referenced.has(linkSuffix(l.url)))
+    .filter((l) => !allowed[l.id])
+    .map((l) => {
+      const items = (l.line_items && l.line_items.data) || [];
+      const price = (items[0] && items[0].price) || {};
+      return {
+        id: l.id,
+        url: l.url,
+        amount: price.unit_amount == null ? null : price.unit_amount,
+        recurring: Boolean(price.recurring),
+      };
+    });
+
+  return { rows, orphans, allowedCount: Object.keys(allowed).length };
 }
 
 // ---------- main ----------
@@ -378,7 +412,7 @@ async function main() {
   console.log(bold('\nLive Stripe check\n'));
   let stripe;
   try {
-    stripe = await checkStripeLinks(entries);
+    stripe = await checkStripeLinks(entries, config.unreferencedActiveLinks);
   } catch (err) {
     // A network failure or a bad key must not be reported as "prices are fine".
     // It is not a price mismatch either, so it is its own outcome.
@@ -406,6 +440,27 @@ async function main() {
       const existing = results.find((x) => x.file === r.file);
       if (existing) existing.problems.push(...r.problems);
       else results.push({ file: r.file, spec: r.spec, problems: r.problems, notes: [] });
+    }
+
+    // Active links nothing advertises. Reported as its own failure rather than
+    // hung off a page, because by definition there is no page to hang it on.
+    if (stripe.orphans && stripe.orphans.length) {
+      results.push({
+        file: '(Stripe account)',
+        spec: { label: 'Unreferenced links' },
+        notes: [],
+        problems: stripe.orphans.map((o) =>
+          `${o.id} is ACTIVE and charges ${o.amount == null ? 'an unknown amount' : money(o.amount)}`
+          + `${o.recurring ? ' recurring' : ''}, but no page in prices.config.json points at it. `
+          + `Anyone holding ${o.url} can buy it. Deactivate it, or add it to `
+          + 'unreferencedActiveLinks with a reason.'),
+      });
+    }
+    if (stripe.allowedCount) {
+      console.log(dim(
+        `  ${stripe.allowedCount} active link(s) deliberately unreferenced — see `
+        + 'unreferencedActiveLinks in prices.config.json'
+      ));
     }
   }
 
