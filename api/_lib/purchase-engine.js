@@ -788,6 +788,210 @@ ${JSON.stringify({
   return cleaned;
 }
 
+
+// --- and the same total, in the prose -------------------------------------
+//
+// Making the model give line items and summing them here fixed the
+// structured half: the strip at the top of the report and the breakdown
+// below it are now the same arithmetic. The first live report generated
+// against that engine (2026-09-08, the same RAV4) proved it only fixed
+// half. Its line items summed to $47,000-$57,700 and its running-cost
+// cross-check reconciled exactly — and its headline read:
+//
+//     ~$52,000-$68,000 total 7-year cost
+//
+// with the same invented figure repeated in the total-cost explanation,
+// the recommendation, and the alternative comparison. The model had been
+// told plainly not to state a total. It cannot help it: it writes the
+// headline without having added up its own line items, because nothing
+// adds them up until this file does.
+//
+// So the total is checked where the customer actually reads it. These
+// fields are prose, which makes a general "is this arithmetic right"
+// check hopeless, but the specific claim is narrow and recognisable — a
+// dollar figure presented AS the whole-period cost of ownership. The
+// exclusions below are each a real sentence from that report that must
+// NOT be caught: "$38,000-$39,200 total amount paid over the loan term"
+// is a legitimate different quantity, and "$13,000-$14,500 of the total
+// cost" is a share of it, not a claim about it.
+
+// $12,000 or $12,000-$15,000 or $12,000 – $15,000.
+const MONEY_RE = /\$\s?[\d,]+(?:\.\d+)?(?:\s*(?:[–—-]|to)\s*\$?\s?[\d,]+(?:\.\d+)?)?/g;
+
+// Windows are deliberately tight. Widening the "before" window to 90
+// characters made "Total 7-year cost of ownership is estimated at roughly
+// $52,000-$68,000. That includes the $32,400 purchase price" flag the
+// purchase price too.
+const LOOK_BEHIND = 60;
+const LOOK_AHEAD = 30;
+
+const CLAIMS_A_TOTAL = /total[\s\w-]{0,25}cost|cost\s+of\s+ownership/i;
+// Only two kinds of exclusion survive, and both are about the scanned
+// fields themselves. An earlier version also excluded loan / interest /
+// financ / resale / depreciat, to protect sentences like "$38,000-$39,200
+// total amount paid over the loan term" — but those live in fields this
+// never looks at, and the words cost a real catch: "pushes 7-year total
+// cost slightly above the RAV4's $52,000-$68,000 range once financing and
+// running costs are included" was let through purely because the word
+// financing sat thirty characters later. Components are already filtered
+// out by magnitude; they do not need a vocabulary list as well.
+const NOT_THE_TOTAL = new RegExp(
+  [
+    String.raw`\bof\s+(the\s+)?total\b`, // "$13,000 of the total cost" is a share, not a claim
+    String.raw`per\s+year|/\s?year|/\s?yr|annual`, // and a per-year figure is not a whole-period one
+  ].join('|'),
+  'i'
+);
+
+function parseMoneyRange(text) {
+  const numbers = String(text).replace(/,/g, '').match(/\d+(?:\.\d+)?/g);
+  if (!numbers || !numbers.length) return null;
+  const values = numbers.map(Number).filter((n) => Number.isFinite(n));
+  if (!values.length) return null;
+  return { low: Math.min(...values), high: Math.max(...values) };
+}
+
+// The fields a customer reads a headline number out of. depreciation and
+// maintenance are deliberately absent: everything they quote is a share or
+// a per-year figure, and including them only produced false positives.
+const PROSE_TOTAL_FIELDS = {
+  headline: { get: (r) => r.headline, label: 'the headline' },
+  summary: { get: (r) => r.summary, label: 'the summary' },
+  'total_cost_of_ownership.explanation': {
+    get: (r) => r.total_cost_of_ownership && r.total_cost_of_ownership.explanation,
+    label: 'the total-cost explanation',
+  },
+  'recommendation.reasoning': {
+    get: (r) => r.recommendation && r.recommendation.reasoning,
+    label: 'the recommendation',
+  },
+  'alternative_comparison.explanation': {
+    get: (r) => r.alternative_comparison && r.alternative_comparison.explanation,
+    label: 'the comparison against the alternative',
+  },
+};
+
+// Returns [] when nothing in the prose contradicts the computed total, or
+// one entry per offending field. Each carries the quoted figure, so the
+// repair prompt can name what to replace rather than asking for a rewrite
+// and hoping.
+function proseTotalConflicts(report) {
+  const derived = deriveNumbers(report);
+  if (!derived.total) return [];
+  const floor = derived.total.low * 0.5;
+  const conflicts = [];
+
+  for (const [path, spec] of Object.entries(PROSE_TOTAL_FIELDS)) {
+    const text = spec.get(report);
+    if (!nonEmpty(text)) continue;
+
+    // Gather every figure in this field that reads as a claim about the
+    // whole-period cost, then judge the field as a whole.
+    const claims = [];
+    MONEY_RE.lastIndex = 0;
+    let match;
+    while ((match = MONEY_RE.exec(text)) !== null) {
+      const window = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
+      if (!CLAIMS_A_TOTAL.test(window) || NOT_THE_TOTAL.test(window)) continue;
+      const stated = parseMoneyRange(match[0]);
+      if (!stated) continue;
+      // A figure far smaller than the computed total is a component being
+      // discussed, not a rival claim about the whole.
+      if (stated.high < floor) continue;
+      claims.push({ stated, quoted: match[0].trim() });
+    }
+    if (!claims.length) continue;
+
+    // A field that states the total correctly is not contradicting
+    // anything, and the other large figures near it are something else.
+    // Without this, a headline reading "$47,000-$57,700 total 7-year cost
+    // — the $32,400 price looks fair" reported the $32,400 as a rival
+    // total, purely because it sat close to the words "total cost".
+    const anyCorrect = claims.some(
+      (c) => withinTolerance(c.stated.low, derived.total.low) && withinTolerance(c.stated.high, derived.total.high)
+    );
+    if (anyCorrect) continue;
+    conflicts.push({ path, label: spec.label, quoted: claims[0].quoted });
+  }
+  return conflicts;
+}
+
+const PROSE_REPAIR_TOOL_FIELDS = {
+  headline: 'A short, specific, plain-English headline. Lead with the correct total.',
+  summary: 'Two to four sentences on the bottom line and why.',
+  'total_cost_of_ownership.explanation': 'Two to four sentences on what drives the total and how confident you are.',
+  'recommendation.reasoning': 'Two to four sentences, specific to this purchase.',
+  'alternative_comparison.explanation': 'Two to four sentences on how the alternative compares.',
+};
+
+function proseRepairTool(conflicts) {
+  const properties = {};
+  for (const c of conflicts) {
+    properties[c.path.replace(/\./g, '__')] = { type: 'string', description: PROSE_REPAIR_TOOL_FIELDS[c.path] };
+  }
+  return {
+    name: 'submit_field_repair',
+    description: 'Rewrite these fields so the total they quote is the correct one.',
+    input_schema: { type: 'object', properties, required: Object.keys(properties) },
+  };
+}
+
+// The model could not have got this right the first time: it wrote the
+// headline before anything had added up its line items. So this hands it
+// the computed figure and asks only for the sentences that quoted a
+// different one.
+async function repairProseTotals({ apiKey, systemPrompt, candidate, submissionId, conflicts }) {
+  const derived = deriveNumbers(candidate);
+  if (!derived.total || !conflicts.length) return null;
+  const correct = moneyRange(derived.total.low, derived.total.high);
+
+  const quoted = conflicts.map((c) => `- ${c.label} says ${c.quoted}`).join('\n');
+  const repairPrompt = `Your cost breakdown for this purchase adds up to ${correct} over ${derived.years} years. That figure is arithmetic over your own line items and is the one the customer is shown, so it is the only total that may appear anywhere in the report.
+
+These parts of your write-up quote a different total:
+${quoted}
+
+Please rewrite just those, using ${correct}. Keep your reasoning, your emphasis and everything else you said — only the total changes. Plain prose, no tool-call or parameter-tag syntax.
+
+Your line items, for reference:
+${JSON.stringify(derived.items, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [proseRepairTool(conflicts)],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 2048,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  if (!toolUse || !toolUse.input) {
+    console.warn(`[purchase-engine] Prose-total repair for submission ${submissionId} returned no usable tool_use.`);
+    return null;
+  }
+
+  const patched = JSON.parse(JSON.stringify(candidate));
+  for (const c of conflicts) {
+    const value = toolUse.input[c.path.replace(/\./g, '__')];
+    if (!nonEmpty(value) || String(value).match(TAG_LEAK_PATTERN)) {
+      console.warn(`[purchase-engine] Prose-total repair for submission ${submissionId} returned an empty or leaked value for ${c.path}.`);
+      return null;
+    }
+    const parts = c.path.split('.');
+    if (parts.length === 1) patched[parts[0]] = value.trim();
+    else patched[parts[0]] = { ...patched[parts[0]], [parts[1]]: value.trim() };
+  }
+
+  const stillWrong = proseTotalConflicts(patched);
+  if (stillWrong.length) {
+    console.warn(
+      `[purchase-engine] Prose-total repair for submission ${submissionId} still quotes a wrong total in: ${stillWrong.map((c) => c.path).join(', ')}`
+    );
+    return null;
+  }
+  return patched;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -832,6 +1036,8 @@ function isReportComplete(report) {
   // Last: the two sections must not contradict each other on the same
   // costs. See tcoArithmeticProblem for the incident this comes from.
   if (tcoArithmeticProblem(report)) return false;
+  // And the prose must not quote a total the line items do not support.
+  if (proseTotalConflicts(report).length) return false;
 
   return true;
 }
@@ -877,6 +1083,7 @@ function firstIncompleteField(report) {
   // with a merely-empty field: the report is structurally complete and
   // still says two different things about the same money.
   if (tcoArithmeticProblem(report)) return 'total_cost_of_ownership.arithmetic';
+  if (proseTotalConflicts(report).length) return 'total_cost_of_ownership.prose';
   return '(unknown — isReportComplete said false but firstIncompleteField found nothing; these two have drifted apart)';
 }
 
@@ -1338,7 +1545,7 @@ async function generatePurchaseReport(submissionId) {
         // +2 for the two numeric repairs (cost model, assumptions), which
         // are labelled by firstIncompleteField rather than living in either
         // of the two REPAIRABLE_* maps.
-        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length + 2;
+        const maxRepairRounds = Object.keys(REPAIRABLE_EXPLANATION_FIELDS).length + Object.keys(REPAIRABLE_COMPOUND_FIELDS).length + 3;
         for (let round = 0; round < maxRepairRounds && !isReportComplete(candidate); round++) {
           const emptyField = firstIncompleteField(candidate);
           if (emptyField === 'total_cost_of_ownership.cost_model' || emptyField === 'total_cost_of_ownership.arithmetic') {
@@ -1354,6 +1561,22 @@ async function generatePurchaseReport(submissionId) {
             candidate = patched;
             console.warn(
               `[purchase-engine] Rebuilt the cost model for submission ${submissionId} on attempt ${attemptNumber}${problem ? ` — the report contradicted itself: ${problem}` : ' — the breakdown was unusable'}`
+            );
+            continue;
+          }
+          if (emptyField === 'total_cost_of_ownership.prose') {
+            const conflicts = proseTotalConflicts(candidate);
+            let patched = null;
+            try {
+              patched = await repairProseTotals({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId, conflicts });
+            } catch (err) {
+              console.warn(`[purchase-engine] Prose-total repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+              patched = null;
+            }
+            if (!patched) break;
+            candidate = patched;
+            console.warn(
+              `[purchase-engine] Corrected a total quoted in prose for submission ${submissionId} on attempt ${attemptNumber}: ${conflicts.map((c) => c.label + ' said ' + c.quoted).join('; ')}`
             );
             continue;
           }
@@ -1496,6 +1719,8 @@ module.exports = {
     validBreakdown,
     sumBreakdown,
     tcoArithmeticProblem,
+    proseTotalConflicts,
+    repairProseTotals,
     deriveNumbers,
     money,
     moneyRange,

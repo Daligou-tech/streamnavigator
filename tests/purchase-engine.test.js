@@ -1060,3 +1060,189 @@ test('a financing customer whose breakdown has no financing line is caught, not 
   };
   assert.equal(__internal.tcoArithmeticProblem(zeroInterest), null);
 });
+
+// --- the same total, in the prose -----------------------------------------
+//
+// Making the model give line items and summing them in code fixed the
+// structured half. The first live report generated against that engine
+// (2026-09-08, the same RAV4) showed it fixed only half. Its line items
+// summed to $47,000-$57,700 and its running-cost cross-check reconciled
+// exactly — and its headline read "~$52,000–$68,000 total 7-year cost",
+// with the same invented figure repeated in three more places.
+//
+// The sentences below are that report, verbatim.
+
+function ravReport(overrides) {
+  return completeReportInput({
+    total_cost_of_ownership: {
+      time_horizon_years: 7,
+      cost_breakdown: [
+        { label: 'Purchase price (incl. VA sales tax/title/registration)', kind: 'purchase', low: 34300, high: 34700, basis: '$32,400 quoted plus ~$1,900-$2,300 Virginia sales tax and fees' },
+        { label: 'Financing interest over 60-month loan', kind: 'financing', low: 3500, high: 4500, basis: 'typical used-auto-loan rates' },
+        { label: 'Running costs over 7 years', kind: 'running', low: 18200, high: 24500, basis: '7 years times $2,600-$3,500 a year' },
+        { label: 'Resale recovered at year 7', kind: 'resale_recovery', low: -9000, high: -6000, basis: '25-30% of purchase price at trade-in' },
+      ],
+      explanation: 'Total 7-year cost of ownership is estimated at roughly $47,000-$57,700.',
+    },
+    maintenance_running_costs: { annual_low: 2600, annual_high: 3500, explanation: 'Insurance, fuel and routine servicing.' },
+    financing_impact: { applicable: true, explanation: 'A 60-month loan at 6.5-7.5% APR.' },
+    ...overrides,
+  });
+}
+
+test('the line items sum to the total the strip shows, for the report that started all this', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const derived = __internal.deriveNumbers(ravReport());
+  // 34,300 + 3,500 + 18,200 - 9,000  ..  34,700 + 4,500 + 24,500 - 6,000
+  assert.equal(__internal.moneyRange(derived.total.low, derived.total.high), '$47,000 – $57,700');
+  assert.equal(__internal.tcoArithmeticProblem(ravReport()), null, 'the structured half already agreed');
+});
+
+test('a total invented in the prose is caught in every place the live report put one', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const bad = ravReport({
+    headline: '~$52,000–$68,000 total 7-year cost — the $32,400 CPO price itself looks fair, but financing + Fairfax-area running costs roughly double the sticker over time',
+    total_cost_of_ownership: {
+      ...ravReport().total_cost_of_ownership,
+      explanation: 'Total 7-year cost of ownership is estimated at roughly $52,000–$68,000. That includes the $32,400 purchase price plus an estimated $3,500–$4,500 in financing interest over the 60-month loan.',
+    },
+    recommendation: { verdict: 'buy', reasoning: 'Shop your 60-month loan rate with an outside lender, since that is the biggest lever left to reduce the $52,000–$68,000 total cost estimate.' },
+    alternative_comparison: {
+      alternative_name: '2023 Honda CR-V Hybrid Sport AWD',
+      explanation: 'A comparably equipped CR-V Hybrid CPO typically prices $1,000-$2,000 higher, which pushes 7-year total cost slightly above the RAV4\'s $52,000-$68,000 range once financing and running costs are included.',
+    },
+  });
+
+  const paths = __internal.proseTotalConflicts(bad).map((c) => c.path).sort();
+  assert.deepEqual(paths, [
+    'alternative_comparison.explanation',
+    'headline',
+    'recommendation.reasoning',
+    'total_cost_of_ownership.explanation',
+  ]);
+  // The quoted figure goes into the repair prompt, so it has to be the
+  // actual text and not just the field name.
+  assert.equal(__internal.proseTotalConflicts(bad)[0].quoted, '$52,000–$68,000');
+  assert.equal(__internal.isReportComplete(bad), false);
+  assert.equal(__internal.firstIncompleteField(bad), 'total_cost_of_ownership.prose');
+});
+
+test('the check does not fire on figures that are not claims about the total', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  // Every one of these is a real sentence from the same live report.
+  const innocent = ravReport({
+    headline: '$47,000-$57,700 total 7-year cost — the $32,400 CPO price itself looks fair',
+    summary: 'Financing $32,400 over 60 months adds roughly $5,600-$6,800 in interest, bringing the total amount paid over the loan term to about $38,000-$39,200.',
+    recommendation: {
+      verdict: 'buy',
+      reasoning: 'Depreciation is only about $13,000-$14,500 of the total cost — a relatively small slice, since resale value lands around $18,000-$19,500 at trade-in.',
+    },
+  });
+  assert.deepEqual(__internal.proseTotalConflicts(innocent), [], JSON.stringify(__internal.proseTotalConflicts(innocent)));
+  assert.equal(__internal.isReportComplete(innocent), true);
+});
+
+test('a field that states the total correctly is not tripped by a price sitting next to it', () => {
+  // "$47,000-$57,700 total 7-year cost — the $32,400 CPO price looks fair"
+  // used to report the $32,400 as a rival total, because it sat within
+  // thirty characters of the words "total cost".
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(
+    __internal.proseTotalConflicts(ravReport({
+      headline: '$47,000-$57,700 total 7-year cost — the $32,400 CPO price itself looks fair',
+    })),
+    []
+  );
+});
+
+test('an invented prose total is corrected in place, and the correction is checked', async (t) => {
+  const submission = fakeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let mainCalls = 0;
+  let proseRepairs = 0;
+  let promptSeen = '';
+  let fieldsAsked = [];
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const tool = (body.tools || [])[0];
+    const props = (tool && tool.input_schema && tool.input_schema.properties) || {};
+    if (props.headline || props.total_cost_of_ownership__explanation) {
+      proseRepairs++;
+      promptSeen = body.messages[0].content;
+      fieldsAsked = Object.keys(props).sort();
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: {
+              headline: '$47,000-$57,700 total 7-year cost — the $32,400 CPO price itself looks fair',
+              total_cost_of_ownership__explanation: 'Total 7-year cost of ownership works out to $47,000-$57,700 once resale is netted off.',
+            },
+          }],
+        }),
+      };
+    }
+    mainCalls++;
+    return toolUseResponse(ravReport({
+      headline: '~$52,000–$68,000 total 7-year cost — the $32,400 CPO price itself looks fair',
+      total_cost_of_ownership: {
+        ...ravReport().total_cost_of_ownership,
+        explanation: 'Total 7-year cost of ownership is estimated at roughly $52,000–$68,000.',
+      },
+    }));
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(mainCalls, 1, 'a wrong number in prose must not cost a whole regenerated report');
+  assert.equal(proseRepairs, 1);
+  assert.deepEqual(fieldsAsked, ['headline', 'total_cost_of_ownership__explanation'], 'only the fields that were wrong get rewritten');
+  // The model could not have got this right first time — it wrote the
+  // headline before anything had added up its line items — so the repair
+  // has to hand it the computed figure rather than ask it to try again.
+  assert.match(promptSeen, /\$47,000 – \$57,700/);
+  assert.ok(report.headline.includes('$47,000-$57,700'));
+  assert.equal(reportInserts.length, 1);
+});
+
+test('a prose repair that keeps the wrong total is rejected rather than shipped', async (t) => {
+  const submission = fakeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = ((body.tools || [])[0] || {}).input_schema;
+    if (props && props.properties && props.properties.headline) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: { headline: 'Still ~$52,000–$68,000 total 7-year cost, reworded' },
+          }],
+        }),
+      };
+    }
+    return toolUseResponse(ravReport({
+      headline: '~$52,000–$68,000 total 7-year cost — the $32,400 CPO price looks fair',
+    }));
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const result = await generatePurchaseReport('sub-1');
+
+  assert.equal(result, null, 'a repair that did not fix the number must hand back for another attempt');
+  assert.equal(submission.status, 'paid');
+  assert.equal(reportInserts.length, 0);
+});
