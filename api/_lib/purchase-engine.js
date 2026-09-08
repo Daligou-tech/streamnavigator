@@ -217,7 +217,27 @@ function buildIntakeBrief(submission) {
   return lines.join('\n');
 }
 
-function buildSystemPrompt(submission) {
+// Renders the graded must-haves for the report's own system prompt. The
+// verification runs first now, so the recommendation is written by a model
+// that already knows the answer instead of one guessing at it.
+function mustHaveBriefing(checks) {
+  if (!Array.isArray(checks) || !checks.length) return '';
+  const MARK = { confirmed: 'MET', contradicted: 'NOT MET', unverified: 'NOT ESTABLISHED' };
+  const lines = checks
+    .map((c) => `  - ${c.requirement} — ${MARK[c.verdict] || 'NOT ESTABLISHED'}. ${c.finding}${nonEmpty(c.source) ? ` (${c.source})` : ''}`)
+    .join('\n');
+  const failed = checks.filter((c) => c.verdict === 'contradicted');
+
+  return `The customer's must-haves have already been checked against the product's published specification. These findings are established and are shown to the customer above your analysis. Treat them as given: do not re-examine them, do not restate them differently, and never describe a requirement as satisfied when it is listed below as NOT MET or NOT ESTABLISHED.
+
+${lines}
+${failed.length ? `
+This item FAILS ${failed.length === 1 ? 'something' : 'things'} the customer called a deal-breaker: ${failed.map((c) => `"${c.requirement}"`).join(', ')}. Your recommendation therefore cannot be "buy". Say plainly in your reasoning that it does not meet that requirement, lead with it, and let the rest of the analysis inform what they should do instead — a report that recommends against a purchase on this ground is doing exactly its job, and the money is secondary to it.` : ''}${checks.some((c) => c.verdict === 'unverified') ? `
+Where a requirement is NOT ESTABLISHED it is unknown, not met. Do not treat it as satisfied, and tell the customer it is worth confirming before they buy.` : ''}
+`;
+}
+
+function buildSystemPrompt(submission, mustHaveChecks) {
   const brief = buildIntakeBrief(submission);
   return `You are the analysis engine behind Purchase Navigator, a StreamNavigator AI product. A customer paid $29 for a true total-cost-of-ownership analysis on something they're considering buying, and confirmed the details below before paying — treat this as sufficient to work with; do not respond by asking for more information or declaring the input insufficient.
 
@@ -226,7 +246,7 @@ ${brief}
 
 Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed — cost it out over the same ownership period so the two totals sit side by side, and make sure everything you say about it is about the product you named rather than a differently-configured version of it. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
 
-Whether the item meets the customer's must-haves is checked separately and is not your job here — do not assert that it does or does not have a given feature anywhere in this report.
+${mustHaveBriefing(mustHaveChecks) || 'Do not assert that the item does or does not have a given feature — you have not checked its specification.'}
 
 Two rules about the numbers, because this product is bought for its arithmetic:
 
@@ -250,11 +270,13 @@ Respond ONLY by calling the submit_purchase_report tool.`;
 // primed the same kind of confusion that caused the original leak. This
 // keeps the customer grounding and the anti-leak honesty rules the repair
 // still needs, without the conflicting framing.
-function buildRepairSystemPrompt(submission) {
+function buildRepairSystemPrompt(submission, mustHaveChecks) {
   const brief = buildIntakeBrief(submission);
   return `You previously analyzed the following purchase for Purchase Navigator, a StreamNavigator AI product:
 
 ${brief}
+
+${mustHaveBriefing(mustHaveChecks)}
 
 ${noLeakRule('submit_field_repair')}
 
@@ -1443,8 +1465,9 @@ const MUST_HAVE_REPAIR_TOOL = {
         },
       },
       verdict: { type: 'string', enum: ['buy', 'wait', 'reconsider'], description: 'The buy/wait/reconsider call, restated. If any must-have came back contradicted this cannot be "buy".' },
+      reasoning: { type: 'string', description: 'Required. The reasoning for that verdict, rewritten to match it. Two to four sentences. If a requirement came back contradicted, lead with the fact that the item does not meet it — never describe it as satisfied.' },
     },
-    required: ['must_have_checks', 'verdict'],
+    required: ['must_have_checks', 'verdict', 'reasoning'],
   },
 };
 
@@ -1460,7 +1483,9 @@ ${fragments.map((f) => '  - ' + f).join('\n')}
 
 ${problem ? 'Something is wrong with how the report answers them: ' + problem : 'The report does not answer them.'}
 
-Give one entry per item above. For each, say what the product's actual specification says and where you read it. If you did not look it up, the verdict is "unverified" and the source is "not checked" — that is an honest, useful answer, and far better than a confident guess: a customer told their deal-breaker is satisfied will buy the thing. If any item comes back contradicted, the recommendation cannot be "buy".
+Give one entry per item above. For each, say what the product's actual specification says and where you read it. If you did not look it up, the verdict is "unverified" and the source is "not checked" — that is an honest, useful answer, and far better than a confident guess: a customer told their deal-breaker is satisfied will buy the thing.
+
+Then give the buy/wait/reconsider call AND the reasoning for it, rewritten to match. If any item comes back contradicted the verdict cannot be "buy", and the reasoning must lead with the fact that the item does not meet that requirement — a verdict that says one thing while its reasoning says another is worse than either alone.
 
 What was already established about each, which you should keep unless you
 have a reason to change it:
@@ -1482,14 +1507,22 @@ ${JSON.stringify({ headline: candidate.headline, recommendation: candidate.recom
     console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} returned no usable checks.`);
     return null;
   }
-  if (reportLooksContaminated(toolUse.input.must_have_checks)) {
+  if (reportLooksContaminated(toolUse.input.must_have_checks) || reportLooksContaminated(toolUse.input.reasoning)) {
     console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} came back with a leaked formatting artifact.`);
+    return null;
+  }
+  if (!nonEmpty(toolUse.input.reasoning)) {
+    console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} returned a verdict with no reasoning to match it.`);
     return null;
   }
   const patched = {
     ...candidate,
     must_have_checks: toolUse.input.must_have_checks,
-    recommendation: { ...candidate.recommendation, verdict: toolUse.input.verdict },
+    recommendation: {
+      ...candidate.recommendation,
+      verdict: toolUse.input.verdict,
+      reasoning: toolUse.input.reasoning.trim(),
+    },
   };
   // Checked against the same rule the report has to pass, so a repair can
   // never install something that fails the next round and burns it.
@@ -2129,7 +2162,51 @@ async function generatePurchaseReport(submissionId) {
     const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
     if (!ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY env var');
 
-    const systemPrompt = buildSystemPrompt(submission);
+    // Before the report, not after it. The recommendation and its reasoning
+    // depend on whether the item meets the customer's requirements, so a
+    // report written first can only ever have that patched into it
+    // afterwards — which is exactly what happened on submission a62f2dd1:
+    // the verdict was corrected from "buy" to "reconsider" while the
+    // reasoning underneath went on listing the failed deal-breaker as
+    // satisfied and telling the customer to proceed. Ordering it this way
+    // removes that whole class rather than repairing it.
+    let verification = null;
+    try {
+      verification = await verifyMustHaves({
+        apiKey: ANTHROPIC_API_KEY,
+        submission,
+        submissionId,
+        allowSearch: ENABLE_WEB_SEARCH,
+      });
+    } catch (err) {
+      console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+    }
+    const mustHaveChecks = (verification && verification.checks) || unverifiedChecks(submission);
+
+    // A spec verdict is only as good as the lookup behind it. With no
+    // searches on the verification call there was no lookup — whatever the
+    // model believes about the product, it is remembering rather than
+    // checking. Downgrading cannot invent a problem; it can only stop one
+    // being ruled out on nothing.
+    if (!verification || !verification.searchRounds) {
+      const graded = mustHaveChecks.filter((c) => c && c.verdict !== 'unverified');
+      if (graded.length) {
+        console.warn(
+          `[purchase-engine] Submission ${submissionId} graded ${graded.length} must-have(s) with no web_search behind them; downgrading to unverified.`
+        );
+        for (const check of graded) {
+          check.verdict = 'unverified';
+          check.source = 'not checked — no live lookup ran for this report';
+        }
+      }
+    }
+    if (mustHaveChecks.some((c) => c.verdict === 'contradicted')) {
+      console.warn(
+        `[purchase-engine] Submission ${submissionId} fails ${mustHaveChecks.filter((c) => c.verdict === 'contradicted').length} stated must-have(s); the report is being written with that as a given.`
+      );
+    }
+
+    const systemPrompt = buildSystemPrompt(submission, mustHaveChecks);
 
     const filePaths = submission.file_paths || [];
     const contentBlocks = [];
@@ -2201,44 +2278,8 @@ async function generatePurchaseReport(submissionId) {
       // required field it didn't cover.
       if (!Array.isArray(candidate.assumptions)) candidate.assumptions = [];
       if (!Array.isArray(candidate.missing_or_uncertain)) candidate.missing_or_uncertain = [];
-      // The must-haves are graded in their own request rather than inside
-      // the report call — see verifyMustHaves for the timeout that forced
-      // that. A failure here costs the customer nothing but certainty: they
-      // get the requirements back marked unchecked, with instructions to
-      // confirm before buying.
-      let verification = null;
-      try {
-        verification = await verifyMustHaves({
-          apiKey: ANTHROPIC_API_KEY,
-          submission,
-          submissionId,
-          allowSearch: ENABLE_WEB_SEARCH,
-        });
-      } catch (err) {
-        console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
-      }
-      candidate.must_have_checks = (verification && verification.checks) || unverifiedChecks(submission);
-
-      // A spec verdict is only as good as the lookup behind it, and with no
-      // searches on the verification call there was no lookup — whatever the
-      // model believes about the product, it is remembering rather than
-      // checking. This is the deterministic half: the report of 2026-09-08
-      // that told a customer their deal-breaker was satisfied was confident,
-      // consistent and wrong, and no amount of asking it to be careful would
-      // have stopped that. Downgrading cannot invent a problem; it can only
-      // stop one being ruled out on nothing.
-      if (!verification || !verification.searchRounds) {
-        const graded = candidate.must_have_checks.filter((c) => c && c.verdict !== 'unverified');
-        if (graded.length) {
-          console.warn(
-            `[purchase-engine] Submission ${submissionId} graded ${graded.length} must-have(s) with no web_search behind them; downgrading to unverified.`
-          );
-          for (const check of graded) {
-            check.verdict = 'unverified';
-            check.source = 'not checked — no live lookup ran for this report';
-          }
-        }
-      }
+      // Established before the report was written; carried onto it here.
+      candidate.must_have_checks = mustHaveChecks;
       // The array shape is coerced here as before, but an EMPTY assumptions
       // list is no longer treated as a valid answer — see isReportComplete.
       // It now routes to repairAssumptions instead of shipping a total whose
@@ -2287,7 +2328,7 @@ async function generatePurchaseReport(submissionId) {
             const problem = tcoArithmeticProblem(candidate);
             let patched = null;
             try {
-              patched = await repairCostModel({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId, problem });
+              patched = await repairCostModel({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, submissionId, problem });
             } catch (err) {
               console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
               patched = null;
@@ -2303,7 +2344,7 @@ async function generatePurchaseReport(submissionId) {
             const conflicts = proseTotalConflicts(candidate);
             let patched = null;
             try {
-              patched = await repairProseTotals({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId, conflicts });
+              patched = await repairProseTotals({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, submissionId, conflicts });
             } catch (err) {
               console.warn(`[purchase-engine] Prose-total repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
               patched = null;
@@ -2319,7 +2360,7 @@ async function generatePurchaseReport(submissionId) {
             const problem = mustHaveProblem(candidate, submission);
             let patched = null;
             try {
-              patched = await repairMustHaveChecks({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submission, submissionId, problem });
+              patched = await repairMustHaveChecks({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, submission, submissionId, problem });
             } catch (err) {
               console.warn(`[purchase-engine] Must-have repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
               patched = null;
@@ -2332,7 +2373,7 @@ async function generatePurchaseReport(submissionId) {
           if (emptyField === 'assumptions') {
             let repairedList = null;
             try {
-              repairedList = await repairAssumptions({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, submissionId });
+              repairedList = await repairAssumptions({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, submissionId });
             } catch (err) {
               console.warn(`[purchase-engine] Assumptions repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
               repairedList = null;
@@ -2345,7 +2386,7 @@ async function generatePurchaseReport(submissionId) {
           if (REPAIRABLE_COMPOUND_FIELDS[emptyField]) {
             let repaired = null;
             try {
-              repaired = await repairCompoundField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, sectionKey: emptyField, submissionId });
+              repaired = await repairCompoundField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, sectionKey: emptyField, submissionId });
             } catch (err) {
               console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${emptyField}) threw: ${String((err && err.message) || err)}`);
               repaired = null;
@@ -2361,7 +2402,7 @@ async function generatePurchaseReport(submissionId) {
           if (!meta) break; // not a field this mechanism knows how to repair
           let repairedValue = null;
           try {
-            repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate, fieldPath: emptyField, submissionId });
+            repairedValue = await repairExplanationField({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate, fieldPath: emptyField, submissionId });
           } catch (err) {
             console.warn(`[purchase-engine] Repair call for submission ${submissionId} (${emptyField}) threw: ${String((err && err.message) || err)}`);
             repairedValue = null;
@@ -2418,7 +2459,7 @@ async function generatePurchaseReport(submissionId) {
       );
       let notes = null;
       try {
-        notes = await repairResearchNotes({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate: report, submissionId, searchRounds });
+        notes = await repairResearchNotes({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission, mustHaveChecks), candidate: report, submissionId, searchRounds });
       } catch (err) {
         console.warn(`[purchase-engine] Research-notes repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
       }

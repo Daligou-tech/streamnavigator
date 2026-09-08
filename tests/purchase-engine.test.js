@@ -1995,7 +1995,15 @@ test('an unanswered must-have is repaired rather than costing a whole attempt', 
       return {
         ok: true,
         json: async () => ({
-          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { must_have_checks: LG_CHECKS(), verdict: 'reconsider' } }],
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: {
+              must_have_checks: LG_CHECKS(),
+              verdict: 'reconsider',
+              reasoning: 'This model has the external door dispenser you called a deal-breaker, so it is not the right unit whatever the price says.',
+            },
+          }],
         }),
       };
     }
@@ -2033,7 +2041,11 @@ test('a repair that still recommends buying a failed deal-breaker is rejected', 
       return {
         ok: true,
         json: async () => ({
-          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { must_have_checks: LG_CHECKS(), verdict: 'buy' } }],
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: { must_have_checks: LG_CHECKS(), verdict: 'buy', reasoning: 'Still recommending it.' },
+          }],
         }),
       };
     }
@@ -2078,8 +2090,46 @@ test('the report call is not asked to check the specification', () => {
     'grading the must-haves belongs in its own request, not on the report call'
   );
   assert.equal(__internal.REPORT_TOOL.input_schema.required.includes('must_have_checks'), false);
-  const prompt = __internal.buildSystemPrompt(fridgeSubmission());
-  assert.match(prompt, /checked separately and is not your job here/i);
+  // With nothing established, it is told not to guess.
+  assert.match(
+    __internal.buildSystemPrompt(fridgeSubmission()),
+    /Do not assert that the item does or does not have a given feature/i
+  );
+});
+
+test('the report is written knowing which must-haves failed', () => {
+  // The reorder, and the reason for it. Verification used to run after the
+  // report, so the recommendation was composed before anyone knew the answer
+  // and could only be patched afterwards. On submission a62f2dd1 that
+  // produced a RECONSIDER whose reasoning read "It hits every stated
+  // requirement — 36-inch fit, counter-depth, internal ice maker, no
+  // external dispenser — so there's no functional reason to keep shopping",
+  // three inches under a check marked ✗ on exactly that dispenser.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const prompt = __internal.buildSystemPrompt(fridgeSubmission(), LG_CHECKS());
+
+  assert.match(prompt, /already been checked against the product's published specification/i);
+  assert.match(prompt, /no external door dispenser — NOT MET/);
+  assert.match(prompt, /internal ice maker — MET/);
+  assert.match(prompt, /Tall Ice & Water Dispenser/, 'the finding travels with the verdict');
+  assert.match(prompt, /cannot be "buy"/i);
+  assert.match(prompt, /lead with it/i, 'and the reasoning has to be built on it, not around it');
+});
+
+test('an unestablished must-have is passed on as unknown, never as met', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const prompt = __internal.buildSystemPrompt(fridgeSubmission(), __internal.unverifiedChecks(fridgeSubmission()));
+  assert.match(prompt, /NOT ESTABLISHED/);
+  assert.match(prompt, /it is unknown, not met/i);
+  assert.equal(/cannot be "buy"/i.test(prompt), false, 'nothing was contradicted, so nothing is ruled out');
+});
+
+test('every repair sees the same findings the report was written from', () => {
+  // A repair prompt that does not carry them can quietly reintroduce the
+  // claim the verification just disproved.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const prompt = __internal.buildRepairSystemPrompt(fridgeSubmission(), LG_CHECKS());
+  assert.match(prompt, /no external door dispenser — NOT MET/);
 });
 
 test('verification is one small request that searches and grades', async (t) => {
@@ -2157,4 +2207,82 @@ test('no must-haves means no verification request at all', async (t) => {
   });
   assert.equal(calls, 0, 'nothing to check is not a reason to spend a request');
   assert.deepEqual(result, { checks: [], searchRounds: 0 });
+});
+
+test('the safety-net repair rewrites the argument, not just the verdict', async (t) => {
+  // What went wrong when it did not. On submission a62f2dd1 this repair
+  // fired, moved the verdict from "buy" to "reconsider", and left the
+  // reasoning reading "It hits every stated requirement — ... no external
+  // dispenser — so there's no functional reason to keep shopping...
+  // proceeding now is the sound move." A customer who reads the
+  // recommendation gets the disproved claim back.
+  const submission = fridgeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (isVerifyCall(opts)) return mustHaveResponse(LG_CHECKS().slice(0, 2), 3);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.must_have_checks) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: {
+              must_have_checks: LG_CHECKS(),
+              verdict: 'reconsider',
+              reasoning: 'This model ships with the external door dispenser you called a deal-breaker, so it is the wrong unit whatever the price says.',
+            },
+          }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({
+      recommendation: { verdict: 'buy', reasoning: 'It hits every stated requirement, so there is no reason to keep shopping.' },
+    }), 4);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  const rec = report.sections.find((x) => /^Recommendation/.test(x.title));
+  assert.match(rec.title, /RECONSIDER/);
+  assert.match(rec.items[0], /external door dispenser/, 'the reasoning has to follow the verdict it now sits under');
+  assert.equal(
+    /hits every stated requirement/.test(rec.items[0]),
+    false,
+    'the argument for buying must not survive under a verdict that says do not'
+  );
+});
+
+test('a repair that supplies a verdict with no reasoning is rejected', async (t) => {
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (isVerifyCall(opts)) return mustHaveResponse(LG_CHECKS().slice(0, 2), 3);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.must_have_checks) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{ type: 'tool_use', name: 'submit_field_repair', input: { must_have_checks: LG_CHECKS(), verdict: 'reconsider', reasoning: '   ' } }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({ recommendation: { verdict: 'buy', reasoning: 'r' } }), 4);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  assert.equal(await generatePurchaseReport('sub-1'), null);
+  assert.equal(reportInserts.length, 0);
 });
