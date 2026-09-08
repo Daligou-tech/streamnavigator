@@ -113,7 +113,7 @@ function completeReportInput(overrides) {
       time_horizon_years: 8,
       cost_breakdown: [
         { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'the quoted price' },
-        { label: 'Electricity', kind: 'running', low: 440, high: 560, basis: '$55-$70/yr at typical U.S. rates' },
+        { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical U.S. rates' },
         { label: 'Delivery and haul-away', kind: 'other', low: 100, high: 150, basis: 'typical retailer fee' },
       ],
       explanation: 'Purchase price plus roughly $400-$500 in electricity over 8 years.',
@@ -121,7 +121,14 @@ function completeReportInput(overrides) {
     financing_impact: { applicable: false, explanation: 'Paying cash, so there is no financing cost — the $2,400 price is the full cost.' },
     maintenance_running_costs: { annual_low: 55, annual_high: 70, explanation: 'Typical electricity draw for a French door fridge this size, plus occasional minor repairs.' },
     depreciation_resale: { resale_low: 0, resale_high: 0, expected_resale_note: 'No meaningful resale market for appliances', explanation: 'Refrigerators are not typically resold for meaningful value; treat this as a sunk cost over its useful life.' },
-    alternative_comparison: { alternative_name: 'A comparable top-freezer model, ~$1,600', explanation: 'A simpler top-freezer configuration would cost several hundred dollars less with slightly higher energy use, but no ice/water dispenser.' },
+    alternative_comparison: {
+      alternative_name: 'A comparable top-freezer model',
+      alternative_price_low: 1500,
+      alternative_price_high: 1700,
+      alternative_total_low: 2100,
+      alternative_total_high: 2400,
+      explanation: 'A simpler top-freezer configuration costs several hundred dollars less with slightly higher energy use, but no ice/water dispenser.',
+    },
     recommendation: { verdict: 'buy', reasoning: 'Price is in the typical range and the customer already needs a replacement — no reason to wait.' },
     assumptions: [
       'Assumed a typical U.S. average electricity rate of about $0.16/kWh since no exact rate was given.',
@@ -337,7 +344,7 @@ test('a leaked tool-syntax fragment attached to otherwise-real prose is stripped
         time_horizon_years: 8,
         cost_breakdown: [
           { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'the quoted price' },
-          { label: 'Electricity', kind: 'running', low: 440, high: 560, basis: '$55-$70/yr at typical U.S. rates' },
+          { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical U.S. rates' },
           { label: 'Delivery and haul-away', kind: 'other', low: 100, high: 150, basis: 'typical retailer fee' },
         ],
         explanation: 'Purchase price plus roughly $400-$500 in electricity over 8 years, using the <parameter name="estimate_low"> baseline.',
@@ -658,7 +665,10 @@ function contradictoryReport() {
       cost_breakdown: [
         { label: 'Purchase price', kind: 'purchase', low: 32400, high: 32400, basis: 'the quoted CPO price' },
         { label: 'Interest over 60 months', kind: 'financing', low: 5200, high: 6400, basis: '60 months at 6.5-7.5% APR' },
-        { label: 'Fuel', kind: 'running', low: 9000, high: 11000, basis: '12,000 mi/yr at 38-40 mpg' },
+        // 9000-11000 over 7 years is 1286-1571 a year, against a maintenance
+        // section saying 900-1100. That is the contradiction, now expressed
+        // where the number actually lives.
+        { label: 'Fuel', kind: 'running', per_year_low: 1286, per_year_high: 1571, basis: '12,000 mi/yr at 38-40 mpg' },
       ],
       explanation: 'Purchase price, interest and running costs over seven years.',
     },
@@ -676,7 +686,9 @@ test('__internal.tcoArithmeticProblem catches the live contradiction that shippe
   assert.ok(problem, 'a $3,000 disagreement on the same line item must be caught');
   // The message is handed straight back to the model as the repair prompt,
   // so it has to quote the figures rather than just name the fields.
-  assert.match(problem, /\$9,000/);
+  // Derived from the per-year figure now, so it lands on $9,002 rather
+  // than the round number the model used to write straight into the field.
+  assert.match(problem, /\$9,0\d\d/);
   assert.match(problem, /\$6,300/);
   assert.match(problem, /7 years/);
 });
@@ -693,7 +705,7 @@ test('__internal.tcoArithmeticProblem tolerates ordinary rounding but not a real
       time_horizon_years: 8,
       cost_breakdown: [
         { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'the quoted price' },
-        { label: 'Electricity', kind: 'running', low: runLow, high: runHigh, basis: 'typical rates' },
+        { label: 'Electricity', kind: 'running', per_year_low: runLow / 8, per_year_high: runHigh / 8, basis: 'typical rates' },
         { label: 'Delivery', kind: 'other', low: 100, high: 150, basis: 'typical fee' },
       ],
       explanation: 'x',
@@ -740,19 +752,19 @@ test('__internal.validBreakdown refuses a breakdown that cannot be summed into a
   const withItems = (items) => ({ time_horizon_years: 8, cost_breakdown: items, explanation: 'x' });
   const ok = [
     { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'quoted' },
-    { label: 'Electricity', kind: 'running', low: 440, high: 560, basis: 'typical' },
+    { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical' },
     { label: 'Delivery', kind: 'other', low: 100, high: 150, basis: 'typical' },
   ];
   assert.ok(__internal.validBreakdown(withItems(ok)));
   assert.equal(__internal.validBreakdown(withItems(ok.slice(0, 2))), null, 'fewer than three line items is not a breakdown');
   assert.equal(__internal.validBreakdown(withItems(ok.slice(1))), null, 'no purchase line means the biggest cost is missing');
   assert.equal(
-    __internal.validBreakdown(withItems([{ ...ok[0] }, { ...ok[1], low: -440, high: -300 }, ok[2]])),
+    __internal.validBreakdown(withItems([{ ...ok[0] }, { ...ok[1], per_year_low: -55, per_year_high: -37 }, ok[2]])),
     null,
     'a negative running cost is a mistake, not a modelling choice'
   );
   assert.equal(
-    __internal.validBreakdown(withItems([ok[0], { ...ok[1], low: 900, high: 400 }, ok[2]])),
+    __internal.validBreakdown(withItems([ok[0], { ...ok[1], per_year_low: 900, per_year_high: 400 }, ok[2]])),
     null,
     'a range whose high is below its low cannot be summed into anything meaningful'
   );
@@ -791,7 +803,7 @@ test('a report that contradicts itself is rebuilt by a targeted repair instead o
               cost_breakdown: [
                 { label: 'Purchase price', kind: 'purchase', low: 32400, high: 32400, basis: 'the quoted CPO price' },
                 { label: 'Interest over 60 months', kind: 'financing', low: 5200, high: 6400, basis: '60 months at 6.5-7.5% APR' },
-                { label: 'Fuel, insurance, servicing', kind: 'running', low: 6300, high: 7700, basis: '$900-$1,100/yr over 7 years' },
+                { label: 'Fuel, insurance, servicing', kind: 'running', per_year_low: 900, per_year_high: 1100, basis: 'reconciled with the per-year figure' },
               ],
               annual_low: 900,
               annual_high: 1100,
@@ -816,7 +828,7 @@ test('a report that contradicts itself is rebuilt by a targeted repair instead o
   assert.equal(reportInserts.length, 1);
   // The repair prompt has to name the contradiction. "Try again" would just
   // reproduce it: both of the original paragraphs looked right on their own.
-  assert.match(repairPromptSeen, /\$9,000/);
+  assert.match(repairPromptSeen, /\$9,0\d\d/);
   assert.match(repairPromptSeen, /\$6,300/);
   const total = report.key_numbers.find((n) => /total cost/i.test(n.label));
   assert.equal(total.value, '$43,900 – $46,500', 'the stored total must be the repaired line items summed');
@@ -842,7 +854,7 @@ test('a repair that still does not reconcile is rejected rather than shipped', a
               cost_breakdown: [
                 { label: 'Purchase price', kind: 'purchase', low: 32400, high: 32400, basis: 'quoted' },
                 { label: 'Interest', kind: 'financing', low: 5200, high: 6400, basis: 'APR' },
-                { label: 'Fuel', kind: 'running', low: 8000, high: 9500, basis: 'mpg' },
+                { label: 'Fuel', kind: 'running', per_year_low: 1143, per_year_high: 1357, basis: 'mpg' },
               ],
               annual_low: 900,
               annual_high: 1100,
@@ -890,7 +902,7 @@ test('__internal.mapToGenericReport shows the interest cost when the customer is
       cost_breakdown: [
         { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'quoted' },
         { label: 'Interest', kind: 'financing', low: 300, high: 420, basis: '24 months at 9.9%' },
-        { label: 'Electricity', kind: 'running', low: 440, high: 560, basis: 'typical' },
+        { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical' },
       ],
       explanation: 'x',
     },
@@ -905,7 +917,9 @@ test('__internal.mapToGenericReport prints the line items above the total, each 
   const { __internal } = require('../api/_lib/purchase-engine');
   const items = __internal.mapToGenericReport(completeReportInput()).sections[0].items;
   assert.equal(items[0], 'Purchase price — $2,400 · the quoted price');
-  assert.equal(items[1], 'Electricity — $440 – $560 · $55-$70/yr at typical U.S. rates');
+  // The per-year figure is shown alongside the period one, because it is
+  // the number the model actually gave and the one the customer can check.
+  assert.equal(items[1], 'Electricity — $440 – $560 ($55 – $70/yr) · typical U.S. rates');
   assert.equal(items[3], 'Total over 8 years — $2,940 – $3,110');
   assert.ok(items[4].includes('electricity over 8 years'), 'the prose explanation still follows the numbers');
 });
@@ -1049,7 +1063,7 @@ test('a financing customer whose breakdown has no financing line is caught, not 
       cost_breakdown: [
         { label: 'Purchase price', kind: 'purchase', low: 2400, high: 2400, basis: 'quoted' },
         { label: 'Interest', kind: 'financing', low: 300, high: 420, basis: '24 months at 9.9%' },
-        { label: 'Electricity', kind: 'running', low: 440, high: 560, basis: 'typical' },
+        { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical' },
       ],
       explanation: 'x',
     },
@@ -1081,7 +1095,7 @@ function ravReport(overrides) {
       cost_breakdown: [
         { label: 'Purchase price (incl. VA sales tax/title/registration)', kind: 'purchase', low: 34300, high: 34700, basis: '$32,400 quoted plus ~$1,900-$2,300 Virginia sales tax and fees' },
         { label: 'Financing interest over 60-month loan', kind: 'financing', low: 3500, high: 4500, basis: 'typical used-auto-loan rates' },
-        { label: 'Running costs over 7 years', kind: 'running', low: 18200, high: 24500, basis: '7 years times $2,600-$3,500 a year' },
+        { label: 'Running costs', kind: 'running', per_year_low: 2600, per_year_high: 3500, basis: 'insurance, fuel and servicing' },
         { label: 'Resale recovered at year 7', kind: 'resale_recovery', low: -9000, high: -6000, basis: '25-30% of purchase price at trade-in' },
       ],
       explanation: 'Total 7-year cost of ownership is estimated at roughly $47,000-$57,700.',
@@ -1118,6 +1132,10 @@ test('a total invented in the prose is caught in every place the live report put
     recommendation: { verdict: 'buy', reasoning: 'Shop your 60-month loan rate with an outside lender, since that is the biggest lever left to reduce the $52,000–$68,000 total cost estimate.' },
     alternative_comparison: {
       alternative_name: '2023 Honda CR-V Hybrid Sport AWD',
+      alternative_price_low: 33000,
+      alternative_price_high: 34500,
+      alternative_total_low: 50000,
+      alternative_total_high: 63000,
       explanation: 'A comparably equipped CR-V Hybrid CPO typically prices $1,000-$2,000 higher, which pushes 7-year total cost slightly above the RAV4\'s $52,000-$68,000 range once financing and running costs are included.',
     },
   });
@@ -1280,7 +1298,7 @@ function ravBreakdown() {
   return [
     { label: 'Purchase price (vehicle)', kind: 'purchase', low: 32400, high: 32400, basis: 'Quoted CPO price' },
     { label: 'Financing interest over 60-month loan', kind: 'financing', low: 5700, high: 9300, basis: '6.5% to 11.4% APR' },
-    { label: 'Fuel, insurance, maintenance, VA taxes over 7 years', kind: 'running', low: 19180, high: 26180, basis: '7 years times $2,740-$3,740' },
+    { label: 'Fuel, insurance, maintenance, VA taxes', kind: 'running', per_year_low: 2740, per_year_high: 3740, basis: 'Fairfax rates' },
     { label: 'Estimated resale value at end of 7 years', kind: 'resale_recovery', low: -8000, high: -6000, basis: '20-25% of original value retained' },
   ];
 }
@@ -1412,4 +1430,253 @@ test('the resale figure reaches the customer in the summary strip', () => {
     __internal.mapToGenericReport(completeReportInput()).key_numbers.some((n) => /worth at year/i.test(n.label)),
     false
   );
+});
+
+// --- the appliance run ----------------------------------------------------
+//
+// Submission 9852136c (2026-09-08): an LG counter-depth fridge, $2,899,
+// cash, kept 12 years, in Fairfax. The first non-vehicle report, and the
+// first to exercise two branches nothing had run live — paying cash, and a
+// category with no resale market. Both worked. Its line items summed to
+// $4,983-$6,153 exactly, and its running lines reconciled with its per-year
+// figure exactly.
+//
+// Every COMPONENT still disagreed with itself, which is where the
+// contradiction had moved:
+//
+//   electricity   line $50-$70/yr | prose $120-$180/yr | assumptions gave
+//                 the EnergyGuide rating and the Dominion rate, which work
+//                 out to $102-$123/yr
+//   water filter  line $40-$60 each | prose $50-$60 | assumptions $25-$40
+//   lifetime cost computed $4,983-$6,153 | financing section $5,300-$7,500
+//
+// The line item was the one that was wrong, and it made the headline total
+// about $600 too low.
+
+function fridgeReport(overrides) {
+  return completeReportInput({
+    headline: 'Total 12-year cost: about $4,983–$6,149 for the LG counter-depth French door fridge',
+    total_cost_of_ownership: {
+      time_horizon_years: 12,
+      cost_breakdown: [
+        { label: 'Purchase price plus VA sales tax and delivery', kind: 'purchase', low: 3123, high: 3173, basis: '$2,899 plus ~6% VA tax and delivery' },
+        { label: 'Electricity', kind: 'running', per_year_low: 50, per_year_high: 70, basis: 'ENERGY STAR rated compressor' },
+        { label: 'Water filter replacements', kind: 'running', per_year_low: 80, per_year_high: 120, basis: 'two changes a year' },
+        { label: 'Out-of-warranty repairs', kind: 'running', per_year_low: 25, per_year_high: 58, basis: 'allowance for years 6-12, averaged' },
+        { label: 'Resale value at end of 12 years', kind: 'resale_recovery', low: 0, high: 0, basis: 'negligible after 12 years' },
+      ],
+      explanation: 'Purchase price plus twelve years of electricity, filters and out-of-warranty repairs.',
+    },
+    financing_impact: { applicable: false, explanation: 'Paying cash, so there is no interest to add.' },
+    maintenance_running_costs: {
+      annual_low: 155,
+      annual_high: 248,
+      explanation: 'Electricity runs about $50–$70/year for this ENERGY STAR model, plus roughly $80–$120/year in water filters and an allowance of $25–$58/year for repairs once the warranty lapses.',
+    },
+    depreciation_resale: { resale_low: 0, resale_high: 0, expected_resale_note: 'no meaningful resale market', explanation: 'Appliances fetch essentially nothing after twelve years.' },
+    ...overrides,
+  });
+}
+
+test('the two branches the vehicle runs never touched both work', () => {
+  // Paying cash means no financing line is demanded, and a category with no
+  // resale market means a zero resale line is a real answer.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const r = fridgeReport();
+  assert.equal(__internal.tcoArithmeticProblem(r), null);
+  assert.deepEqual(__internal.proseTotalConflicts(r), []);
+  assert.equal(__internal.isReportComplete(r), true);
+  const generic = __internal.mapToGenericReport(r);
+  assert.equal(generic.key_numbers[0].value, '$4,983 – $6,149');
+  assert.equal(
+    generic.key_numbers.some((n) => /worth at year/i.test(n.label)),
+    false,
+    'a $0 resale market must not show a "worth at year 12: $0" row'
+  );
+});
+
+test('a running cost is stated once, per year, and the period figure is worked out from it', () => {
+  // The model used to write the per-year figure, the whole-period figure and
+  // a basis string describing both, and the fridge report put three
+  // different electricity numbers in those three places. The whole-period
+  // field is now ignored on a running line, so it cannot disagree.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const lying = fridgeReport();
+  lying.total_cost_of_ownership.cost_breakdown[1].low = 99999;
+  lying.total_cost_of_ownership.cost_breakdown[1].high = 99999;
+  const derived = __internal.deriveNumbers(lying);
+  assert.equal(__internal.moneyRange(derived.total.low, derived.total.high), '$4,983 – $6,149',
+    'a whole-period figure written on a running line must have no effect at all');
+  assert.deepEqual(__internal.itemRange(lying.total_cost_of_ownership.cost_breakdown[1], 12), { low: 600, high: 840 });
+});
+
+test('a running line with no per-year figure is not a usable breakdown', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const r = fridgeReport();
+  delete r.total_cost_of_ownership.cost_breakdown[1].per_year_low;
+  assert.equal(__internal.validBreakdown(r.total_cost_of_ownership), null);
+  assert.equal(__internal.firstIncompleteField(r), 'total_cost_of_ownership.cost_model');
+});
+
+test('a per-year figure in the prose must be one the report actually uses', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflict = __internal.proseRunningConflict(fridgeReport({
+    maintenance_running_costs: {
+      annual_low: 155,
+      annual_high: 248,
+      explanation: 'Expect roughly $10–$15/month in electricity (about $120–$180/year), plus about $50–$60 every 6 months for replacement water filters.',
+    },
+  }));
+  assert.equal(conflict.path, 'maintenance_running_costs.explanation');
+  assert.equal(conflict.quoted, '$120–$180/year');
+  assert.match(conflict.correct, /\$50 – \$70\/yr/, 'the repair prompt lists the figures that were available');
+  assert.match(conflict.correct, /\$155 – \$248\/yr/);
+});
+
+test('the per-year check tolerates the figures the report does use', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  // Each of these is one of the line items or the aggregate, rounded.
+  for (const explanation of [
+    'Electricity is about $50–$70/year and filters about $80–$120 per year.',
+    'All in, running costs come to roughly $155–$248 a year.',
+    'Repairs average $25–$58 annually once the warranty lapses.',
+    'Coil cleaning is DIY and costs nothing, and a service call runs $150–$600 per incident.',
+  ]) {
+    assert.equal(
+      __internal.proseRunningConflict(fridgeReport({
+        maintenance_running_costs: { annual_low: 155, annual_high: 248, explanation },
+      })),
+      null,
+      explanation
+    );
+  }
+});
+
+test('the financing section cannot state a lifetime total of its own', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(fridgeReport({
+    financing_impact: {
+      applicable: false,
+      explanation: 'Paying cash is the most cost-efficient route, since even a 0% promotional plan would offer no savings, while any interest-bearing plan would only add to the $5,300–$7,500 lifetime cost estimate.',
+    },
+  }));
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, 'financing_impact.explanation');
+  assert.equal(conflicts[0].quoted, '$5,300–$7,500');
+});
+
+test('a loan total in the financing section is still allowed to be itself', () => {
+  // This section was left out of the prose scan for a reason: the amount
+  // paid over a loan term is a legitimately different quantity that lives
+  // here, and flagging it would send an honest sentence back for rewriting.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(__internal.proseTotalConflicts(fridgeReport({
+    financing_impact: {
+      applicable: true,
+      explanation: 'At 6.5% you would pay roughly $5,700 in interest, bringing your all-in vehicle cost to about $38,100 and the total amount paid over the loan term to $38,000-$39,200.',
+    },
+  })), []);
+});
+
+test('the alternative has to be costed, not just named', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  // The fridge report named a Samsung Bespoke with an internal dispenser and
+  // then compared "a similar fridge WITHOUT an internal water dispenser",
+  // giving no price for either. Nothing there could be compared.
+  const vague = fridgeReport({
+    alternative_comparison: {
+      alternative_name: 'Samsung RF24BB6600AC Bespoke, internal dispenser',
+      explanation: 'A model without the dispenser and filter system would likely cost somewhat less over its lifetime.',
+    },
+  });
+  assert.equal(__internal.isReportComplete(vague), false);
+  assert.equal(__internal.firstIncompleteField(vague), 'alternative_comparison');
+
+  const costed = fridgeReport({
+    alternative_comparison: {
+      alternative_name: 'Samsung RF24BB6600AC Bespoke, internal dispenser',
+      alternative_price_low: 2600,
+      alternative_price_high: 2900,
+      alternative_total_low: 4600,
+      alternative_total_high: 5800,
+      explanation: 'It costs a little less up front and runs slightly cheaper on filters.',
+    },
+  });
+  assert.equal(__internal.isReportComplete(costed), true);
+  const section = __internal.mapToGenericReport(costed).sections.find((x) => /compares/i.test(x.title));
+  assert.equal(section.items[0], 'Price — $2,600 – $2,900');
+  assert.match(section.items[1], /^Total over 12 years — \$4,600 – \$5,800 \(this one: \$4,983 – \$6,149\)$/,
+    'the two totals have to sit side by side, or it is not a comparison');
+});
+
+test('an alternative whose total is below its own price is rejected', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.isReportComplete(fridgeReport({
+    alternative_comparison: {
+      alternative_name: 'x', alternative_price_low: 2600, alternative_price_high: 2900,
+      alternative_total_low: 1000, alternative_total_high: 5800, explanation: 'y',
+    },
+  })), false);
+});
+
+test('research that ran is asked for rather than dropped', async (t) => {
+  // The fridge report searched — its assumptions cite Dominion territory,
+  // the 2026-27 Virginia rate case, the EnergyGuide rating and LG's filter
+  // guidance — and returned an empty research_notes, so the customer's
+  // report carried no research section at all.
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let asked = 0;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.research_notes) {
+      asked++;
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: { research_notes: ['Dominion Energy residential rates currently run $0.15-$0.18/kWh.'] },
+          }],
+        }),
+      };
+    }
+    return searchedToolUseResponse(completeReportInput({ research_notes: [] }), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(asked, 1);
+  const section = report.sections.find((x) => /live research/i.test(x.title));
+  assert.match(section.items[0], /Dominion/);
+});
+
+test('if the notes cannot be recovered the customer is told, not left guessing', async (t) => {
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.research_notes) return { ok: true, json: async () => ({ content: [] }) };
+    return searchedToolUseResponse(completeReportInput({ research_notes: [] }), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  // A missing research section must not cost the customer their whole
+  // analysis — but it must not pass silently either.
+  assert.ok(report.headline, 'the report still ships');
+  assert.ok(report.missing_or_uncertain.some((m) => /could not be summarised/i.test(m)));
 });

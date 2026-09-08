@@ -92,9 +92,11 @@ const REPORT_TOOL = {
                   enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'],
                   description: 'purchase = the price paid for the item itself. financing = interest and loan fees. running = fuel/energy, insurance, maintenance, repairs, taxes and fees, everything recurring. resale_recovery = money expected BACK at the end (enter it as a negative number). other = anything genuinely none of the above.',
                 },
-                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line.' },
-                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period.' },
-                basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal".' },
+                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line. IGNORED on a "running" line — give per_year_low there instead and the period figure is worked out from it.' },
+                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period. Ignored on a "running" line.' },
+                per_year_low: { type: 'number', description: 'REQUIRED on a "running" line, ignored on every other kind. Low end of this cost PER YEAR, in whole dollars. The whole-period figure is this multiplied by the ownership period — you are not asked for it and should not work it out. A cost that is lumpy rather than steady (repairs that only start in year 6, say) goes in as its average per year across the whole period.' },
+                per_year_high: { type: 'number', description: 'Required on a "running" line. High end of this cost per year, in whole dollars.' },
+                basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal". Do not restate the figure itself here in different numbers.' },
               },
               required: ['label', 'kind', 'low', 'high', 'basis'],
             },
@@ -137,10 +139,14 @@ const REPORT_TOOL = {
         type: 'object',
         description: 'Required. At least one realistic, specific alternative, compared directly against what the customer described.',
         properties: {
-          alternative_name: { type: 'string', description: 'Required, non-empty. The specific alternative being compared — a different model, tier, or approach.' },
-          explanation: { type: 'string', description: 'Required, non-empty. How it compares on price, total cost, and the customer\'s stated must-haves.' },
+          alternative_name: { type: 'string', description: 'Required, non-empty. The specific alternative being compared — a different model, tier, or approach. Everything below and the explanation must be about THIS product. If you want to talk about a differently-configured version instead, name that one here.' },
+          alternative_price_low: { type: 'number', description: 'Required. Low end of what this alternative costs to buy, in whole dollars.' },
+          alternative_price_high: { type: 'number', description: 'Required. High end of the purchase price.' },
+          alternative_total_low: { type: 'number', description: 'Required. Low end of what this alternative costs over the SAME ownership period as the main item, on the same basis. This is what makes it a comparison rather than a mention.' },
+          alternative_total_high: { type: 'number', description: 'Required. High end of the same figure.' },
+          explanation: { type: 'string', description: 'Required, non-empty. How the alternative named above compares on price, total cost, and the customer\'s stated must-haves. Do not restate the figures in different numbers — they are shown to the customer from the fields above.' },
         },
-        required: ['alternative_name', 'explanation'],
+        required: ['alternative_name', 'alternative_price_low', 'alternative_price_high', 'alternative_total_low', 'alternative_total_high', 'explanation'],
       },
       recommendation: {
         type: 'object',
@@ -218,7 +224,7 @@ function buildSystemPrompt(submission) {
 Customer-provided details:
 ${brief}
 
-Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
+Produce a genuinely useful, honest, specific analysis using these details as your foundation. Estimate financing cost impact if relevant, expected maintenance/running costs, and depreciation or resale-value expectations, using web search where it would sharpen a general-knowledge estimate into something more current and specific (typical current prices for this size/category/region, typical current financing rates) — and your own general knowledge of typical patterns for this category otherwise. Compare against at least one realistic, specific alternative that respects any must-have features the customer listed — cost it out over the same ownership period so the two totals sit side by side, and make sure everything you say about it is about the product you named rather than a differently-configured version of it. Give a clear buy/wait/reconsider recommendation grounded in the math, accounting for the customer's stated timeline. Show your reasoning and assumptions plainly so the customer can sanity-check them.
 
 Two rules about the numbers, because this product is bought for its arithmetic:
 
@@ -424,7 +430,11 @@ const REPAIRABLE_COMPOUND_FIELDS = {
     label: 'the realistic alternative comparison',
     fields: {
       alternative_name: { type: 'string', description: 'The specific alternative being compared — a different model, tier, or approach. Plain text only, no tool-call or parameter-tag syntax.' },
-      explanation: { type: 'string', description: 'How it compares on price, total cost, and the customer\'s stated must-haves. 2-4 sentences of plain prose, no tool-call or parameter-tag syntax.' },
+      alternative_price_low: { type: 'number', description: 'Low end of what this alternative costs to buy, in whole dollars.' },
+      alternative_price_high: { type: 'number', description: 'High end of the purchase price.' },
+      alternative_total_low: { type: 'number', description: 'Low end of what it costs over the same ownership period as the main item.' },
+      alternative_total_high: { type: 'number', description: 'High end of the same figure.' },
+      explanation: { type: 'string', description: 'How the alternative named above compares on price, total cost, and the customer\'s stated must-haves. 2-4 sentences of plain prose, no tool-call or parameter-tag syntax.' },
     },
   },
   recommendation: {
@@ -483,6 +493,14 @@ ${JSON.stringify({ headline: candidate.headline, summary: candidate.summary }, n
   const result = {};
   for (const key of fieldNames) {
     const value = toolUse.input[key];
+    if (spec.fields[key].type === 'number') {
+      if (!isNum(value)) {
+        console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${sectionKey}.${key}) returned a non-numeric value.`);
+        return null;
+      }
+      result[key] = value;
+      continue;
+    }
     if (typeof value !== 'string' || !nonEmpty(value) || value.match(TAG_LEAK_PATTERN)) {
       console.warn(`[purchase-engine] Compound repair call for submission ${submissionId} (${sectionKey}.${key}) returned an empty, invalid, or leaked value.`);
       return null;
@@ -552,10 +570,19 @@ function moneyRange(low, high) {
 // what this whole section exists to stop.
 function validBreakdown(tco) {
   if (!tco || !Array.isArray(tco.cost_breakdown) || tco.cost_breakdown.length < 3) return null;
+  const years = tco.time_horizon_years;
   for (const item of tco.cost_breakdown) {
     if (!item || typeof item !== 'object') return null;
     if (!nonEmpty(item.label) || !nonEmpty(item.basis)) return null;
     if (!COST_KINDS.includes(item.kind)) return null;
+    if (item.kind === 'running') {
+      // A recurring cost is given once, per year, and the period figure is
+      // worked out from it. See itemRange for why.
+      if (!isNum(years) || years <= 0) return null;
+      if (!isNum(item.per_year_low) || !isNum(item.per_year_high)) return null;
+      if (item.per_year_low < 0 || item.per_year_high < item.per_year_low) return null;
+      continue;
+    }
     if (!isNum(item.low) || !isNum(item.high) || item.high < item.low) return null;
     // Only money coming back at the end may be negative. A negative fuel
     // cost is not a modelling choice, it is a mistake.
@@ -566,9 +593,34 @@ function validBreakdown(tco) {
   return tco.cost_breakdown;
 }
 
-function sumBreakdown(items) {
+// The one place a running line's whole-period figure comes from.
+//
+// It used to be a number the model wrote, alongside a per-year number it
+// also wrote, in a "basis" string it also wrote. The appliance report of
+// 2026-09-08 put three different electricity figures in those three places:
+// a line reading $600-$840 over 12 years, prose reading $120-$180 a year
+// (which is $1,440-$2,160), and an assumptions entry giving the fridge's
+// EnergyGuide rating and the Dominion rate, which work out to $102-$123 a
+// year. The line item — the one the customer's total was built from — was
+// the only one of the three that was wrong, and it made the headline total
+// roughly $600 too low.
+//
+// Every previous fix here checked that two written numbers agreed, and each
+// time the disagreement simply moved somewhere else. So a running cost is
+// now written once, per year, and this multiplies.
+function itemRange(item, years) {
+  if (item.kind === 'running' && isNum(item.per_year_low) && isNum(item.per_year_high) && isNum(years)) {
+    return { low: item.per_year_low * years, high: item.per_year_high * years };
+  }
+  return { low: item.low, high: item.high };
+}
+
+function sumBreakdown(items, years) {
   return items.reduce(
-    (acc, i) => ({ low: acc.low + i.low, high: acc.high + i.high }),
+    (acc, i) => {
+      const range = itemRange(i, years);
+      return { low: acc.low + range.low, high: acc.high + range.high };
+    },
     { low: 0, high: 0 }
   );
 }
@@ -589,8 +641,14 @@ function withinTolerance(actual, expected) {
 // anything; it is a second number for the same thing. 3% still allows an
 // honest round — $49,280 shown as "$49,000" is 0.6% — while a figure a
 // customer would notice as different gets sent back.
+// The $200 absolute floor here came from withinTolerance, where it is
+// rounding noise on a $49,000 car. Applied to a per-year figure it is the
+// whole quantity: it let a stated $120-$180/yr for electricity match a line
+// item of $80-$120/yr, which is how the appliance contradiction survived the
+// first attempt at this check. The floor now only guards against dividing
+// attention over pocket change.
 function withinProseTolerance(actual, expected) {
-  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.03, 200);
+  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.03, 25);
 }
 
 // Prose quotes a range two ways, and they need judging differently. A range
@@ -634,7 +692,7 @@ function tcoArithmeticProblem(report) {
     return `The maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over ${years} years, but the cost breakdown contains no line of kind "running" at all — so those costs are missing from the total.`;
   }
 
-  const actual = sumBreakdown(running);
+  const actual = sumBreakdown(running, years);
   if (!withinTolerance(actual.low, expectedLow) || !withinTolerance(actual.high, expectedHigh)) {
     const labels = running.map((i) => i.label).join(', ');
     return `The running-cost lines in the cost breakdown (${labels}) come to ${moneyRange(actual.low, actual.high)} over ${years} years, but the maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over the same period. Those two describe the same costs and must agree.`;
@@ -665,7 +723,7 @@ function resaleProblem(report, items) {
 
   // The breakdown carries the figure negated, so compare magnitudes. Note the
   // low/high inversion: the MOST money back is the most negative line.
-  const summed = sumBreakdown(recovery);
+  const summed = sumBreakdown(recovery, report.total_cost_of_ownership.time_horizon_years);
   const backLow = Math.abs(summed.high);
   const backHigh = Math.abs(summed.low);
   if (withinTolerance(backLow, stated.low) && withinTolerance(backHigh, stated.high)) return null;
@@ -678,14 +736,18 @@ function resaleProblem(report, items) {
 function deriveNumbers(report) {
   const tco = (report && report.total_cost_of_ownership) || {};
   const items = validBreakdown(tco) || [];
-  const totals = sumBreakdown(items);
+  const years = isNum(tco.time_horizon_years) ? tco.time_horizon_years : null;
+  const totals = sumBreakdown(items, years);
   const financing = items.filter((i) => i.kind === 'financing');
   const maint = report.maintenance_running_costs || {};
   return {
     items,
-    years: isNum(tco.time_horizon_years) ? tco.time_horizon_years : null,
+    // Each line paired with the range actually used, so callers never have
+    // to know which kinds are per-year and which are whole-period.
+    ranges: items.map((i) => ({ item: i, range: itemRange(i, years) })),
+    years,
     total: items.length ? totals : null,
-    financingCost: financing.length ? sumBreakdown(financing) : null,
+    financingCost: financing.length ? sumBreakdown(financing, years) : null,
     annual: isNum(maint.annual_low) && isNum(maint.annual_high)
       ? { low: maint.annual_low, high: maint.annual_high }
       : null,
@@ -711,14 +773,16 @@ const COST_MODEL_REPAIR_TOOL = {
       time_horizon_years: { type: 'number', description: 'The ownership period in years, as the customer gave it.' },
       cost_breakdown: {
         type: 'array',
-        description: 'At least three line items, each covering the WHOLE ownership period in whole dollars. Include a purchase line always, a financing line if the customer is financing, and a running line for recurring costs. Each quantity appears exactly once across the array.',
+        description: 'At least three line items. A purchase line always, a financing line if the customer is financing, and a running line for each recurring cost. Whole-period figures in low/high, EXCEPT on "running" lines, which give per_year_low/per_year_high instead and have their period figure worked out from that. Each quantity appears exactly once across the array.',
         items: {
           type: 'object',
           properties: {
             label: { type: 'string' },
             kind: { type: 'string', enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'] },
-            low: { type: 'number' },
-            high: { type: 'number' },
+            low: { type: 'number', description: 'Whole-period figure. Ignored on a "running" line.' },
+            high: { type: 'number', description: 'Whole-period figure. Ignored on a "running" line.' },
+            per_year_low: { type: 'number', description: 'Required on a "running" line: the cost PER YEAR. The period figure is worked out from it.' },
+            per_year_high: { type: 'number', description: 'Required on a "running" line.' },
             basis: { type: 'string', description: 'One short clause on where the number comes from.' },
           },
           required: ['label', 'kind', 'low', 'high', 'basis'],
@@ -906,7 +970,7 @@ const LOOK_AHEAD = 30;
 // number of years.
 const CLAIMS_A_TOTAL = new RegExp(
   [
-    String.raw`(?:total|true|all-?in|\d+-year)[\s\w-]{0,25}cost`,
+    String.raw`(?:total|true|all-?in|lifetime|\d+-year)[\s\w-]{0,25}cost`,
     String.raw`cost\s+of\s+ownership`,
   ].join('|'),
   'i'
@@ -954,6 +1018,13 @@ const PROSE_TOTAL_FIELDS = {
     get: (r) => r.alternative_comparison && r.alternative_comparison.explanation,
     label: 'the comparison against the alternative',
   },
+  'financing_impact.explanation': {
+    get: (r) => r.financing_impact && r.financing_impact.explanation,
+    label: 'the financing section',
+    // Loan totals belong in this section and are not claims about the
+    // lifetime cost. Only an explicit one counts here.
+    claims: /lifetime[\s\w-]{0,25}cost|cost\s+of\s+ownership|total\s+cost\s+of\s+ownership/i,
+  },
 };
 
 // Returns [] when nothing in the prose contradicts the computed total, or
@@ -977,7 +1048,7 @@ function proseTotalConflicts(report) {
     let match;
     while ((match = MONEY_RE.exec(text)) !== null) {
       const window = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
-      if (!CLAIMS_A_TOTAL.test(window) || NOT_THE_TOTAL.test(window)) continue;
+      if (!(spec.claims || CLAIMS_A_TOTAL).test(window) || NOT_THE_TOTAL.test(window)) continue;
       const stated = parseMoneyRange(match[0]);
       if (!stated) continue;
       // A figure far smaller than the computed total is a component being
@@ -999,6 +1070,9 @@ function proseTotalConflicts(report) {
 
   const resale = proseResaleConflict(report);
   if (resale) conflicts.push(resale);
+
+  const running = proseRunningConflict(report);
+  if (running) conflicts.push(running);
 
   return conflicts;
 }
@@ -1047,6 +1121,51 @@ function proseResaleConflict(report) {
   return null;
 }
 
+// $X/yr, $X-$Y a year, $X per year, $X annually.
+const PER_YEAR_MONEY_RE = new RegExp(
+  MONEY_RE.source + String.raw`\s*(?:\(\s*\)\s*)?(?:/\s?yr\b|/\s?year\b|per\s+year|a\s+year|annually|/year)`,
+  'gi'
+);
+
+// The running lines each state a cost per year, and the maintenance section
+// talks about the same costs in prose. On 2026-09-08 that section said
+// "$10-$15/month in electricity (about $120-$180/year)" while the
+// electricity line said $50-$70 a year. Both were about the same fridge.
+//
+// Every per-year figure in that section now has to be one the report
+// actually uses: a running line's own per-year range, or the aggregate.
+// That is a set membership test rather than an attempt to understand the
+// sentence, which is why it is tractable at all.
+function proseRunningConflict(report) {
+  const maint = report && report.maintenance_running_costs;
+  if (!maint || !nonEmpty(maint.explanation)) return null;
+  if (!isNum(maint.annual_low) || !isNum(maint.annual_high)) return null;
+  const items = validBreakdown(report.total_cost_of_ownership);
+  if (!items) return null;
+
+  const allowed = items
+    .filter((i) => i.kind === 'running' && isNum(i.per_year_low) && isNum(i.per_year_high))
+    .map((i) => ({ low: i.per_year_low, high: i.per_year_high }))
+    .concat([{ low: maint.annual_low, high: maint.annual_high }]);
+  if (!allowed.length) return null;
+
+  PER_YEAR_MONEY_RE.lastIndex = 0;
+  let match;
+  while ((match = PER_YEAR_MONEY_RE.exec(maint.explanation)) !== null) {
+    const stated = parseMoneyRange(match[0]);
+    if (!stated) continue;
+    if (allowed.some((a) => proseFigureMatches(stated, a))) continue;
+    const list = allowed.map((a) => moneyRange(a.low, a.high) + '/yr').join(', ');
+    return {
+      path: 'maintenance_running_costs.explanation',
+      label: 'the maintenance and running costs section',
+      quoted: match[0].trim(),
+      correct: 'one of the per-year figures this report actually uses (' + list + ')',
+    };
+  }
+  return null;
+}
+
 const PROSE_REPAIR_TOOL_FIELDS = {
   headline: 'A short, specific, plain-English headline. Lead with the correct total.',
   summary: 'Two to four sentences on the bottom line and why.',
@@ -1055,6 +1174,8 @@ const PROSE_REPAIR_TOOL_FIELDS = {
   'alternative_comparison.explanation': 'Two to four sentences on how the alternative compares.',
   'depreciation_resale.expected_resale_note': 'One short phrase, e.g. "roughly 40% of purchase price after 5 years".',
   'depreciation_resale.explanation': 'Two to four sentences on how this item holds its value.',
+  'financing_impact.explanation': 'Two to four sentences on what financing costs and what drives it.',
+  'maintenance_running_costs.explanation': 'Two to four sentences on what drives these costs. Any per-year figure must be one the report already uses.',
 };
 
 function proseRepairTool(conflicts) {
@@ -1127,6 +1248,64 @@ ${JSON.stringify(derived.items, null, 2)}`;
   return patched;
 }
 
+
+const RESEARCH_NOTES_REPAIR_TOOL = {
+  name: 'submit_field_repair',
+  description: 'Submit short notes on what the web research turned up.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      research_notes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Two to five short notes, each saying what you found and roughly where it came from, e.g. "Experian Q1 2026 puts the average used-car loan APR at 11.43%". Only things you actually looked up.',
+      },
+    },
+    required: ['research_notes'],
+  },
+};
+
+// buying.html sells "live web research". The appliance report of 2026-09-08
+// searched — its assumptions cite Dominion Energy territory, the 2026-27
+// Virginia rate case, the fridge's EnergyGuide rating and LG's own filter
+// guidance — and then returned an empty research_notes, so the customer's
+// report carried no research section at all. The work was done and paid for
+// and thrown away on the way out.
+//
+// Only ever called when the response actually contained web_search rounds,
+// so this asks the model to write down what it already found rather than
+// inviting it to invent having searched. A failure here does not fail the
+// report: an absent research section is a lesser wrong than losing a
+// customer's whole analysis over it.
+async function repairResearchNotes({ apiKey, systemPrompt, candidate, submissionId, searchRounds }) {
+  const repairPrompt = `You ran ${searchRounds} web search${searchRounds === 1 ? '' : 'es'} while producing the analysis below, but the notes on what they turned up did not reach us, so the customer's report currently shows none of it.
+
+Please provide ONLY those notes: two to five short lines, each saying what you found and roughly what kind of source it came from. Only things you actually looked up — if a figure came from general knowledge rather than a search, leave it out.
+
+Your analysis, for reference:
+${JSON.stringify({
+    total_cost_of_ownership: candidate.total_cost_of_ownership,
+    assumptions: candidate.assumptions,
+  }, null, 2)}`;
+
+  const data = await callAnthropic({
+    apiKey,
+    system: systemPrompt,
+    tools: [RESEARCH_NOTES_REPAIR_TOOL],
+    toolChoice: { type: 'tool', name: 'submit_field_repair' },
+    messages: [{ role: 'user', content: repairPrompt }],
+    maxTokens: 1024,
+  });
+  const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_field_repair');
+  const list = toolUse && toolUse.input && toolUse.input.research_notes;
+  if (!Array.isArray(list)) {
+    console.warn(`[purchase-engine] Research-notes repair for submission ${submissionId} returned no usable list.`);
+    return null;
+  }
+  const cleaned = list.filter((v) => nonEmpty(v) && !String(v).match(TAG_LEAK_PATTERN)).map((v) => v.trim());
+  return cleaned.length ? cleaned : null;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -1156,6 +1335,11 @@ function isReportComplete(report) {
 
   const alt = report.alternative_comparison;
   if (!alt || !nonEmpty(alt.alternative_name) || !nonEmpty(alt.explanation)) return false;
+  if (!isNum(alt.alternative_price_low) || !isNum(alt.alternative_price_high)) return false;
+  if (!isNum(alt.alternative_total_low) || !isNum(alt.alternative_total_high)) return false;
+  if (alt.alternative_price_low < 0 || alt.alternative_price_high < alt.alternative_price_low) return false;
+  if (alt.alternative_total_low < alt.alternative_price_low) return false;
+  if (alt.alternative_total_high < alt.alternative_total_low) return false;
 
   const rec = report.recommendation;
   if (!rec || !['buy', 'wait', 'reconsider'].includes(rec.verdict) || !nonEmpty(rec.reasoning)) return false;
@@ -1216,6 +1400,12 @@ function firstIncompleteField(report) {
     || report.depreciation_resale.resale_low < 0
     || report.depreciation_resale.resale_high < report.depreciation_resale.resale_low) return 'total_cost_of_ownership.cost_model';
   if (!report.alternative_comparison || !nonEmpty(report.alternative_comparison.alternative_name) || !nonEmpty(report.alternative_comparison.explanation)) return 'alternative_comparison';
+  {
+    const a = report.alternative_comparison;
+    if (!isNum(a.alternative_price_low) || !isNum(a.alternative_price_high) || !isNum(a.alternative_total_low) || !isNum(a.alternative_total_high)
+      || a.alternative_price_low < 0 || a.alternative_price_high < a.alternative_price_low
+      || a.alternative_total_low < a.alternative_price_low || a.alternative_total_high < a.alternative_total_low) return 'alternative_comparison';
+  }
   if (!report.recommendation || !['buy', 'wait', 'reconsider'].includes(report.recommendation.verdict) || !nonEmpty(report.recommendation.reasoning)) return 'recommendation';
   if (!Array.isArray(report.missing_or_uncertain)) return 'missing_or_uncertain';
   if (!Array.isArray(report.assumptions) || report.assumptions.filter(nonEmpty).length < 2) return 'assumptions';
@@ -1283,8 +1473,10 @@ function mapToGenericReport(report) {
       title: 'True total cost of ownership',
       // Line items first, then the total they add up to, then the prose.
       // A customer who reads nothing else can still check the sum.
-      items: derived.items
-        .map((i) => `${i.label} — ${moneyRange(i.low, i.high)}${nonEmpty(i.basis) ? ` · ${i.basis}` : ''}`)
+      items: derived.ranges
+        .map(({ item: i, range }) => `${i.label} — ${moneyRange(range.low, range.high)}${
+          i.kind === 'running' && derived.years ? ` (${moneyRange(i.per_year_low, i.per_year_high)}/yr)` : ''
+        }${nonEmpty(i.basis) ? ` · ${i.basis}` : ''}`)
         .concat(derived.total
           ? [`Total over ${derived.years} year${derived.years === 1 ? '' : 's'} — ${moneyRange(derived.total.low, derived.total.high)}`]
           : [])
@@ -1311,7 +1503,21 @@ function mapToGenericReport(report) {
     {
       icon: '🔍',
       title: `How it compares: ${(report.alternative_comparison && report.alternative_comparison.alternative_name) || 'a realistic alternative'}`,
-      items: [report.alternative_comparison && report.alternative_comparison.explanation].filter(Boolean),
+      // Its price and its total first, against the same numbers for the main
+      // item, so the two are actually side by side.
+      items: (() => {
+        const alt = report.alternative_comparison || {};
+        const rows = [];
+        if (isNum(alt.alternative_price_low) && isNum(alt.alternative_price_high)) {
+          rows.push(`Price — ${moneyRange(alt.alternative_price_low, alt.alternative_price_high)}`);
+        }
+        if (isNum(alt.alternative_total_low) && isNum(alt.alternative_total_high)) {
+          rows.push(`Total over ${derived.years || '?'} year${derived.years === 1 ? '' : 's'} — ${moneyRange(alt.alternative_total_low, alt.alternative_total_high)}${
+            derived.total ? ` (this one: ${moneyRange(derived.total.low, derived.total.high)})` : ''
+          }`);
+        }
+        return rows.concat([alt.explanation].filter(Boolean));
+      })(),
     },
     {
       icon: '✅',
@@ -1812,8 +2018,22 @@ async function generatePurchaseReport(submissionId) {
       if (!report.missing_or_uncertain.includes(note)) report.missing_or_uncertain.unshift(note);
     } else if (!Array.isArray(report.research_notes) || !report.research_notes.length) {
       console.warn(
-        `[purchase-engine] Submission ${submissionId} ran ${searchRounds} web_search round(s) but returned no research_notes, so the report cannot show the customer what the research found.`
+        `[purchase-engine] Submission ${submissionId} ran ${searchRounds} web_search round(s) but returned no research_notes; asking for them rather than dropping the research section.`
       );
+      let notes = null;
+      try {
+        notes = await repairResearchNotes({ apiKey: ANTHROPIC_API_KEY, systemPrompt: buildRepairSystemPrompt(submission), candidate: report, submissionId, searchRounds });
+      } catch (err) {
+        console.warn(`[purchase-engine] Research-notes repair for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+      }
+      if (notes) {
+        report.research_notes = notes;
+      } else {
+        // Not a reason to fail an otherwise-good report, but the customer
+        // should not be left assuming a section they paid for is missing
+        // because nothing was found.
+        report.missing_or_uncertain.push('The live research behind these figures could not be summarised for this report. The numbers were researched; the notes on what was found did not survive.');
+      }
     }
 
     const genericReport = mapToGenericReport(report);
@@ -1869,6 +2089,8 @@ module.exports = {
     resaleProblem,
     proseTotalConflicts,
     proseResaleConflict,
+    proseRunningConflict,
+    itemRange,
     proseFigureMatches,
     repairProseTotals,
     deriveNumbers,
@@ -1876,6 +2098,7 @@ module.exports = {
     moneyRange,
     repairCostModel,
     repairAssumptions,
+    repairResearchNotes,
     COST_MODEL_REPAIR_TOOL,
     ASSUMPTIONS_REPAIR_TOOL,
     REPORT_TOOL,
