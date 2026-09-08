@@ -72,7 +72,6 @@
   "unreferencedActiveLinks": {
     "_comment": "Payment links that are ACTIVE in Stripe on purpose while no product page in this config points at them. check-prices.js fails on any active link not listed here, because an unexplained sellable link is exactly what this catches: a retired $29 Closing tier stayed active for six days after the product moved to $59, linked from nowhere, and anyone holding the URL could have bought a $59 report for $29. Each entry needs a reason. If you cannot write one, deactivate the link instead.",
     "plink_1U6Ie6H9DnCfGBIZwuRsRcpy": "StreamNavigator Pro, $4.99/mo — the streaming subscription, sold from streaming.html, which this config deliberately skips.",
-    "plink_1U6Ie6H9DnCfGBIZpyylQEqI": "StreamNavigator Family, $8.99/mo — same, the family tier of the streaming subscription.",
-    "plink_1UB3bsH9DnCfGBIZ8JBVhKqL": "Purchase Navigator $39 — the price before 2026-09-07. Left active deliberately so the $29 change can be rolled back by pointing buying.html at it again. REMOVE THIS ENTRY AND DEACTIVATE THE LINK once $29 is settled; until then it is sellable by anyone holding the URL."
+    "plink_1U6Ie6H9DnCfGBIZpyylQEqI": "StreamNavigator Family, $8.99/mo — same, the family tier of the streaming subscription."
   }
 }
