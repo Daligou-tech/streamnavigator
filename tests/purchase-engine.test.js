@@ -116,7 +116,7 @@ function completeReportInput(overrides) {
         { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical U.S. rates' },
         { label: 'Delivery and haul-away', kind: 'other', low: 100, high: 150, basis: 'typical retailer fee' },
       ],
-      explanation: 'Purchase price plus roughly $400-$500 in electricity over 8 years.',
+      explanation: 'Purchase price plus roughly $440-$560 in electricity over 8 years.',
     },
     financing_impact: { applicable: false, explanation: 'Paying cash, so there is no financing cost — the $2,400 price is the full cost.' },
     maintenance_running_costs: { annual_low: 55, annual_high: 70, explanation: 'Typical electricity draw for a French door fridge this size, plus occasional minor repairs.' },
@@ -347,7 +347,7 @@ test('a leaked tool-syntax fragment attached to otherwise-real prose is stripped
           { label: 'Electricity', kind: 'running', per_year_low: 55, per_year_high: 70, basis: 'typical U.S. rates' },
           { label: 'Delivery and haul-away', kind: 'other', low: 100, high: 150, basis: 'typical retailer fee' },
         ],
-        explanation: 'Purchase price plus roughly $400-$500 in electricity over 8 years, using the <parameter name="estimate_low"> baseline.',
+        explanation: 'Purchase price plus roughly $440-$560 in electricity over 8 years, using the <parameter name="estimate_low"> baseline.',
       },
     });
     return toolUseResponse(contaminated);
@@ -363,7 +363,7 @@ test('a leaked tool-syntax fragment attached to otherwise-real prose is stripped
   assert.equal(submission.generation_attempts, 1);
   const reportText = JSON.stringify(report);
   assert.ok(!reportText.includes('<parameter'), 'the stored report must not contain the leaked tag fragment');
-  assert.ok(reportText.includes('roughly $400-$500 in electricity'), 'the real surrounding prose must survive the strip');
+  assert.ok(reportText.includes('roughly $440-$560 in electricity'), 'the real surrounding prose must survive the strip');
 });
 
 test('a leaked tag that is the entire content of a required field still triggers a retry (stripping correctly leaves it empty)', async (t) => {
@@ -2689,4 +2689,160 @@ test('the alternative may quote its own total without being called a contradicti
   }));
   assert.equal(conflicts.length, 1);
   assert.match(conflicts[0].quoted, /\$8,800-\$9,400/);
+});
+
+// --- components restated inside the total-cost explanation -----------------
+//
+// The Peloton report (submission 95bd1598, the first run of the "other"
+// category) had an exact strip and an exact total, and its total-cost
+// explanation contradicted its own line items three times:
+//
+//   interest      prose $150-$300   | line $0-$670
+//   maintenance   prose $200-$400   | line $360-$1,080
+//   resale        prose $600-$900   | line $200-$450
+//
+// Nothing looked. The resale check reads the depreciation section, the
+// per-year check reads the maintenance section, the total check reads the
+// total; a component restated in the total-cost explanation was in none of
+// them.
+
+function pelotonReport(explanation) {
+  return completeReportInput({
+    headline: 'Roughly $5,700–$7,800 total over 6 years',
+    must_have_checks: [],
+    total_cost_of_ownership: {
+      time_horizon_years: 6,
+      cost_breakdown: [
+        { label: 'Bike+ purchase price', kind: 'purchase', low: 2495, high: 2495, per_year_low: 0, per_year_high: 0, basis: 'quoted new price' },
+        { label: 'Sales tax + delivery/assembly', kind: 'other', low: 150, high: 250, per_year_low: 0, per_year_high: 0, basis: '~6% VA tax plus setup' },
+        { label: 'Interest on 39-month financing', kind: 'financing', low: 0, high: 670, per_year_low: 0, per_year_high: 0, basis: '0% promotional to ~15% APR' },
+        { label: 'All-Access membership', kind: 'running', low: 0, high: 0, per_year_low: 528, per_year_high: 588, basis: '~$44/month household fee' },
+        { label: 'Maintenance, parts, minor repairs, electricity', kind: 'running', low: 0, high: 0, per_year_low: 60, per_year_high: 180, basis: 'cleats, cleaning, repair allowance' },
+        { label: 'Resale value recovered at 6 years', kind: 'resale_recovery', low: -450, high: -200, per_year_low: 0, per_year_high: 0, basis: 'secondhand value' },
+      ],
+      explanation,
+    },
+    financing_impact: { applicable: true, explanation: 'A 39-month plan at anywhere from 0% to about 15% APR.' },
+    maintenance_running_costs: { annual_low: 588, annual_high: 768, explanation: 'Membership, cleats and an allowance for repairs.' },
+    depreciation_resale: { resale_low: 200, resale_high: 450, expected_resale_note: 'modest secondhand value', explanation: 'Connected fitness hardware holds little value at six years.' },
+    alternative_comparison: {
+      alternative_name: 'NordicTrack Commercial S22i',
+      alternative_price_low: 1799, alternative_price_high: 2299,
+      alternative_total_low: 5000, alternative_total_high: 7000,
+      explanation: 'A similar bike with its own subscription.',
+    },
+    recommendation: { verdict: 'buy', reasoning: 'Used four or five times a week, it earns its keep.' },
+  });
+}
+
+test('the Peloton line items sum to the total the strip showed', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const d = __internal.deriveNumbers(pelotonReport('x'));
+  assert.equal(__internal.moneyRange(d.total.low, d.total.high), '$5,723 – $7,823');
+});
+
+test('a component restated in the total-cost explanation is held to its own line items', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const wrong = [
+    ['interest', 'The $2,495 bike financed over 39 months typically adds roughly $150–$300 in interest.', '$150–$300'],
+    ['maintenance', 'Modest maintenance costs of perhaps $200–$400 over the period.', '$200–$400'],
+    ['resale', 'Netting out an expected resale value of $600–$900 after 6 years.', '$600–$900'],
+  ];
+  for (const [what, explanation, quoted] of wrong) {
+    const conflict = __internal.proseComponentConflict(pelotonReport(explanation));
+    assert.ok(conflict, `the ${what} figure must be caught`);
+    assert.equal(conflict.path, 'total_cost_of_ownership.explanation');
+    assert.equal(conflict.quoted, quoted);
+    assert.match(conflict.correct, /a figure this report actually uses/);
+  }
+});
+
+test('every figure the Peloton report got right is left alone', () => {
+  // Each of these is a real sentence from that report, and each quotes a
+  // figure some line item actually carries — at whatever scale it is written.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  for (const explanation of [
+    'Total cost of ownership starts with the $2,495 bike financed over 39 months.',
+    'Plus sales tax and delivery fees of around $150–$250.',
+    'The dominant cost is the mandatory All-Access membership at $44/month.',
+    'The All-Access membership runs $528–$588 a year.',
+    'Maintenance, parts and minor repairs run $60–$180 per year.',
+    'Netting out an expected resale value of $200–$450 after 6 years.',
+    'The all-in total lands around $5,700–$7,800.',
+    'Interest runs anywhere from $0 to $670 depending on the APR you qualify for.',
+  ]) {
+    assert.equal(__internal.proseComponentConflict(pelotonReport(explanation)), null, explanation);
+  }
+});
+
+test('the financing section is not held to the line items', () => {
+  // It talks about quantities that are real and are not line items — the
+  // amount paid over a loan term, the item's cost plus its interest. A
+  // membership test would report every one of them.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const r = pelotonReport('The bike, the membership and upkeep over six years.');
+  r.financing_impact.explanation =
+    'At 0% the bike costs $2,495; at 15% the total paid over the 39-month term is about $3,165, or roughly $81 a month.';
+  assert.equal(__internal.proseComponentConflict(r), null);
+});
+
+test('a field is asked about once, however many checks it trips', () => {
+  // A total-cost explanation that invents a total is also quoting a figure no
+  // line item carries. The repair rewrites a field once, so it is asked once.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(
+    pelotonReport('The all-in total over six years lands around $9,100–$11,400.')
+  );
+  assert.equal(conflicts.filter((c) => c.path === 'total_cost_of_ownership.explanation').length, 1);
+});
+
+// --- the timeout ----------------------------------------------------------
+
+test('the report call no longer competes with the verification for searches', () => {
+  // Two live runs were killed at Vercel's 300-second ceiling with no output —
+  // submission 7d2aa0fb twice and 95bd1598 once, all financed submissions,
+  // where the rate research is heaviest. verifyMustHaves now runs first, in
+  // the same invocation, and does its own searching.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.WEB_SEARCH_TOOL.max_uses, 3);
+});
+
+test('a verification already done is not done again on the next attempt', async (t) => {
+  const submission = fridgeSubmission();
+  const { submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let verifyCalls = 0;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) { verifyCalls++; return mustHaveResponse(LG_CHECKS(), 3); }
+    return searchedToolUseResponse(completeReportInput({
+      recommendation: { verdict: 'reconsider', reasoning: 'The dispenser is a deal-breaker.' },
+    }), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport, __internal } = require('../api/_lib/purchase-engine');
+  await generatePurchaseReport('sub-1');
+  assert.equal(verifyCalls, 1);
+
+  // It is on the row, so a second attempt spends its 300 seconds on the
+  // report rather than re-establishing a specification that has not changed.
+  const cached = __internal.readCachedVerification(submission);
+  assert.equal(cached.checks.length, 3);
+  assert.equal(cached.searchRounds, 3);
+  assert.ok(
+    submissionUpdates.some((u) => u.job_state && u.job_state.must_have_verification),
+    'and it is written to job_state, not held in memory'
+  );
+
+  await generatePurchaseReport('sub-1');
+  assert.equal(verifyCalls, 1, 'the second attempt must not verify again');
+});
+
+test('a row with no cached verification reads as none, not as an empty result', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.readCachedVerification(fakeSubmission()), null);
+  assert.equal(__internal.readCachedVerification({ job_state: {} }), null);
+  assert.equal(__internal.readCachedVerification({ job_state: { must_have_verification: {} } }), null);
 });

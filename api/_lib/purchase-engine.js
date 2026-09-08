@@ -175,12 +175,18 @@ const REPORT_TOOL = {
   },
 };
 
-// Restored to 5 (from a temporary 3) now that this function runs on Vercel
-// Pro with a 300s ceiling (see vercel.json) instead of Hobby's 60s — the
-// earlier trim was a stopgap to fit real, live-verified generations inside
-// 60s, which two live tests showed didn't reliably work anyway (see
-// MAX_ATTEMPTS below). More search rounds means fresher pricing data for
-// the alternative-comparison and depreciation/resale sections.
+// Back to 3 from 5, because the report call no longer has the invocation to
+// itself: verifyMustHaves runs first, in the same 300 seconds, and does its
+// own searching. Two live runs were killed at the ceiling with no output at
+// all — submission 7d2aa0fb (twice) and 95bd1598, both financed submissions,
+// where the rate research is heaviest. Runs that fit did so at around 160-230
+// seconds, so the margin was thin rather than comfortable.
+//
+// Three is a real reduction in research and the honest trade is worth
+// stating: a report that completes with three searches is worth more than a
+// better-researched one the platform kills. The must-have verification has
+// also already looked the product up by the time this runs, so some of what
+// the fourth and fifth searches used to buy is now on the table anyway.
 // 20260209 is the current server-tool version for Sonnet 5, which is the
 // model this engine runs on. It was pinned at 20250305 — the variant that
 // predates this model — and a paid report generated 2026-09-07 came back
@@ -191,7 +197,7 @@ const REPORT_TOOL = {
 // replacement: runOneAttempt now steps 20260209 -> 20250305 -> no search,
 // so an account that only has the older variant enabled still searches
 // instead of silently dropping to knowledge-only.
-const WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5 };
+const WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 3 };
 const WEB_SEARCH_TOOL_LEGACY = { type: 'web_search_20250305', name: 'web_search', max_uses: 5 };
 
 function categoryLabel(category) {
@@ -1141,7 +1147,19 @@ function proseTotalConflicts(report) {
   const running = proseRunningConflict(report);
   if (running) conflicts.push(running);
 
-  return conflicts;
+  const component = proseComponentConflict(report);
+  if (component) conflicts.push(component);
+
+  // A field can trip more than one of these — a total-cost explanation that
+  // invents a total is also quoting a figure no line item carries. The repair
+  // rewrites a field once, so it should be asked once, and the earlier
+  // diagnosis is the more specific one.
+  const seen = new Set();
+  return conflicts.filter((c) => {
+    if (seen.has(c.path)) return false;
+    seen.add(c.path);
+    return true;
+  });
 }
 
 // The resale figure has the same shape of problem as the total and needs
@@ -1232,12 +1250,21 @@ const WHOLE_PERIOD_MONEY_RE = new RegExp(
 // near enough the ELECTRICITY line's $60-$75 to satisfy set membership. A
 // number can be right about the wrong thing and still clear a check that
 // only looks at the set of numbers.
-function nearestNamedLine(text, at, runningLines) {
+// A line label may contain a unit of time — "Interest on 39-month
+// financing", "Resale value recovered at 6 years" — and those words then
+// match the scale marker on a completely different figure. "$44/month" for
+// the All-Access membership was attributed to the financing line on exactly
+// that, because "month" sat one character away. A word that describes when
+// a cost falls is not evidence of which cost it is.
+const LABEL_TIME_WORDS = new Set(['month', 'months', 'year', 'years', 'annual', 'annually', 'monthly', 'yearly']);
+
+function nearestNamedLine(text, at, lines) {
   const lower = text.toLowerCase();
   let best = null;
   let bestDistance = Infinity;
-  for (const line of runningLines) {
+  for (const line of lines) {
     for (const word of meaningfulWords(line.label)) {
+      if (LABEL_TIME_WORDS.has(word)) continue;
       const needle = word.replace(/s$/, '');
       if (needle.length < 4) continue;
       for (let i = lower.indexOf(needle); i !== -1; i = lower.indexOf(needle, i + 1)) {
@@ -1310,6 +1337,7 @@ const PROSE_REPAIR_TOOL_FIELDS = {
   'depreciation_resale.explanation': 'Two to four sentences on how this item holds its value.',
   'financing_impact.explanation': 'Two to four sentences on what financing costs and what drives it.',
   'maintenance_running_costs.explanation': 'Two to four sentences on what drives these costs. Any per-year figure must be one the report already uses.',
+  'total_cost_of_ownership.explanation': 'Two to four sentences on what drives the total. Any figure naming a line item must be that line item\'s figure.',
 };
 
 function proseRepairTool(conflicts) {
@@ -1451,6 +1479,164 @@ ${JSON.stringify({
   return cleaned.length ? { notes: cleaned } : null;
 }
 
+
+
+
+// The must-have verification, cached on the submission row.
+//
+// job_state is the jsonb column the HOA worker already uses for its own
+// per-job bookkeeping; a submission belongs to one product, so there is no
+// collision. Stored under its own key so anything else that lands there
+// later is unaffected.
+//
+// This exists for the timeout. An attempt gets 300 seconds; a second attempt
+// gets a fresh 300, and it should spend them on the report rather than on
+// re-establishing a specification that has not changed since the attempt
+// that ran out of time.
+function readCachedVerification(submission) {
+  const cached = ((submission && submission.job_state) || {}).must_have_verification;
+  if (!cached || !Array.isArray(cached.checks)) return null;
+  return { checks: cached.checks, searchRounds: Number(cached.searchRounds) || 0 };
+}
+
+async function cacheVerification(admin, submission, verification) {
+  try {
+    const jobState = { ...(submission.job_state || {}), must_have_verification: verification };
+    await admin
+      .from('navigator_submissions')
+      .update({ job_state: jobState, updated_at: new Date().toISOString() })
+      .eq('id', submission.id);
+    submission.job_state = jobState;
+  } catch (err) {
+    // Losing the cache costs a repeated lookup on the next attempt, which is
+    // the situation this was written to improve, not one it can make worse.
+    console.warn(`[purchase-engine] Could not cache the must-have verification for submission ${submission.id}: ${String((err && err.message) || err)}`);
+  }
+}
+
+// --- components restated in prose -----------------------------------------
+//
+// The Peloton report (submission 95bd1598, the first run of the "other"
+// category) had an exact strip and an exact total, and its total-cost
+// explanation contradicted its own line items four times over:
+//
+//   interest      prose $150-$300   | line $0-$670
+//   maintenance   prose $200-$400   | line $360-$1,080
+//   resale        prose $600-$900   | line $200-$450
+//
+// Nothing looked at any of them. The resale check reads only the
+// depreciation section, the per-year check reads only the maintenance
+// section, and the total check reads the total. A component restated inside
+// the total-cost explanation was in none of those.
+//
+// This is the same check as proseRunningConflict, generalised: find which
+// line a figure is talking about, and hold it to that line.
+
+// Every line item with the ranges it can legitimately be quoted at.
+// resale_recovery is stored negative and spoken about positive, so its
+// magnitude is what prose is compared against.
+function lineRanges(report) {
+  const tco = (report && report.total_cost_of_ownership) || {};
+  const items = validBreakdown(tco);
+  const years = tco.time_horizon_years;
+  if (!items || !isNum(years) || years <= 0) return [];
+  return items.map((item) => {
+    if (item.kind === 'running') {
+      return {
+        label: item.label,
+        whole: { low: item.per_year_low * years, high: item.per_year_high * years },
+        perYear: { low: item.per_year_low, high: item.per_year_high },
+      };
+    }
+    if (item.kind === 'resale_recovery') {
+      return {
+        label: item.label,
+        whole: { low: Math.abs(item.high), high: Math.abs(item.low) },
+        perYear: null,
+      };
+    }
+    return { label: item.label, whole: { low: item.low, high: item.high }, perYear: null };
+  });
+}
+
+// Whether the figure says per year, per month, or across the period. A figure
+// with no scale attached could be either, and is accepted at either.
+function scaleAfter(text, at) {
+  const tail = text.slice(at, at + 30);
+  if (/\/\s?mo\b|\/\s?month|per\s+month|a\s+month|monthly/i.test(tail)) return 'month';
+  if (/\/\s?yr\b|\/\s?year|per\s+year|a\s+year|annually|each\s+year/i.test(tail)) return 'year';
+  if (/(over|across|during)\s+(the\s+)?(full\s+|entire\s+)?\d+[\s-]*year/i.test(tail)) return 'period';
+  return null;
+}
+
+const COMPONENT_FIELDS = {
+  'total_cost_of_ownership.explanation': {
+    get: (r) => r.total_cost_of_ownership && r.total_cost_of_ownership.explanation,
+    label: 'the total-cost explanation',
+  },
+  // financing_impact is deliberately absent. It talks about quantities that
+  // are real and are not line items — the amount paid over a loan term, the
+  // all-in cost of the item plus its interest — and a membership test would
+  // report every one of them. Whole-life claims made there are already
+  // covered by the total check.
+};
+
+function proseComponentConflict(report) {
+  const lines = lineRanges(report);
+  if (!lines.length) return null;
+  const years = report.total_cost_of_ownership.time_horizon_years;
+  const derived = deriveNumbers(report);
+
+  for (const [path, spec] of Object.entries(COMPONENT_FIELDS)) {
+    const text = spec.get(report);
+    if (!nonEmpty(text)) continue;
+    MONEY_RE.lastIndex = 0;
+    let match;
+    while ((match = MONEY_RE.exec(text)) !== null) {
+      const stated = parseMoneyRange(match[0]);
+      if (!stated) continue;
+      // The total is this field's business too, and has its own check.
+      if (derived.total && proseFigureMatches(stated, derived.total)) continue;
+
+      // Every figure any line in this report can legitimately be quoted at,
+      // rather than an attempt to work out which line this sentence means.
+      //
+      // The defect being caught is a figure that belongs to NO line — the
+      // Peloton report's "$150-$300 in interest" against a $0-$670 line,
+      // "$200-$400" maintenance against $360-$1,080, "$600-$900" resale
+      // against $200-$450. None of those is any line's figure at any scale,
+      // and none needs a parser to see that.
+      //
+      // The cost of membership over attribution is that a figure matching the
+      // WRONG line still passes. That is a weaker guarantee, and it is the one
+      // worth having here: the line items are printed directly above this
+      // paragraph, so a figure drawn from them is at least a real number from
+      // this report, whereas the alternative is a heuristic that has now been
+      // wrong three different ways on three real sentences.
+      const scale = scaleAfter(text, match.index + match[0].length);
+      const allowed = [];
+      for (const line of lines) {
+        const perYear = line.perYear || { low: line.whole.low / years, high: line.whole.high / years };
+        if (scale === 'year') allowed.push(perYear);
+        else if (scale === 'month') allowed.push({ low: perYear.low / 12, high: perYear.high / 12 });
+        else if (scale === 'period') allowed.push(line.whole);
+        else { allowed.push(line.whole); allowed.push(perYear); }
+      }
+      if (allowed.some((a) => proseFigureMatches(stated, a))) continue;
+
+      const nearest = nearestNamedLine(text, match.index, lines);
+      return {
+        path,
+        label: spec.label,
+        quoted: match[0].trim(),
+        correct: nearest
+          ? `a figure this report actually uses — the "${nearest.label}" line says ${moneyRange(nearest.whole.low, nearest.whole.high)} over ${years} years`
+          : 'a figure this report actually uses; none of its line items carries this one',
+      };
+    }
+  }
+  return null;
+}
 
 // --- the must-haves -------------------------------------------------------
 //
@@ -2336,16 +2522,28 @@ async function generatePurchaseReport(submissionId) {
     // reasoning underneath went on listing the failed deal-breaker as
     // satisfied and telling the customer to proceed. Ordering it this way
     // removes that whole class rather than repairing it.
-    let verification = null;
-    try {
-      verification = await verifyMustHaves({
-        apiKey: ANTHROPIC_API_KEY,
-        submission,
-        submissionId,
-        allowSearch: ENABLE_WEB_SEARCH,
-      });
-    } catch (err) {
-      console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+    //
+    // It is also cached on the row. Each attempt is its own invocation with
+    // its own 300 seconds, and re-checking a specification that has not
+    // changed spends part of that budget rediscovering the same answer — on
+    // an attempt that only exists because the previous one ran out of time.
+    let verification = readCachedVerification(submission);
+    if (verification) {
+      console.warn(
+        `[purchase-engine] Reusing the must-have verification stored on submission ${submissionId} (${verification.checks.length} check(s), ${verification.searchRounds} search round(s)) rather than running it again.`
+      );
+    } else {
+      try {
+        verification = await verifyMustHaves({
+          apiKey: ANTHROPIC_API_KEY,
+          submission,
+          submissionId,
+          allowSearch: ENABLE_WEB_SEARCH,
+        });
+      } catch (err) {
+        console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
+      }
+      if (verification) await cacheVerification(admin, submission, verification);
     }
     const mustHaveChecks = (verification && verification.checks) || unverifiedChecks(submission);
 
@@ -2725,6 +2923,8 @@ module.exports = {
     proseTotalConflicts,
     proseResaleConflict,
     proseRunningConflict,
+    proseComponentConflict,
+    lineRanges,
     itemRange,
     proseFigureMatches,
     repairProseTotals,
@@ -2736,6 +2936,7 @@ module.exports = {
     repairResearchNotes,
     repairMustHaveChecks,
     verifyMustHaves,
+    readCachedVerification,
     unverifiedChecks,
     salvageLeakedObject,
     horizonYears,
