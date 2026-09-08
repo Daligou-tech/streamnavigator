@@ -82,7 +82,10 @@ for (const s of suites) {
   let output = '';
   let ok = true;
   try {
-    output = execFileSync('node', [path.join(dir, s)], {
+    // --require tests/no-network.js in every child: a suite that did not
+    // deliberately fake fetch cannot make a real request. One of them used
+    // to email hello@streamnavigator.ai on every deploy — the file says how.
+    output = execFileSync("node", ["--require", path.join(dir, "no-network.js"), path.join(dir, s)], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000,
     });
   } catch (err) {
