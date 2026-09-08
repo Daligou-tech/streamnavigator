@@ -124,12 +124,14 @@ const REPORT_TOOL = {
       },
       depreciation_resale: {
         type: 'object',
-        description: 'Required. If this category has essentially no resale market, say so explicitly — that is still a real answer, not a reason to omit the section.',
+        description: 'Required. If this category has essentially no resale market, say so explicitly — that is still a real answer, not a reason to omit the section. Enter zero for both figures in that case.',
         properties: {
+          resale_low: { type: 'number', description: 'Required. Low end of what the item is worth in whole dollars at the END of the ownership period, as a positive number. This is checked against the resale_recovery line of cost_breakdown, which carries the same figure negated. Zero if there is no meaningful resale market.' },
+          resale_high: { type: 'number', description: 'Required. High end of the same figure. Zero if there is no meaningful resale market.' },
           expected_resale_note: { type: 'string', description: 'e.g. "roughly 40% of purchase price after 5 years" or "no meaningful resale market for this category".' },
-          explanation: { type: 'string', description: 'Required, non-empty.' },
+          explanation: { type: 'string', description: 'Required, non-empty. Do not restate the resale figure in different numbers — it is stated once, above, and shown to the customer from there.' },
         },
-        required: ['explanation'],
+        required: ['resale_low', 'resale_high', 'explanation'],
       },
       alternative_comparison: {
         type: 'object',
@@ -579,6 +581,31 @@ function withinTolerance(actual, expected) {
   return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.1, 200);
 }
 
+// Prose is judged harder than structure, because the figure it disagrees
+// with is printed a couple of inches away. 10% was too generous: the live
+// report of 2026-09-08 led with "roughly $51,000–$65,000 in true 7-year
+// cost" directly above a summary strip reading $49,280 – $61,880, and the
+// check waved it through at 3.5% and 5.0%. Nothing there is a rounding of
+// anything; it is a second number for the same thing. 3% still allows an
+// honest round — $49,280 shown as "$49,000" is 0.6% — while a figure a
+// customer would notice as different gets sent back.
+function withinProseTolerance(actual, expected) {
+  return Math.abs(actual - expected) <= Math.max(Math.abs(expected) * 0.03, 200);
+}
+
+// Prose quotes a range two ways, and they need judging differently. A range
+// ("$51,000–$65,000") is compared end to end. A single figure ("total cost
+// around $2,900") is a summary OF the range, so it is right if it lands
+// inside it — requiring it to match both ends at once made a perfectly
+// honest headline fail, which is how this function came to exist.
+function proseFigureMatches(stated, target) {
+  if (stated.low !== stated.high) {
+    return withinProseTolerance(stated.low, target.low) && withinProseTolerance(stated.high, target.high);
+  }
+  if (stated.low >= target.low && stated.low <= target.high) return true;
+  return withinProseTolerance(stated.low, target.low) || withinProseTolerance(stated.low, target.high);
+}
+
 // Returns null when the report is internally consistent, or a plain-English
 // description of the contradiction otherwise. The text is written to be
 // useful in two places at once: a Vercel log line, and the repair prompt
@@ -608,9 +635,41 @@ function tcoArithmeticProblem(report) {
   }
 
   const actual = sumBreakdown(running);
-  if (withinTolerance(actual.low, expectedLow) && withinTolerance(actual.high, expectedHigh)) return null;
-  const labels = running.map((i) => i.label).join(', ');
-  return `The running-cost lines in the cost breakdown (${labels}) come to ${moneyRange(actual.low, actual.high)} over ${years} years, but the maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over the same period. Those two describe the same costs and must agree.`;
+  if (!withinTolerance(actual.low, expectedLow) || !withinTolerance(actual.high, expectedHigh)) {
+    const labels = running.map((i) => i.label).join(', ');
+    return `The running-cost lines in the cost breakdown (${labels}) come to ${moneyRange(actual.low, actual.high)} over ${years} years, but the maintenance and running costs section says ${moneyRange(maint.annual_low, maint.annual_high)} a year, which is ${moneyRange(expectedLow, expectedHigh)} over the same period. Those two describe the same costs and must agree.`;
+  }
+
+  return resaleProblem(report, items);
+}
+
+// Resale was the last quantity in this schema still living in two places at
+// once, and the live report of 2026-09-08 duly put two different numbers in
+// them: a resale_recovery line of $6,000-$8,000 in the breakdown (which the
+// total was computed from), against "a resale/trade-in value in the ballpark
+// of $16,000-$18,000" in the depreciation section a few inches below. Its own
+// assumptions list said 22-31% of $32,400, which is $7,100-$10,000 — so the
+// breakdown was the honest one and the section a customer reads for exactly
+// this number was wrong by a factor of two.
+function resaleProblem(report, items) {
+  const dep = report.depreciation_resale;
+  if (!dep || !isNum(dep.resale_low) || !isNum(dep.resale_high)) return null;
+  const recovery = items.filter((i) => i.kind === 'resale_recovery');
+  const stated = { low: dep.resale_low, high: dep.resale_high };
+
+  if (!recovery.length) {
+    // No line is right only if nothing comes back at the end.
+    if (stated.high <= 0) return null;
+    return `The depreciation and resale section says the item is worth ${moneyRange(stated.low, stated.high)} at the end of the ownership period, but the cost breakdown has no line of kind "resale_recovery" — so that money is not coming off the total. Add it as a negative line.`;
+  }
+
+  // The breakdown carries the figure negated, so compare magnitudes. Note the
+  // low/high inversion: the MOST money back is the most negative line.
+  const summed = sumBreakdown(recovery);
+  const backLow = Math.abs(summed.high);
+  const backHigh = Math.abs(summed.low);
+  if (withinTolerance(backLow, stated.low) && withinTolerance(backHigh, stated.high)) return null;
+  return `The cost breakdown takes ${moneyRange(backLow, backHigh)} off the total as resale value recovered, but the depreciation and resale section says the item will be worth ${moneyRange(stated.low, stated.high)} at the end. Those are the same number and must agree.`;
 }
 
 // The single place a total is allowed to come from. Called by
@@ -667,8 +726,10 @@ const COST_MODEL_REPAIR_TOOL = {
       },
       annual_low: { type: 'number', description: 'Low end of running costs PER YEAR. Multiplied by the ownership period, this must match the running lines above.' },
       annual_high: { type: 'number', description: 'High end of running costs per year, on the same basis.' },
+      resale_low: { type: 'number', description: 'Low end of what the item is worth at the END of the period, as a positive number. Must match the resale_recovery line above, which carries it negated. Zero if there is no resale market.' },
+      resale_high: { type: 'number', description: 'High end of the same figure, as a positive number. Zero if there is no resale market.' },
     },
-    required: ['time_horizon_years', 'cost_breakdown', 'annual_low', 'annual_high'],
+    required: ['time_horizon_years', 'cost_breakdown', 'annual_low', 'annual_high', 'resale_low', 'resale_high'],
   },
 };
 
@@ -691,6 +752,7 @@ ${JSON.stringify({
     summary: candidate.summary,
     total_cost_of_ownership: candidate.total_cost_of_ownership,
     maintenance_running_costs: candidate.maintenance_running_costs,
+    depreciation_resale: candidate.depreciation_resale,
   }, null, 2)}`;
 
   const data = await callAnthropic({
@@ -721,6 +783,11 @@ ${JSON.stringify({
       annual_low: toolUse.input.annual_low,
       annual_high: toolUse.input.annual_high,
     },
+    depreciation_resale: {
+      ...candidate.depreciation_resale,
+      resale_low: toolUse.input.resale_low,
+      resale_high: toolUse.input.resale_high,
+    },
   };
   if (reportLooksContaminated(patched.total_cost_of_ownership)) {
     console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} came back with a leaked formatting artifact.`);
@@ -729,6 +796,11 @@ ${JSON.stringify({
   const horizon = patched.total_cost_of_ownership.time_horizon_years;
   if (!validBreakdown(patched.total_cost_of_ownership) || !isNum(horizon) || horizon <= 0) {
     console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} returned an unusable breakdown.`);
+    return null;
+  }
+  const dep = patched.depreciation_resale;
+  if (!isNum(dep.resale_low) || !isNum(dep.resale_high) || dep.resale_low < 0 || dep.resale_high < dep.resale_low) {
+    console.warn(`[purchase-engine] Cost-model repair for submission ${submissionId} returned unusable resale figures.`);
     return null;
   }
   const stillWrong = tcoArithmeticProblem(patched);
@@ -825,7 +897,20 @@ const MONEY_RE = /\$\s?[\d,]+(?:\.\d+)?(?:\s*(?:[–—-]|to)\s*\$?\s?[\d,]+(?:\
 const LOOK_BEHIND = 60;
 const LOOK_AHEAD = 30;
 
-const CLAIMS_A_TOTAL = /total[\s\w-]{0,25}cost|cost\s+of\s+ownership/i;
+// A whole-period cost claim does not have to contain the word "total".
+// This required it, and the live report of 2026-09-08 walked straight
+// past: its headline read "becomes roughly $51,000–$65,000 in true 7-year
+// cost", which is exactly the claim being policed, phrased without the
+// one word the pattern was looking for. The qualifiers below are the ways
+// the same sentence gets written — total, true, all-in, or just the
+// number of years.
+const CLAIMS_A_TOTAL = new RegExp(
+  [
+    String.raw`(?:total|true|all-?in|\d+-year)[\s\w-]{0,25}cost`,
+    String.raw`cost\s+of\s+ownership`,
+  ].join('|'),
+  'i'
+);
 // Only two kinds of exclusion survive, and both are about the scanned
 // fields themselves. An earlier version also excluded loan / interest /
 // financ / resale / depreciat, to protect sentences like "$38,000-$39,200
@@ -907,13 +992,59 @@ function proseTotalConflicts(report) {
     // Without this, a headline reading "$47,000-$57,700 total 7-year cost
     // — the $32,400 price looks fair" reported the $32,400 as a rival
     // total, purely because it sat close to the words "total cost".
-    const anyCorrect = claims.some(
-      (c) => withinTolerance(c.stated.low, derived.total.low) && withinTolerance(c.stated.high, derived.total.high)
-    );
+    const anyCorrect = claims.some((c) => proseFigureMatches(c.stated, derived.total));
     if (anyCorrect) continue;
     conflicts.push({ path, label: spec.label, quoted: claims[0].quoted });
   }
+
+  const resale = proseResaleConflict(report);
+  if (resale) conflicts.push(resale);
+
   return conflicts;
+}
+
+// The resale figure has the same shape of problem as the total and needs
+// its own vocabulary: it is never called a "total", so CLAIMS_A_TOTAL
+// cannot see it. On 2026-09-08 the depreciation section said "a
+// resale/trade-in value in the ballpark of $16,000-$18,000" while the
+// breakdown took $6,000-$8,000 off the total and the assumptions list said
+// 22-31% of $32,400. Two of the three agreed; the one written in prose,
+// in the section titled for exactly this number, did not.
+const CLAIMS_A_RESALE = /resale|trade-?in|worth|retain|residual/i;
+
+// Percentages and per-year figures are not the resale figure, and the
+// purchase price appears constantly in this section as the thing being
+// depreciated from.
+const NOT_THE_RESALE = /%|per\s+year|\/\s?year|\/\s?yr|annual|purchase price|paid|sticker|original/i;
+
+function proseResaleConflict(report) {
+  const dep = report && report.depreciation_resale;
+  if (!dep || !isNum(dep.resale_low) || !isNum(dep.resale_high)) return null;
+  if (dep.resale_high <= 0) return null; // nothing comes back; nothing to contradict
+
+  for (const [field, text] of [['expected_resale_note', dep.expected_resale_note], ['explanation', dep.explanation]]) {
+    if (!nonEmpty(text)) continue;
+    const claims = [];
+    MONEY_RE.lastIndex = 0;
+    let match;
+    while ((match = MONEY_RE.exec(text)) !== null) {
+      const window = text.slice(Math.max(0, match.index - LOOK_BEHIND), match.index + match[0].length + LOOK_AHEAD);
+      if (!CLAIMS_A_RESALE.test(window) || NOT_THE_RESALE.test(window)) continue;
+      const stated = parseMoneyRange(match[0]);
+      if (!stated) continue;
+      claims.push({ stated, quoted: match[0].trim() });
+    }
+    if (!claims.length) continue;
+    const anyCorrect = claims.some((c) => proseFigureMatches(c.stated, { low: dep.resale_low, high: dep.resale_high }));
+    if (anyCorrect) continue;
+    return {
+      path: 'depreciation_resale.' + field,
+      label: 'the depreciation and resale section',
+      quoted: claims[0].quoted,
+      correct: moneyRange(dep.resale_low, dep.resale_high),
+    };
+  }
+  return null;
 }
 
 const PROSE_REPAIR_TOOL_FIELDS = {
@@ -922,6 +1053,8 @@ const PROSE_REPAIR_TOOL_FIELDS = {
   'total_cost_of_ownership.explanation': 'Two to four sentences on what drives the total and how confident you are.',
   'recommendation.reasoning': 'Two to four sentences, specific to this purchase.',
   'alternative_comparison.explanation': 'Two to four sentences on how the alternative compares.',
+  'depreciation_resale.expected_resale_note': 'One short phrase, e.g. "roughly 40% of purchase price after 5 years".',
+  'depreciation_resale.explanation': 'Two to four sentences on how this item holds its value.',
 };
 
 function proseRepairTool(conflicts) {
@@ -945,13 +1078,15 @@ async function repairProseTotals({ apiKey, systemPrompt, candidate, submissionId
   if (!derived.total || !conflicts.length) return null;
   const correct = moneyRange(derived.total.low, derived.total.high);
 
-  const quoted = conflicts.map((c) => `- ${c.label} says ${c.quoted}`).join('\n');
+  const quoted = conflicts
+    .map((c) => `- ${c.label} says ${c.quoted}, which should be ${c.correct || correct}`)
+    .join('\n');
   const repairPrompt = `Your cost breakdown for this purchase adds up to ${correct} over ${derived.years} years. That figure is arithmetic over your own line items and is the one the customer is shown, so it is the only total that may appear anywhere in the report.
 
-These parts of your write-up quote a different total:
+These parts of your write-up quote a figure that disagrees with your own numbers:
 ${quoted}
 
-Please rewrite just those, using ${correct}. Keep your reasoning, your emphasis and everything else you said — only the total changes. Plain prose, no tool-call or parameter-tag syntax.
+Please rewrite just those, using the correct figure named against each. Keep your reasoning, your emphasis and everything else you said — only the number changes. Plain prose, no tool-call or parameter-tag syntax.
 
 Your line items, for reference:
 ${JSON.stringify(derived.items, null, 2)}`;
@@ -1016,6 +1151,8 @@ function isReportComplete(report) {
 
   const depreciation = report.depreciation_resale;
   if (!depreciation || !nonEmpty(depreciation.explanation)) return false;
+  if (!isNum(depreciation.resale_low) || !isNum(depreciation.resale_high)) return false;
+  if (depreciation.resale_low < 0 || depreciation.resale_high < depreciation.resale_low) return false;
 
   const alt = report.alternative_comparison;
   if (!alt || !nonEmpty(alt.alternative_name) || !nonEmpty(alt.explanation)) return false;
@@ -1075,6 +1212,9 @@ function firstIncompleteField(report) {
     || report.maintenance_running_costs.annual_low < 0
     || report.maintenance_running_costs.annual_high < report.maintenance_running_costs.annual_low) return 'total_cost_of_ownership.cost_model';
   if (!report.depreciation_resale || !nonEmpty(report.depreciation_resale.explanation)) return 'depreciation_resale.explanation';
+  if (!isNum(report.depreciation_resale.resale_low) || !isNum(report.depreciation_resale.resale_high)
+    || report.depreciation_resale.resale_low < 0
+    || report.depreciation_resale.resale_high < report.depreciation_resale.resale_low) return 'total_cost_of_ownership.cost_model';
   if (!report.alternative_comparison || !nonEmpty(report.alternative_comparison.alternative_name) || !nonEmpty(report.alternative_comparison.explanation)) return 'alternative_comparison';
   if (!report.recommendation || !['buy', 'wait', 'reconsider'].includes(report.recommendation.verdict) || !nonEmpty(report.recommendation.reasoning)) return 'recommendation';
   if (!Array.isArray(report.missing_or_uncertain)) return 'missing_or_uncertain';
@@ -1124,6 +1264,13 @@ function mapToGenericReport(report) {
     keyNumbers.push({
       label: 'Running cost per year',
       value: moneyRange(derived.annual.low, derived.annual.high) + '/yr',
+    });
+  }
+  const dep = report.depreciation_resale;
+  if (dep && isNum(dep.resale_low) && isNum(dep.resale_high) && dep.resale_high > 0) {
+    keyNumbers.push({
+      label: `Worth at year ${derived.years || '?'}`,
+      value: moneyRange(dep.resale_low, dep.resale_high),
     });
   }
   if (report.recommendation && report.recommendation.verdict) {
@@ -1719,7 +1866,10 @@ module.exports = {
     validBreakdown,
     sumBreakdown,
     tcoArithmeticProblem,
+    resaleProblem,
     proseTotalConflicts,
+    proseResaleConflict,
+    proseFigureMatches,
     repairProseTotals,
     deriveNumbers,
     money,

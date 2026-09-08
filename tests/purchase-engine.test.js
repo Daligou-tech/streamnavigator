@@ -120,7 +120,7 @@ function completeReportInput(overrides) {
     },
     financing_impact: { applicable: false, explanation: 'Paying cash, so there is no financing cost — the $2,400 price is the full cost.' },
     maintenance_running_costs: { annual_low: 55, annual_high: 70, explanation: 'Typical electricity draw for a French door fridge this size, plus occasional minor repairs.' },
-    depreciation_resale: { expected_resale_note: 'No meaningful resale market for appliances', explanation: 'Refrigerators are not typically resold for meaningful value; treat this as a sunk cost over its useful life.' },
+    depreciation_resale: { resale_low: 0, resale_high: 0, expected_resale_note: 'No meaningful resale market for appliances', explanation: 'Refrigerators are not typically resold for meaningful value; treat this as a sunk cost over its useful life.' },
     alternative_comparison: { alternative_name: 'A comparable top-freezer model, ~$1,600', explanation: 'A simpler top-freezer configuration would cost several hundred dollars less with slightly higher energy use, but no ice/water dispenser.' },
     recommendation: { verdict: 'buy', reasoning: 'Price is in the typical range and the customer already needs a replacement — no reason to wait.' },
     assumptions: [
@@ -795,6 +795,8 @@ test('a report that contradicts itself is rebuilt by a targeted repair instead o
               ],
               annual_low: 900,
               annual_high: 1100,
+              resale_low: 0,
+              resale_high: 0,
             },
           }],
         }),
@@ -1086,6 +1088,13 @@ function ravReport(overrides) {
     },
     maintenance_running_costs: { annual_low: 2600, annual_high: 3500, explanation: 'Insurance, fuel and routine servicing.' },
     financing_impact: { applicable: true, explanation: 'A 60-month loan at 6.5-7.5% APR.' },
+    // The breakdown hands back $6,000-$9,000; the section has to say the same.
+    depreciation_resale: {
+      resale_low: 6000,
+      resale_high: 9000,
+      expected_resale_note: '25-30% of purchase price at trade-in',
+      explanation: 'Toyota RAV4 Hybrids hold value well, so expect $6,000-$9,000 back at year 7.',
+    },
     ...overrides,
   });
 }
@@ -1245,4 +1254,162 @@ test('a prose repair that keeps the wrong total is rejected rather than shipped'
   assert.equal(result, null, 'a repair that did not fix the number must hand back for another attempt');
   assert.equal(submission.status, 'paid');
   assert.equal(reportInserts.length, 0);
+});
+
+// --- resale: the last quantity that lived in two places --------------------
+//
+// The report generated on the fixed engine (submission 95216657,
+// 2026-09-08) reconciled perfectly on every check that existed: its line
+// items summed to the $49,280-$61,880 in the summary strip, and its
+// running-cost line was exactly seven times its per-year figure. Two
+// numbers were still wrong, both of them a quantity stated twice.
+//
+//   - the breakdown took $6,000-$8,000 off the total as resale, and the
+//     assumptions list said 22-31% of $32,400 (so $7,100-$10,000) — while
+//     the depreciation section, the one a customer reads FOR that number,
+//     said "a resale/trade-in value in the ballpark of $16,000-$18,000".
+//     Two of the three agreed; the prose was out by a factor of two.
+//
+//   - the headline read "roughly $51,000–$65,000 in true 7-year cost"
+//     directly above a strip reading $49,280 – $61,880. The prose check
+//     waved it through twice over: the tolerance was 10% (it is 3.5% and
+//     5.0% out), and the pattern required the literal word "total", which
+//     "true 7-year cost" does not contain.
+
+function ravBreakdown() {
+  return [
+    { label: 'Purchase price (vehicle)', kind: 'purchase', low: 32400, high: 32400, basis: 'Quoted CPO price' },
+    { label: 'Financing interest over 60-month loan', kind: 'financing', low: 5700, high: 9300, basis: '6.5% to 11.4% APR' },
+    { label: 'Fuel, insurance, maintenance, VA taxes over 7 years', kind: 'running', low: 19180, high: 26180, basis: '7 years times $2,740-$3,740' },
+    { label: 'Estimated resale value at end of 7 years', kind: 'resale_recovery', low: -8000, high: -6000, basis: '20-25% of original value retained' },
+  ];
+}
+
+function ravLive(overrides) {
+  return completeReportInput({
+    headline: 'About $32,400 upfront becomes roughly $49,280–$61,880 in true 7-year cost — the car itself is a smart pick',
+    total_cost_of_ownership: {
+      time_horizon_years: 7,
+      cost_breakdown: ravBreakdown(),
+      explanation: 'Total cost of ownership over 7 years is estimated at $49,280 – $61,880.',
+    },
+    financing_impact: { applicable: true, explanation: 'A 60-month loan at 6.5-11.4% APR.' },
+    maintenance_running_costs: { annual_low: 2740, annual_high: 3740, explanation: 'Fuel, insurance and servicing.' },
+    depreciation_resale: {
+      resale_low: 6000,
+      resale_high: 8000,
+      expected_resale_note: 'roughly 20-25% of original value retained after 7 years',
+      explanation: 'Toyota RAV4 Hybrids hold their value well, so expect $6,000-$8,000 back at trade-in.',
+    },
+    ...overrides,
+  });
+}
+
+test('the live report reconciles once its two remaining figures are right', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const derived = __internal.deriveNumbers(ravLive());
+  assert.equal(__internal.moneyRange(derived.total.low, derived.total.high), '$49,280 – $61,880');
+  assert.equal(__internal.tcoArithmeticProblem(ravLive()), null);
+  assert.deepEqual(__internal.proseTotalConflicts(ravLive()), []);
+  assert.equal(__internal.isReportComplete(ravLive()), true);
+});
+
+test('the resale figure must match the money the total actually takes off', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  // The breakdown nets off $6,000-$8,000; the section claims $16,000-$18,000.
+  const problem = __internal.tcoArithmeticProblem(ravLive({
+    depreciation_resale: { resale_low: 16000, resale_high: 18000, expected_resale_note: 'x', explanation: 'y' },
+  }));
+  assert.match(problem, /\$6,000/);
+  assert.match(problem, /\$16,000/);
+  assert.match(problem, /same number and must agree/);
+});
+
+test('a resale figure with no line taking it off the total is caught', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const problem = __internal.tcoArithmeticProblem(ravLive({
+    total_cost_of_ownership: {
+      time_horizon_years: 7,
+      cost_breakdown: ravBreakdown().filter((i) => i.kind !== 'resale_recovery'),
+      explanation: 'x',
+    },
+  }));
+  assert.match(problem, /no line of kind "resale_recovery"/);
+});
+
+test('a category with no resale market is a real answer, not a contradiction', () => {
+  // The appliance fixture: zero back at the end, and no resale line.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.tcoArithmeticProblem(completeReportInput()), null);
+  assert.equal(__internal.isReportComplete(completeReportInput()), true);
+  assert.deepEqual(__internal.proseTotalConflicts(completeReportInput()), []);
+});
+
+test('a resale figure invented in the prose is caught, in the section written for it', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(ravLive({
+    depreciation_resale: {
+      resale_low: 6000,
+      resale_high: 8000,
+      expected_resale_note: 'roughly 20-25% of original value retained after 7 years',
+      explanation: 'Expect it to retain roughly 50-55% of its current value after 7 years, meaning a resale/trade-in value in the ballpark of $16,000-$18,000 at the end of your ownership period.',
+    },
+  }));
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, 'depreciation_resale.explanation');
+  assert.equal(conflicts[0].quoted, '$16,000-$18,000');
+  // The repair prompt names the right figure per field, not one global total.
+  assert.equal(conflicts[0].correct, '$6,000 – $8,000');
+});
+
+test('a percentage of the purchase price in the resale section is not a rival figure', () => {
+  // "retain roughly 50-55% of its value" and "$32,400 purchase price" both
+  // sit in this section constantly and are not claims about resale value.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(__internal.proseTotalConflicts(ravLive({
+    depreciation_resale: {
+      resale_low: 6000,
+      resale_high: 8000,
+      expected_resale_note: 'roughly 20-25% of original value retained after 7 years',
+      explanation: 'Starting from the $32,400 purchase price, expect it to retain roughly 20-25% after 7 years — around $6,000-$8,000 at trade-in.',
+    },
+  })), []);
+});
+
+test('a total claim written without the word "total" is still a total claim', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const phrasings = [
+    'becomes roughly $51,000–$65,000 in true 7-year cost',
+    'the all-in cost lands at $51,000–$65,000',
+    'a 7-year cost of $51,000–$65,000',
+    'total cost of ownership runs $51,000–$65,000',
+  ];
+  for (const headline of phrasings) {
+    const conflicts = __internal.proseTotalConflicts(ravLive({ headline }));
+    assert.equal(conflicts.length, 1, `"${headline}" should have been caught`);
+    assert.equal(conflicts[0].path, 'headline');
+  }
+});
+
+test('prose is held to a tighter tolerance than the structural cross-checks', () => {
+  // $51,000 against a computed $49,280 is 3.5% out — inside the 10% used
+  // for the running-cost reconciliation, and a visibly different number
+  // sitting inches above the real one. An honest round still passes.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const at = (headline) => __internal.proseTotalConflicts(ravLive({ headline })).length;
+  assert.equal(at('a true 7-year cost of $49,000–$62,000'), 0, 'rounding the computed figure must pass');
+  assert.equal(at('a true 7-year cost of $51,000–$65,000'), 1, 'a second number for the same thing must not');
+});
+
+test('the resale figure reaches the customer in the summary strip', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const generic = __internal.mapToGenericReport(ravLive());
+  const resale = generic.key_numbers.find((n) => /worth at year/i.test(n.label));
+  assert.equal(resale.label, 'Worth at year 7');
+  assert.equal(resale.value, '$6,000 – $8,000');
+  // And is absent where there is no resale market, rather than showing $0.
+  assert.equal(
+    __internal.mapToGenericReport(completeReportInput()).key_numbers.some((n) => /worth at year/i.test(n.label)),
+    false
+  );
 });
