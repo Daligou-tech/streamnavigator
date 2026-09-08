@@ -658,6 +658,14 @@ test('__internal.buildSystemPrompt grounds the prompt in the customer\'s submitt
 // you doing.
 
 // The real numbers from that report, in the shape the engine now requires.
+// The RAV4 fixtures run over seven years; fakeSubmission is the eight-year
+// appliance. Since the horizon is taken from the form rather than the model,
+// a test pairing the two is testing a report for the wrong period.
+function sevenYearSubmission() {
+  const base = fakeSubmission();
+  return fakeSubmission({ form_data: { ...base.form_data, ownership_years: '7' } });
+}
+
 function contradictoryReport() {
   return completeReportInput({
     total_cost_of_ownership: {
@@ -780,7 +788,7 @@ test('__internal.validBreakdown refuses a breakdown that cannot be summed into a
 });
 
 test('a report that contradicts itself is rebuilt by a targeted repair instead of burning a whole attempt', async (t) => {
-  const submission = fakeSubmission();
+  const submission = sevenYearSubmission();
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
@@ -835,7 +843,7 @@ test('a report that contradicts itself is rebuilt by a targeted repair instead o
 });
 
 test('a repair that still does not reconcile is rejected rather than shipped', async (t) => {
-  const submission = fakeSubmission();
+  const submission = sevenYearSubmission();
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
@@ -1185,7 +1193,7 @@ test('a field that states the total correctly is not tripped by a price sitting 
 });
 
 test('an invented prose total is corrected in place, and the correction is checked', async (t) => {
-  const submission = fakeSubmission();
+  const submission = sevenYearSubmission();
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
@@ -1242,7 +1250,7 @@ test('an invented prose total is corrected in place, and the correction is check
 });
 
 test('a prose repair that keeps the wrong total is rejected rather than shipped', async (t) => {
-  const submission = fakeSubmission();
+  const submission = sevenYearSubmission();
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
@@ -2487,4 +2495,106 @@ test('the resale check still works with the wider total window', () => {
   }));
   assert.ok(conflict, 'the resale contradiction must still be caught');
   assert.equal(conflict.quoted, '$16,000-$18,000');
+});
+
+// --- the leak -------------------------------------------------------------
+//
+// First seen 2026-08-31, and by 2026-09-08 settled into one reproducible
+// shape: total_cost_of_ownership arrives not as an object but as the string
+//
+//     "\n<parameter name=\"time_horizon_years\">12"
+//
+// — the model writing the nested object out in tool-call syntax instead of
+// JSON. Four of six appliance runs, none of three vehicle ones. Two earlier
+// attempts to prevent it (a prompt instruction, then renaming the field it
+// kept naming) both failed, and the rename moved the leak to the new name.
+// So this bounds the damage rather than trying a third time to stop it.
+
+test('__internal.salvageLeakedObject recovers the object from the leaked string', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(
+    __internal.salvageLeakedObject('\n<parameter name="time_horizon_years">12'),
+    { time_horizon_years: 12 }
+  );
+  assert.deepEqual(
+    __internal.salvageLeakedObject('<parameter name="annual_low">55<parameter name="explanation">Typical draw for this size.'),
+    { annual_low: 55, explanation: 'Typical draw for this size.' }
+  );
+  assert.deepEqual(__internal.salvageLeakedObject({ already: 'an object' }), null);
+  assert.deepEqual(__internal.salvageLeakedObject('no tags here at all'), {});
+});
+
+test('a leaked nested object costs a repair, not a whole attempt', async (t) => {
+  // Before this, sanitizeReportTags reduced the string to "12", the
+  // explanation repair spread a string into an object ({0:'1',1:'2'}), and
+  // the attempt was spent discovering that the result was unusable.
+  const submission = fakeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  let mainCalls = 0;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.cost_breakdown && props.annual_low) {
+      // The cost-model repair rebuilds what the leak destroyed.
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use',
+            name: 'submit_field_repair',
+            input: {
+              cost_breakdown: completeReportInput().total_cost_of_ownership.cost_breakdown,
+              annual_low: 55, annual_high: 70, resale_low: 0, resale_high: 0,
+            },
+          }],
+        }),
+      };
+    }
+    if (props.value) return fieldRepairResponse('Purchase price plus eight years of electricity and a delivery fee.');
+    mainCalls++;
+    const leaked = completeReportInput();
+    leaked.total_cost_of_ownership = '\n<parameter name="time_horizon_years">8';
+    return toolUseResponse(leaked);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+
+  assert.equal(mainCalls, 1, 'the leak must not cost a whole regenerated report');
+  assert.equal(submission.generation_attempts, 1);
+  assert.equal(reportInserts.length, 1);
+  assert.ok(!submissionUpdates.some((u) => u.status === 'paid'), 'and must not hand back for a retry');
+  assert.equal(report.key_numbers[0].value, '$2,940 – $3,110', 'the rebuilt cost model reaches the customer');
+});
+
+test('the ownership period comes from the customer, not the model', async (t) => {
+  // It was a required field of the report schema — asking the model to
+  // repeat a number the intake form already collects and the pre-payment
+  // gate already requires for every category.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(
+    __internal.REPORT_TOOL.input_schema.properties.total_cost_of_ownership.properties.time_horizon_years,
+    undefined
+  );
+  assert.equal(__internal.horizonYears(fakeSubmission()), 8);
+  assert.equal(__internal.horizonYears(sevenYearSubmission()), 7);
+  assert.equal(__internal.horizonYears({ form_data: {} }), null);
+
+  // And a report whose model-supplied horizon disagrees is overridden.
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  const wrong = completeReportInput();
+  wrong.total_cost_of_ownership.time_horizon_years = 99;
+  global.fetch = async () => toolUseResponse(wrong);
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+  assert.match(report.key_numbers[0].label, /\(8yr\)/, 'the form says 8 years, so the report does');
 });

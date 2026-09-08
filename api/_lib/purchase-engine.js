@@ -79,7 +79,6 @@ const REPORT_TOOL = {
         type: 'object',
         description: 'Required. The true total cost over the ownership period the customer gave you, not just the purchase price. Give the LINE ITEMS; the total is computed from them, so do not state a separate total that could disagree with its own parts.',
         properties: {
-          time_horizon_years: { type: 'number', description: 'Required. The ownership period in years, matching what the customer told you.' },
           cost_breakdown: {
             type: 'array',
             description: 'Required. Every cost that makes up the total, each as its own line item covering the WHOLE ownership period (not per year). At least three items. Include a purchase line always, a financing line whenever the customer is financing, and a running-costs line whenever there are any. These numbers are summed to produce the headline total, so each quantity must appear exactly ONCE across the whole array.',
@@ -103,7 +102,7 @@ const REPORT_TOOL = {
           },
           explanation: { type: 'string', description: 'Required, non-empty. What drives the total and how confident you are. Do NOT restate the total or re-derive individual line items here in different numbers — the breakdown above is the single source of truth and this text sits directly beneath it.' },
         },
-        required: ['time_horizon_years', 'cost_breakdown', 'explanation'],
+        required: ['cost_breakdown', 'explanation'],
       },
       financing_impact: {
         type: 'object',
@@ -801,7 +800,6 @@ const COST_MODEL_REPAIR_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      time_horizon_years: { type: 'number', description: 'The ownership period in years, as the customer gave it.' },
       cost_breakdown: {
         type: 'array',
         description: 'At least three line items. A purchase line always, a financing line if the customer is financing, and a running line for each recurring cost. Whole-period figures in low/high, EXCEPT on "running" lines, which give per_year_low/per_year_high instead and have their period figure worked out from that. Each quantity appears exactly once across the array.',
@@ -824,7 +822,7 @@ const COST_MODEL_REPAIR_TOOL = {
       resale_low: { type: 'number', description: 'Low end of what the item is worth at the END of the period, as a positive number. Must match the resale_recovery line above, which carries it negated. Zero if there is no resale market.' },
       resale_high: { type: 'number', description: 'High end of the same figure, as a positive number. Zero if there is no resale market.' },
     },
-    required: ['time_horizon_years', 'cost_breakdown', 'annual_low', 'annual_high', 'resale_low', 'resale_high'],
+    required: ['cost_breakdown', 'annual_low', 'annual_high', 'resale_low', 'resale_high'],
   },
 };
 
@@ -837,9 +835,10 @@ async function repairCostModel({ apiKey, systemPrompt, candidate, submissionId, 
   const framing = problem
     ? 'It is internally inconsistent and needs correcting.\n\nThe contradiction: ' + problem
     : 'Its cost breakdown did not reach us in a usable form.';
+  const years = (candidate.total_cost_of_ownership || {}).time_horizon_years;
   const repairPrompt = `Your previous analysis of this purchase is below. ${framing}
 
-Please provide ONLY a corrected cost model: the line items making up the total over the whole ownership period, and the running cost per year. The two must agree — the running lines, over the ownership period, must come to the per-year figure multiplied by the number of years. Give whole dollars. Decide which of the figures is the right one and make everything follow from it; do not split the difference.
+Please provide ONLY a corrected cost model for a ${years}-year ownership period: the line items making up the total, and the running cost per year. The two must agree — the running lines, over the ownership period, must come to the per-year figure multiplied by the number of years. Give whole dollars. Decide which of the figures is the right one and make everything follow from it; do not split the difference.
 
 Your analysis so far, for context:
 ${JSON.stringify({
@@ -870,7 +869,7 @@ ${JSON.stringify({
     ...candidate,
     total_cost_of_ownership: {
       ...candidate.total_cost_of_ownership,
-      time_horizon_years: toolUse.input.time_horizon_years,
+      time_horizon_years: candidate.total_cost_of_ownership && candidate.total_cost_of_ownership.time_horizon_years,
       cost_breakdown: toolUse.input.cost_breakdown,
     },
     maintenance_running_costs: {
@@ -1725,6 +1724,62 @@ function unverifiedChecks(submission) {
   }));
 }
 
+
+// The ownership period, taken from the customer rather than the model.
+//
+// It was a required field of the report schema, which meant asking the model
+// to repeat a number the intake form already collects and the pre-payment
+// gate already requires for every category. Every quantity in this file has
+// been moved to having one source of truth; this one had two, and the second
+// was the more likely to be wrong.
+function horizonYears(submission) {
+  const raw = ((submission && submission.form_data) || {}).ownership_years;
+  const years = Number(raw);
+  return Number.isFinite(years) && years > 0 ? years : null;
+}
+
+const OBJECT_VALUED_FIELDS = [
+  'total_cost_of_ownership',
+  'financing_impact',
+  'maintenance_running_costs',
+  'depreciation_resale',
+  'alternative_comparison',
+  'recommendation',
+];
+
+// Recovers a nested object the model serialised as a flat string.
+//
+// The leak first seen on 2026-08-31 has settled into one reproducible shape:
+// total_cost_of_ownership arrives not as an object but as the string
+//
+//     "\n<parameter name=\"time_horizon_years\">12"
+//
+// — the model writing the nested object out in tool-call syntax instead of
+// as JSON. It hit four of six appliance runs and none of three vehicle ones.
+//
+// Two earlier attempts to stop it — a prompt instruction, then renaming the
+// field it kept referencing — both failed, and the rename simply moved the
+// leak to the new name. So this does not try to prevent it a third time. It
+// bounds the damage instead: pull out whatever fragments are recoverable,
+// hand the rest to the repair machinery that already knows how to rebuild a
+// cost model, and let the attempt finish. Before this, sanitizeReportTags
+// reduced the string to "12", the explanation repair spread a string into an
+// object ({0:'1',1:'2'}), and the attempt was spent discovering that.
+function salvageLeakedObject(value) {
+  if (typeof value !== 'string') return null;
+  const out = {};
+  const fragments = /<parameter\s+name="([^"]+)"\s*>([^<]*)/g;
+  let match;
+  while ((match = fragments.exec(value)) !== null) {
+    const key = match[1];
+    const raw = match[2].trim();
+    if (!raw) continue;
+    const asNumber = Number(raw.replace(/[$,]/g, ''));
+    out[key] = /^[$\s,\d.]+$/.test(raw) && Number.isFinite(asNumber) ? asNumber : raw;
+  }
+  return out;
+}
+
 // Defense in depth: the tool schema's `required` arrays lean on the model
 // to fill every field, but a model can technically satisfy a JSON Schema
 // with an empty string. This is the actual guarantee that all six promised
@@ -2319,6 +2374,26 @@ async function generatePurchaseReport(submissionId) {
     }
 
     if (candidate && !recoverableError) {
+      // A nested object that arrived as a string is turned back into an
+      // object here, before anything else reads it — otherwise the repairs
+      // below spread a string and produce {0:'1',1:'2'}.
+      for (const key of OBJECT_VALUED_FIELDS) {
+        if (candidate[key] === undefined || candidate[key] === null) continue;
+        if (typeof candidate[key] === 'object' && !Array.isArray(candidate[key])) continue;
+        const salvaged = salvageLeakedObject(candidate[key]) || {};
+        console.warn(
+          `[purchase-engine] ${key} arrived as a ${typeof candidate[key]} rather than an object for submission ${submissionId} on attempt ${attemptNumber}; recovered ${Object.keys(salvaged).length} field(s), the rest goes to the repair path.`
+        );
+        candidate[key] = salvaged;
+      }
+
+      // The ownership period comes from the customer, not the model. Set
+      // before any check reads it, and after the salvage so it survives one.
+      if (!candidate.total_cost_of_ownership || typeof candidate.total_cost_of_ownership !== 'object') {
+        candidate.total_cost_of_ownership = {};
+      }
+      candidate.total_cost_of_ownership.time_horizon_years = horizonYears(submission);
+
       // Always ensure a financing_impact object exists — even if the model
       // dropped the whole section, not just the applicable flag — so the
       // deterministic override below can run unconditionally. Real live
@@ -2626,6 +2701,8 @@ module.exports = {
     repairMustHaveChecks,
     verifyMustHaves,
     unverifiedChecks,
+    salvageLeakedObject,
+    horizonYears,
     MUST_HAVE_TOOL,
     mustHaveProblem,
     mustHaveFragments,
