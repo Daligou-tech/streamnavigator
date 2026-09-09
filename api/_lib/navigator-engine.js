@@ -247,6 +247,52 @@ State plainly that this is not legal advice.`,
   },
 };
 
+// The tool schema declares missing_or_uncertain, sections, sections[].items
+// and key_numbers as arrays. The model does not always honour that, and
+// nothing between the API and the customer's screen checked.
+//
+// Observed on a live rental report (submission 37466c44, 2026-09-09):
+// missing_or_uncertain came back as the STRING '["...","..."]}' — a JSON
+// array plus a stray brace, serialised into a string field. It carries no
+// angle brackets, so the tag-leak check above passed it; the JSON parses,
+// so nothing else objected; and it was stored and served.
+//
+// navigator-status.html then called .forEach on a string. That throws
+// partway through rendering, which cost the customer three things at once:
+// the "what I couldn't verify" block rendered as a heading with an empty
+// list, and the two statements that run AFTER it — renderFixups() and the
+// automatic PDF email — never ran at all. The page promises the report is
+// "delivered automatically"; on that report it silently was not.
+//
+// Normalising here rather than retrying is deliberate: the content was
+// entirely correct, only the container was wrong, and a retry would have
+// spent another minute of the customer's wait to re-roll a die.
+function coerceStringArray(value) {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string' && v.trim());
+  if (typeof value !== 'string') return [];
+  const trimmed = value.trim();
+  // '["a","b"]}' — take everything up to the last ']' and try again.
+  const close = trimmed.lastIndexOf(']');
+  if (trimmed.startsWith('[') && close > 0) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(0, close + 1));
+      if (Array.isArray(parsed)) return parsed.filter((v) => typeof v === 'string' && v.trim());
+    } catch (err) { /* fall through and keep the raw string as one item */ }
+  }
+  return trimmed ? [trimmed] : [];
+}
+
+function normalizeReport(input) {
+  const out = { ...input };
+  out.missing_or_uncertain = coerceStringArray(out.missing_or_uncertain);
+  out.sections = (Array.isArray(out.sections) ? out.sections : [])
+    .filter((s) => s && typeof s === 'object')
+    .map((s) => ({ ...s, items: coerceStringArray(s.items) }));
+  out.key_numbers = (Array.isArray(out.key_numbers) ? out.key_numbers : [])
+    .filter((n) => n && typeof n === 'object' && (n.label || n.value));
+  return out;
+}
+
 function guessMediaType(filename) {
   const ext = String(filename).toLowerCase().split('.').pop();
   if (ext === 'pdf') return 'application/pdf';
@@ -555,12 +601,23 @@ async function generateNavigatorReport(submissionId) {
         continue;
       }
 
-      if (reportLooksContaminated(toolUse.input)) {
+      // Normalised BEFORE the contamination check so the check reads the same
+      // strings the customer will, not a container the renderer would reject.
+      const candidate = normalizeReport(toolUse.input);
+
+      if (reportLooksContaminated(candidate)) {
         lastError = new Error('Model output contained malformed/leaked formatting artifacts');
         continue;
       }
 
-      report = toolUse.input;
+      // A report with no sections is not a report. Retrying costs a minute;
+      // storing an empty one costs the customer the whole purchase.
+      if (!candidate.sections.length) {
+        lastError = new Error('Model returned a report with no sections');
+        continue;
+      }
+
+      report = candidate;
     }
 
     if (!report) throw lastError || new Error('Failed to generate a valid report after retrying');
@@ -618,4 +675,8 @@ async function generateNavigatorReport(submissionId) {
   }
 }
 
-module.exports = { generateNavigatorReport, PRODUCT_CONFIGS, __internal: { renderLettersAsText } };
+module.exports = {
+  generateNavigatorReport,
+  PRODUCT_CONFIGS,
+  __internal: { renderLettersAsText, normalizeReport, coerceStringArray },
+};

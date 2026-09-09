@@ -469,6 +469,31 @@
     }
   }
 
+  // api/_lib/navigator-engine.js now normalises every list field before it
+  // stores a report, so a model that returns a string where the tool schema
+  // declared an array can no longer reach this page. Reports generated before
+  // that fix are still in the database, and this page must render them.
+  //
+  // It is also the last line of defence for a shape nobody predicted. The cost
+  // of getting this wrong is not a missing bullet list: a throw inside this
+  // function abandons everything after it, and what comes after it includes the
+  // automatic PDF email. One malformed field silently cancelled the delivery
+  // the intake page promised.
+  function asArray(value){
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string' && value.trim()) {
+      var close = value.lastIndexOf(']');
+      if (value.trim().charAt(0) === '[' && close > 0) {
+        try {
+          var parsed = JSON.parse(value.slice(value.indexOf('['), close + 1));
+          if (Array.isArray(parsed)) return parsed;
+        } catch (e) { /* fall through */ }
+      }
+      return [value];
+    }
+    return [];
+  }
+
   function renderGenericReport(report){
     document.getElementById('report-headline').textContent = report.headline || 'Your report';
     document.getElementById('report-summary').textContent = report.summary || '';
@@ -482,11 +507,12 @@
       tagEl.hidden = true;
     }
 
-    if (report.key_numbers && report.key_numbers.length) {
+    var keyNumbers = asArray(report.key_numbers).filter(function(n){ return n && typeof n === 'object'; });
+    if (keyNumbers.length) {
       document.getElementById('numbers-block').hidden = false;
       var grid = document.getElementById('numbers-grid');
       grid.innerHTML = '';
-      report.key_numbers.forEach(function(n){
+      keyNumbers.forEach(function(n){
         var card = document.createElement('div');
         card.className = 'report-number-card';
         card.innerHTML = '<div class="num-label"></div><div class="num-value"></div>';
@@ -500,14 +526,14 @@
 
     var sectionsEl = document.getElementById('report-sections');
     sectionsEl.innerHTML = '';
-    (report.sections || []).forEach(function(sec){
+    asArray(report.sections).forEach(function(sec){
       var block = document.createElement('div');
       block.className = 'report-block';
       var h3 = document.createElement('h3');
       h3.textContent = (sec.icon ? sec.icon + ' ' : '') + (sec.title || '');
       block.appendChild(h3);
       var ul = document.createElement('ul');
-      (sec.items || []).forEach(function(item){
+      asArray(sec.items).forEach(function(item){
         var li = document.createElement('li');
         li.textContent = item;
         ul.appendChild(li);
@@ -516,11 +542,12 @@
       sectionsEl.appendChild(block);
     });
 
-    if (report.missing_or_uncertain && report.missing_or_uncertain.length) {
+    var uncertain = asArray(report.missing_or_uncertain);
+    if (uncertain.length) {
       document.getElementById('uncertain-block').hidden = false;
       var ul2 = document.getElementById('uncertain-list');
       ul2.innerHTML = '';
-      report.missing_or_uncertain.forEach(function(item){
+      uncertain.forEach(function(item){
         var li = document.createElement('li');
         li.textContent = item;
         ul2.appendChild(li);
