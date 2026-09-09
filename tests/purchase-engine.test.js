@@ -3686,3 +3686,28 @@ test('the graded count matches what the buyer actually asked for', async (t) => 
     'two requirements in, two graded'
   );
 });
+
+test('the verification budget clears the verifications that actually succeed', () => {
+  // Shipped at 120s once, on the stated but unchecked belief that a working
+  // verification finishes well inside two minutes. Measured, they do not: a
+  // verification holds its invocation open until it answers, so the first
+  // poll's duration is its duration, and the two that succeeded on 2026-09-09
+  // took 128s and 166s. At 120s both were killed on the next run, and the LG
+  // fridge stopped reporting a deal-breaker it had correctly caught.
+  //
+  // The budget does not have to leave room for the report — an answered
+  // verification hands back, and an abandoned one hands back too, so the
+  // report always gets its own invocation. It only has to fit inside the 300s
+  // platform limit with enough left to write the marker.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const budget = __internal.VERIFICATION_BUDGET_MS;
+
+  assert.ok(
+    budget >= 200000,
+    `the budget (${budget}ms) must clear the slowest verification observed to SUCCEED (166s), with margin — tightening it below that silently downgrades must-have checks to unverified`
+  );
+  assert.ok(
+    budget <= 280000,
+    `the budget (${budget}ms) must leave room inside the 300s invocation limit to record the abandonment and hand back`
+  );
+});
