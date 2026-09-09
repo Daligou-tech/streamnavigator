@@ -3,28 +3,64 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Unsubscribe — StreamNavigator AI</title>
+<title>Unsubscribe — StreamNavigator</title>
 <meta name="description" content="Remove your email address from StreamNavigator outreach." />
 <meta name="robots" content="noindex, nofollow" />
 <link rel="canonical" href="https://streamnavigator.ai/unsubscribe" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  .unsub-wrap{ max-width:560px; margin:0 auto; padding:72px 24px 56px; }
-  .unsub-wrap .eyebrow{ margin-bottom:14px; }
-  .unsub-wrap h1{ font-size:clamp(1.8rem, 4vw, 2.4rem); margin-bottom:12px; }
-  .unsub-lede{ color:var(--text-dim); font-size:16px; line-height:1.65; margin-bottom:32px; }
-  .unsub-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius-sm); box-shadow:var(--shadow-hard-sm); padding:26px 24px; }
-  .unsub-card .btn{ width:100%; justify-content:center; }
-  .unsub-note{ color:var(--text-dimmer); font-size:13.5px; line-height:1.6; margin-top:24px; }
-  .unsub-note a{ color:var(--accent-deep); }
-  .unsub-msg{ font-size:14px; line-height:1.55; margin-top:14px; }
-  .unsub-msg.error{ color:#B3261E; }
-  .unsub-done h2{ font-size:1.25rem; margin-bottom:10px; }
-  .unsub-done p{ color:var(--text-dim); font-size:15px; line-height:1.65; margin-bottom:12px; }
-  .unsub-done strong{ color:var(--text); }
+/* Deliberately self-contained and copied from closing.html rather than
+   pulling in navigator-shared.css. The recipients who land here arrived from
+   a cold email pointing at /closing, and a page that looks like a different
+   company than the one that mailed them reads as phishing — which is the one
+   impression an unsubscribe page cannot afford to give. */
+:root{
+  --ink:#1B2A3A; --ink-soft:#5B6570; --paper:#FBFAF7; --panel:#FFFFFF;
+  --rule:#D8DAD5; --rule-soft:#E9EAE6;
+  --flag:#B01F12; --flag-tint:#FBEEEC;
+  --ok:#2C6A57; --ok-tint:#EDF3F0;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;font-size:17px;line-height:1.6}
+.wrap{max-width:1080px;margin:0 auto;padding:0 28px}
+h1,h2{font-family:"Newsreader",Georgia,serif;font-weight:500;letter-spacing:-0.01em;margin:0}
+h1{font-size:clamp(2rem,4.4vw,2.9rem);line-height:1.09;margin-bottom:14px}
+h2{font-size:1.3rem;line-height:1.25;margin-bottom:10px}
+p{margin:0 0 16px}
+a{color:inherit}
+
+header.nav{border-bottom:1px solid var(--rule);background:var(--paper)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;gap:20px;height:62px}
+.brand{font-family:"Newsreader",serif;font-size:1.12rem;font-weight:600;text-decoration:none}
+.brand span{color:var(--ink-soft);font-weight:400}
+
+main{padding:62px 0 40px}
+.col{max-width:560px}
+.notice{display:inline-block;font-size:.82rem;color:var(--ink-soft);border:1px solid var(--rule);border-radius:2px;padding:5px 10px;margin-bottom:20px}
+.lede{font-size:1.05rem;color:var(--ink-soft);margin-bottom:30px}
+
+.card{background:var(--panel);border:1px solid var(--ink);box-shadow:5px 5px 0 rgba(27,42,58,.08);padding:26px 26px 24px}
+label{display:block;font-size:.9rem;font-weight:500;margin-bottom:6px}
+input[type=email]{width:100%;padding:12px 13px;border:1px solid var(--rule);border-radius:2px;font-family:inherit;font-size:.97rem;background:var(--panel);color:var(--ink)}
+input[type=email]:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.field{margin-bottom:20px}
+.btn{display:inline-block;width:100%;background:var(--ink);color:var(--paper);text-decoration:none;font-size:1rem;font-weight:500;padding:14px 26px;border:1px solid var(--ink);border-radius:2px;cursor:pointer;font-family:inherit}
+.btn:hover{background:#12202E}
+.btn[disabled]{opacity:.55;cursor:default}
+.err{color:var(--flag);font-size:.88rem;line-height:1.5;margin-top:12px}
+
+.done{border-top:1px solid var(--rule-soft);margin-top:0}
+.done .addr{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:.93rem}
+.done p{color:var(--ink-soft);font-size:.97rem}
+.done p:last-child{margin-bottom:0}
+.after{font-size:.87rem;color:var(--ink-soft);margin-top:22px;max-width:60ch}
+
+footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft);border-top:1px solid var(--rule);margin-top:40px}
+.disc{max-width:74ch;margin-bottom:20px}
+.foot-links{display:flex;gap:18px;flex-wrap:wrap}
 </style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -33,54 +69,61 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator
-    </a>
-  </nav>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Email preferences</span></a>
+  </div>
 </header>
 
-<main id="top">
-  <div class="unsub-wrap">
-    <div class="eyebrow">✦ Email preferences</div>
+<main>
+  <div class="wrap"><div class="col">
 
     <div id="form-view">
-      <h1>Unsubscribe</h1>
-      <p class="unsub-lede">Confirm your address below and we won't email you again. No account, no sign-in, nothing else to fill in.</p>
+      <div class="notice">Unsubscribe</div>
+      <h1>Stop receiving email from us</h1>
+      <p class="lede">Confirm your address and we won't write again. No account, no sign-in, nothing else to fill in.</p>
 
-      <div class="unsub-card">
+      <div class="card">
         <form id="unsub-form" novalidate>
-          <div class="field-block">
+          <div class="field">
             <label for="email">Your email address</label>
             <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required />
           </div>
-          <button type="submit" class="btn btn-primary" id="submit-btn">Unsubscribe me</button>
+          <button type="submit" class="btn" id="submit-btn">Unsubscribe me</button>
         </form>
-        <p class="unsub-msg" id="msg" role="status" aria-live="polite"></p>
+        <p class="err" id="msg" role="status" aria-live="polite" hidden></p>
       </div>
 
-      <p class="unsub-note">This removes you from outreach email only. It does not affect reports or receipts for anything you've purchased. Questions: <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a>.</p>
+      <p class="after">This removes you from outreach email only. It does not affect reports or receipts for anything you have purchased. Questions: <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a>.</p>
     </div>
 
     <div id="done-view" hidden>
+      <div class="notice">Unsubscribed</div>
       <h1>You're unsubscribed</h1>
-      <div class="unsub-card unsub-done">
+
+      <div class="card done">
         <h2>Done — nothing else to do.</h2>
-        <p><strong id="done-email"></strong> has been removed from our outreach list. You won't hear from us again.</p>
-        <p>If something does arrive after today, it crossed in the post — forward it to <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a> and we'll fix it.</p>
+        <p><span class="addr" id="done-email"></span> has been removed from our outreach list. You won't hear from us again.</p>
+        <p>If something does arrive after today, it crossed in the post. Forward it to <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a> and we'll fix it.</p>
       </div>
-      <p class="unsub-note">StreamNavigator LLC · 478 Elden Street, #101, Herndon VA 20170</p>
+
+      <p class="after">StreamNavigator LLC · 478 Elden Street, #101, Herndon VA 20170</p>
     </div>
-  </div>
+
+  </div></div>
 </main>
 
 <footer>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+  <div class="wrap">
+    <p class="disc">StreamNavigator LLC · 478 Elden Street, #101, Herndon VA 20170. Automated analysis for informational purposes only. Not legal, tax, financial or mortgage advice.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
@@ -105,14 +148,21 @@
 
   var campaign = (params.get('c') || '').slice(0, 120);
 
+  function fail(text) {
+    btn.disabled = false;
+    btn.textContent = 'Unsubscribe me';
+    msg.hidden = false;
+    msg.textContent = text;
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var email = (input.value || '').trim();
-    msg.className = 'unsub-msg';
+    msg.hidden = true;
     msg.textContent = '';
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      msg.className = 'unsub-msg error';
+      msg.hidden = false;
       msg.textContent = 'That address doesn’t look right. Please check it and try again.';
       input.focus();
       return;
@@ -135,13 +185,10 @@
         window.scrollTo(0, 0);
       })
       .catch(function (err) {
-        btn.disabled = false;
-        btn.textContent = 'Unsubscribe me';
-        msg.className = 'unsub-msg error';
         // Never a dead end: if the button cannot do it, the address that can is
         // on screen. An opt-out that fails silently is the failure that matters.
-        msg.textContent = (err && err.message ? err.message : 'Something went wrong.')
-          + ' You can also email partners@streamnavigator.ai and we’ll remove you by hand.';
+        fail((err && err.message ? err.message : 'Something went wrong.')
+          + ' You can also email partners@streamnavigator.ai and we’ll remove you by hand.');
       });
   });
 })();
