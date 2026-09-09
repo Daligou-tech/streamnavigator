@@ -1845,10 +1845,20 @@ function fridgeSubmission() {
   });
 }
 
+// published_value is the figure the verdict rests on, quoted rather than
+// paraphrased, and the size requirement carries the two numbers so its
+// verdict is computed rather than judged.
 const LG_CHECKS = () => ([
-  { requirement: 'internal ice maker', verdict: 'confirmed', finding: 'Ships with a Dual Ice Maker including Craft Ice.', source: "LG's product page" },
-  { requirement: 'no external door dispenser', verdict: 'contradicted', finding: 'Has a Tall Ice & Water Dispenser built into the door.', source: "LG's product page" },
-  { requirement: 'must fit a 36-inch opening', verdict: 'confirmed', finding: 'Listed at 35.75 inches wide.', source: 'LG spec sheet' },
+  { requirement: 'internal ice maker', verdict: 'confirmed', finding: 'Ships with a Dual Ice Maker including Craft Ice.', published_value: 'Dual Ice Maker with Craft Ice', source: "LG's product page" },
+  { requirement: 'no external door dispenser', verdict: 'contradicted', finding: 'Has a Tall Ice & Water Dispenser built into the door.', published_value: 'Tall Ice & Water Dispenser with Measured Fill', source: "LG's product page" },
+  {
+    requirement: 'must fit a 36-inch opening',
+    verdict: 'confirmed',
+    finding: 'Listed at 35.75 inches wide.',
+    published_value: '35 3/4 in W',
+    measurement: { value: 35.75, limit: 36, unit: 'inches', comparison: 'at_most' },
+    source: 'LG spec sheet',
+  },
 ]);
 
 function checkedReport(overrides) {
@@ -1965,8 +1975,9 @@ test('a graded verdict survives when research did run', async (t) => {
   const report = await generatePurchaseReport('sub-1');
 
   const section = report.sections[0];
-  assert.equal(section.items[0], '✓ internal ice maker — Ships with a Dual Ice Maker including Craft Ice. (LG\'s product page)');
-  assert.equal(section.items[1], '✗ no external door dispenser — Has a Tall Ice & Water Dispenser built into the door. (LG\'s product page)');
+  // The published figure the verdict rests on now travels with it.
+  assert.equal(section.items[0], '✓ internal ice maker — Ships with a Dual Ice Maker including Craft Ice. [published: Dual Ice Maker with Craft Ice] (LG\'s product page)');
+  assert.equal(section.items[1], '✗ no external door dispenser — Has a Tall Ice & Water Dispenser built into the door. [published: Tall Ice & Water Dispenser with Measured Fill] (LG\'s product page)');
   const strip = report.key_numbers.find((n) => /must-haves/i.test(n.label));
   assert.equal(strip.value, '1 of 3 NOT met', 'a failed deal-breaker belongs in the strip, not three screens down');
 });
@@ -2906,7 +2917,12 @@ test('with nothing looked up anywhere, the disclaimer claims no separate check',
 });
 
 test('an unverified spec check does not count as having been looked up', async (t) => {
-  const unverified = LG_CHECKS().map((c) => ({ ...c, verdict: 'unverified', source: 'not checked' }));
+  // Nothing looked up means no published figure and no measurement either —
+  // a measurement left behind would have its verdict recomputed.
+  const unverified = LG_CHECKS().map((c) => {
+    const { measurement, published_value, ...rest } = c;
+    return { ...rest, verdict: 'unverified', source: 'not checked' };
+  });
   const report = await reportWithNoUsableResearch(t, unverified);
   assert.equal(/checked separately/i.test(report.missing_or_uncertain[0]), false);
 });
@@ -3000,4 +3016,119 @@ test('a field is still asked about once when it trips both checks', () => {
     'Everything above is folded into the $9,100-$11,400 total cost of ownership.'
   ));
   assert.equal(conflicts.filter((c) => c.path === 'maintenance_running_costs.explanation').length, 1);
+});
+
+// --- a size requirement is arithmetic, not a judgement ---------------------
+//
+// Two runs of the same Peloton submission disagreed about the same fact. The
+// requirement was "must fit a 4ft by 2ft floor space". One answered CONFIRMED,
+// citing Peloton's shop page and its "compact 4' x 2' footprint"; the other
+// answered NOT MET. Both had read Peloton. The Bike+ is 59 inches long, which
+// is 4.9 feet — the marketing line and the spec sheet describe the same object
+// and only one of them answers the question.
+//
+// Three LG runs disagreed the same way about an external door dispenser. With
+// the arithmetic stable for a while, this was the largest remaining source of
+// variance in the product.
+
+test('__internal.verdictFromMeasurement decides a size requirement by the numbers', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const v = __internal.verdictFromMeasurement;
+  // The Peloton disagreement, both ways round.
+  assert.equal(v({ value: 59, limit: 48, unit: 'inches', comparison: 'at_most' }), 'contradicted');
+  assert.equal(v({ value: 48, limit: 48, unit: 'inches', comparison: 'at_most' }), 'confirmed');
+  // The LG fridge: 35.75 into a 36-inch opening fits; 70.25 into 70 does not.
+  assert.equal(v({ value: 35.75, limit: 36, unit: 'inches', comparison: 'at_most' }), 'confirmed');
+  assert.equal(v({ value: 70.25, limit: 70, unit: 'inches', comparison: 'at_most' }), 'contradicted');
+  assert.equal(v({ value: 24, limit: 22, unit: 'cu ft', comparison: 'at_least' }), 'confirmed');
+  assert.equal(v({ value: 20, limit: 22, unit: 'cu ft', comparison: 'at_least' }), 'contradicted');
+});
+
+test('a requirement with no numbers is left as the judgement it is', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const v = __internal.verdictFromMeasurement;
+  assert.equal(v(undefined), null);
+  assert.equal(v(null), null);
+  assert.equal(v({ value: 59, unit: 'inches', comparison: 'at_most' }), null, 'no limit');
+  assert.equal(v({ value: 59, limit: 48, unit: 'inches' }), null, 'no comparison');
+  assert.equal(v({ value: 'fifty-nine', limit: 48, comparison: 'at_most' }), null, 'not a number');
+});
+
+test('the figures override the verdict the model reached, and show their working', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const checks = [{
+    requirement: 'must fit a 4ft by 2ft floor space',
+    verdict: 'confirmed',
+    finding: 'Peloton describes a compact 4ft by 2ft footprint.',
+    published_value: '59.0 in L x 22.0 in W',
+    source: 'Peloton spec sheet',
+    measurement: { value: 59, limit: 48, unit: 'inches', comparison: 'at_most' },
+  }];
+  __internal.applyMeasuredVerdicts(checks, 'sub-1');
+  assert.equal(checks[0].verdict, 'contradicted', 'its own figures say it does not fit');
+  assert.match(checks[0].finding, /59 inches against 48 inches/, 'and the customer sees the comparison');
+  assert.match(checks[0].finding, /compact 4ft by 2ft footprint/, 'without losing what was found');
+});
+
+test('a verdict the figures agree with is left alone, and not annotated twice', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const checks = [{
+    requirement: 'must fit a 36-inch opening',
+    verdict: 'confirmed',
+    finding: 'Listed at 35.75 inches wide, inside a 36-inch opening.',
+    published_value: '35 3/4 in W',
+    source: 'LG spec sheet',
+    measurement: { value: 35.75, limit: 36, unit: 'inches', comparison: 'at_most' },
+  }];
+  const before = checks[0].finding;
+  __internal.applyMeasuredVerdicts(checks, 'sub-1');
+  assert.equal(checks[0].verdict, 'confirmed');
+  assert.equal(checks[0].finding, before, 'the figure is already in the finding, so it is not restated');
+});
+
+test('a graded verdict has to quote the published figure it rests on', () => {
+  // Where "compact 4' x 2' footprint" and "59 inches long" stop being
+  // distinguishable is exactly where a paraphrase is allowed.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const noValue = LG_CHECKS();
+  delete noValue[0].published_value;
+  assert.match(
+    __internal.mustHaveProblem(checkedReport({ must_have_checks: noValue }), fridgeSubmission()),
+    /without quoting the published figure it rests on/
+  );
+  // Unverified needs none, because there is nothing to quote.
+  const unver = LG_CHECKS();
+  unver[0] = { requirement: 'internal ice maker', verdict: 'unverified', finding: 'Could not establish it.', source: 'not checked' };
+  assert.equal(__internal.mustHaveProblem(checkedReport({ must_have_checks: unver }), fridgeSubmission()), null);
+});
+
+test('both tools ask for the published figure, and the size numbers', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const item = __internal.MUST_HAVE_TOOL.input_schema.properties.must_have_checks.items;
+  assert.ok(item.required.includes('published_value'), 'the quote is required');
+  assert.ok(item.properties.measurement, 'and the numbers are available when the requirement is a size');
+  for (const f of ['value', 'limit', 'unit', 'comparison']) {
+    assert.ok(item.properties.measurement.required.includes(f), `measurement.${f}`);
+  }
+  assert.match(item.properties.published_value.description, /marketing summary is not a published value/i);
+});
+
+test('a downgraded check keeps no figures that could resurrect it', async (t) => {
+  // The searchRounds downgrade takes a verdict away because nothing was
+  // looked up. A measurement left behind would let a later pass compute it
+  // straight back.
+  const submission = fridgeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) =>
+    (isVerifyCall(opts) ? mustHaveResponse(LG_CHECKS(), 0) : toolUseResponse(checkedReport()));
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+  for (const line of report.sections[0].items) {
+    assert.match(line, /^\?/, line);
+    assert.equal(/\[published:/.test(line), false, 'and no published figure is shown for it');
+  }
 });

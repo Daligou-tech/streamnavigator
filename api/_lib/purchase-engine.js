@@ -1727,6 +1727,12 @@ function mustHaveProblem(report, submission) {
     if (!nonEmpty(check.requirement) || !nonEmpty(check.finding) || !nonEmpty(check.source)) {
       return `The must-have check for "${(check && check.requirement) || '(unnamed)'}" is missing its finding or its source.`;
     }
+    // A verdict about a specification has to quote the specification. A
+    // paraphrase is where "compact 4' x 2' footprint" and "59 inches long"
+    // stop being distinguishable.
+    if (check.verdict !== 'unverified' && !nonEmpty(check.published_value)) {
+      return `The must-have check for "${check.requirement}" says "${check.verdict}" without quoting the published figure it rests on.`;
+    }
     if (!['confirmed', 'contradicted', 'unverified'].includes(check.verdict)) {
       return `The must-have check for "${check.requirement}" has no usable verdict.`;
     }
@@ -1753,6 +1759,61 @@ function mustHaveProblem(report, submission) {
   return null;
 }
 
+
+
+// A size requirement is arithmetic, so it is not left as a judgement.
+//
+// Two Peloton runs on the same submission disagreed about the same fact.
+// The requirement was "must fit a 4ft by 2ft floor space". One run answered
+// CONFIRMED, citing Peloton's shop page and its "compact 4' x 2' footprint";
+// the other answered NOT MET. Both had read Peloton. The Bike+ is 59 inches
+// long, which is 4.9 feet, so the marketing line and the spec sheet describe
+// the same object and only one of them answers the question.
+//
+// The same shape appeared on the LG fridge, where runs disagreed about an
+// external door dispenser, and it is the largest remaining source of
+// variance in this product: the numbers have been stable for a while, the
+// spec judgements have not.
+//
+// So when the model hands back a measurement, the verdict is computed from
+// it. That does not make the lookup reliable — a wrong published figure is
+// still wrong — but it removes the step where the same two numbers produce
+// different answers on different days.
+function verdictFromMeasurement(measurement) {
+  if (!measurement || typeof measurement !== 'object') return null;
+  const { value, limit, comparison } = measurement;
+  if (!isNum(value) || !isNum(limit)) return null;
+  if (comparison !== 'at_most' && comparison !== 'at_least') return null;
+  return comparison === 'at_most'
+    ? (value <= limit ? 'confirmed' : 'contradicted')
+    : (value >= limit ? 'confirmed' : 'contradicted');
+}
+
+// Applies those computed verdicts in place, and says so when one disagrees
+// with what the model concluded — that disagreement is the whole point, and
+// it should be visible in the logs rather than silently corrected.
+function applyMeasuredVerdicts(checks, submissionId) {
+  if (!Array.isArray(checks)) return checks;
+  for (const check of checks) {
+    if (!check || typeof check !== 'object') continue;
+    const computed = verdictFromMeasurement(check.measurement);
+    if (!computed) continue;
+    const { value, limit, unit, comparison } = check.measurement;
+    const relation = comparison === 'at_most' ? 'must be at most' : 'must be at least';
+    if (check.verdict !== computed) {
+      console.warn(
+        `[purchase-engine] Submission ${submissionId}: "${check.requirement}" was graded ${check.verdict} but its own figures say ${computed} (${value} ${unit} against a limit of ${limit}); using the figures.`
+      );
+    }
+    check.verdict = computed;
+    // The customer sees the comparison, not just the answer.
+    const arithmetic = `${value} ${unit} against ${limit} ${unit} — it ${relation} ${limit}.`;
+    if (!String(check.finding || '').includes(String(value))) {
+      check.finding = `${arithmetic} ${check.finding || ''}`.trim();
+    }
+  }
+  return checks;
+}
 
 const MUST_HAVE_REPAIR_TOOL = {
   name: 'submit_field_repair',
@@ -1827,7 +1888,7 @@ ${JSON.stringify({ headline: candidate.headline, recommendation: candidate.recom
   }
   const patched = {
     ...candidate,
-    must_have_checks: toolUse.input.must_have_checks,
+    must_have_checks: applyMeasuredVerdicts(toolUse.input.must_have_checks, submissionId),
     recommendation: {
       ...candidate.recommendation,
       verdict: toolUse.input.verdict,
@@ -1864,9 +1925,21 @@ const MUST_HAVE_TOOL = {
               description: 'confirmed = you looked the specification up and the item has this. contradicted = you looked it up and it does NOT, or it has the thing they called a deal-breaker. unverified = you could not establish it. Recalling that a model has a feature is NOT checking; if you did not look it up in this conversation, the honest answer is unverified.',
             },
             finding: { type: 'string', description: 'What the specification actually says, in one sentence. For unverified, what you were unable to establish.' },
+            published_value: { type: 'string', description: 'Required. The published figure or wording your verdict rests on, quoted rather than paraphrased — "59.0 in D x 22.0 in W", "Tall Ice & Water Dispenser with Measured Fill", "Dual Ice Maker". Write "not found" when the verdict is unverified. A marketing summary is not a published value: if a page says "compact 4\' x 2\' footprint" and the spec sheet says 59 inches long, quote the spec sheet.' },
+            measurement: {
+              type: 'object',
+              description: 'ONLY for a requirement that is a size, weight or capacity limit — a width that must fit an opening, a footprint, a height clearance. Leave it out entirely otherwise. When you give it, the verdict is worked out from these numbers rather than taken from your verdict field, so put the published figure in value and the customer\'s limit in limit, both in the same unit.',
+              properties: {
+                value: { type: 'number', description: 'The item\'s published figure, e.g. 59 for a 59-inch length.' },
+                limit: { type: 'number', description: 'The customer\'s stated limit in the same unit, e.g. 48 for a 4-foot space.' },
+                unit: { type: 'string', description: 'The unit both are in, e.g. "inches".' },
+                comparison: { type: 'string', enum: ['at_most', 'at_least'], description: 'at_most when the item must not exceed the limit (fitting an opening); at_least when it must meet or beat it.' },
+              },
+              required: ['value', 'limit', 'unit', 'comparison'],
+            },
             source: { type: 'string', description: 'Where you read it — the manufacturer page, a retailer listing, the spec sheet. "not checked" when unverified. Never a source you did not actually read.' },
           },
-          required: ['requirement', 'verdict', 'finding', 'source'],
+          required: ['requirement', 'verdict', 'finding', 'published_value', 'source'],
         },
       },
     },
@@ -1887,6 +1960,8 @@ async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch }
 The product, as the buyer described it: ${formData.item_description || '(not given)'}
 ${formData.configuration ? `Configuration they want: ${formData.configuration}\n` : ''}${formData.size_constraints ? `Size constraints: ${formData.size_constraints}\n` : ''}
 Search for the product's published specification before answering. Do not answer from memory about what a given model has or does not have — that is the single most damaging thing you can get wrong, because a buyer told their deal-breaker is satisfied will go and buy the thing. If a search does not settle it, "unverified" is the right answer and costs the buyer nothing; a confident wrong answer costs them the purchase.
+
+Prefer the specification sheet to the marketing copy, and quote what you found rather than summarising it. Manufacturers round in their own favour: a page describing a "compact 4' x 2' footprint" alongside a spec sheet listing 59 inches of length is describing the same object twice, and only one of those two answers whether it fits a four-foot space. Where a requirement is a size, give the numbers and let the comparison be done for you.
 
 ${noLeakRule('submit_must_have_checks')}
 
@@ -1943,7 +2018,10 @@ Give exactly one entry per line above, using the buyer's own wording for the req
     console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} returned no usable checks.`);
     return null;
   }
-  return { checks: sanitizeReportTags(toolUse.input.must_have_checks), searchRounds };
+  return {
+    checks: applyMeasuredVerdicts(sanitizeReportTags(toolUse.input.must_have_checks), submissionId),
+    searchRounds,
+  };
 }
 
 // What the report carries when verification could not run at all: the
@@ -2206,8 +2284,8 @@ function mapToGenericReport(report) {
       icon: '📋',
       title: 'Your must-haves, checked against the actual specification',
       items: checks.map((c) => `${MARK[c.verdict] || '?'} ${c.requirement} — ${c.finding}${
-        nonEmpty(c.source) ? ` (${c.source})` : ''
-      }`),
+        nonEmpty(c.published_value) && c.verdict !== 'unverified' ? ` [published: ${c.published_value}]` : ''
+      }${nonEmpty(c.source) ? ` (${c.source})` : ''}`),
     });
   }
   sections.push(
@@ -2575,6 +2653,11 @@ async function generatePurchaseReport(submissionId) {
         for (const check of graded) {
           check.verdict = 'unverified';
           check.source = 'not checked — no live lookup ran for this report';
+          // The figures go with it. Leaving a measurement on a downgraded
+          // check would let a later pass recompute the verdict this line
+          // exists to take away.
+          delete check.measurement;
+          delete check.published_value;
         }
       }
     }
@@ -2966,6 +3049,8 @@ module.exports = {
     repairAssumptions,
     repairResearchNotes,
     repairMustHaveChecks,
+    verdictFromMeasurement,
+    applyMeasuredVerdicts,
     verifyMustHaves,
     readCachedVerification,
     unverifiedChecks,
