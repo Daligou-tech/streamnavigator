@@ -169,10 +169,67 @@ async function generateUntilReport(id, maxPolls = 6) {
   return last;
 }
 
+// The flat wire shape, written out by hand rather than derived from the
+// engine's own FLAT_TO_NESTED. That duplication is the point: if it were
+// derived, a wrong entry in that map would be applied in both directions and
+// every round-trip test below would still pass. Stated independently, a
+// disagreement between the two shows up as dozens of failures.
+const WIRE_FIELDS = {
+  total_cost_of_ownership: { cost_breakdown: 'cost_breakdown', explanation: 'cost_explanation' },
+  financing_impact: { applicable: 'financing_applicable', explanation: 'financing_explanation' },
+  maintenance_running_costs: { annual_low: 'maintenance_annual_low', annual_high: 'maintenance_annual_high', explanation: 'maintenance_explanation' },
+  depreciation_resale: { resale_low: 'resale_low', resale_high: 'resale_high', expected_resale_note: 'expected_resale_note', explanation: 'resale_explanation' },
+  alternative_comparison: {
+    alternative_name: 'alternative_name',
+    alternative_price_low: 'alternative_price_low',
+    alternative_price_high: 'alternative_price_high',
+    alternative_total_low: 'alternative_total_low',
+    alternative_total_high: 'alternative_total_high',
+    explanation: 'alternative_explanation',
+  },
+  recommendation: { verdict: 'verdict', reasoning: 'verdict_reasoning' },
+};
+
+// Turns a report written in the readable nested shape into the flat input the
+// model actually returns. Tests go on declaring reports the way a reader
+// understands them; what crosses the wire is what the schema now asks for, so
+// every stub below exercises nestReportInput for real.
+//
+// time_horizon_years is dropped on purpose: it is not in the schema and never
+// was model-supplied. The engine takes it from the customer's own form.
+function flattenToWire(input) {
+  if (!input || typeof input !== 'object') return input;
+  const out = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (WIRE_FIELDS[key]) continue;
+    out[key] = value;
+  }
+  for (const [section, fields] of Object.entries(WIRE_FIELDS)) {
+    const value = input[section];
+    if (value === undefined) continue;
+    // A section the model returned as tag text rather than an object: the
+    // leak lands in every one of that section's fields, which is what the
+    // flat schema turns "this whole section leaked" into.
+    if (typeof value !== 'object' || value === null) {
+      for (const flatKey of Object.values(fields)) out[flatKey] = value;
+      continue;
+    }
+    for (const [nestedKey, flatKey] of Object.entries(fields)) {
+      if (value[nestedKey] === undefined) continue;
+      out[flatKey] = value[nestedKey];
+    }
+  }
+  return out;
+}
+
+function nonEmptyString(v) {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
 function toolUseResponse(input) {
   return {
     ok: true,
-    json: async () => ({ content: [{ type: 'tool_use', name: 'submit_purchase_report', input }] }),
+    json: async () => ({ content: [{ type: 'tool_use', name: 'submit_purchase_report', input: flattenToWire(input) }] }),
   };
 }
 
@@ -2620,9 +2677,11 @@ test('the ownership period comes from the customer, not the model', async (t) =>
   // repeat a number the intake form already collects and the pre-payment
   // gate already requires for every category.
   const { __internal } = require('../api/_lib/purchase-engine');
-  assert.equal(
-    __internal.REPORT_TOOL.input_schema.properties.total_cost_of_ownership.properties.time_horizon_years,
-    undefined
+  // Not asked for anywhere in the schema — which is now a flat list of
+  // fields, so this is the whole search space rather than one section of it.
+  assert.deepEqual(
+    Object.keys(__internal.REPORT_TOOL.input_schema.properties).filter((k) => k.includes('horizon') || k.includes('years')),
+    []
   );
   assert.equal(__internal.horizonYears(fakeSubmission()), 8);
   assert.equal(__internal.horizonYears(sevenYearSubmission()), 7);
@@ -2633,9 +2692,10 @@ test('the ownership period comes from the customer, not the model', async (t) =>
   installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
-  const wrong = completeReportInput();
-  wrong.total_cost_of_ownership.time_horizon_years = 99;
-  global.fetch = async () => toolUseResponse(wrong);
+  // The model cannot send a horizon at all now, so the check is that the
+  // report still comes out on the customer's 8 years with nothing supplying
+  // it but the form.
+  global.fetch = async () => toolUseResponse(completeReportInput());
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
@@ -3329,4 +3389,152 @@ test('a model stuck returning tag text still terminates', async (t) => {
   await generatePurchaseReport('sub-1');
   assert.equal(submission.generation_attempts, 1, 'after that they start costing attempts');
   assert.equal(reportInserts.length, 0);
+});
+
+// --- the report schema is flat, and folds back to the shape everything reads --
+//
+// The whole-response tag leak (roughly three attempts in four) was traced to
+// the report tool asking for six sibling object-valued fields in one call.
+// submit_must_have_checks, on the same model with the same search tool, asks
+// for an array of objects with a nested object inside and has never leaked, so
+// neither depth nor search context is what breaks. The schema is now flat and
+// nestReportInput folds it back at the boundary, leaving the arithmetic, the
+// repair paths and mapToGenericReport reading the shape they always read.
+
+test('nothing the model is asked for is an object any more', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const props = __internal.REPORT_TOOL.input_schema.properties;
+
+  const objectValued = Object.entries(props)
+    .filter(([, spec]) => spec.type === 'object')
+    .map(([key]) => key);
+  assert.deepEqual(objectValued, [], 'a sibling object here is the thing that leaked');
+
+  // cost_breakdown stays an array of objects, deliberately: must_have_checks
+  // is exactly that shape and is the evidence that it is safe.
+  assert.equal(props.cost_breakdown.type, 'array');
+  assert.equal(props.cost_breakdown.items.type, 'object');
+
+  const arraysOfObjects = Object.entries(props)
+    .filter(([, spec]) => spec.type === 'array' && spec.items && spec.items.type === 'object')
+    .map(([key]) => key);
+  assert.deepEqual(arraysOfObjects, ['cost_breakdown'], 'and it is the only one');
+});
+
+test('every field the schema asks for is folded somewhere', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const { REPORT_TOOL, FLAT_TO_NESTED, PASSTHROUGH_FIELDS } = __internal;
+
+  const mapped = new Set(PASSTHROUGH_FIELDS);
+  for (const fields of Object.values(FLAT_TO_NESTED)) {
+    for (const flatKey of Object.values(fields)) mapped.add(flatKey);
+  }
+
+  // A field added to the schema but never wired into FLAT_TO_NESTED would be
+  // silently dropped on the way in — the model would answer and the answer
+  // would not reach the report.
+  const unmapped = Object.keys(REPORT_TOOL.input_schema.properties).filter((k) => !mapped.has(k));
+  assert.deepEqual(unmapped, [], 'these are asked for and then thrown away');
+
+  // And the reverse: a mapping naming a field the schema no longer has.
+  const schemaKeys = new Set(Object.keys(REPORT_TOOL.input_schema.properties));
+  const dangling = [...mapped].filter((k) => !schemaKeys.has(k));
+  assert.deepEqual(dangling, [], 'these are folded from nothing');
+
+  // Every required field, in particular, has somewhere to land.
+  const missing = REPORT_TOOL.input_schema.required.filter((k) => !mapped.has(k));
+  assert.deepEqual(missing, []);
+});
+
+test('the flat input folds back into exactly the nested report', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const nested = completeReportInput();
+  // time_horizon_years is not on the wire and is not the model's to give;
+  // the engine sets it from the customer's form.
+  delete nested.total_cost_of_ownership.time_horizon_years;
+
+  const wire = flattenToWire(completeReportInput());
+  assert.equal(wire.total_cost_of_ownership, undefined, 'the sections are gone from the wire');
+  assert.equal(wire.cost_explanation, nested.total_cost_of_ownership.explanation);
+  assert.equal(wire.verdict, 'buy');
+  assert.equal(wire.maintenance_annual_low, 55);
+
+  assert.deepEqual(__internal.nestReportInput(wire), nested);
+});
+
+test('a report that has already been folded survives being folded again', () => {
+  // The repair paths and the cached job state pass reports around in the
+  // nested shape, and one of those can come back through here.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const nested = completeReportInput();
+  assert.deepEqual(__internal.nestReportInput(nested), nested);
+});
+
+test('a stray fragment on good prose is repaired, not treated as a lost response', () => {
+  // The regression this guards: sanitizeReportTags exists to absorb a
+  // fragment left on the end of otherwise-good prose, and those reports are
+  // salvaged cheaply. If that started counting as a leaked section, two of
+  // them would trigger a whole-response retry and throw away a report that
+  // only needed a strip.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const wire = flattenToWire(completeReportInput());
+  wire.cost_explanation += ' <parameter name="total">';
+  wire.resale_explanation += ' <parameter name="resale_low">';
+
+  assert.deepEqual(__internal.leakedFlatSections(wire), []);
+  assert.ok(nonEmptyString(__internal.sanitizeReportTags(wire.cost_explanation)));
+});
+
+test('a field whose content was entirely tag text is a lost section', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+
+  // (a) the whole value was tag text
+  let wire = flattenToWire(completeReportInput());
+  wire.cost_explanation = '<parameter name="explanation">';
+  assert.deepEqual(__internal.leakedFlatSections(wire), ['total_cost_of_ownership']);
+
+  // (b) a number field carrying tag text — prose cannot be repaired back
+  //     into the figure it replaced
+  wire = flattenToWire(completeReportInput());
+  wire.maintenance_annual_low = '<parameter name="annual_low">55';
+  assert.deepEqual(__internal.leakedFlatSections(wire), ['maintenance_running_costs']);
+
+  // (c) an enum field outside its enum
+  wire = flattenToWire(completeReportInput());
+  wire.verdict = '<parameter name="verdict">buy';
+  assert.deepEqual(__internal.leakedFlatSections(wire), ['recommendation']);
+
+  // and a clean report is clean
+  assert.deepEqual(__internal.leakedFlatSections(flattenToWire(completeReportInput())), []);
+});
+
+test('a flat report the model actually returns becomes a complete report', async (t) => {
+  // End to end through the real wire shape, with nothing nested anywhere in
+  // what the model hands back.
+  const submission = fakeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let sentInput = null;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.tool_choice && body.tool_choice.name === 'submit_field_repair') {
+      throw new Error('a complete flat report should need no repair');
+    }
+    sentInput = flattenToWire(completeReportInput());
+    return {
+      ok: true,
+      json: async () => ({ content: [{ type: 'tool_use', name: 'submit_purchase_report', input: sentInput }] }),
+    };
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generateUntilReport('sub-1');
+
+  assert.ok(report, 'a flat report is a complete report');
+  assert.equal(reportInserts.length, 1);
+  assert.ok(Object.values(sentInput).every((v) => typeof v !== 'object' || Array.isArray(v)),
+    'nothing nested crossed the wire');
+  assert.match(report.key_numbers[0].label, /\(8yr\)/);
 });
