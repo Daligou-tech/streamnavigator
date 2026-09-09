@@ -73,9 +73,35 @@ const HONESTY_RULES = `${WEB_SEARCH_HONESTY_RULE}
 
 ${noLeakRule('submit_purchase_report')}`;
 
+// Flat on purpose. Every field the model fills in is a top-level scalar or a
+// list; the only nested structure left is cost_breakdown, an array of line
+// items.
+//
+// This schema used to carry six sibling object-valued fields
+// (total_cost_of_ownership, financing_impact, maintenance_running_costs,
+// depreciation_resale, alternative_comparison, recommendation), and roughly
+// three report attempts in four came back with those objects serialised as
+// parameter-tag text instead of JSON — often all six at once, one fragment
+// each. Four other fixes were tried against that and all four failed: a
+// prompt instruction not to do it, renaming the field the leak kept naming
+// (the leak followed the new name), removing the literal tag syntax from the
+// prompt, and giving the model a scratchpad to do its arithmetic in.
+//
+// The evidence pointing here is submit_must_have_checks, in this same file,
+// on the same model: it asks for an ARRAY OF OBJECTS with five required
+// fields each plus a nested optional object, it runs with web_search enabled
+// exactly as this call does, and it has never leaked once. So neither nesting
+// depth nor search context is what breaks — the one structural feature this
+// tool had and that one does not was the six sibling objects.
+//
+// The report is still stored, checked and repaired in its nested shape:
+// nestReportInput below folds this flat input back into it at the boundary,
+// so the arithmetic checks, the repair paths and mapToGenericReport are
+// unchanged. The flattening is a change to what the model is asked to emit,
+// which is the only place the evidence implicates.
 const REPORT_TOOL = {
   name: 'submit_purchase_report',
-  description: 'Submit the structured Purchase Navigator total-cost-of-ownership report. Every field is required — if something genuinely cannot be pinned down, say so explicitly inside that field rather than leaving it out. The customer already confirmed sufficient information before paying, so every one of the six sections below must contain real, substantive content — never a placeholder or an "insufficient information" deflection.',
+  description: 'Submit the structured Purchase Navigator total-cost-of-ownership report. Every field is required — if something genuinely cannot be pinned down, say so explicitly inside that field rather than leaving it out. The customer already confirmed sufficient information before paying, so every field below must contain real, substantive content — never a placeholder or an "insufficient information" deflection.',
   input_schema: {
     type: 'object',
     properties: {
@@ -87,87 +113,52 @@ const REPORT_TOOL = {
         items: { type: 'string' },
         description: 'If you used web_search, 0-5 short notes on what you found and roughly what kind of source it came from (e.g. "current retail listings show similar 33-inch French door fridges from $1,800-$2,600"). Leave empty if you did not search, or found nothing useful — never fabricate having searched.',
       },
-      total_cost_of_ownership: {
-        type: 'object',
-        description: 'Required. The true total cost over the ownership period the customer gave you, not just the purchase price. Give the LINE ITEMS; the total is computed from them, so do not state a separate total that could disagree with its own parts.',
-        properties: {
-          cost_breakdown: {
-            type: 'array',
-            description: 'Required. Every cost that makes up the total, each as its own line item covering the WHOLE ownership period (not per year). At least three items. Include a purchase line always, a financing line whenever the customer is financing, and a running-costs line whenever there are any. These numbers are summed to produce the headline total, so each quantity must appear exactly ONCE across the whole array.',
-            items: {
-              type: 'object',
-              properties: {
-                label: { type: 'string', description: 'Short plain-English name for this cost, e.g. "Fuel" or "Insurance" or "Interest over 60 months".' },
-                kind: {
-                  type: 'string',
-                  enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'],
-                  description: 'purchase = the price paid for the item itself. financing = interest and loan fees. running = fuel/energy, insurance, maintenance, repairs, taxes and fees, everything recurring. resale_recovery = money expected BACK at the end (enter it as a negative number). other = anything genuinely none of the above.',
-                },
-                low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line. On a "running" line this is ignored entirely — write 0 and give per_year_low instead.' },
-                high: { type: 'number', description: 'High end in whole dollars over the entire ownership period. Write 0 on a "running" line.' },
-                per_year_low: { type: 'number', description: 'Low end of this cost PER YEAR, in whole dollars, on a "running" line. Write 0 on every other kind. The whole-period figure is this multiplied by the ownership period — you are not asked for it and should not work it out. A cost that is lumpy rather than steady (repairs that only start in year 6, say) goes in as its average per year across the whole period.' },
-                per_year_high: { type: 'number', description: 'High end of this cost per year on a "running" line. Write 0 on every other kind.' },
-                basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal". Do not restate the figure itself here in different numbers.' },
-              },
-              required: ['label', 'kind', 'low', 'high', 'per_year_low', 'per_year_high', 'basis'],
+
+      cost_breakdown: {
+        type: 'array',
+        description: 'Required. Every cost that makes up the true total over the ownership period the customer gave you, each as its own line item covering the WHOLE ownership period (not per year). At least three items. Include a purchase line always, a financing line whenever the customer is financing, and a running-costs line whenever there are any. These numbers are summed to produce the headline total, so each quantity must appear exactly ONCE across the whole array. Give the LINE ITEMS only; the total is computed from them, so do not state a separate total anywhere that could disagree with its own parts.',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: 'Short plain-English name for this cost, e.g. "Fuel" or "Insurance" or "Interest over 60 months".' },
+            kind: {
+              type: 'string',
+              enum: ['purchase', 'financing', 'running', 'resale_recovery', 'other'],
+              description: 'purchase = the price paid for the item itself. financing = interest and loan fees. running = fuel/energy, insurance, maintenance, repairs, taxes and fees, everything recurring. resale_recovery = money expected BACK at the end (enter it as a negative number). other = anything genuinely none of the above.',
             },
+            low: { type: 'number', description: 'Low end in whole dollars over the entire ownership period. Negative only for a resale_recovery line. On a "running" line this is ignored entirely — write 0 and give per_year_low instead.' },
+            high: { type: 'number', description: 'High end in whole dollars over the entire ownership period. Write 0 on a "running" line.' },
+            per_year_low: { type: 'number', description: 'Low end of this cost PER YEAR, in whole dollars, on a "running" line. Write 0 on every other kind. The whole-period figure is this multiplied by the ownership period — you are not asked for it and should not work it out. A cost that is lumpy rather than steady (repairs that only start in year 6, say) goes in as its average per year across the whole period.' },
+            per_year_high: { type: 'number', description: 'High end of this cost per year on a "running" line. Write 0 on every other kind.' },
+            basis: { type: 'string', description: 'One short clause on where this number comes from, e.g. "12,000 mi/yr at 38 mpg and $3.20/gal". Do not restate the figure itself here in different numbers.' },
           },
-          explanation: { type: 'string', description: 'Required, non-empty. What drives the total and how confident you are. Do NOT restate the total or re-derive individual line items here in different numbers — the breakdown above is the single source of truth and this text sits directly beneath it.' },
+          required: ['label', 'kind', 'low', 'high', 'per_year_low', 'per_year_high', 'basis'],
         },
-        required: ['cost_breakdown', 'explanation'],
       },
-      financing_impact: {
-        type: 'object',
-        description: 'Required even when the customer is paying cash — say so explicitly rather than omitting this section.',
-        properties: {
-          applicable: { type: 'boolean', description: 'true if financing changes the cost picture (the customer is financing), false if paying cash.' },
-          explanation: { type: 'string', description: 'Required, non-empty. If not financing, say plainly that the cash price is the cost (optionally note opportunity cost of tying up cash). If financing, explain what drives the interest cost — the figure itself comes from the financing line of cost_breakdown, so do not state a different one here.' },
-        },
-        required: ['applicable', 'explanation'],
-      },
-      maintenance_running_costs: {
-        type: 'object',
-        description: 'Required. Expected maintenance and running costs over the ownership period.',
-        properties: {
-          annual_low: { type: 'number', description: 'Required. Low end in whole dollars PER YEAR, covering the same things as the running-costs line(s) of cost_breakdown. These must agree: annual_low multiplied by the ownership period is checked against that line.' },
-          annual_high: { type: 'number', description: 'Required. High end in whole dollars per year, on the same basis.' },
-          explanation: { type: 'string', description: 'Required, non-empty. What drives these costs for this specific item/category, and how confident you are. Do not restate the annual figure in different numbers.' },
-        },
-        required: ['annual_low', 'annual_high', 'explanation'],
-      },
-      depreciation_resale: {
-        type: 'object',
-        description: 'Required. If this category has essentially no resale market, say so explicitly — that is still a real answer, not a reason to omit the section. Enter zero for both figures in that case.',
-        properties: {
-          resale_low: { type: 'number', description: 'Required. Low end of what the item is worth in whole dollars at the END of the ownership period, as a positive number. This is checked against the resale_recovery line of cost_breakdown, which carries the same figure negated. Zero if there is no meaningful resale market.' },
-          resale_high: { type: 'number', description: 'Required. High end of the same figure. Zero if there is no meaningful resale market.' },
-          expected_resale_note: { type: 'string', description: 'e.g. "roughly 40% of purchase price after 5 years" or "no meaningful resale market for this category".' },
-          explanation: { type: 'string', description: 'Required, non-empty. Do not restate the resale figure in different numbers — it is stated once, above, and shown to the customer from there.' },
-        },
-        required: ['resale_low', 'resale_high', 'explanation'],
-      },
-      alternative_comparison: {
-        type: 'object',
-        description: 'Required. At least one realistic, specific alternative, compared directly against what the customer described.',
-        properties: {
-          alternative_name: { type: 'string', description: 'Required, non-empty. The specific alternative being compared — a different model, tier, or approach. Everything below and the explanation must be about THIS product. If you want to talk about a differently-configured version instead, name that one here.' },
-          alternative_price_low: { type: 'number', description: 'Required. Low end of what this alternative costs to buy, in whole dollars.' },
-          alternative_price_high: { type: 'number', description: 'Required. High end of the purchase price.' },
-          alternative_total_low: { type: 'number', description: 'Required. Low end of what this alternative costs over the SAME ownership period as the main item, on the same basis. This is what makes it a comparison rather than a mention.' },
-          alternative_total_high: { type: 'number', description: 'Required. High end of the same figure.' },
-          explanation: { type: 'string', description: 'Required, non-empty. How the alternative named above compares on price, total cost, and the customer\'s stated must-haves. Do not restate the figures in different numbers — they are shown to the customer from the fields above.' },
-        },
-        required: ['alternative_name', 'alternative_price_low', 'alternative_price_high', 'alternative_total_low', 'alternative_total_high', 'explanation'],
-      },
-      recommendation: {
-        type: 'object',
-        description: 'Required. The bottom-line call, grounded in the math above.',
-        properties: {
-          verdict: { type: 'string', enum: ['buy', 'wait', 'reconsider'] },
-          reasoning: { type: 'string', description: 'Required, non-empty. Specific to this submission, not generic advice.' },
-        },
-        required: ['verdict', 'reasoning'],
-      },
+      cost_explanation: { type: 'string', description: 'Required, non-empty. What drives the total cost of ownership and how confident you are. Do NOT restate the total or re-derive individual line items here in different numbers — cost_breakdown is the single source of truth and this text sits directly beneath it.' },
+
+      financing_applicable: { type: 'boolean', description: 'Required even when the customer is paying cash. true if financing changes the cost picture (the customer is financing), false if paying cash.' },
+      financing_explanation: { type: 'string', description: 'Required, non-empty, even when paying cash — say so explicitly rather than leaving it out. If not financing, say plainly that the cash price is the cost (optionally note opportunity cost of tying up cash). If financing, explain what drives the interest cost — the figure itself comes from the financing line of cost_breakdown, so do not state a different one here.' },
+
+      maintenance_annual_low: { type: 'number', description: 'Required. Low end of expected maintenance and running costs in whole dollars PER YEAR, covering the same things as the running-costs line(s) of cost_breakdown. These must agree: this multiplied by the ownership period is checked against that line.' },
+      maintenance_annual_high: { type: 'number', description: 'Required. High end of the same figure in whole dollars per year, on the same basis.' },
+      maintenance_explanation: { type: 'string', description: 'Required, non-empty. What drives these costs for this specific item/category, and how confident you are. Do not restate the annual figure in different numbers.' },
+
+      resale_low: { type: 'number', description: 'Required. Low end of what the item is worth in whole dollars at the END of the ownership period, as a positive number. This is checked against the resale_recovery line of cost_breakdown, which carries the same figure negated. Zero if there is no meaningful resale market.' },
+      resale_high: { type: 'number', description: 'Required. High end of the same figure. Zero if there is no meaningful resale market.' },
+      expected_resale_note: { type: 'string', description: 'e.g. "roughly 40% of purchase price after 5 years" or "no meaningful resale market for this category".' },
+      resale_explanation: { type: 'string', description: 'Required, non-empty. What drives how this item holds its value. If this category has essentially no resale market, say so explicitly — that is still a real answer, not a reason to leave the field thin, and both figures above go in as zero. Do not restate the resale figure in different numbers — it is stated once, above, and shown to the customer from there.' },
+
+      alternative_name: { type: 'string', description: 'Required, non-empty. The specific alternative being compared — a different model, tier, or approach, realistic and specific, and respecting any must-haves the customer listed. Every alternative_* field and the explanation must be about THIS product. If you want to talk about a differently-configured version instead, name that one here.' },
+      alternative_price_low: { type: 'number', description: 'Required. Low end of what this alternative costs to buy, in whole dollars.' },
+      alternative_price_high: { type: 'number', description: 'Required. High end of the purchase price.' },
+      alternative_total_low: { type: 'number', description: 'Required. Low end of what this alternative costs over the SAME ownership period as the main item, on the same basis. This is what makes it a comparison rather than a mention.' },
+      alternative_total_high: { type: 'number', description: 'Required. High end of the same figure.' },
+      alternative_explanation: { type: 'string', description: 'Required, non-empty. How the alternative named above compares on price, total cost, and the customer\'s stated must-haves. Do not restate the figures in different numbers — they are shown to the customer from the fields above.' },
+
+      verdict: { type: 'string', enum: ['buy', 'wait', 'reconsider'], description: 'Required. The bottom-line call, grounded in the math above.' },
+      verdict_reasoning: { type: 'string', description: 'Required, non-empty. Why that verdict, specific to this submission and grounded in the numbers above — not generic advice.' },
+
       assumptions: {
         type: 'array',
         items: { type: 'string' },
@@ -180,12 +171,130 @@ const REPORT_TOOL = {
       },
     },
     required: [
-      'headline', 'summary', 'total_cost_of_ownership', 'financing_impact',
-      'maintenance_running_costs', 'depreciation_resale', 'alternative_comparison',
-      'recommendation', 'assumptions', 'missing_or_uncertain',
+      'headline', 'summary',
+      'cost_breakdown', 'cost_explanation',
+      'financing_applicable', 'financing_explanation',
+      'maintenance_annual_low', 'maintenance_annual_high', 'maintenance_explanation',
+      'resale_low', 'resale_high', 'resale_explanation',
+      'alternative_name', 'alternative_price_low', 'alternative_price_high',
+      'alternative_total_low', 'alternative_total_high', 'alternative_explanation',
+      'verdict', 'verdict_reasoning',
+      'assumptions', 'missing_or_uncertain',
     ],
   },
 };
+
+// The wire format above and the nested shape everything else in this file
+// speaks. Kept as data rather than code so leakedFlatSections can report a
+// leak in the same "N of 6 sections" terms the old detector used, which is
+// what makes the leak rate before and after the flattening comparable.
+const FLAT_TO_NESTED = {
+  total_cost_of_ownership: { cost_breakdown: 'cost_breakdown', explanation: 'cost_explanation' },
+  financing_impact: { applicable: 'financing_applicable', explanation: 'financing_explanation' },
+  maintenance_running_costs: { annual_low: 'maintenance_annual_low', annual_high: 'maintenance_annual_high', explanation: 'maintenance_explanation' },
+  depreciation_resale: { resale_low: 'resale_low', resale_high: 'resale_high', expected_resale_note: 'expected_resale_note', explanation: 'resale_explanation' },
+  alternative_comparison: {
+    alternative_name: 'alternative_name',
+    alternative_price_low: 'alternative_price_low',
+    alternative_price_high: 'alternative_price_high',
+    alternative_total_low: 'alternative_total_low',
+    alternative_total_high: 'alternative_total_high',
+    explanation: 'alternative_explanation',
+  },
+  recommendation: { verdict: 'verdict', reasoning: 'verdict_reasoning' },
+};
+
+const PASSTHROUGH_FIELDS = ['headline', 'headline_tag', 'summary', 'research_notes', 'assumptions', 'missing_or_uncertain'];
+
+// Folds the flat tool input back into the nested report the rest of this file
+// reads. Absent fields stay absent rather than becoming undefined-valued keys,
+// so isReportComplete still names the one field that is actually missing
+// instead of reporting a whole section as broken.
+//
+// Tolerant of already-nested input on purpose: the repair paths, the cached
+// job state and the tests all hand around reports in the nested shape, and a
+// report that has been through here once must survive going through again.
+function nestReportInput(input) {
+  if (!input || typeof input !== 'object') return input;
+  const looksNested = Object.keys(FLAT_TO_NESTED).some(
+    (section) => input[section] && typeof input[section] === 'object' && !Array.isArray(input[section])
+  );
+  if (looksNested) return input;
+
+  const out = {};
+  for (const key of PASSTHROUGH_FIELDS) {
+    if (input[key] !== undefined) out[key] = input[key];
+  }
+  for (const [section, fields] of Object.entries(FLAT_TO_NESTED)) {
+    const built = {};
+    let any = false;
+    for (const [nestedKey, flatKey] of Object.entries(fields)) {
+      if (input[flatKey] === undefined) continue;
+      built[nestedKey] = input[flatKey];
+      any = true;
+    }
+    // financing_impact and total_cost_of_ownership are always materialised
+    // because the caller writes into them unconditionally (applicable comes
+    // from the customer's own form, time_horizon_years from the submission).
+    if (any || section === 'financing_impact' || section === 'total_cost_of_ownership') out[section] = built;
+  }
+  return out;
+}
+
+// The flat-schema equivalent of the old "did this whole response come back as
+// tool-call text" check.
+//
+// The old one had an unambiguous signal: a field declared as an object that
+// arrived as a string could only be a leak. Flattening removes that signal,
+// so this asks the narrower question the schema can still answer — is this
+// value something the schema could not have been asking for?
+//
+// Deliberately NOT "the value contains a tag fragment". A fragment left on
+// the end of otherwise-good prose is the common, cheap case that
+// sanitizeReportTags exists to absorb, and reports that used to be salvaged
+// by stripping it must not start triggering whole-response retries instead.
+// What counts here is a field whose content is GONE:
+//
+//   (a) the whole value was tag text, so sanitizing leaves nothing;
+//   (b) a number, boolean or array field arrived as a string carrying tag
+//       text — no amount of repair makes prose into the figure it replaced;
+//   (c) an enum field came back as something outside its enum.
+//
+// Two or more SECTIONS' worth of that is a response that came back in
+// tool-call syntax rather than a field to repair, and the caller asks again
+// without spending an attempt.
+function schemaPropsFor(flatKey) {
+  return (REPORT_TOOL.input_schema.properties || {})[flatKey] || {};
+}
+
+function flatFieldIsLost(input, flatKey) {
+  const value = input[flatKey];
+  if (value === undefined || value === null) return false;
+  const spec = schemaPropsFor(flatKey);
+
+  if (typeof value === 'string') {
+    // .match, not .test — TAG_LEAK_PATTERN is a /g regex and .test would
+    // carry lastIndex between fields.
+    const hasTag = !!value.match(TAG_LEAK_PATTERN);
+    if (hasTag && !nonEmpty(sanitizeReportTags(value))) return true;            // (a)
+    if (hasTag && spec.type && spec.type !== 'string') return true;             // (b)
+    if (Array.isArray(spec.enum) && !spec.enum.includes(value)) return true;    // (c)
+    return false;
+  }
+
+  // A non-string where the schema wanted a scalar string is not this failure
+  // mode; isReportComplete deals with it on its own terms.
+  return false;
+}
+
+function leakedFlatSections(input) {
+  if (!input || typeof input !== 'object') return [];
+  const hit = [];
+  for (const [section, fields] of Object.entries(FLAT_TO_NESTED)) {
+    if (Object.values(fields).some((flatKey) => flatFieldIsLost(input, flatKey))) hit.push(section);
+  }
+  return hit;
+}
 
 // Back to 3 from 5, because the report call no longer has the invocation to
 // itself: verifyMustHaves runs first, in the same 300 seconds, and does its
@@ -269,7 +378,7 @@ Two rules about the numbers, because this product is bought for its arithmetic:
 
 1. Give the cost breakdown as line items and let the total follow from them. You are not asked for a total anywhere, and you should not state one — it is computed from your line items and printed above your own explanation, so a total you write separately can only ever contradict it.
 
-2. Each quantity gets stated once, in one place. Running costs go in maintenance_running_costs as a per-year figure and in cost_breakdown as a whole-period line; those two are checked against each other in code and the report is sent back to you if they disagree. Do not restate either of them, in different numbers, inside any explanation.
+2. Each quantity gets stated once, in one place. Running costs go in maintenance_annual_low/maintenance_annual_high as a per-year figure and in cost_breakdown as a whole-period line; those two are checked against each other in code and the report is sent back to you if they disagree. Do not restate either of them, in different numbers, inside any explanation.
 
 ${HONESTY_RULES}
 
@@ -282,7 +391,7 @@ Respond ONLY by calling the submit_purchase_report tool.`;
 // the repair mechanism failed on every attempt. buildSystemPrompt's last
 // line explicitly instructs "Respond ONLY by calling the
 // submit_purchase_report tool", and the body above it frames the task as
-// producing all six report sections — both directly conflict with a
+// producing a whole report at once — both directly conflict with a
 // forced call to a completely different, single-field tool, and plausibly
 // primed the same kind of confusion that caused the original leak. This
 // keeps the customer grounding and the anti-leak honesty rules the repair
@@ -2493,7 +2602,11 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch,
   const content = data.content || [];
   const searchRounds = countSearchRounds(data);
   let toolUse = content.find((b) => b.type === 'tool_use' && b.name === 'submit_purchase_report');
-  if (toolUse) return { report: toolUse.input, searchRounds };
+  // Flat on the wire, nested from here on. leakedSections is read off the
+  // RAW input, before nesting: that is the only point at which a section
+  // that arrived as tag text is still distinguishable from one the model
+  // simply left out.
+  if (toolUse) return { report: nestReportInput(toolUse.input), searchRounds, leakedSections: leakedFlatSections(toolUse.input) };
 
   // Model didn't call the submit tool on the first turn — force it on a
   // bounded follow-up instead of looping indefinitely. The follow-up call
@@ -2520,7 +2633,7 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch,
   if (!toolUse) throw new Error('Model did not return a structured report after a forced follow-up');
   // The follow-up carries no search tool, so any research came from the
   // first turn — count it from there.
-  return { report: toolUse.input, searchRounds };
+  return { report: nestReportInput(toolUse.input), searchRounds, leakedSections: leakedFlatSections(toolUse.input) };
 }
 
 // Raised from 2 to 4 on 2026-08-31: live testing after the Vercel Pro
@@ -2746,6 +2859,7 @@ async function generatePurchaseReport(submissionId) {
 
     let candidate;
     let searchRounds = 0;
+    let flatLeakedSections = [];
     let recoverableError = null;
     try {
       const attempt = await runOneAttempt({
@@ -2756,16 +2870,30 @@ async function generatePurchaseReport(submissionId) {
       });
       candidate = attempt.report;
       searchRounds = attempt.searchRounds;
+      flatLeakedSections = attempt.leakedSections || [];
     } catch (err) {
       recoverableError = err;
     }
 
     if (candidate && !recoverableError) {
+      // Sections the model returned as tag text rather than content. Under
+      // the flat schema this is what the leak looks like now: the six
+      // objects no longer exist on the wire, so a leak lands in the scalar
+      // fields and leakedFlatSections attributes it back to the section it
+      // belongs to. Counting it in the same units as before keeps the leak
+      // rate comparable to the pre-flattening baseline (9 in 12, then 4 in 4).
+      const leakedKeys = flatLeakedSections.slice();
+
+      // Kept for the nested shape, which the repair paths and the cached job
+      // state still pass around, and which a report coming back through here
+      // a second time is in. Under the flat schema the loop finds nothing on
+      // a first pass, because nestReportInput always builds real objects.
+      //
       // A nested object that arrived as a string is turned back into an
       // object here, before anything else reads it — otherwise the repairs
       // below spread a string and produce {0:'1',1:'2'}.
-      const leakedKeys = [];
       for (const key of OBJECT_VALUED_FIELDS) {
+        if (leakedKeys.includes(key)) continue;
         if (candidate[key] === undefined || candidate[key] === null) continue;
         if (typeof candidate[key] === 'object' && !Array.isArray(candidate[key])) continue;
         const salvaged = salvageLeakedObject(candidate[key]) || {};
@@ -3103,6 +3231,10 @@ module.exports = {
   generatePurchaseReport,
   // Exported for unit testing without hitting the network or Supabase.
   __internal: {
+    nestReportInput,
+    leakedFlatSections,
+    FLAT_TO_NESTED,
+    PASSTHROUGH_FIELDS,
     buildSystemPrompt,
     buildRepairSystemPrompt,
     buildIntakeBrief,
