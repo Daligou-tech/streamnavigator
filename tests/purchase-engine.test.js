@@ -140,6 +140,20 @@ function completeReportInput(overrides) {
   };
 }
 
+// Drives generation the way the browser does: poll until a report comes back
+// or the row stops moving. It takes more than one call now, because a fresh
+// must-have verification hands back so the report gets an invocation of its
+// own — see the 300-second ceiling in purchase-engine.js.
+async function generateUntilReport(id, maxPolls = 6) {
+  const { generatePurchaseReport } = require("../api/_lib/purchase-engine");
+  let last = null;
+  for (let i = 0; i < maxPolls; i++) {
+    last = await generatePurchaseReport(id);
+    if (last) return last;
+  }
+  return last;
+}
+
 function toolUseResponse(input) {
   return {
     ok: true,
@@ -1950,7 +1964,7 @@ test('with no research behind them, every spec verdict is downgraded to unverifi
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
 
   const section = report.sections[0];
   assert.match(section.title, /must-haves/i, 'the must-haves come before the money');
@@ -1972,7 +1986,7 @@ test('a graded verdict survives when research did run', async (t) => {
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
 
   const section = report.sections[0];
   // The published figure the verdict rests on now travels with it.
@@ -1995,7 +2009,7 @@ test('anything left unverified is put in front of the customer as a thing to che
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
 
   assert.ok(report.missing_or_uncertain.some((m) => /must fit a 36-inch opening.*could not be verified/i.test(m)));
 });
@@ -2039,7 +2053,7 @@ test('an unanswered must-have is repaired rather than costing a whole attempt', 
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
 
   assert.equal(mainCalls, 1, 'an unchecked must-have must not cost a whole regenerated report');
   assert.match(promptSeen, /no external door dispenser/, 'the repair has to be told what the customer actually asked for');
@@ -2272,7 +2286,7 @@ test('the safety-net repair rewrites the argument, not just the verdict', async 
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
 
   const rec = report.sections.find((x) => /^Recommendation/.test(x.title));
   assert.match(rec.title, /RECONSIDER/);
@@ -2891,7 +2905,7 @@ async function reportWithNoUsableResearch(t, mustHaveChecks) {
     }), 7);
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
-  return require('../api/_lib/purchase-engine').generatePurchaseReport('sub-1');
+  return generateUntilReport('sub-1');
 }
 
 test('the disclaimer covers the cost figures, not the spec checks that did get looked up', async (t) => {
@@ -3126,9 +3140,172 @@ test('a downgraded check keeps no figures that could resurrect it', async (t) =>
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
   const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  const report = await generateUntilReport('sub-1');
   for (const line of report.sections[0].items) {
     assert.match(line, /^\?/, line);
     assert.equal(/\[published:/.test(line), false, 'and no published figure is shown for it');
   }
+});
+
+// --- one job per invocation ------------------------------------------------
+//
+// Caching the verification stopped the SECOND attempt redoing it and left the
+// first doing both jobs inside one 300-second budget. Submission 87e1bc2b was
+// killed at the ceiling on attempt 1 for that reason, after 95bd1598 and
+// 7d2aa0fb before it.
+
+test('a fresh verification hands back rather than starting the report in what is left', async (t) => {
+  const submission = fridgeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let verifyCalls = 0, reportCalls = 0;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) { verifyCalls++; return mustHaveResponse(LG_CHECKS(), 3); }
+    reportCalls++;
+    return searchedToolUseResponse(checkedReport(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+
+  const first = await generatePurchaseReport('sub-1');
+  assert.equal(first, null, 'the verifying invocation produces no report');
+  assert.equal(verifyCalls, 1);
+  assert.equal(reportCalls, 0, 'and does not start the report inside the same budget');
+  assert.equal(submission.status, 'paid', 'it hands back for the next poll');
+  assert.equal(submission.generation_attempts, 0, 'and gives the attempt back — nothing was attempted');
+
+  const second = await generatePurchaseReport('sub-1');
+  assert.ok(second, 'the next poll gets an uncontended invocation and produces the report');
+  assert.equal(verifyCalls, 1, 'reusing what the first one established');
+  assert.equal(reportCalls, 1);
+  assert.equal(reportInserts.length, 1);
+  assert.ok(submissionUpdates.some((u) => u.status === 'complete'));
+});
+
+test('a submission with no must-haves is not split in two', () => {
+  // Nothing to verify means nothing to hand back for.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.deepEqual(__internal.mustHaveFragments(fakeSubmission()), []);
+});
+
+test('a verification that fails does not hand back, or it would never stop', async (t) => {
+  // A failure caches nothing, so handing back would run it again, fail again
+  // and hand back again — the customer polling forever. It cost little when
+  // it failed, so the report proceeds in the same invocation.
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) return { ok: false, status: 500, text: async () => 'upstream exploded' };
+    return searchedToolUseResponse(completeReportInput(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generatePurchaseReport('sub-1');
+  assert.ok(report, 'one call, one report');
+  assert.equal(reportInserts.length, 1);
+});
+
+// --- a response that came back as tag text ---------------------------------
+//
+// On submission 87e1bc2b attempt 2, all six nested objects arrived as strings
+// carrying one parameter-tag fragment each. The salvage recovered a sixth of
+// each section and the repairs then spent two more requests establishing that
+// what was left was unusable. That report took four attempts and twelve
+// minutes.
+
+function allSectionsLeaked() {
+  const bad = completeReportInput();
+  for (const key of ['total_cost_of_ownership', 'financing_impact', 'maintenance_running_costs',
+    'depreciation_resale', 'alternative_comparison', 'recommendation']) {
+    bad[key] = '\n<parameter name="explanation">a fragment';
+  }
+  return bad;
+}
+
+test('several sections arriving as tag text is refused, not repaired', async (t) => {
+  const submission = fakeSubmission();
+  const { reportInserts, submissionUpdates } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let repairCalls = 0, mainCalls = 0;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (body.tool_choice && body.tool_choice.name === 'submit_field_repair') { repairCalls++; return fieldRepairResponse('x'); }
+    mainCalls++;
+    return toolUseResponse(allSectionsLeaked());
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const result = await generatePurchaseReport('sub-1');
+
+  assert.equal(result, null);
+  assert.equal(repairCalls, 0, 'there is nothing in it to repair, so nothing is spent trying');
+  assert.equal(mainCalls, 1);
+  assert.equal(submission.status, 'paid', 'it asks again immediately');
+  assert.equal(submission.generation_attempts, 0, 'and does not spend an attempt on a malformed response');
+  assert.equal(reportInserts.length, 0);
+  assert.match(submissionUpdates[submissionUpdates.length - 1].error, /tool-call text/);
+});
+
+test('one leaked section is still a field to repair, not a refusal', async (t) => {
+  const submission = fakeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    const props = (((body.tools || [])[0] || {}).input_schema || {}).properties || {};
+    if (props.cost_breakdown && props.annual_low) {
+      return {
+        ok: true,
+        json: async () => ({
+          content: [{
+            type: 'tool_use', name: 'submit_field_repair',
+            input: {
+              cost_breakdown: completeReportInput().total_cost_of_ownership.cost_breakdown,
+              annual_low: 55, annual_high: 70, resale_low: 0, resale_high: 0,
+            },
+          }],
+        }),
+      };
+    }
+    if (props.value) return fieldRepairResponse('Purchase price plus eight years of electricity and a delivery fee.');
+    const one = completeReportInput();
+    one.total_cost_of_ownership = '\n<parameter name="time_horizon_years">8';
+    return toolUseResponse(one);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  const report = await generateUntilReport('sub-1');
+  assert.ok(report, 'a single leaked section is recoverable in-call');
+  assert.equal(reportInserts.length, 1);
+});
+
+test('a model stuck returning tag text still terminates', async (t) => {
+  // The free retries are bounded, or the row would poll forever.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  assert.equal(__internal.MAX_MALFORMED_RETRIES, 2);
+
+  const submission = fakeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async () => toolUseResponse(allSectionsLeaked());
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  for (let i = 0; i < __internal.MAX_MALFORMED_RETRIES; i++) {
+    assert.equal(await generatePurchaseReport('sub-1'), null);
+    assert.equal(submission.generation_attempts, 0, 'the first two are forgiven');
+  }
+  await generatePurchaseReport('sub-1');
+  assert.equal(submission.generation_attempts, 1, 'after that they start costing attempts');
+  assert.equal(reportInserts.length, 0);
 });

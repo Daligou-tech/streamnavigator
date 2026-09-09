@@ -2524,6 +2524,11 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch,
 // instead of failing a customer's report outright while the root cause is
 // still being narrowed down.
 const MAX_ATTEMPTS = 4;
+// How many whole-response malformations are forgiven without costing one of
+// those attempts. Two, because the failure is the model losing the tool-call
+// format rather than anything about this submission, and because a model
+// stuck in that mode has to terminate rather than poll forever.
+const MAX_MALFORMED_RETRIES = 2;
 // Originally written for the Vercel Hobby plan's 60s hard cap on a
 // serverless function invocation, which real live-money traffic showed was
 // too tight for this report (web_search rounds plus a forced follow-up call
@@ -2619,6 +2624,7 @@ async function generatePurchaseReport(submissionId) {
     // its own 300 seconds, and re-checking a specification that has not
     // changed spends part of that budget rediscovering the same answer — on
     // an attempt that only exists because the previous one ran out of time.
+    let verificationIsFresh = false;
     let verification = readCachedVerification(submission);
     if (verification) {
       console.warn(
@@ -2635,7 +2641,13 @@ async function generatePurchaseReport(submissionId) {
       } catch (err) {
         console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
       }
-      if (verification) await cacheVerification(admin, submission, verification);
+      if (verification) {
+        await cacheVerification(admin, submission, verification);
+        // Set HERE, not by re-reading the cache afterwards — cacheVerification
+        // has just written it, so a later read always says it was already
+        // there and the hand-back below never fires.
+        verificationIsFresh = true;
+      }
     }
     const mustHaveChecks = (verification && verification.checks) || unverifiedChecks(submission);
 
@@ -2665,6 +2677,32 @@ async function generatePurchaseReport(submissionId) {
       console.warn(
         `[purchase-engine] Submission ${submissionId} fails ${mustHaveChecks.filter((c) => c.verdict === 'contradicted').length} stated must-have(s); the report is being written with that as a given.`
       );
+    }
+
+    // Fresh verification means this invocation has already spent time on a
+    // separate request. Hand back rather than start the report inside what is
+    // left of the budget: the next poll is three seconds away and gets its own.
+    // Only when it SUCCEEDED. A failed verification caches nothing, so
+    // handing back would run it again on the next attempt, fail again, and
+    // hand back again — the customer would poll forever. It cost little
+    // when it failed, so the report proceeds here with the requirements
+    // marked unchecked.
+    if (verification && verificationIsFresh && mustHaveFragments(submission).length) {
+      console.warn(
+        `[purchase-engine] Verified ${mustHaveChecks.length} must-have(s) for submission ${submissionId}; handing back so the report gets an invocation of its own.`
+      );
+      await admin
+        .from('navigator_submissions')
+        .update({
+          status: 'paid',
+          // Not a failed attempt — nothing was attempted. Giving this one
+          // back keeps MAX_ATTEMPTS meaning four tries at the report.
+          generation_attempts: Math.max(0, attemptNumber - 1),
+          error: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', submissionId);
+      return null;
     }
 
     const systemPrompt = buildSystemPrompt(submission, mustHaveChecks);
@@ -2708,14 +2746,46 @@ async function generatePurchaseReport(submissionId) {
       // A nested object that arrived as a string is turned back into an
       // object here, before anything else reads it — otherwise the repairs
       // below spread a string and produce {0:'1',1:'2'}.
+      const leakedKeys = [];
       for (const key of OBJECT_VALUED_FIELDS) {
         if (candidate[key] === undefined || candidate[key] === null) continue;
         if (typeof candidate[key] === 'object' && !Array.isArray(candidate[key])) continue;
         const salvaged = salvageLeakedObject(candidate[key]) || {};
+        leakedKeys.push(key);
         console.warn(
-          `[purchase-engine] ${key} arrived as a ${typeof candidate[key]} rather than an object for submission ${submissionId} on attempt ${attemptNumber}; recovered ${Object.keys(salvaged).length} field(s), the rest goes to the repair path.`
+          `[purchase-engine] ${key} arrived as a ${typeof candidate[key]} rather than an object for submission ${submissionId} on attempt ${attemptNumber}; recovered ${Object.keys(salvaged).length} field(s).`
         );
         candidate[key] = salvaged;
+      }
+
+      // One leaked object is a field to repair. Several at once is a
+      // response that came back in tool-call syntax instead of JSON, and
+      // there is nothing in it to repair: submission 87e1bc2b had all six
+      // arrive as strings carrying one fragment each, so the salvage
+      // recovered a sixth of each section and the repairs then spent two
+      // more requests establishing that what was left was unusable. The
+      // report took four attempts and twelve minutes.
+      //
+      // Asking again is the only move, so it is made immediately — and it
+      // does not cost an attempt, because nothing was attempted. Bounded by
+      // a counter on the row so a model stuck in this mode still terminates.
+      if (leakedKeys.length >= 2) {
+        const malformed = ((submission.job_state || {}).malformed_responses || 0) + 1;
+        const spare = malformed <= MAX_MALFORMED_RETRIES;
+        console.warn(
+          `[purchase-engine] Submission ${submissionId} attempt ${attemptNumber}: ${leakedKeys.length} of ${OBJECT_VALUED_FIELDS.length} sections came back as tag text (${leakedKeys.join(', ')}). Nothing to repair; asking again${spare ? ' without spending an attempt' : ''}.`
+        );
+        await admin
+          .from('navigator_submissions')
+          .update({
+            status: 'paid',
+            generation_attempts: spare ? Math.max(0, attemptNumber - 1) : attemptNumber,
+            job_state: { ...(submission.job_state || {}), malformed_responses: malformed },
+            error: `The model returned ${leakedKeys.length} sections as tool-call text rather than a report; retrying.`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+        return null;
       }
 
       // The ownership period comes from the customer, not the model. Set
@@ -3051,6 +3121,7 @@ module.exports = {
     repairMustHaveChecks,
     verdictFromMeasurement,
     applyMeasuredVerdicts,
+    MAX_MALFORMED_RETRIES,
     verifyMustHaves,
     readCachedVerification,
     unverifiedChecks,
