@@ -2286,8 +2286,9 @@ test('a verification that fails leaves the requirements marked unchecked, not an
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
-  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
+  // Takes a second poll now: a failed verification hands back so the report
+  // gets a full invocation instead of its leftovers.
+  const report = await generateUntilReport('sub-1');
 
   assert.equal(reportInserts.length, 1, 'the customer still gets their analysis');
   const section = report.sections[0];
@@ -3269,24 +3270,95 @@ test('a submission with no must-haves is not split in two', () => {
   assert.deepEqual(__internal.mustHaveFragments(fakeSubmission()), []);
 });
 
-test('a verification that fails does not hand back, or it would never stop', async (t) => {
-  // A failure caches nothing, so handing back would run it again, fail again
-  // and hand back again — the customer polling forever. It cost little when
-  // it failed, so the report proceeds in the same invocation.
+test('a failed verification is bought once, never twice', async (t) => {
+  // The invariant here has always been that the customer stops polling and
+  // gets a report. What changed is how: a failure used to push straight on
+  // into the report inside whatever time was left, because it "cost little".
+  // That is untrue of the failure that matters — a verification that runs
+  // until the platform kills the invocation costs all 300 seconds and never
+  // reaches the report at all (submission 72100718, three times).
+  //
+  // So it hands back now, and the marker on the row is what keeps that from
+  // being the infinite loop the old comment rightly feared: the SECOND
+  // attempt must not buy the same failure again.
   const submission = fridgeSubmission();
   const { reportInserts } = installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
+  let verifyCalls = 0;
   global.fetch = async (url, opts) => {
-    if (isVerifyCall(opts)) return { ok: false, status: 500, text: async () => 'upstream exploded' };
+    if (isVerifyCall(opts)) {
+      verifyCalls++;
+      return { ok: false, status: 500, text: async () => 'upstream exploded' };
+    }
     return searchedToolUseResponse(completeReportInput(), 3);
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
 
-  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
-  const report = await generatePurchaseReport('sub-1');
-  assert.ok(report, 'one call, one report');
+  const report = await generateUntilReport('sub-1');
+  assert.ok(report, 'the customer still stops polling with a report');
   assert.equal(reportInserts.length, 1);
+  assert.equal(verifyCalls, 1, 'the second attempt skips it rather than paying for it again');
+  assert.equal(
+    submission.job_state.must_have_verification_abandoned, true,
+    'and the row records why, so any later attempt skips it too'
+  );
+});
+
+test('a verification that overruns its budget is abandoned, not waited on', async (t) => {
+  // The bound itself. Without it the call can take the whole invocation and
+  // leave nothing for the report it exists to inform.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const submission = fridgeSubmission();
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  // A request that never answers on its own — only the deadline ends it.
+  let sawSignal = false;
+  global.fetch = async (url, opts) => {
+    sawSignal = !!(opts && opts.signal);
+    return new Promise((resolve, reject) => {
+      if (opts && opts.signal) {
+        opts.signal.addEventListener('abort', () => {
+          const err = new Error('The operation was aborted');
+          err.name = 'AbortError';
+          reject(err);
+        });
+      }
+    });
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const started = Date.now();
+  const result = await __internal.verifyMustHaves({
+    apiKey: 'test-key',
+    submission,
+    submissionId: 'sub-1',
+    allowSearch: true,
+    deadlineAt: Date.now() + 60,
+  });
+  assert.ok(sawSignal, 'the request carries the abort signal');
+  assert.equal(result, null, 'an overrun verification comes back as no verification');
+  assert.ok(Date.now() - started < 5000, 'and it does not sit there until the platform kills it');
+});
+
+test('a verification with no budget left does not open a request at all', async (t) => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => { calls++; throw new Error('should never be reached'); };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const result = await __internal.verifyMustHaves({
+    apiKey: 'test-key',
+    submission: fridgeSubmission(),
+    submissionId: 'sub-1',
+    allowSearch: true,
+    deadlineAt: Date.now() - 1,
+  });
+  assert.equal(result, null);
+  assert.equal(calls, 0, 'spending nothing is the point');
 });
 
 // --- a response that came back as tag text ---------------------------------
