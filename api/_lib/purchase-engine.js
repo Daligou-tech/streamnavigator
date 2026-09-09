@@ -2170,10 +2170,15 @@ async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, 
     console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} had no time left in its budget; abandoning before the request.`);
     return null;
   }
+  // Deliberately NOT unref()d. It was, on the reasoning that a pending timer
+  // must never be the reason a lambda stays up — but clearTimeout in the
+  // finally below already guarantees it cannot outlive this call, so unref
+  // bought nothing and cost correctness: an unref'd timer does not hold the
+  // event loop, so if the request in flight is not holding it either, Node
+  // exits before the deadline can fire and the abort never happens. A real
+  // fetch holds a socket and hides this; a stubbed one does not, which is why
+  // it surfaced as a suite that died mid-run on CI and passed everywhere else.
   const abortTimer = setTimeout(() => controller.abort(), remaining);
-  // Node keeps the process alive for a pending timer; this one must never be
-  // the reason a lambda stays up.
-  if (typeof abortTimer.unref === 'function') abortTimer.unref();
   try {
     return await runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal: controller.signal });
   } catch (err) {
