@@ -3314,17 +3314,30 @@ test('a verification that overruns its budget is abandoned, not waited on', asyn
   const originalFetch = global.fetch;
 
   // A request that never answers on its own — only the deadline ends it.
+  //
+  // The already-aborted branch is not defensive padding, it is the whole
+  // reason this stub was wrong: it used to listen only for a FUTURE abort
+  // event, so if the deadline fired before fetch was reached the signal was
+  // already aborted, no event ever came, and the promise never settled. The
+  // suite then hung and every test after this one was reported failed. That is
+  // exactly what happened on CI, whose runners are slower and colder than this
+  // laptop, while the same test passed locally and on the Vercel gate every
+  // time. A real fetch rejects immediately on an already-aborted signal; a
+  // stub that does not is not standing in for fetch, it is standing in for a
+  // fetch that cannot be cancelled.
   let sawSignal = false;
   global.fetch = async (url, opts) => {
-    sawSignal = !!(opts && opts.signal);
+    const signal = opts && opts.signal;
+    sawSignal = !!signal;
     return new Promise((resolve, reject) => {
-      if (opts && opts.signal) {
-        opts.signal.addEventListener('abort', () => {
-          const err = new Error('The operation was aborted');
-          err.name = 'AbortError';
-          reject(err);
-        });
-      }
+      const abort = () => {
+        const err = new Error('The operation was aborted');
+        err.name = 'AbortError';
+        reject(err);
+      };
+      if (!signal) return;
+      if (signal.aborted) return abort();
+      signal.addEventListener('abort', abort);
     });
   };
   t.after(() => { global.fetch = originalFetch; });
@@ -3335,7 +3348,7 @@ test('a verification that overruns its budget is abandoned, not waited on', asyn
     submission,
     submissionId: 'sub-1',
     allowSearch: true,
-    deadlineAt: Date.now() + 60,
+    deadlineAt: Date.now() + 750,
   });
   assert.ok(sawSignal, 'the request carries the abort signal');
   assert.equal(result, null, 'an overrun verification comes back as no verification');
@@ -3710,4 +3723,52 @@ test('the verification budget clears the verifications that actually succeed', (
     budget <= 280000,
     `the budget (${budget}ms) must leave room inside the 300s invocation limit to record the abandonment and hand back`
   );
+});
+
+test('a request that reaches fetch after the deadline still settles', async (t) => {
+  // The CI failure this pins, made deterministic.
+  //
+  // The sibling test above aborts a request already in flight. This is the
+  // other order: the budget expires while the request is still being built, so
+  // the signal is ALREADY aborted when fetch finally sees it and no abort event
+  // will ever arrive. Get that wrong and it is not one failing test — the
+  // promise never settles, the suite hangs, and every test after it is
+  // reported failed.
+  //
+  // That is exactly what happened: green here and on the Vercel gate, red on
+  // CI for three commits, because which of the two wins the race depends on how
+  // fast the machine is. The delay below removes the race instead of relying on
+  // hardware to lose it.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const signal = opts && opts.signal;
+    // Stand in for a slow runner: the deadline lands before we look at all.
+    await new Promise((r) => setTimeout(r, 250));
+    return new Promise((resolve, reject) => {
+      const abort = () => {
+        const err = new Error('The operation was aborted');
+        err.name = 'AbortError';
+        reject(err);
+      };
+      if (!signal) return;
+      if (signal.aborted) return abort();
+      signal.addEventListener('abort', abort);
+    });
+  };
+  t.after(() => { global.fetch = originalFetch; });
+
+  const started = Date.now();
+  const result = await __internal.verifyMustHaves({
+    apiKey: 'test-key',
+    submission: fridgeSubmission(),
+    submissionId: 'sub-1',
+    allowSearch: true,
+    // Positive, so the budget check passes and a request is genuinely started,
+    // but gone by the time the stub above inspects the signal.
+    deadlineAt: Date.now() + 50,
+  });
+  assert.equal(result, null, 'an overrun verification comes back as no verification');
+  assert.ok(Date.now() - started < 5000, 'it settles rather than hanging the suite');
 });
