@@ -20,11 +20,19 @@ const path = require('path');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'navigator-status.html'), 'utf8');
 
+// Line-ending agnostic on purpose. core.autocrlf is true on Windows and there
+// is no .gitattributes, so navigator-status.html arrives with CRLF in a fresh
+// clone and with LF whenever a tool has rewritten it. An LF-only '\n  }\n'
+// anchor silently returns an empty string instead of the function body, and the
+// suite then fails with "maybeAutoSendPdf is not defined" — which reads like a
+// missing function rather than a line-ending mismatch, and sends you looking in
+// the wrong file. upload-restore.test.js had the same bug.
 const grab = (name) => {
   const i = src.indexOf('  function ' + name + '(');
   assert.notEqual(i, -1, `function ${name} not found in navigator-status.html`);
-  const j = src.indexOf('\n  }\n', i) + 4;
-  return src.slice(i, j);
+  const end = /\r?\n {2}\}\r?\n/.exec(src.slice(i));
+  assert.notEqual(end, null, `could not find the end of ${name} in navigator-status.html`);
+  return src.slice(i, i + end.index + end[0].length);
 };
 
 function harness({ email, alreadySent = false, sendResult = 'ok' } = {}) {
