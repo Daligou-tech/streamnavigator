@@ -651,10 +651,14 @@ test('__internal.buildSystemPrompt grounds the prompt in the customer\'s submitt
   assert.match(prompt, /2400/);
   assert.match(prompt, /30301/);
   assert.match(prompt, /do not respond by asking for more information or declaring the input insufficient/i);
-  assert.match(
-    prompt,
-    /never write out tool-call, function-call, or parameter-tag syntax/i,
-    'must explicitly instruct the model against the leaked-artifact failure mode seen in production on 2026-08-31'
+  // It still forbids the artifact, but no longer demonstrates it. The rule
+  // used to spell out the exact token the leak reproduces, which on the
+  // night of 2026-09-08 came back in nine of twelve report attempts.
+  assert.match(prompt, /Do not put markup or structured call syntax of any kind/i);
+  assert.deepEqual(
+    prompt.match(/<[a-z/][^>]*>/gi),
+    null,
+    'the prompt must not contain the syntax it is telling the model not to write'
   );
 });
 
@@ -3291,7 +3295,9 @@ test('one leaked section is still a field to repair, not a refusal', async (t) =
 test('a model stuck returning tag text still terminates', async (t) => {
   // The free retries are bounded, or the row would poll forever.
   const { __internal } = require('../api/_lib/purchase-engine');
-  assert.equal(__internal.MAX_MALFORMED_RETRIES, 2);
+  // One, not two. A forgiven retry is free of attempts and not of money —
+  // at two, a troubled submission made up to six paid calls instead of four.
+  assert.equal(__internal.MAX_MALFORMED_RETRIES, 1);
 
   const submission = fakeSubmission();
   const { reportInserts } = installFakes({ submission });

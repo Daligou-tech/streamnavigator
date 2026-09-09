@@ -53,7 +53,7 @@ You have access to a web_search tool, and the customer has been told in writing 
 // same way that caused the original leak) when reused verbatim for a
 // request that's actually forcing a different tool.
 function noLeakRule(toolName) {
-  return `Every field in ${toolName} must be plain natural-language prose (or the specific short-string/number format its description asks for) — nothing else. In particular: never write out tool-call, function-call, or parameter-tag syntax (anything shaped like <tag>, <parameter name="...">, <invoke ...>, or similar) inside any field's value, even as a way of showing your work or thinking through a calculation. If you want to show how a number was derived, just say it in words directly in that field's own "explanation" — e.g. "$38,000 purchase + roughly $6,200 in interest over 60 months = about $44,200" — never by simulating a nested call to another tool or to yourself.`;
+  return `Every field in ${toolName} must be plain natural-language prose (or the specific short-string/number format its description asks for) — nothing else. Do not put markup or structured call syntax of any kind inside a field value, even as a way of showing your work. If you want to show how a number was derived, say it in words in that field own explanation — for example "$38,000 purchase plus roughly $6,200 in interest over 60 months is about $44,200".`;
 }
 
 // Kept for the main call, which gets both rules.
@@ -2525,10 +2525,16 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch,
 // still being narrowed down.
 const MAX_ATTEMPTS = 4;
 // How many whole-response malformations are forgiven without costing one of
-// those attempts. Two, because the failure is the model losing the tool-call
-// format rather than anything about this submission, and because a model
-// stuck in that mode has to terminate rather than poll forever.
-const MAX_MALFORMED_RETRIES = 2;
+// those attempts.
+//
+// One, not two. A forgiven retry is free of ATTEMPTS and not of money: it is
+// still a full generation with extended thinking and its own searches. At two,
+// a troubled submission made up to six paid calls instead of four, and on the
+// night this was written that helped drain the account mid-run — 27 report
+// attempts produced 8 reports and the balance ran out with three submissions
+// unfinished. Forgiving one absorbs a single bad response without turning a
+// bad night into a bill.
+const MAX_MALFORMED_RETRIES = 1;
 // Originally written for the Vercel Hobby plan's 60s hard cap on a
 // serverless function invocation, which real live-money traffic showed was
 // too tight for this report (web_search rounds plus a forced follow-up call
