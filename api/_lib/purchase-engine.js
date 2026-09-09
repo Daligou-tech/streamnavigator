@@ -38,11 +38,7 @@ const { sendFailureAlert } = require('./alerts');
 const { fieldsForCategory, CATEGORIES } = require('../../navigator-buying-rules');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
-// TEMPORARY — diagnostic only, reverted immediately after. Forces search off
-// on this branch so the preview deployment can answer whether the whole-
-// response leak is triggered by context size (search results) or by the
-// report schema. Production runs from main and is untouched.
-const ENABLE_WEB_SEARCH = false;
+const ENABLE_WEB_SEARCH = process.env.PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH !== 'true';
 
 const WEB_SEARCH_HONESTY_RULE = `
 You have access to a web_search tool, and the customer has been told in writing that this analysis uses live web research. Search before you write. At minimum, search for what this item currently sells for and — when the customer is financing — what rates are currently typical for this kind of borrowing; search for current running costs (fuel or energy prices, insurance, typical repair costs) wherever a figure would otherwise be a guess. A handful of searches is plenty, but zero is not acceptable when the tool is available to you. When you do search and use what you find, say so briefly in research_notes and reflect it in the relevant explanation. When you have not searched, or a search did not turn up anything useful, that's fine — rely on general knowledge instead — but never present a specific current price, rate, or figure as verified when it is really a directional estimate from training knowledge. Ground every specific claim in one of: (a) something you found via web_search in this conversation, (b) the customer's own submitted details, or (c) general knowledge you are genuinely confident is still directionally accurate. Never invent a specific current price, interest rate, or resale percentage presented as verified fact when you are not confident it is both real and current — a clearly-labeled directional estimate is always better than a confident-sounding fabrication.
