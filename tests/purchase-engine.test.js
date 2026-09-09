@@ -3610,3 +3610,79 @@ test('a flat report the model actually returns becomes a complete report', async
     'nothing nested crossed the wire');
   assert.match(report.key_numbers[0].label, /\(8yr\)/);
 });
+
+// --- a thousands separator is not a list separator -------------------------
+//
+// Submission 72100718 asked for "must tow at least 7,000 lbs, and must have
+// adaptive cruise control" and the report came back grading THREE
+// requirements. The count was the visible symptom; the real damage was that
+// the towing requirement had been silently rewritten to "must tow at least 7",
+// which every truck on earth satisfies, and "000 lbs" was quoted back to the
+// customer as something they had asked for.
+
+test('a comma inside a number does not split the requirement around it', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const fragments = __internal.mustHaveFragments({
+    form_data: { must_have_features: 'must tow at least 7,000 lbs, and must have adaptive cruise control' },
+  });
+  assert.deepEqual(fragments, [
+    'must tow at least 7,000 lbs',
+    'must have adaptive cruise control',
+  ]);
+  // Stated separately from the deepEqual because this is the part that could
+  // get someone a truck that cannot tow their trailer.
+  assert.ok(
+    fragments.every((f) => !/^\d{3}\b/.test(f)),
+    'no fragment is the tail of a number that was cut in half'
+  );
+  assert.ok(
+    fragments[0].includes('7,000'),
+    'and the figure reaches the model and the customer as the buyer wrote it'
+  );
+});
+
+test('real commas still separate, and the count is right either way', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const f = (t) => __internal.mustHaveFragments({ form_data: { must_have_features: t } });
+
+  assert.equal(f('internal ice maker, no external door dispenser, must fit a 36-inch opening').length, 3);
+  assert.deepEqual(f('under $1,200 and at least 12,000 BTU'), ['under $1,200', 'at least 12,000 BTU']);
+  assert.deepEqual(f('towing capacity'), ['towing capacity']);
+  assert.deepEqual(f(''), []);
+  assert.deepEqual(f(undefined), []);
+});
+
+test('the graded count matches what the buyer actually asked for', async (t) => {
+  // End to end: two requirements in, two checks out — the mismatch that made
+  // one report say "0 of 3 confirmed" under a headline saying "both".
+  const submission = fakeSubmission();
+  submission.form_data = {
+    ...submission.form_data,
+    must_have_features: 'must tow at least 7,000 lbs, and must have adaptive cruise control',
+  };
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let asked = null;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (isVerifyCall(opts)) {
+      asked = body.messages[0].content;
+      return { ok: false, status: 500, text: async () => 'no verification for this test' };
+    }
+    return searchedToolUseResponse(completeReportInput(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const report = await generateUntilReport('sub-1');
+  assert.ok(report);
+  assert.match(asked, /7,000 lbs/, 'the model is asked about the requirement as written');
+  // Checked as a whole bullet, not a substring: \b000 matches inside
+  // "7,000" too, which is the correct text rather than the broken one.
+  assert.doesNotMatch(asked, /^\s*-\s*000\b/m, 'and no bullet is the tail of a split number');
+  assert.equal(
+    report.key_numbers.find((n) => /must-haves/i.test(n.label)).value,
+    '0 of 2 confirmed',
+    'two requirements in, two graded'
+  );
+});

@@ -1831,12 +1831,33 @@ function proseComponentConflict(report) {
 // Splits the customer's free-text must-haves into the individual things they
 // asked for. Deliberately generous about separators: people write these as
 // "AWD, Apple CarPlay and roof rails" as often as a clean list.
+// A comma inside a number is a thousands separator, not a list separator.
+//
+// Splitting on every comma took submission 72100718's "must tow at least
+// 7,000 lbs, and must have adaptive cruise control" and made THREE
+// requirements out of two: "must tow at least 7", "000 lbs", and the cruise
+// control. The count was the visible symptom (the report said "0 of 3
+// confirmed" while its own headline said "both"), but the damage is worse
+// than a miscount — the towing requirement had been rewritten into one about
+// 7 lbs, which any truck satisfies, and "000 lbs" was shown to the customer
+// as something they had asked for. A requirement that gets silently rewritten
+// before it is graded is the one failure this whole section exists to
+// prevent: a buyer told their deal-breaker is met goes and buys the thing.
+//
+// Masked rather than matched around, because the comma has to survive into
+// the fragment text — it is quoted back to the customer and sent to the model
+// as the requirement to check, and "7000 lbs" is not what they wrote.
+const THOUSANDS_MASK = '\u0000';
+
 function mustHaveFragments(submission) {
   const raw = ((submission && submission.form_data) || {}).must_have_features;
   if (!nonEmpty(raw)) return [];
   return String(raw)
+    // Only a comma sitting between a digit and exactly three more digits, so
+    // "7,000 lbs" is protected while "36 inches, 20 amps" still separates.
+    .replace(/(\d),(?=\d{3}(?!\d))/g, '$1' + THOUSANDS_MASK)
     .split(/[,;\n]|\band\b|\bplus\b/i)
-    .map((part) => part.trim())
+    .map((part) => part.split(THOUSANDS_MASK).join(',').trim())
     .filter((part) => part.length > 2);
 }
 
