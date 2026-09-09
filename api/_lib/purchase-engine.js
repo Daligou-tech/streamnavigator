@@ -1074,6 +1074,20 @@ const PROSE_TOTAL_FIELDS = {
         : [];
     },
   },
+  'maintenance_running_costs.explanation': {
+    get: (r) => r.maintenance_running_costs && r.maintenance_running_costs.explanation,
+    label: 'the maintenance and running costs section',
+    // The eighth place a total could be stated, and the last one nothing was
+    // watching. On submission 05d61ecb this section closed with "...already
+    // folded into the $5,700-$7,800 total-cost-of-ownership estimate above",
+    // where the estimate above was $5,943-$7,533 — out by 4.1% and 3.5%. It
+    // was checked by proseRunningConflict for per-year and whole-period
+    // COMPONENT figures and never for a claim about the whole.
+    //
+    // Its own business is components, so every line item's figure is set
+    // aside first at both scales; what remains is a claim about the total.
+    alsoAllows: (r) => lineRanges(r).flatMap((l) => [l.whole, l.perYear].filter(Boolean)),
+  },
   'financing_impact.explanation': {
     get: (r) => r.financing_impact && r.financing_impact.explanation,
     label: 'the financing section',

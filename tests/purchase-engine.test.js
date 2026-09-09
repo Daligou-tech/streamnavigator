@@ -2910,3 +2910,94 @@ test('an unverified spec check does not count as having been looked up', async (
   const report = await reportWithNoUsableResearch(t, unverified);
   assert.equal(/checked separately/i.test(report.missing_or_uncertain[0]), false);
 });
+
+// --- the eighth field ------------------------------------------------------
+//
+// Three runs on 2026-09-08, one per category, checked against the rendered
+// reports rather than the engine's own view of them. Every structural
+// invariant held in all three — line items to printed total, strip to
+// breakdown, per-year to running lines, resale across all three places it
+// appears. One contradiction survived, in the Peloton report (submission
+// 05d61ecb), and it was in the one field the total check had never been
+// pointed at:
+//
+//   "...already folded into the $5,700-$7,800 total-cost-of-ownership
+//    estimate above."
+//
+// The estimate above was $5,943-$7,533. Out by 4.1% and 3.5%.
+//
+// maintenance_running_costs.explanation was read by proseRunningConflict for
+// per-year and whole-period COMPONENT figures, and by nothing at all for a
+// claim about the whole.
+
+function pelotonRunTwo(maintenanceExplanation) {
+  return completeReportInput({
+    headline: 'Roughly $5,900–$7,500 over 6 years',
+    must_have_checks: [],
+    total_cost_of_ownership: {
+      time_horizon_years: 6,
+      cost_breakdown: [
+        { label: 'Bike+ purchase price', kind: 'purchase', low: 2495, high: 2495, per_year_low: 0, per_year_high: 0, basis: 'quoted new price' },
+        { label: 'Interest over 39-month financing', kind: 'financing', low: 250, high: 450, per_year_low: 0, per_year_high: 0, basis: '0% to ~15% APR' },
+        { label: 'All-Access membership (required for classes)', kind: 'running', low: 0, high: 0, per_year_low: 528, per_year_high: 588, basis: '$44-$49/month' },
+        { label: 'Electricity for console/touchscreen', kind: 'running', low: 0, high: 0, per_year_low: 5, per_year_high: 10, basis: 'negligible draw' },
+        { label: 'Maintenance, parts & occasional repairs', kind: 'running', low: 0, high: 0, per_year_low: 75, per_year_high: 200, basis: 'cleats, belts, post-warranty repair' },
+        { label: 'Expected resale value at year 6', kind: 'resale_recovery', low: -450, high: -200, per_year_low: 0, per_year_high: 0, basis: 'secondhand value' },
+      ],
+      explanation: 'The membership dominates the total; the bike itself is the smaller part.',
+    },
+    financing_impact: { applicable: true, explanation: 'A 39-month plan at 0% to about 15% APR.' },
+    maintenance_running_costs: { annual_low: 608, annual_high: 798, explanation: maintenanceExplanation },
+    depreciation_resale: { resale_low: 200, resale_high: 450, expected_resale_note: 'modest', explanation: 'Connected fitness hardware depreciates fast.' },
+    alternative_comparison: {
+      alternative_name: 'NordicTrack Commercial S22i',
+      alternative_price_low: 1699, alternative_price_high: 2199,
+      alternative_total_low: 4800, alternative_total_high: 6500,
+      explanation: 'Cheaper hardware and a cheaper subscription.',
+    },
+    recommendation: { verdict: 'buy', reasoning: 'Used four or five times a week it earns its keep.' },
+  });
+}
+
+test('the Peloton run-two line items sum to what the strip showed', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const d = __internal.deriveNumbers(pelotonRunTwo('x'));
+  assert.equal(__internal.moneyRange(d.total.low, d.total.high), '$5,943 – $7,533');
+});
+
+test('a total stated in the maintenance section is caught', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(pelotonRunTwo(
+    'The membership runs about $44/month, and you should budget $150-$300 for consumables. These are already folded into the $5,700-$7,800 total-cost-of-ownership estimate above.'
+  ));
+  assert.equal(conflicts.length, 1);
+  assert.equal(conflicts[0].path, 'maintenance_running_costs.explanation');
+  assert.match(conflicts[0].quoted, /\$5,700-\$7,800/);
+});
+
+test('the same section may still quote its own components freely', () => {
+  // Its business IS components, so every line item's figure is set aside at
+  // both scales before anything is judged — otherwise adding this field to
+  // the total check would report every per-year and whole-period figure it
+  // was written to contain.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  for (const explanation of [
+    'The All-Access membership runs $528–$588 a year, or roughly $3,168 over six years.',
+    'Maintenance, parts and occasional repairs come to $75–$200 a year, or $450 – $1,200 over the six years.',
+    'All told, running costs are $608–$798 a year.',
+    'These are already folded into the $5,943-$7,533 total-cost-of-ownership estimate above.',
+  ]) {
+    assert.deepEqual(__internal.proseTotalConflicts(pelotonRunTwo(explanation)), [], explanation);
+  }
+});
+
+test('a field is still asked about once when it trips both checks', () => {
+  // A wrong total here is also a figure no line item carries, so the
+  // component check and the total check both have something to say. The
+  // repair rewrites the field once.
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const conflicts = __internal.proseTotalConflicts(pelotonRunTwo(
+    'Everything above is folded into the $9,100-$11,400 total cost of ownership.'
+  ));
+  assert.equal(conflicts.filter((c) => c.path === 'maintenance_running_costs.explanation').length, 1);
+});
