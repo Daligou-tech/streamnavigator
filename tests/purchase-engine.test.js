@@ -11,6 +11,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
 
+// purchase-engine.js reads PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH once, at
+// module load, to decide whether the report call gets a web_search tool. Ten of
+// the tests below are about what happens when it does.
+//
+// Vercel injects a project's environment variables into the BUILD as well as
+// the runtime, and scripts/vercel-gate.sh runs this suite inside that build. So
+// switching the flag on to run a diagnostic against a preview also switched it
+// on for the gate, those ten tests failed, and four production deploys in a row
+// were cancelled by a flag that was never meant to touch production.
+//
+// A unit test about the search path must not be at the mercy of a deploy-time
+// switch. Cleared before the module is required, which is the only moment that
+// matters.
+delete process.env.PURCHASE_NAVIGATOR_DISABLE_WEB_SEARCH;
+
 const supabaseAdminPath = require.resolve('../api/_lib/supabaseAdmin');
 const purchaseEnginePath = require.resolve('../api/_lib/purchase-engine');
 
