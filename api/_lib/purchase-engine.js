@@ -1634,6 +1634,38 @@ function readCachedVerification(submission) {
   return { checks: cached.checks, searchRounds: Number(cached.searchRounds) || 0 };
 }
 
+// A verification that ran out of budget, recorded so the next attempt does
+// not buy the same failure again.
+//
+// The cache above only ever held a SUCCESS, which is why the old code had to
+// push on into the report rather than hand back: with nothing written, handing
+// back would re-run the failing verification on the next attempt, fail again,
+// and hand back again, and the customer would poll forever. Writing the
+// failure down is what makes handing back safe, because the next attempt takes
+// the skip branch instead of the retry.
+function verificationWasAbandoned(submission) {
+  return !!(((submission && submission.job_state) || {}).must_have_verification_abandoned);
+}
+
+// Returns whether the marker actually landed. The caller hands back only on
+// true — handing back on a marker that was not written is the poll-forever
+// loop this exists to prevent.
+async function markVerificationAbandoned(admin, submission) {
+  try {
+    const jobState = { ...(submission.job_state || {}), must_have_verification_abandoned: true };
+    const { error } = await admin
+      .from('navigator_submissions')
+      .update({ job_state: jobState, updated_at: new Date().toISOString() })
+      .eq('id', submission.id);
+    if (error) throw new Error(error.message || String(error));
+    submission.job_state = jobState;
+    return true;
+  } catch (err) {
+    console.warn(`[purchase-engine] Could not record the abandoned must-have verification for submission ${submission.id}: ${String((err && err.message) || err)}`);
+    return false;
+  }
+}
+
 async function cacheVerification(admin, submission, verification) {
   try {
     const jobState = { ...(submission.job_state || {}), must_have_verification: verification };
@@ -2068,12 +2100,62 @@ const MUST_HAVE_TOOL = {
   },
 };
 
+// How long the must-have verification may spend before it is abandoned.
+//
+// An invocation gets 300 seconds and this call runs first, so without a bound
+// it can take all of them and leave nothing for the report it exists to
+// inform. Submission 72100718 (a financed F-150 with a towing figure and
+// adaptive cruise to check) did exactly that three times: three consecutive
+// "Task timed out after 300 seconds", job_state still null afterwards because
+// nothing was ever cached, and no report call reached on any of them.
+//
+// 120s is chosen against what a working verification costs, not what a
+// failing one does: the two that succeeded in that same batch were done well
+// inside it. A lookup still running at two minutes is not close to finishing,
+// and the honest move is to stop paying for it and write the report with the
+// requirements marked unchecked — which the product already renders, and
+// which is worth incomparably more to the customer than a fourth timeout.
+const VERIFICATION_BUDGET_MS = 120000;
+
 // Its own request, with its own search budget and one job. Returns the
 // graded checks and — separately — how many searches actually ran, because
 // the caller downgrades every verdict when the answer is none.
-async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch }) {
+//
+// deadlineAt is an absolute timestamp rather than a duration so that the
+// step-down retries below (search variant, then no search at all) share one
+// budget instead of each starting a fresh one.
+async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, deadlineAt }) {
   const fragments = mustHaveFragments(submission);
   if (!fragments.length) return { checks: [], searchRounds: 0 };
+
+  const deadline = isNum(deadlineAt) ? deadlineAt : Date.now() + VERIFICATION_BUDGET_MS;
+  const controller = new AbortController();
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} had no time left in its budget; abandoning before the request.`);
+    return null;
+  }
+  const abortTimer = setTimeout(() => controller.abort(), remaining);
+  // Node keeps the process alive for a pending timer; this one must never be
+  // the reason a lambda stays up.
+  if (typeof abortTimer.unref === 'function') abortTimer.unref();
+  try {
+    return await runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      console.warn(
+        `[purchase-engine] Must-have verification for submission ${submissionId} passed its ${Math.round(VERIFICATION_BUDGET_MS / 1000)}s budget and was abandoned; the report will run with the requirements marked unchecked.`
+      );
+      return null;
+    }
+    throw err;
+  } finally {
+    clearTimeout(abortTimer);
+  }
+}
+
+async function runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal }) {
+  const fragments = mustHaveFragments(submission);
 
   const formData = submission.form_data || {};
   const system = `You check whether one specific product meets a buyer's stated requirements, for StreamNavigator AI. You do one thing: look up what the product actually is, and grade each requirement against it.
@@ -2106,10 +2188,11 @@ Give exactly one entry per line above, using the buyer's own wording for the req
       toolChoice: { type: 'auto' },
       messages,
       maxTokens: 3000,
+      signal,
     });
   } catch (err) {
     if (allowSearch && looksLikeUnsupportedToolError(err)) {
-      return verifyMustHaves({ apiKey, submission, submissionId, allowSearch: false });
+      return runVerification({ apiKey, submission, submissionId, allowSearch: false, deadline, signal });
     }
     // A failed verification must not cost the customer their report. The
     // caller falls back to unverified entries, which is honest and still
@@ -2132,6 +2215,7 @@ Give exactly one entry per line above, using the buyer's own wording for the req
         { role: 'user', content: 'Now call submit_must_have_checks with one entry per requirement, using anything you found above.' },
       ]),
       maxTokens: 2000,
+      signal,
     });
     toolUse = (followData.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_must_have_checks');
   }
@@ -2485,7 +2569,7 @@ function mapToGenericReport(report) {
   };
 }
 
-async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens, thinkingBudget }) {
+async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens, thinkingBudget, signal }) {
   const body = {
     model: ANTHROPIC_MODEL,
     max_tokens: maxTokens || 4096,
@@ -2517,6 +2601,7 @@ async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxT
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify(body),
+    signal,
   });
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
@@ -2756,10 +2841,18 @@ async function generatePurchaseReport(submissionId) {
     // changed spends part of that budget rediscovering the same answer — on
     // an attempt that only exists because the previous one ran out of time.
     let verificationIsFresh = false;
+    let verificationJustAbandoned = false;
     let verification = readCachedVerification(submission);
     if (verification) {
       console.warn(
         `[purchase-engine] Reusing the must-have verification stored on submission ${submissionId} (${verification.checks.length} check(s), ${verification.searchRounds} search round(s)) rather than running it again.`
+      );
+    } else if (verificationWasAbandoned(submission)) {
+      // An earlier attempt already established that this one cannot finish in
+      // its budget. Running it again would spend this attempt's time
+      // rediscovering that, which is how the submission got here.
+      console.warn(
+        `[purchase-engine] Skipping the must-have verification for submission ${submissionId} — an earlier attempt abandoned it, so the report runs now with the requirements marked unchecked.`
       );
     } else {
       try {
@@ -2778,6 +2871,8 @@ async function generatePurchaseReport(submissionId) {
         // has just written it, so a later read always says it was already
         // there and the hand-back below never fires.
         verificationIsFresh = true;
+      } else if (mustHaveFragments(submission).length) {
+        verificationJustAbandoned = await markVerificationAbandoned(admin, submission);
       }
     }
     const mustHaveChecks = (verification && verification.checks) || unverifiedChecks(submission);
@@ -2810,17 +2905,27 @@ async function generatePurchaseReport(submissionId) {
       );
     }
 
-    // Fresh verification means this invocation has already spent time on a
-    // separate request. Hand back rather than start the report inside what is
-    // left of the budget: the next poll is three seconds away and gets its own.
-    // Only when it SUCCEEDED. A failed verification caches nothing, so
-    // handing back would run it again on the next attempt, fail again, and
-    // hand back again — the customer would poll forever. It cost little
-    // when it failed, so the report proceeds here with the requirements
-    // marked unchecked.
-    if (verification && verificationIsFresh && mustHaveFragments(submission).length) {
+    // This invocation has already spent time on a separate request, so hand
+    // back rather than start the report inside what is left of the budget: the
+    // next poll is three seconds away and gets its own 300 seconds.
+    //
+    // Both outcomes hand back now. It used to be only a SUCCESS, because a
+    // failure cached nothing and handing back would re-run it, fail again and
+    // hand back again — polling forever. That reasoning was right, and its
+    // remedy (push on into the report with whatever time is left) rested on
+    // "it cost little when it failed", which is untrue of the failure that
+    // actually matters: a verification that runs until the platform kills the
+    // invocation costs all 300 seconds and never reaches this line at all.
+    // Submission 72100718 died that way three times over.
+    //
+    // The budget above makes the failure cheap and bounded; the marker makes
+    // handing back safe, because the next attempt skips the verification
+    // rather than repeating it. Neither is enough alone.
+    if ((verificationIsFresh || verificationJustAbandoned) && mustHaveFragments(submission).length) {
       console.warn(
-        `[purchase-engine] Verified ${mustHaveChecks.length} must-have(s) for submission ${submissionId}; handing back so the report gets an invocation of its own.`
+        verificationIsFresh
+          ? `[purchase-engine] Verified ${mustHaveChecks.length} must-have(s) for submission ${submissionId}; handing back so the report gets an invocation of its own.`
+          : `[purchase-engine] Abandoned the must-have verification for submission ${submissionId}; handing back so the report gets a full invocation with the requirements marked unchecked.`
       );
       await admin
         .from('navigator_submissions')
