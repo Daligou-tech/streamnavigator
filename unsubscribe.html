@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Unsubscribe — StreamNavigator AI</title>
+<meta name="description" content="Remove your email address from StreamNavigator outreach." />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="canonical" href="https://streamnavigator.ai/unsubscribe" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-shared.css">
+<style>
+  .unsub-wrap{ max-width:560px; margin:0 auto; padding:72px 24px 56px; }
+  .unsub-wrap .eyebrow{ margin-bottom:14px; }
+  .unsub-wrap h1{ font-size:clamp(1.8rem, 4vw, 2.4rem); margin-bottom:12px; }
+  .unsub-lede{ color:var(--text-dim); font-size:16px; line-height:1.65; margin-bottom:32px; }
+  .unsub-card{ background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius-sm); box-shadow:var(--shadow-hard-sm); padding:26px 24px; }
+  .unsub-card .btn{ width:100%; justify-content:center; }
+  .unsub-note{ color:var(--text-dimmer); font-size:13.5px; line-height:1.6; margin-top:24px; }
+  .unsub-note a{ color:var(--accent-deep); }
+  .unsub-msg{ font-size:14px; line-height:1.55; margin-top:14px; }
+  .unsub-msg.error{ color:#B3261E; }
+  .unsub-done h2{ font-size:1.25rem; margin-bottom:10px; }
+  .unsub-done p{ color:var(--text-dim); font-size:15px; line-height:1.65; margin-bottom:12px; }
+  .unsub-done strong{ color:var(--text); }
+</style>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+<div class="bg-noise"></div>
+<header>
+  <nav>
+    <a href="/#top" class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
+      StreamNavigator
+    </a>
+  </nav>
+</header>
+
+<main id="top">
+  <div class="unsub-wrap">
+    <div class="eyebrow">✦ Email preferences</div>
+
+    <div id="form-view">
+      <h1>Unsubscribe</h1>
+      <p class="unsub-lede">Confirm your address below and we won't email you again. No account, no sign-in, nothing else to fill in.</p>
+
+      <div class="unsub-card">
+        <form id="unsub-form" novalidate>
+          <div class="field-block">
+            <label for="email">Your email address</label>
+            <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" required />
+          </div>
+          <button type="submit" class="btn btn-primary" id="submit-btn">Unsubscribe me</button>
+        </form>
+        <p class="unsub-msg" id="msg" role="status" aria-live="polite"></p>
+      </div>
+
+      <p class="unsub-note">This removes you from outreach email only. It does not affect reports or receipts for anything you've purchased. Questions: <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a>.</p>
+    </div>
+
+    <div id="done-view" hidden>
+      <h1>You're unsubscribed</h1>
+      <div class="unsub-card unsub-done">
+        <h2>Done — nothing else to do.</h2>
+        <p><strong id="done-email"></strong> has been removed from our outreach list. You won't hear from us again.</p>
+        <p>If something does arrive after today, it crossed in the post — forward it to <a href="mailto:partners@streamnavigator.ai">partners@streamnavigator.ai</a> and we'll fix it.</p>
+      </div>
+      <p class="unsub-note">StreamNavigator LLC · 478 Elden Street, #101, Herndon VA 20170</p>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-bottom">
+    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
+    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var input = document.getElementById('email');
+  var form = document.getElementById('unsub-form');
+  var btn = document.getElementById('submit-btn');
+  var msg = document.getElementById('msg');
+
+  // Prefill from ?e= when the sending tool could merge the address in, so the
+  // recipient only has to press the button. Everything still works with no
+  // parameter at all — that is the path the Apollo signature actually uses,
+  // since a mailbox signature is static text with no merge fields.
+  //
+  // The address is NOT trusted or acted on until the button is pressed. Nothing
+  // is suppressed by loading this page, which is what keeps corporate link
+  // scanners from unsubscribing people who never clicked.
+  var prefill = params.get('e') || params.get('email') || '';
+  if (prefill && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(prefill)) input.value = prefill;
+
+  var campaign = (params.get('c') || '').slice(0, 120);
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var email = (input.value || '').trim();
+    msg.className = 'unsub-msg';
+    msg.textContent = '';
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      msg.className = 'unsub-msg error';
+      msg.textContent = 'That address doesn’t look right. Please check it and try again.';
+      input.focus();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Removing…';
+
+    fetch('/api/unsubscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, campaign: campaign || undefined }),
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      .then(function (data) {
+        if (!data || !data.ok) throw new Error((data && data.error) || 'Something went wrong.');
+        document.getElementById('done-email').textContent = email;
+        document.getElementById('form-view').hidden = true;
+        document.getElementById('done-view').hidden = false;
+        window.scrollTo(0, 0);
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        btn.textContent = 'Unsubscribe me';
+        msg.className = 'unsub-msg error';
+        // Never a dead end: if the button cannot do it, the address that can is
+        // on screen. An opt-out that fails silently is the failure that matters.
+        msg.textContent = (err && err.message ? err.message : 'Something went wrong.')
+          + ' You can also email partners@streamnavigator.ai and we’ll remove you by hand.';
+      });
+  });
+})();
+</script>
+</body>
+</html>
