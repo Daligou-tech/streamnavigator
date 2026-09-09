@@ -2130,13 +2130,27 @@ const MUST_HAVE_TOOL = {
 // "Task timed out after 300 seconds", job_state still null afterwards because
 // nothing was ever cached, and no report call reached on any of them.
 //
-// 120s is chosen against what a working verification costs, not what a
-// failing one does: the two that succeeded in that same batch were done well
-// inside it. A lookup still running at two minutes is not close to finishing,
-// and the honest move is to stop paying for it and write the report with the
-// requirements marked unchecked — which the product already renders, and
-// which is worth incomparably more to the customer than a fourth timeout.
-const VERIFICATION_BUDGET_MS = 120000;
+// This was 120s for one deploy, on the stated but unchecked belief that a
+// working verification finishes well inside two minutes. It does not. The
+// measurements were already available and said otherwise: a verification
+// holds its invocation open until it answers, so the first poll's duration IS
+// its duration, and the two that succeeded on 2026-09-09 took 128s (Peloton)
+// and 166s (the LG fridge). 120s killed both on the next run. The LG had been
+// correctly reporting a failed deal-breaker — no internal water dispenser,
+// verdict RECONSIDER — and instead came back "0 of 2 confirmed". Honest, and
+// far less than the customer paid for.
+//
+// The ceiling this has to respect is not the report's. A verification that
+// answers hands back, and one that is abandoned now hands back too, so it
+// never shares an invocation with the report either way. All the budget needs
+// is the 300s platform limit minus enough to write the marker and update the
+// row — a second or two. 240s leaves a minute of headroom over that and still
+// stops the runaway case (the F-150 lookup that ran to 300s and returned
+// nothing) well short of costing an attempt.
+//
+// If this is ever tightened again, measure first: the number to beat is the
+// slowest verification that SUCCEEDS, not the fastest one that fails.
+const VERIFICATION_BUDGET_MS = 240000;
 
 // Its own request, with its own search budget and one job. Returns the
 // graded checks and — separately — how many searches actually ran, because
@@ -2156,10 +2170,15 @@ async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, 
     console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} had no time left in its budget; abandoning before the request.`);
     return null;
   }
+  // Deliberately NOT unref()d. It was, on the reasoning that a pending timer
+  // must never be the reason a lambda stays up — but clearTimeout in the
+  // finally below already guarantees it cannot outlive this call, so unref
+  // bought nothing and cost correctness: an unref'd timer does not hold the
+  // event loop, so if the request in flight is not holding it either, Node
+  // exits before the deadline can fire and the abort never happens. A real
+  // fetch holds a socket and hides this; a stubbed one does not, which is why
+  // it surfaced as a suite that died mid-run on CI and passed everywhere else.
   const abortTimer = setTimeout(() => controller.abort(), remaining);
-  // Node keeps the process alive for a pending timer; this one must never be
-  // the reason a lambda stays up.
-  if (typeof abortTimer.unref === 'function') abortTimer.unref();
   try {
     return await runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal: controller.signal });
   } catch (err) {
@@ -3357,6 +3376,7 @@ module.exports = {
   generatePurchaseReport,
   // Exported for unit testing without hitting the network or Supabase.
   __internal: {
+    VERIFICATION_BUDGET_MS,
     nestReportInput,
     leakedFlatSections,
     FLAT_TO_NESTED,
