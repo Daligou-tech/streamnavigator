@@ -117,3 +117,35 @@ test('every page still names a price, and it is the one Stripe charges', () => {
     assert.ok(shown || onCheckoutPage, `${file} no longer shows $${expected}`);
   }
 });
+
+// --- /buying: the feature that is not sold ----------------------------------
+//
+// Purchase Navigator's claim sheet audited clean on 2026-09-10 — the
+// sufficiency gate holds server-side, all six promised parts appear, the TCO
+// arithmetic foots, and the Stripe link charges $29 once. The problem there was
+// never honesty. It was that the page led with total cost of ownership, which
+// Edmunds and Kelley Blue Book both do for free and with better data for
+// vehicles, while the one output nothing free produces — checking a buyer's
+// stated deal-breakers against the real specification — appeared nowhere in the
+// selling copy at all.
+//
+// On a live report that check caught two of two deal-breakers on a $2,400
+// refrigerator (roughly 36 inches wide against a 33-inch opening, and a
+// through-door rather than internal dispenser) and turned the verdict to
+// RECONSIDER. It is the most valuable thing the product does.
+
+test('the deal-breaker check is sold, not just implemented', () => {
+  const page = fs.readFileSync(path.join(ROOT, 'buying.html'), 'utf8');
+  const rules = fs.readFileSync(path.join(ROOT, 'navigator-buying-rules.js'), 'utf8');
+
+  assert.ok(/must_have_features/.test(rules), 'the field that drives it still exists');
+  assert.ok(/deal-breaker/i.test(page),
+    'buying.html never mentions the deal-breaker check — the one output no free '
+    + 'calculator produces, driven by an optional field nobody is told the value of');
+
+  // And the field has to explain what actually happens to what you type in it.
+  const why = rules.slice(rules.indexOf("key: 'must_have_features'"), rules.indexOf("key: 'must_have_features'") + 900);
+  assert.ok(/checked against the actual specification/i.test(why),
+    'the field explains only that it helps pick an alternative, which undersells it: '
+    + 'what is typed there is verified, and a failed deal-breaker changes the recommendation');
+});

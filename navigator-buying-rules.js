@@ -114,11 +114,11 @@
     },
     {
       key: 'must_have_features',
-      label: 'Any must-have features or deal-breakers (optional)',
+      label: 'Must-have features or deal-breakers (optional, but the most useful box here)',
       type: 'text',
       required: false,
-      placeholder: 'e.g. towing capacity, ice maker, quiet operation',
-      why: 'Helps us pick a realistic alternative to compare against instead of a generic one.',
+      placeholder: 'e.g. must tow at least 7,000 lbs · must fit a 33-inch opening · must have an internal water dispenser',
+      why: 'Anything you write here is checked against the actual specification before you buy, and a deal-breaker that is not met changes the recommendation. It also picks the alternative we compare against — one that meets the requirement the original missed.',
     },
   ];
 
