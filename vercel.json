@@ -46,7 +46,7 @@
     },
     {
       "path": "/api/rental-reminders",
-      "schedule": "0 14 * * *"
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
