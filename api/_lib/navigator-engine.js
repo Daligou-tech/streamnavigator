@@ -34,6 +34,7 @@ const {
   runRentalAudit, rankFindings: rankRentalFindings, Severity: RentalSeverity,
 } = require('./rental-audit');
 const { runRentalTrend, sameProperty } = require('./rental-trend');
+const { runRentalOutcomes } = require('./rental-outcomes');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 const { grantEntitlement } = require('./rental-entitlement');
@@ -177,6 +178,7 @@ Hard rules:
 HEADLINE AND ORDERING — this determines whether the report reads as work delivered or work not done.
 
 Lead with the strongest TRUE statement available, in this order of preference:
+0. If money from LAST year's audit is confirmed recovered, that leads — it is the only sentence in this product that reports a result rather than a recommendation. Pair it with this year's strongest finding.
 1. Confirmed arithmetic errors or recoverable charges, with the dollar figure.
 2. A unit below comparable units in the same property, or an unrecovered owner cost, with the dollar figure.
 3. A cost that rose against this property's own earlier period, with the dollar increase and the percentage. State which period it is measured against.
@@ -407,6 +409,14 @@ async function resolvePriorPeriod(admin, submission, extraction) {
         expenses: priorExtraction.expenses,
         expense_total_stated: priorExtraction.expense_total_stated,
         submissionId: row.id,
+        // Carried for api/_lib/rental-outcomes.js, which closes out last year's
+        // findings against this year's documents. Only an earlier SUBMISSION
+        // has these — a prior-year column inside one statement was never
+        // audited, so there is nothing of ours to confirm against it.
+        priorFindings: Array.isArray((row.form_data || {}).rental_findings)
+          ? (row.form_data || {}).rental_findings
+          : [],
+        priorExtraction,
       };
     })
     .filter(Boolean);
@@ -740,10 +750,20 @@ async function generateNavigatorReport(submissionId) {
       // against the same building last year outranks one that merely sits above
       // a typical range, and the ordering has to say so.
       let trend = { findings: [], skipped: [], comparedTo: null };
+      let outcomes = null;
       if (extraction) {
         try {
           const prior = await resolvePriorPeriod(admin, submission, extraction);
-          if (prior) trend = runRentalTrend(extraction, prior);
+          if (prior) {
+            trend = runRentalTrend(extraction, prior);
+            // Closing out last year's findings needs a last year's AUDIT, not
+            // merely an earlier column of figures, so this only runs on the
+            // returning-customer path.
+            if (prior.source === 'earlier_submission' && (prior.priorFindings || []).length) {
+              const closed = runRentalOutcomes(prior.priorFindings, extraction, prior.priorExtraction);
+              if (closed.outcomes.length) outcomes = closed;
+            }
+          }
         } catch (err) {
           // A comparison that cannot be built is a missing section, not a
           // missing report. The fifteen checks stand on their own.
@@ -807,6 +827,29 @@ async function generateNavigatorReport(submissionId) {
               'line that is not in a finding.',
             ].join('\n')
             : '',
+          outcomes
+            ? [
+              '',
+              'WHAT LAST YEAR\'S FINDINGS DID — the outcome of the audit this customer already paid for,',
+              'read out of the documents they have just sent rather than asked of them. Give it its own',
+              'section, near the top, before this year\'s findings.',
+              `${outcomes.resolved} resolved, ${outcomes.improved} improved, ${outcomes.stillOpen} still open, `
+                + `${outcomes.notTestable} not testable from what was sent this time.`,
+              outcomes.confirmedRecovered > 0
+                ? `CONFIRMED RECOVERED: $${outcomes.confirmedRecovered.toLocaleString('en-US')} a year. This figure `
+                  + 'is money a document proves stopped leaving the account or started arriving. Use it, and use '
+                  + 'it exactly — do not round it up, do not add anything to it, and do not describe any other '
+                  + 'number in this report as recovered. Several outcomes below are resolved with no figure '
+                  + 'attached, deliberately: a statement that now adds up does not mean the earlier difference '
+                  + 'was refunded, and sub-metering shifts a cost without proving how much of it reached the '
+                  + 'tenants. Report those as resolved, without money.'
+                : 'Nothing is confirmed recovered yet. Say that plainly rather than implying progress.',
+              'A "not testable" outcome means this year\'s upload does not contain the document that would',
+              'answer it. It is NOT a pass, it is NOT progress, and it must never be written as either —',
+              'name the document that would close it.',
+              JSON.stringify(outcomes.outcomes, null, 1),
+            ].join('\n')
+            : '',
           allSkipped.length
             ? `Checks that could not be run because the required figures were missing or unreadable: `
               + `${allSkipped.join('; ')}. Say so plainly rather than implying they passed.`
@@ -821,7 +864,29 @@ async function generateNavigatorReport(submissionId) {
         await admin
           .from('navigator_submissions')
           .update({
-            form_data: { ...formData, rental_extraction: extraction, rental_checks_run: audited.checksRun },
+            form_data: {
+              ...formData,
+              rental_extraction: extraction,
+              rental_checks_run: audited.checksRun,
+              // The findings themselves, as data rather than as the prose the
+              // model wrote about them. Next year's audit reads these to work
+              // out which of them the landlord actually acted on — see
+              // api/_lib/rental-outcomes.js. Projected down to the fields the
+              // resolvers use, because storing the write-up would be storing
+              // the same thing twice and the basis strings are long.
+              rental_findings: allFindings
+                .filter((f) => f.severity !== RentalSeverity.WITHIN_NORMS)
+                .map((f) => ({
+                  checkId: f.checkId,
+                  title: f.title,
+                  severity: f.severity,
+                  dollarImpact: f.dollarImpact === undefined ? null : f.dollarImpact,
+                  impactKind: f.impactKind || null,
+                  charged: f.charged === undefined ? null : f.charged,
+                  expected: f.expected === undefined ? null : f.expected,
+                  detail: f.detail || {},
+                })),
+            },
             updated_at: new Date().toISOString(),
           })
           .eq('id', submissionId);
