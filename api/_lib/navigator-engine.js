@@ -33,10 +33,14 @@ const { extractRentalDocuments } = require('./rental-extract');
 const {
   runRentalAudit, rankFindings: rankRentalFindings, Severity: RentalSeverity,
 } = require('./rental-audit');
+const {
+  runLandlordAudit, Severity: LandlordSeverity,
+} = require('./landlord-audit');
 const { runRentalTrend, sameProperty } = require('./rental-trend');
 const { runRentalOutcomes } = require('./rental-outcomes');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
+const { sendFailureAlert } = require('./alerts');
 const { grantEntitlement } = require('./rental-entitlement');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -229,9 +233,20 @@ Weigh expected remaining life if repaired vs. replaced using general knowledge o
   'landlord': {
     label: 'Landlord Navigator',
     requiresFiles: false,
-    task: `You are the analysis engine behind Landlord Navigator — a legally sensitive product, so apply the honesty rules below especially strictly. A landlord paid for a compliance checklist covering licensing/registration, inspection deadlines, lead-paint/safety disclosure, tenant notice requirements, and permits, based on the properties they described (locations, property types, unit counts).
+    task: `You are the writer for a Landlord Navigator compliance review. A landlord paid to find out what their specific properties are required to do about registration and licensing, periodic inspection, lead paint, documents that must be attached to a lease, security deposit handling, notice before a lease ends, and permits for planned work.
 
-Landlord-tenant law varies by state, county, and sometimes city, and changes over time. Do not state a specific statute, ordinance number, or exact current notice-period length as settled fact unless you are genuinely confident it is both correct and current for the specific location given. When unsure, name the general category of requirement (e.g., "most jurisdictions require written notice before entry — the exact period depends on your state") and explicitly flag that it needs verification with the local housing authority or an attorney, rather than presenting a guess as legal fact. Produce a specific action-item checklist across the requested categories, with each item labeled either as something you're reasonably confident about or as something requiring the landlord's own local verification.`,
+You are NOT the analyst. api/_lib/landlord-audit.js has already decided every finding below, deterministically, by matching the property details this landlord entered against a held reference set of jurisdictions. Your job is to write those findings up. Do not add findings, do not recompute one, do not soften or escalate a severity, and do not merge two into one.
+
+This is a legally sensitive product, so the honesty rules below apply especially strictly, and two of them are absolute here:
+
+- NEVER state a fee, a dollar penalty, a renewal date, a statute or ordinance number, or an exact notice-period length. The engine holds none of these and neither do you. Where a landlord needs one, the finding already names the office that can give it to them, and naming that office IS the answer — say it plainly rather than apologising for it.
+- CARRY EACH FINDING'S CONFIDENCE THROUGH, every time. A finding marked confidence "high" rests on a long-standing programme and is written as a statement. A finding marked "check" is written as likely-and-worth-confirming, in those words. Presenting a "check" as settled fact is the single most damaging thing you can do in this report.
+
+Every finding carries a "verifyWith" naming an office. Every action item in your write-up must end at a concrete next step the landlord can take this week — a call to that office, a form to obtain, an account to open, a notice to serve.
+
+Organise the sections by property where the findings are per-property, using the property label the engine gives. A landlord with four rentals wants four checklists, not one merged narrative. Put the portfolio-level findings, if any, in their own section.
+
+A landlord whose properties come back clean has bought exactly what they came for. Deliver that as a result rather than apologising for the absence of problems, and name the checks that ran and passed so they can see what was examined.`,
   },
 
   'insurance': {
@@ -896,6 +911,79 @@ async function generateNavigatorReport(submissionId) {
       }
     }
 
+    // Landlord Navigator, on the same arrangement as Closing and Rental: decide
+    // the findings here, hand them to the model as data, and let it write.
+    //
+    // The input is different in kind — structured answers from the intake form
+    // rather than figures extracted from an uploaded statement — but the reason
+    // is identical. Told to produce a compliance checklist from a paragraph of
+    // prose, a model produces whatever the paragraph brought to mind; told to
+    // write up "Seattle runs RRIO and you said this property is not enrolled",
+    // it writes that. See api/_lib/landlord-audit.js for what this replaced.
+    if (submission.product === 'landlord') {
+      const properties = Array.isArray(formData.properties) ? formData.properties : [];
+      const audited = runLandlordAudit({ properties });
+
+      if (audited.findings.length) {
+        const flagged = audited.findings.filter((f) => f.severity !== LandlordSeverity.WITHIN_NORMS);
+        const passed = audited.findings.filter((f) => f.severity === LandlordSeverity.WITHIN_NORMS);
+
+        // Flagged and passed go over separately for the reason the two branches
+        // above document: severity order puts within-norms last, and a writer
+        // told to name every passed check will summarise the tail of one long
+        // list however firmly it is instructed not to.
+        auditBlock = [
+          '',
+          'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
+          'recompute them, and do not soften or escalate any severity. Each carries its own',
+          'confidence: write "high" as a statement and "check" as likely-and-worth-confirming.',
+          JSON.stringify(flagged, null, 1),
+          '',
+          passed.length
+            ? [
+              `CHECKS THAT RAN AND PASSED — ${passed.length} of them, listed below.`,
+              'These belong in a "what was checked and is fine" section. Name EVERY ONE, against the',
+              'property it belongs to. Do not compress them into "other checks passed" and do not drop',
+              'any for length — on a portfolio with little wrong, this list is the product.',
+              JSON.stringify(
+                passed.map((f) => ({ property: f.property, title: f.title, basis: f.basis })),
+                null, 1
+              ),
+            ].join('\n')
+            : '',
+          `COVERAGE — ${audited.checksRun} of ${audited.checksTotal} checks ran across `
+            + `${audited.propertyCount} propert${audited.propertyCount === 1 ? 'y' : 'ies'}.`,
+          'This figure goes in key_numbers, labelled "checks run", on every report. It separates two',
+          'results a customer will otherwise confuse: a portfolio that was examined and is fine, and one',
+          'we could barely examine because fields were left blank. Where coverage is low, the headline',
+          'must say that the answers, not the properties, are the limit, and the report must name the',
+          'specific questions that would raise it.',
+          audited.coverage.uncovered.length
+            ? 'JURISDICTIONS WE HOLD NO REFERENCE ENTRY FOR: '
+              + `${audited.coverage.uncovered.join('; ')}. Say this plainly and early, in missing_or_uncertain `
+              + 'and in the body. A landlord in one of these places must not read a short report as a clean one.'
+            : '',
+          audited.skipped.length
+            ? `Checks that could not run because a field was left blank: ${audited.skipped.join('; ')}. `
+              + 'Name them rather than implying they passed, and say which answer would turn each one on.'
+            : '',
+        ].filter(Boolean).join('\n');
+      } else {
+        // No properties entered at all. The intake blocks this client- and
+        // server-side, so reaching here means something upstream let a blank
+        // submission through, and the report has to say so rather than
+        // inventing a portfolio to talk about.
+        auditBlock = [
+          '',
+          'NO PROPERTY DETAILS WERE RECORDED for this submission, so not one check could run.',
+          'Say that first, plainly, in the summary and again in missing_or_uncertain. Do not produce a',
+          'general landlord compliance article in its place — that is not what was paid for. Tell them to',
+          'reply to their receipt with the address, build year and city of each property so the review',
+          'can be run.',
+        ].join('\n');
+      }
+    }
+
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -1049,10 +1137,49 @@ Then do what you can. Work only from what is legibly present, flag anything that
 
     return report;
   } catch (err) {
-    await admin
-      .from('navigator_submissions')
-      .update({ status: 'failed', error: String(err.message || err).slice(0, 500), updated_at: new Date().toISOString() })
-      .eq('id', submissionId);
+    // Failing loudly, and paying the money back.
+    //
+    // Until this block did both, a report that died here left a row reading
+    // 'failed' and nothing else. No alert reached anyone — api/_lib/alerts.js
+    // was wired into the HOA and Purchase engines only — and no refund was
+    // queued, because api/process-refunds.js acts on refund_state='due' and
+    // only api/_lib/hoa-engine.js ever set it. The customer was shown "no
+    // charge is lost", which was true only if they happened to email in and
+    // somebody happened to act on it.
+    //
+    // The audit of 2026-09-10 found this the direct way: a live submission was
+    // put through the real path, the Anthropic account turned out to be out of
+    // credit, and the failure produced silence. Nine products run through this
+    // function. Every one of them had the same hole.
+    //
+    // The refund is queued only where a Stripe session actually exists, so a
+    // submission that never paid — a test row, or one abandoned at checkout —
+    // cannot queue money it never took. process-refunds re-checks that and
+    // three other conditions before a cent moves, including that no report was
+    // ever delivered for this submission.
+    const paidForReal = !!submission.stripe_checkout_session_id;
+    const patch = {
+      status: 'failed',
+      error: String(err.message || err).slice(0, 500),
+      updated_at: new Date().toISOString(),
+    };
+    if (paidForReal) patch.refund_state = 'due';
+
+    await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
+
+    // Never allowed to mask the original failure: an alert that cannot be sent
+    // is a worse alert, not a worse report.
+    try {
+      await sendFailureAlert({
+        submissionId,
+        product: submission.product,
+        error: String(err.message || err).slice(0, 500),
+        refundQueued: paidForReal,
+      });
+    } catch (alertError) {
+      console.error('[navigator] failure alert could not be sent:', alertError.message);
+    }
+
     throw err;
   }
 }

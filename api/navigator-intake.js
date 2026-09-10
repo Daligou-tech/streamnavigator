@@ -112,6 +112,29 @@ module.exports = async function handler(req, res) {
       });
       return;
     }
+  } else if (product === 'landlord') {
+    // Landlord Navigator gets a structured gate for the same reason Purchase
+    // Navigator does: every check it runs needs a city, a state and a build
+    // year, so a submission without them buys a report that can only say it
+    // had nothing to work with. That was discoverable before payment and was
+    // not checked — landlord.html used to take one free-text box.
+    //
+    // These are the same three fields landlord.html gates its own button on,
+    // so a customer can never reach checkout with input this endpoint would
+    // reject, and calling the endpoint directly cannot bypass the page.
+    const properties = Array.isArray(formData.properties) ? formData.properties : [];
+    const usable = properties.filter((p) => p
+      && String(p.city || '').trim()
+      && String(p.state || '').trim());
+    if (!usable.length) {
+      res.status(400).json({
+        ok: false,
+        error: 'Add at least one property with its city and state — every check in this review is '
+          + 'jurisdiction-specific, so without them there is nothing to run.',
+        missing: ['city', 'state'],
+      });
+      return;
+    }
   } else {
     // D-04 fix: require at least one piece of substantive input — a
     // non-empty description/address, or an uploaded document — before
