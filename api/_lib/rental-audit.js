@@ -143,6 +143,36 @@ const LABELS = {
   landscaping: 'landscaping',
 };
 
+// What the property actually took in, from whichever line the statement chose
+// to print it on.
+//
+// Three checks divide by this, and all three used to require `total_collected`
+// specifically. A single-family statement with no laundry or parking income
+// prints one figure — "Gross rent collected $19,140" — and never a separate
+// total, so `total_collected` came back null and the checks skipped. Live
+// submission b1f1f1af was exactly that shape: the repair-ratio check had been
+// quietly failing to run on those statements since the engine shipped, and the
+// two ratios added to serve single-property customers did not run for the first
+// single-property customer they met.
+//
+// Preference order, most complete first. Every one of these is a figure the
+// statement printed; none is derived from an assumption.
+function collectedIncome(income) {
+  const x = income || {};
+  const total = num(x.total_collected);
+  if (total !== null && total > 0) return total;
+
+  const collected = num(x.collected_rent);
+  const other = num(x.other_income);
+  if (collected !== null && collected > 0) return collected + (other || 0);
+
+  const scheduled = num(x.gross_scheduled_rent);
+  if (scheduled !== null && scheduled > 0) {
+    return scheduled - Math.abs(num(x.vacancy_loss) || 0) + (other || 0);
+  }
+  return null;
+}
+
 function sentenceCase(text) {
   const t = String(text || "");
   return t.charAt(0).toUpperCase() + t.slice(1);
@@ -686,10 +716,10 @@ check(
 check(
   'REPAIR_RATIO',
   'Repair and maintenance spend as a share of rent collected',
-  (x) => num((x.income || {}).total_collected) !== null
+  (x) => collectedIncome(x.income) > 0
     && arr(x.expenses).some((e) => e.category === 'repairs_maintenance'),
   (x) => {
-    const collected = num((x.income || {}).total_collected);
+    const collected = collectedIncome(x.income);
     const spend = sum(arr(x.expenses)
       .filter((e) => e.category === 'repairs_maintenance')
       .map((e) => num(e.annual_amount)));
@@ -1000,9 +1030,9 @@ check(
 check(
   'OPEX_RATIO',
   'Operating costs as a share of the rent collected',
-  (x) => arr(x.expenses).length >= 3 && num((x.income || {}).total_collected) > 0,
+  (x) => arr(x.expenses).length >= 3 && collectedIncome(x.income) > 0,
   (x) => {
-    const collected = num((x.income || {}).total_collected);
+    const collected = collectedIncome(x.income);
     const opex = sum(arr(x.expenses).map((e) => num(e.annual_amount)));
     const ratio = opex / collected;
 

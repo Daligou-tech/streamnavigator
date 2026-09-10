@@ -369,3 +369,52 @@ test('both ratios run on a statement with no rent roll, mortgage or policy', () 
   assert.ok(find(result, 'OPEX_RATIO').length === 1);
   assert.ok(find(result, 'VACANCY_RATIO').length === 1);
 });
+
+test('a statement that prints one rent figure still gets its ratios', () => {
+  // Submission b1f1f1af, verbatim as the extractor recorded it. A single-family
+  // statement with no laundry or parking income prints "Gross rent collected"
+  // and never a separate total, so income.total_collected is null.
+  //
+  // Three checks divided by that field specifically. The repair-ratio check had
+  // therefore been skipping on statements of this shape since the engine
+  // shipped, and the two ratios written to serve single-property customers did
+  // not run for the first single-property customer they met.
+  const asExtracted = {
+    income: { period_start: '01/01/2025', period_end: '12/31/2025', collected_rent: 19140, net_operating_income: 10955 },
+    expenses: [
+      { label: 'Repairs & maintenance', category: 'repairs_maintenance', annual_amount: 2415 },
+      { label: 'Landscaping', category: 'landscaping', annual_amount: 410 },
+      { label: 'Property insurance', category: 'insurance', annual_amount: 1780 },
+      { label: 'Property taxes', category: 'taxes', annual_amount: 2940 },
+      { label: 'Accounting', category: 'admin', annual_amount: 350 },
+      { label: 'Umbrella liability', category: 'insurance', annual_amount: 290 },
+    ],
+    expense_total_stated: 8185,
+    units: [{ unit_id: 'house', monthly_rent: 1650 }],
+  };
+
+  const result = runRentalAudit(asExtracted);
+  const opex = one(result, 'OPEX_RATIO');
+  assert.equal(opex.severity, Severity.WITHIN_NORMS, '$8,185 against $19,140 is 42.8%');
+  assert.equal(opex.detail.collected, 19140, 'the figure the statement printed, not null');
+  assert.equal(opex.detail.ownerPaysUtilities, false, 'landscaping is not a utility');
+
+  const repairs = one(result, 'REPAIR_RATIO');
+  assert.ok(/12\.6%/.test(repairs.basis), `repairs are 12.6% of collected: ${repairs.basis}`);
+
+  // Vacancy still does not run, and that is correct: this statement books no
+  // vacancy line at all, and absence is not the same as zero.
+  assert.equal(find(result, 'VACANCY_RATIO').length, 0);
+  assert.ok(result.skipped.some((s) => /Vacancy/i.test(s)), 'and the customer is told which check did not run');
+});
+
+test('collected income is never invented, only read from whichever line carries it', () => {
+  const { runRentalAudit: run } = require('../api/_lib/rental-audit');
+  const base = { expenses: [{ label: 'R&M', category: 'repairs_maintenance', annual_amount: 1000 }] };
+
+  // No income figure of any kind: the ratio checks must decline rather than
+  // divide by something they made up.
+  const none = run(Object.assign({}, base, { income: {} }));
+  assert.equal(none.findings.filter((f) => f.checkId === 'OPEX_RATIO').length, 0);
+  assert.equal(none.findings.filter((f) => f.checkId === 'REPAIR_RATIO').length, 0);
+});
