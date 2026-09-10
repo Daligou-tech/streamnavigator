@@ -13,18 +13,8 @@
    connect those.
    ========================================================================= */
 
-// ---------- Reveal-on-scroll + toast + FAQ accordion (same as index.html) ----------
+// ---------- Toast + FAQ accordion ----------
 document.addEventListener('DOMContentLoaded', () => {
-  const revealEls = document.querySelectorAll('.reveal');
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach((e) => {
-      if (e.isIntersecting) {
-        e.target.classList.add('in');
-        io.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.12 });
-  revealEls.forEach((el) => io.observe(el));
 
   document.querySelectorAll('.faq-item').forEach((item) => {
     const btn = item.querySelector('.faq-q');

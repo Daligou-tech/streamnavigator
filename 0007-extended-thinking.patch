@@ -1,0 +1,211 @@
+From d2e1efe3f80b0203e52054a4b76c4727737119c6 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 31 Aug 2026 02:35:09 +0000
+Subject: [PATCH] Give the model a real scratch space for arithmetic, instead
+ of asking it not to leak
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Live re-verification of the diagnostics added in the previous patch (0006)
+paid off immediately: it pinpointed the leak to the SAME field —
+total_cost_of_ownership.explanation — on all 3 fresh attempts just run
+(7/7 total across this whole incident), always with the leaked fragment as
+the field's entire content. That field is specifically where the model has
+to combine purchase price + financing interest + running costs into one
+number and explain the derivation — the most arithmetic-heavy of the six
+required explanations, and the first one in the schema.
+
+Working theory, now much better supported: the model has nowhere to work
+through that multi-step arithmetic except inside the graded tool-call
+output itself, and it reproducibly attempts to do so via a simulated nested
+tool invocation instead of just writing the answer — which is exactly what
+the leaked `<parameter name="estimate_low">` fragment looks like. The
+previous prompt-level instruction not to do this (0005) did not stop it —
+telling the model not to reach for a tool didn't remove its apparent need
+for scratch space.
+
+This patch gives it real scratch space instead of just asking nicely:
+
+- purchase-engine.js: callAnthropic now accepts a `thinkingBudget` and, when
+  set, sends Anthropic's extended-thinking parameter. Only the FIRST,
+  non-forced (tool_choice:'auto') call in runOneAttempt enables it (4000
+  token budget, max_tokens raised to 12000 to leave room for the actual
+  output on top) — extended thinking is incompatible with a forced
+  tool_choice, so the fallback forced follow-up call (used when the model
+  doesn't call the tool on the first turn) still can't use it. Any
+  thinking/redacted_thinking blocks from that first turn are stripped
+  before replaying it into the follow-up request, since thinking blocks in
+  a request where thinking isn't enabled aren't valid there.
+- The sanitize-then-retry defense (0004), the anti-leak prompt instruction
+  (0005), and the MAX_ATTEMPTS=4 + per-field diagnostics (0006) all stay in
+  place — this is a fix at the likely source, layered under the existing
+  defenses, not a replacement for them.
+- tests/purchase-engine.test.js: asserts the first call requests thinking
+  with a sane budget/max_tokens relationship, and that the forced follow-up
+  neither enables thinking nor replays thinking blocks from the prior turn.
+  36 tests total, all passing.
+
+Live re-verification against the real Anthropic API pending this deploy —
+this is the first fix in this incident with a concrete mechanistic reason
+to expect it addresses the cause rather than a symptom.
+---
+ api/_lib/purchase-engine.js   | 51 ++++++++++++++++++++++++++---------
+ tests/purchase-engine.test.js | 47 ++++++++++++++++++++++++++++++--
+ 2 files changed, 84 insertions(+), 14 deletions(-)
+
+diff --git a/api/_lib/purchase-engine.js b/api/_lib/purchase-engine.js
+index d3d880f..854c82b 100644
+--- a/api/_lib/purchase-engine.js
++++ b/api/_lib/purchase-engine.js
+@@ -369,7 +369,30 @@ function mapToGenericReport(report) {
+   };
+ }
+ 
+-async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens }) {
++async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxTokens, thinkingBudget }) {
++  const body = {
++    model: ANTHROPIC_MODEL,
++    max_tokens: maxTokens || 4096,
++    system,
++    tools,
++    tool_choice: toolChoice,
++    messages,
++  };
++  // Extended thinking gives the model a dedicated scratch space for
++  // multi-step arithmetic (e.g. total-cost-of-ownership, financing-interest
++  // math) — worked theory for the 2026-08-31 incident where the model
++  // reproducibly (7/7 live attempts) tried to "show its work" for exactly
++  // this kind of calculation by emitting a stray simulated tool-call
++  // fragment INTO the final answer's explanation field instead of just
++  // stating the result. Giving it a real place to work through the
++  // arithmetic first, separate from the graded output, is a more direct fix
++  // than asking it not to via the system prompt (which did not stop the
++  // leak — see the 0005 patch notes). Only valid with tool_choice:'auto'
++  // (Anthropic disallows combining it with a forced tool_choice), so this
++  // is only passed on the first, non-forced call.
++  if (thinkingBudget) {
++    body.thinking = { type: 'enabled', budget_tokens: thinkingBudget };
++  }
+   const response = await fetch('https://api.anthropic.com/v1/messages', {
+     method: 'POST',
+     headers: {
+@@ -377,14 +400,7 @@ async function callAnthropic({ apiKey, system, tools, toolChoice, messages, maxT
+       'x-api-key': apiKey,
+       'anthropic-version': '2023-06-01',
+     },
+-    body: JSON.stringify({
+-      model: ANTHROPIC_MODEL,
+-      max_tokens: maxTokens || 4096,
+-      system,
+-      tools,
+-      tool_choice: toolChoice,
+-      messages,
+-    }),
++    body: JSON.stringify(body),
+   });
+   if (!response.ok) {
+     const errText = await response.text().catch(() => '');
+@@ -422,7 +438,11 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch
+       tools,
+       toolChoice: { type: 'auto' },
+       messages: baseMessages,
+-      maxTokens: 8000,
++      // max_tokens must exceed thinkingBudget (thinking + final output share
++      // this budget) — 4000 for thinking, comfortable headroom left for the
++      // actual tool-call JSON on top.
++      maxTokens: 12000,
++      thinkingBudget: 4000,
+     });
+   } catch (err) {
+     if (allowSearch && looksLikeUnsupportedToolError(err)) {
+@@ -436,9 +456,16 @@ async function runOneAttempt({ apiKey, systemPrompt, contentBlocks, allowSearch
+   if (toolUse) return toolUse.input;
+ 
+   // Model didn't call the submit tool on the first turn — force it on a
+-  // bounded follow-up instead of looping indefinitely.
++  // bounded follow-up instead of looping indefinitely. The follow-up call
++  // doesn't itself enable extended thinking (forced tool_choice and
++  // thinking can't be combined — see callAnthropic), so strip any
++  // thinking/redacted_thinking blocks from the replayed turn rather than
++  // risk the API rejecting a thinking block in a request where thinking
++  // isn't enabled; the model's own text summary in `content` already
++  // carries what the follow-up needs.
++  const replayContent = content.filter((b) => b.type !== 'thinking' && b.type !== 'redacted_thinking');
+   const followMessages = baseMessages.concat([
+-    { role: 'assistant', content },
++    { role: 'assistant', content: replayContent },
+     { role: 'user', content: 'Now call submit_purchase_report with your complete findings, using anything useful you found above.' },
+   ]);
+   const followData = await callAnthropic({
+diff --git a/tests/purchase-engine.test.js b/tests/purchase-engine.test.js
+index 971827e..4d14e20 100644
+--- a/tests/purchase-engine.test.js
++++ b/tests/purchase-engine.test.js
+@@ -349,11 +349,26 @@ test('a model that only searches and summarizes in text (no tool_use on the firs
+   global.fetch = async (url, opts) => {
+     call++;
+     if (call === 1) {
+-      // Model responded with plain text, never calling submit_purchase_report.
+-      return { ok: true, json: async () => ({ content: [{ type: 'text', text: 'Here is what I found from searching...' }] }) };
++      // Model responded with a thinking block plus plain text, never
++      // calling submit_purchase_report.
++      return {
++        ok: true,
++        json: async () => ({
++          content: [
++            { type: 'thinking', thinking: 'Let me work through the math...' },
++            { type: 'text', text: 'Here is what I found from searching...' },
++          ],
++        }),
++      };
+     }
+     const parsedBody = JSON.parse(opts.body);
+     assert.equal(parsedBody.tool_choice.type, 'tool', 'the forced follow-up must force the submit tool');
++    assert.equal(parsedBody.thinking, undefined, 'the forced follow-up must not enable thinking — incompatible with a forced tool_choice');
++    const replayedAssistantTurn = parsedBody.messages.find((m) => m.role === 'assistant');
++    assert.ok(
++      !replayedAssistantTurn.content.some((b) => b.type === 'thinking' || b.type === 'redacted_thinking'),
++      'thinking blocks from the first turn must be stripped before replaying it into a request where thinking is off'
++    );
+     return toolUseResponse(completeReportInput());
+   };
+   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+@@ -366,6 +381,34 @@ test('a model that only searches and summarizes in text (no tool_use on the firs
+   assert.ok(report.headline);
+ });
+ 
++test('the first, non-forced call enables extended thinking as scratch space for the report\'s arithmetic', async (t) => {
++  // Direct fix for the 2026-08-31 incident: the model reproducibly (7/7
++  // live attempts) leaked a simulated tool-call fragment into
++  // total_cost_of_ownership.explanation instead of just stating the
++  // computed number — plausibly because it had nowhere else to "show its
++  // work" for the financing/TCO arithmetic. Giving it a real thinking
++  // channel is the structural fix; this locks in that the first call
++  // actually requests it.
++  const submission = fakeSubmission();
++  installFakes({ submission });
++  process.env.ANTHROPIC_API_KEY = 'test-key';
++  const originalFetch = global.fetch;
++  let firstBody = null;
++  global.fetch = async (url, opts) => {
++    if (!firstBody) firstBody = JSON.parse(opts.body);
++    return toolUseResponse(completeReportInput());
++  };
++  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
++
++  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
++  await generatePurchaseReport('sub-1');
++
++  assert.equal(firstBody.tool_choice.type, 'auto', 'thinking is only valid alongside a non-forced tool_choice');
++  assert.equal(firstBody.thinking.type, 'enabled');
++  assert.ok(firstBody.thinking.budget_tokens > 0);
++  assert.ok(firstBody.max_tokens > firstBody.thinking.budget_tokens, 'max_tokens must exceed the thinking budget to leave room for the actual output');
++});
++
+ test('__internal.isReportComplete rejects a report missing any one of the six required sections', () => {
+   const { __internal } = require('../api/_lib/purchase-engine');
+   assert.equal(__internal.isReportComplete(completeReportInput()), true);
+-- 
+2.43.0
+

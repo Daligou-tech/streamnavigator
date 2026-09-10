@@ -499,9 +499,6 @@
   .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
   .toast .ico{ color:var(--status-active-deep); }
 
-  /* reveal animation */
-  .reveal{ opacity:0; transform:translateY(24px); transition:opacity .7s ease, transform .7s ease; }
-  .reveal.in{ opacity:1; transform:translateY(0); }
 
   /* ---------- Responsive ---------- */
   @media (max-width: 900px){
