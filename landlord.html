@@ -4,12 +4,358 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Landlord Navigator — StreamNavigator AI</title>
-<meta name="description" content="Stay ahead of licensing, inspection, and notice requirements. Landlord Navigator turns the rules that apply to your properties into a specific action list — $149, once." />
+<meta name="description" content="Find out what your rentals are actually required to do. Landlord Navigator checks each property against its own city and state — registration, inspection, lead paint, lease documents, deposits, notice windows and permits — and names the office to confirm each one with. $149, once." />
 <link rel="canonical" href="https://streamnavigator.ai/landlord" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<style>
+/* ============================================================================
+   Closing Navigator's type and color system, applied to this page only.
+   ----------------------------------------------------------------------------
+   /closing is the one Navigator that does not use navigator-shared.css: it
+   carries its own editorial system — Newsreader for headings, IBM Plex Sans
+   for body, IBM Plex Mono for figures, on paper (#FBFAF7) with a 1px rule and
+   a single red accent. This block re-points the shared stylesheet's tokens at
+   that palette and restates the handful of rules the tokens cannot reach —
+   the font stacks, the type scale, and the hard shadows and 20px radii, which
+   read as a different product once the headings are set in a serif.
+
+   Scoped to this file rather than edited into navigator-shared.css on purpose:
+   that sheet dresses eleven other Navigator pages, and changing it there would
+   restyle all of them.
+   ========================================================================== */
+:root{
+  /* closing.html's palette, mapped onto the shared sheet's token names */
+  --paper:#FBFAF7; --panel:#FFFFFF;
+  --rule:#D8DAD5; --rule-soft:#E9EAE6;
+  --ink-soft:#5B6570;
+  --flag:#B01F12; --flag-tint:#FBEEEC;
+  --ok:#2C6A57; --ok-tint:#EDF3F0;
+  --hold:#8A6A16; --hold-tint:#FAF3E2;
+
+  --bg:#FBFAF7;
+  --bg-alt:#F4F2EC;
+  --bg-gradient:#FBFAF7;
+  --surface:#FFFFFF;
+  --surface-2:#F4F2EC;
+  --ink:#1B2A3A;
+  --text:#1B2A3A;
+  --text-dim:#5B6570;
+  --text-dimmer:#5B6570;
+  --border:#E9EAE6;
+  --border-strong:#D8DAD5;
+  --accent:#FFFFFF;
+  --accent-deep:#B01F12;
+  --accent-2:#2C6A57;
+  --accent-2-deep:#2C6A57;
+  --accent-3:#2C6A57;
+  --accent-3-deep:#5B6570;
+  --yellow:#F4F2EC;
+  --status-active:#2C6A57;
+  --status-active-deep:#2C6A57;
+  --status-paused:#9C9282;
+  --gradient:#1B2A3A;
+  --gradient-text:none;
+  --gradient-warm:#1B2A3A;
+  --radius:2px;
+  --radius-sm:2px;
+  --shadow-hard:none;
+  --shadow-hard-sm:none;
+  --shadow-hard-xs:none;
+  --shadow-soft:none;
+  --shadow-glow:none;
+}
+
+/* ---------- Type ---------- */
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-size:17px;
+  line-height:1.6;
+}
+h1,h2,h3,h4,h5{
+  font-family:"Newsreader", Georgia, serif;
+  font-weight:500;
+  letter-spacing:-0.01em;
+  color:var(--ink);
+}
+.hero h1, h1{ font-size:clamp(2.2rem,5vw,3.3rem); line-height:1.09; }
+.section-head h2, .cta-final h2, h2{ font-size:clamp(1.55rem,3.1vw,2.05rem); line-height:1.18; }
+h3, .price-card h3{ font-size:1.1rem; line-height:1.35; font-weight:600; }
+h4, .step-card h4{ font-size:1.02rem; line-height:1.35; font-weight:600; }
+.hero h1 .grad{
+  background:none; -webkit-background-clip:border-box; background-clip:border-box;
+  color:var(--ink);
+}
+.hero p.sub{ font-size:1.08rem; color:var(--ink-soft); max-width:62ch; }
+.section-head p{ font-size:1.08rem; color:var(--ink-soft); }
+.eyebrow{
+  font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:.78rem; font-weight:400; letter-spacing:.08em;
+  color:var(--ink-soft); margin-bottom:12px;
+}
+.mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+
+/* ---------- Ground ---------- */
+.bg-noise{ display:none; }
+section{ padding:60px 24px; border-bottom:1px solid var(--rule); }
+.section-head{ margin-bottom:36px; }
+#what-you-get{
+  background:var(--bg-alt) !important;
+  border-top:1px solid var(--rule) !important;
+  border-bottom:1px solid var(--rule) !important;
+}
+
+/* ---------- Nav ---------- */
+header{
+  background:var(--paper);
+  backdrop-filter:none;
+  border-bottom:1px solid var(--rule);
+}
+.logo{ font-family:"Newsreader", Georgia, serif; font-weight:600; font-size:1.12rem; }
+.logo-mark{ background:var(--ink); border:1px solid var(--ink); border-radius:2px; box-shadow:none; }
+.logo-mark svg{ stroke:var(--paper); }
+.nav-subbrand{
+  font-family:"IBM Plex Sans", sans-serif; font-weight:400; font-size:.82rem; letter-spacing:0;
+  color:var(--ink-soft); background:none; border:1px solid var(--rule); border-radius:2px; padding:3px 9px;
+}
+.nav-links a{ font-size:.93rem; font-weight:400; color:var(--ink-soft); }
+.nav-links a:hover{ color:var(--ink); text-decoration:underline; text-underline-offset:3px; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  border-radius:2px; border:1px solid var(--ink); font-weight:500; font-size:1rem;
+  padding:14px 26px; box-shadow:none !important;
+}
+.btn:active{ transform:none; }
+.btn-primary{ background:var(--ink); color:var(--paper); font-weight:500; }
+.btn-primary:hover{ background:#12202E; transform:none; }
+.btn-ghost{ background:transparent; color:var(--ink); }
+.btn-ghost:hover{ background:#F1EFEA; transform:none; }
+.btn-sm{ padding:9px 16px; font-size:.9rem; }
+.btn:focus-visible, a:focus-visible, button:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible{ outline:2px solid var(--flag); outline-offset:2px; }
+
+/* ---------- Hero pill ---------- */
+.pill{
+  background:none; border:1px solid var(--rule); border-radius:2px; box-shadow:none;
+  font-size:.82rem; font-weight:400; color:var(--ink-soft); padding:5px 12px; margin-bottom:20px;
+}
+.pill span.dot{ background:none; color:var(--ok); width:auto; height:auto; font-size:.82rem; }
+
+/* ---------- Steps ---------- */
+.steps-grid{ gap:0; grid-template-columns:1fr; max-width:780px; }
+.step-card{
+  background:none; border:none; border-top:1px solid var(--rule-soft); border-radius:0;
+  padding:12px 0 12px 50px; box-shadow:none;
+}
+.step-card:first-child{ border-top:1px solid var(--rule); }
+.step-num{
+  position:absolute; left:0; top:15px;
+  width:auto; height:auto; margin:0; background:none; border:none; border-radius:0; box-shadow:none;
+  font-family:"IBM Plex Mono", monospace; font-weight:400; font-size:.95rem; color:var(--flag);
+}
+.step-card p{ font-size:.95rem; color:var(--ink-soft); line-height:1.5; max-width:62ch; margin-top:1px; }
+
+/* ---------- What you get ---------- */
+.check-card{
+  background:var(--panel); border:1px solid var(--rule); border-radius:2px;
+  box-shadow:none; padding:26px 28px;
+}
+.check-list{ gap:0; }
+.check-list li{
+  font-size:.95rem; font-weight:400; color:var(--ink); line-height:1.5;
+  gap:12px; padding:9px 0; border-top:1px solid var(--rule-soft);
+}
+.check-list li:first-child{ border-top:none; }
+.check-list li:not(:last-child){ padding-bottom:9px; border-bottom:none; }
+.check-list .tick{
+  width:9px; height:9px; margin-top:8px; border-radius:0;
+  background:var(--ok-tint); border:1px solid var(--ok); color:transparent;
+  font-size:0; flex-shrink:0;
+}
+
+/* ---------- The check catalog ---------- */
+.checks{ display:grid; grid-template-columns:1fr 1fr; gap:0 44px; max-width:1000px; margin:0 auto; }
+@media(max-width:860px){ .checks{ grid-template-columns:1fr; } }
+.chk{
+  display:grid; grid-template-columns:30px 1fr; gap:12px; padding:12px 0;
+  border-top:1px solid var(--rule-soft); font-size:.93rem; line-height:1.45;
+}
+.chk .n{ font-family:"IBM Plex Mono", monospace; font-size:.82rem; color:var(--ink-soft); padding-top:2px; }
+.chk b{ font-weight:600; }
+.chk span.d{ display:block; color:var(--ink-soft); margin-top:2px; }
+.tagline{ display:flex; gap:10px; flex-wrap:wrap; margin:26px auto 0; max-width:1000px; }
+.tag{
+  font-family:"IBM Plex Mono", monospace; font-size:.76rem; letter-spacing:.04em;
+  padding:5px 11px; border-radius:2px; border:1px solid;
+}
+.tag.a{ background:var(--ok-tint); border-color:#CADED6; color:var(--ok); }
+.tag.b{ background:var(--hold-tint); border-color:#E7D9AE; color:var(--hold); }
+.tag.c{ background:var(--flag-tint); border-color:#EED4CF; color:var(--flag); }
+
+/* ---------- Coverage ---------- */
+.coverage{
+  background:var(--panel); border:1px solid var(--rule); border-radius:2px;
+  padding:24px 26px; max-width:820px; margin:0 auto;
+}
+.coverage h3{ margin-bottom:8px; }
+.coverage p{ color:var(--ink-soft); font-size:.95rem; margin-bottom:14px; max-width:70ch; }
+.cov-list{
+  font-family:"IBM Plex Mono", monospace; font-size:.85rem; line-height:1.9;
+  color:var(--ink); border-top:1px solid var(--rule-soft); padding-top:12px;
+}
+.cov-list b{ color:var(--ink-soft); font-weight:400; }
+
+/* ---------- Pricing ---------- */
+.single-price-wrap .price-card{ max-width:780px; }
+.price-card{
+  background:var(--panel); border:1px solid var(--ink); border-radius:2px; padding:32px;
+}
+.price-card.featured{
+  background:var(--panel); border-color:var(--ink);
+  box-shadow:5px 5px 0 rgba(27,42,58,.08);
+}
+.price-badge{
+  position:static; transform:none; display:inline-block;
+  background:none; border:1px solid var(--rule); border-radius:2px;
+  color:var(--ink-soft); font-size:.78rem; font-weight:400; padding:3px 9px; margin-bottom:14px;
+  font-family:"IBM Plex Mono", monospace; letter-spacing:.04em;
+}
+.price-card .desc{ font-size:.95rem; color:var(--ink-soft); margin-bottom:18px; }
+.price-amount{
+  font-family:"Newsreader", Georgia, serif; font-weight:500; font-size:2.5rem; line-height:1;
+  color:var(--ink); margin-bottom:6px;
+}
+.price-period{ font-size:.9rem; color:var(--ink-soft); margin-bottom:22px; }
+.price-feats{ gap:0; margin-bottom:24px; }
+.price-feats li{
+  font-size:.95rem; color:var(--ink); gap:12px; padding:8px 0; border-top:1px solid var(--rule-soft);
+}
+.price-feats li:first-child{ border-top:none; }
+.price-feats .tick{
+  width:9px; height:9px; margin-top:8px; background:var(--ok-tint);
+  border:1px solid var(--ok); color:transparent; font-size:0; flex-shrink:0;
+}
+.price-secure{ font-size:.85rem; font-weight:400; color:var(--ink-soft); }
+.pricing-footnote{ font-size:.9rem; color:var(--ink-soft); max-width:64ch; }
+
+/* ---------- Intake form ---------- */
+.field-block > label{
+  font-family:"IBM Plex Sans", sans-serif; font-size:.9rem; font-weight:500;
+  letter-spacing:0; text-transform:none; color:var(--ink); margin-bottom:6px;
+}
+.field-block input[type="text"], .field-block input[type="email"],
+.field-block input[type="number"], .field-block input[type="date"],
+.field-block textarea, .field-block select{
+  border:1px solid var(--rule); border-radius:2px; background:var(--panel);
+  color:var(--ink); font-size:.97rem; padding:12px 13px; width:100%;
+  font-family:inherit; outline:none;
+}
+.field-block input:focus, .field-block textarea:focus, .field-block select:focus{ border-color:var(--ink-soft); }
+.field-hint{ font-size:.85rem; color:var(--ink-soft); }
+
+/* The repeating property block. Each one is a self-contained record, so it
+   gets an edge; the fields inside it do not. */
+.prop-card{
+  border:1px solid var(--rule); border-radius:2px; background:#FDFDFB;
+  padding:20px 22px; margin-bottom:16px;
+}
+.prop-head{
+  display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+  border-bottom:1px solid var(--rule-soft); padding-bottom:10px; margin-bottom:16px;
+}
+.prop-head h4{ font-size:1rem; margin:0; }
+.prop-head .n{ font-family:"IBM Plex Mono", monospace; font-size:.78rem; color:var(--flag); margin-right:8px; }
+.prop-remove{
+  background:none; border:none; color:var(--ink-soft); font-family:inherit;
+  font-size:.85rem; cursor:pointer; text-decoration:underline; text-underline-offset:3px; padding:0;
+}
+.prop-remove:hover{ color:var(--flag); }
+.field-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; }
+@media(max-width:560px){ .field-grid{ grid-template-columns:1fr; } }
+.field-grid .field-block{ margin-bottom:16px; }
+.field-grid .span2{ grid-column:1 / -1; }
+.opt{ color:var(--ink-soft); font-weight:400; }
+.unlocks{
+  font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.03em;
+  color:var(--ink-soft); margin-top:5px; display:block;
+}
+.add-prop{
+  background:none; border:1px dashed #B9BDB6; border-radius:2px; width:100%;
+  padding:14px; font-family:inherit; font-size:.95rem; color:var(--ink); cursor:pointer;
+}
+.add-prop:hover{ background:#F7F7F3; border-color:var(--ink-soft); }
+.prop-count{
+  font-family:"IBM Plex Mono", monospace; font-size:.8rem; color:var(--ink-soft);
+  margin:14px 0 22px; padding-top:12px; border-top:1px solid var(--rule-soft);
+}
+
+.upload-zone{
+  border:1px dashed #B9BDB6; border-radius:2px; background:#FDFDFB; padding:26px 20px;
+}
+.upload-zone:hover, .upload-zone.drag{ background:#F7F7F3; border-color:var(--ink-soft); }
+.upload-zone.has-files{ border-style:solid; border-color:var(--ink-soft); }
+.upload-zone .upload-ico{ font-size:22px; margin-bottom:8px; }
+.upload-zone .upload-cta{ font-weight:500; font-size:.97rem; color:var(--ink); }
+.upload-zone .upload-sub{ font-size:.85rem; color:var(--ink-soft); }
+.upload-file-row{
+  background:var(--panel); border:none; border-top:1px solid var(--rule-soft);
+  border-radius:0; font-size:.88rem; padding:7px 0;
+}
+#intake-error{ color:var(--flag) !important; font-weight:400 !important; font-size:.88rem !important; }
+
+/* ---------- FAQ ---------- */
+.faq-list{ max-width:780px; gap:0; }
+.faq-item{ background:none; border:none; border-top:1px solid var(--rule-soft); border-radius:0; }
+.faq-item:first-child{ border-top:1px solid var(--rule); }
+.faq-item.open{ border-color:var(--rule-soft); }
+.faq-q{
+  font-family:"Newsreader", Georgia, serif; font-size:1.1rem; font-weight:600;
+  color:var(--ink); padding:16px 0;
+}
+.faq-q .plus{
+  width:auto; height:auto; background:none; border:none; border-radius:0;
+  font-family:"IBM Plex Mono", monospace; font-size:1rem; color:var(--flag);
+}
+.faq-item.open .faq-q .plus{ background:none; border:none; color:var(--flag); }
+.faq-a-inner{ padding:0 0 18px; font-size:.95rem; color:var(--ink-soft); max-width:66ch; }
+.faq-item.open .faq-a{ max-height:460px; }
+
+/* ---------- Final CTA ---------- */
+.cta-final{
+  background:var(--panel); border:1px solid var(--rule); border-radius:2px;
+  box-shadow:none; padding:52px 32px; margin:0 auto;
+}
+.cta-final p{ color:var(--ink-soft); font-size:1.08rem; }
+
+/* ---------- Footer ---------- */
+footer{ padding:44px 24px 32px; }
+.footer-col h5, .other-navs h5{
+  font-family:"IBM Plex Mono", monospace; font-size:.78rem; font-weight:400;
+  letter-spacing:.08em; color:var(--ink-soft);
+}
+.footer-col a, .footer-legal a{ font-size:.93rem; color:var(--ink-soft); }
+.footer-col a:hover, .footer-legal a:hover{ color:var(--ink); }
+.footer-bottom{ border-top:1px solid var(--rule); }
+.footer-bottom p{ font-size:.85rem; color:var(--ink-soft); }
+.footer-disclaimer{ border-top:1px solid var(--rule); font-size:.85rem; color:var(--ink-soft); max-width:80ch; }
+.other-navs-grid a{
+  border:1px solid var(--rule-soft); border-radius:2px; font-size:.9rem;
+  font-weight:400; color:var(--ink-soft);
+}
+.other-navs-grid a:hover{ border-color:var(--ink-soft); color:var(--ink); background:#F1EFEA; }
+
+/* ---------- Toast ---------- */
+.toast{
+  background:var(--panel); border:1px solid var(--ink); border-radius:2px;
+  box-shadow:none; font-size:.93rem; font-weight:400; color:var(--ink);
+}
+.toast .ico{ color:var(--ok); }
+</style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -26,7 +372,8 @@
     </a>
     <div class="nav-links">
       <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
+      <a href="#checks">What we check</a>
+      <a href="#coverage">Coverage</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
     </div>
@@ -38,22 +385,21 @@
 <main id="top">
   <section class="hero" style="padding-bottom:8px;">
     <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> Stay ahead of compliance deadlines</div>
-      <h1>Never miss a rental <span class="grad">compliance deadline again.</span></h1>
-      <p class="sub">Tell StreamNavigator where your rental properties are. It turns the licensing, inspection, lead, notice, and permit rules that apply to you into specific action items.</p>
+      <div class="pill"><span class="dot">✓</span> Checked property by property, city by city</div>
+      <h1>Find out what your rentals <span class="grad">are actually required to do.</span></h1>
+      <p class="sub">Tell StreamNavigator where your rental properties are. StreamNavigator determines the licensing, inspection, lead, notice, and permit rules that apply to you, and turns them into specific action items — each one naming the office that can confirm it.</p>
     </div>
   </section>
   <section id="how-it-works">
     <div class="section-head">
       <div class="eyebrow">How it works</div>
-      <h2>From your properties to a compliance checklist.</h2>
-      
+      <h2>From your properties to a checklist per property.</h2>
     </div>
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-num">1</div>
-        <h4>Tell us about your properties</h4>
-        <p>Locations, property types, and how many units you manage.</p>
+        <h4>Enter each property</h4>
+        <p>City and state, the year it was built, and whatever else you know — when the lease ends, whether you are registered, how the deposit is held. Every answer switches on another check.</p>
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
@@ -62,31 +408,75 @@
       </div>
       <div class="step-card">
         <div class="step-num">3</div>
-        <h4>AI tracks relevant rules</h4>
-        <p>Licensing, inspection, lead-paint, notice, and permit requirements for your specific locations.</p>
+        <h4>StreamNavigator checks each property against its own jurisdiction</h4>
+        <p>Registration, inspection, lead paint, lease documents, deposits, notice windows and permits — run one property at a time against a held reference set, not summarised out of a paragraph.</p>
       </div>
       <div class="step-card">
         <div class="step-num">4</div>
-        <h4>Get action items as things change</h4>
-        <p>Plain-English summaries of what changed and exactly what you need to do about it.</p>
+        <h4>Get a checklist per property</h4>
+        <p>Every item says what to do, which office confirms it, and whether we are stating it or flagging it as worth checking first.</p>
       </div>
     </div>
   </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+
+  <section id="checks">
+    <div class="section-head">
+      <div class="eyebrow">What we check</div>
+      <h2>Ten checks, run against every property you enter.</h2>
+      <p>Each one is decided before any writing happens, by matching your answers against a held reference set — so the same property produces the same finding every time.</p>
+    </div>
+    <div class="checks">
+      <div class="chk"><span class="n">01</span><span><b>Registration and licensing</b><span class="d">Does your city or state require a rental to be registered or licensed, and does this one hold it?</span></span></div>
+      <div class="chk"><span class="n">02</span><span><b>Registration renewal</b><span class="d">Counted from the expiry date you give: lapsed, due inside ninety days, or clear.</span></span></div>
+      <div class="chk"><span class="n">03</span><span><b>Federal lead disclosure</b><span class="d">Pre-1978 housing carries a federal disclosure duty at every lease. Do you hold the signed copy?</span></span></div>
+      <div class="chk"><span class="n">04</span><span><b>A child under six in an older unit</b><span class="d">The fact pattern several states write specific duties around, over and above disclosure.</span></span></div>
+      <div class="chk"><span class="n">05</span><span><b>State lead certification</b><span class="d">Some states require an inspection or certificate for pre-1978 rentals. We name which, and who issues it.</span></span></div>
+      <div class="chk"><span class="n">06</span><span><b>Periodic inspection programmes</b><span class="d">Cities that inspect on a cycle rather than on complaint — so the visit is not a surprise.</span></span></div>
+      <div class="chk"><span class="n">07</span><span><b>Documents that must go with the lease</b><span class="d">Where a city requires a summary or certificate attached to every lease and every renewal.</span></span></div>
+      <div class="chk"><span class="n">08</span><span><b>How the security deposit is held</b><span class="d">Deposits sitting in a personal account, in states that require them held separately.</span></span></div>
+      <div class="chk"><span class="n">09</span><span><b>Notice window before a lease ends</b><span class="d">Counted from your own lease end date, so you know whether the decision is due this week.</span></span></div>
+      <div class="chk"><span class="n">10</span><span><b>Permits for planned work</b><span class="d">Runs when you tell us about work coming up, including the lead-safe certification question on older buildings.</span></span></div>
+    </div>
+    <div class="tagline">
+      <span class="tag a">Checked and fine</span>
+      <span class="tag b">Likely — confirm first</span>
+      <span class="tag c">Appears unmet</span>
+    </div>
+    <p style="max-width:70ch;margin:26px auto 0;color:var(--ink-soft);font-size:.95rem;text-align:center;">Every finding carries one of those three, and the write-up is not allowed to turn one into another.</p>
+  </section>
+
+  <section id="coverage" style="background:var(--bg-alt); border-top:1px solid var(--rule); border-bottom:1px solid var(--rule);">
+    <div class="section-head">
+      <div class="eyebrow">Coverage</div>
+      <h2>Where we hold a reference entry — and where we don't.</h2>
+      <p>A short report on an uncovered city would read like a clean one. So the report names the gap instead.</p>
+    </div>
+    <div class="coverage">
+      <h3>Jurisdictions in the reference set today</h3>
+      <p>These are the places where the registration and inspection checks run against something we hold, rather than telling you to go and ask. A property anywhere else still gets the federal lead checks, the deposit check, the lease-notice arithmetic and the permit check — plus a finding that names your city and says exactly what we could not look up for it.</p>
+      <div class="cov-list">
+        Baltimore · Boston · Cambridge · Chicago · Cleveland · Denver · Detroit · Fort Lauderdale · Kansas City ·
+        Los Angeles · Miami · Minneapolis · New Orleans · New York · Philadelphia · Phoenix · Portland ·
+        Saint Paul · San Francisco · Seattle · Washington DC · plus statewide entries for
+        <b>AZ, NJ, MA, MD, RI, NY, FL and CT</b>, and the federal lead rules everywhere.
+      </div>
+    </div>
+  </section>
+
+  <section id="what-you-get">
     <div class="section-head">
       <div class="eyebrow">What you get</div>
       <h2>Compliance, translated into a to-do list.</h2>
-      
     </div>
     <div class="wrap" style="max-width:680px;">
       <div class="check-card">
         <ul class="check-list">
-          <li><span class="tick">✓</span> Licensing and registration requirements for your properties</li>
-          <li><span class="tick">✓</span> Upcoming inspection deadlines and what they require</li>
-          <li><span class="tick">✓</span> Lead-paint and safety disclosure obligations</li>
-          <li><span class="tick">✓</span> Required tenant notice periods and formats for your area</li>
-          <li><span class="tick">✓</span> Permit requirements for any planned work</li>
-          <li><span class="tick">✓</span> A specific action item for every relevant change</li>
+          <li><span class="tick">✓</span> A separate checklist for every property you enter, not one merged summary</li>
+          <li><span class="tick">✓</span> The name of the programme behind each requirement, and the office that administers it</li>
+          <li><span class="tick">✓</span> Days counted to your own renewal and lease dates, from the dates you give us</li>
+          <li><span class="tick">✓</span> Every item marked checked-and-fine, likely, or appears-unmet — never blurred together</li>
+          <li><span class="tick">✓</span> A named list of the checks that ran and passed, so you can see what was examined</li>
+          <li><span class="tick">✓</span> A named list of what we could not look up for your jurisdiction, and which answer would turn each skipped check on</li>
         </ul>
       </div>
     </div>
@@ -115,23 +505,32 @@
   <section id="pricing">
     <div class="section-head">
       <div class="eyebrow">Get started</div>
-      <h2>One price. One compliance review.</h2>
-      <p>Tell us about your properties, pay once, stay ahead of deadlines.</p>
+      <h2>One price. Every property you own.</h2>
+      <p>Enter your properties, pay once, get a checklist for each.</p>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
         <span class="price-badge">One-time</span>
         <h3>Landlord Navigator Report</h3>
-        <p class="desc">A compliance review across the rental properties you list, turned into specific action items.</p>
+        <p class="desc">Ten checks run against every property you enter, written up one property at a time, each finding naming the office that can confirm it.</p>
         <div class="price-amount">$149</div>
-        <div class="price-period">charged once &middot; not a subscription</div>
+        <div class="price-period">charged once &middot; not a subscription &middot; every property included</div>
 
         <div class="field-block">
-          <label>Tell us about your properties</label>
-          <textarea id="intake-description" placeholder="e.g. 3 single-family rentals in Austin, TX, self-managed since 2021..."></textarea>
+          <label>Your properties</label>
+          <p class="field-hint" style="margin-top:0;margin-bottom:14px;">City, state and year built are what the checks need. Everything else is optional — and each optional answer switches on another check, which the form tells you as you go.</p>
+          <div id="prop-list"></div>
+          <button type="button" class="add-prop" id="add-prop">+ Add another property</button>
+          <p class="prop-count" id="prop-count">1 property · checked on its own</p>
+        </div>
+
+        <div class="field-block">
+          <label>Anything else we should know <span class="opt">(optional)</span></label>
+          <textarea id="intake-description" placeholder="e.g. I've never used a property manager; I'm thinking of selling the Chicago building next year..."></textarea>
+          <p class="field-hint">Read alongside your answers. The ten checks run from the fields above, not from this box.</p>
         </div>
         <div class="field-block">
-          <label>Upload a current license or registration (optional)</label>
+          <label>Upload a current registration or licence <span class="opt">(optional)</span></label>
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
@@ -139,17 +538,18 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Helps establish your current compliance status as a starting point.</p>
+          <p class="field-hint">Useful for cross-checking the answers you gave above. The checks do not depend on it.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers licensing, inspections, lead-paint rules, notices, and permits</li>
-          <li><span class="tick">✓</span> Turns regulatory changes into specific action items</li>
-          <li><span class="tick">✓</span> Covers every property you list, in one report</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
+          <li><span class="tick">✓</span> Ten checks per property, decided before anything is written</li>
+          <li><span class="tick">✓</span> Registration, inspection, lead paint, lease documents, deposits, notice and permits</li>
+          <li><span class="tick">✓</span> Every property you enter, each written up on its own</li>
+          <li><span class="tick">✓</span> Every finding names the office that can confirm it</li>
+          <li><span class="tick">✓</span> Delivered automatically, usually within a few minutes</li>
         </ul>
         <a href="https://buy.stripe.com/14AdR9548ceE88k6VOabK0a" data-stripe-link="landlord" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- The checks that run before the upload starts report themselves
@@ -170,28 +570,36 @@
     </div>
     <div class="faq-list">
       <div class="faq-item">
-        <button class="faq-q">Does this replace a property manager? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — it turns the rules into a checklist of what to do and when. Many self-managing landlords use it exactly to avoid needing a full property manager.</div></div>
+        <button class="faq-q">Will you tell me my exact notice period, or what registration costs? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No, and that is deliberate. Fees, renewal dates, ordinance numbers and exact notice periods change, vary by unit count, and are the numbers most worth getting right. We do not hold them, so we never print one — a wrong figure in a compliance report is worse for you than no figure at all. What every finding does carry is the office that can give you the exact answer, so the call takes five minutes instead of an afternoon.</div></div>
       </div>
       <div class="faq-item">
-        <button class="faq-q">How will I be notified of changes? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Your report and any tracked updates are available through this site — check back periodically or reach out to hello@streamnavigator.ai for update frequency.</div></div>
+        <button class="faq-q">Does this monitor my properties or send me reminders? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No. This is a one-time review of the properties you enter, on the day you enter them. Nothing watches them afterwards and nothing will email you when something falls due — put the dates from your report into your own calendar. We would rather say that plainly than sell you a subscription to something that does not run.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if my city isn't in your reference set? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">You still get the federal lead checks, the deposit check, the notice-window arithmetic on your own lease dates and the permit check — plus a finding that names your city, says plainly that we hold no registration entry for it, and gives you the one question to ask your local housing office. What you will never get is silence dressed up as a clean result. The covered list is above, and extending it is the first thing we add to.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Does this cover multiple properties? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes — describe all your properties and locations, and your report covers each one.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Yes, and each one is checked and written up separately rather than merged into a single narrative. That matters more than it sounds: a portfolio spread across two states cannot run on one lease template, and the report says so where it applies to you.</div></div>
       </div>
       <div class="faq-item">
-        <button class="faq-q">What if requirements vary by city, not just state? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">City- and county-level rules are factored in wherever publicly available information supports it.</div></div>
+        <button class="faq-q">Does this replace a property manager, or a lawyer? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Neither. It tells you which requirements apply to your specific properties and who to confirm each one with, which is the part self-managing landlords usually have no good way to find out. It is not legal advice, and where a finding involves real exposure — lead hazards, a deposit dispute, an eviction — the report says to take it to an attorney rather than pretending otherwise.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What happens if the report fails? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Your refund is queued automatically — you do not need to ask for it — and we are alerted at the same moment. If you would rather we ran it again than took the refund, email hello@streamnavigator.ai and we will, at no charge.</div></div>
       </div>
     </div>
   </section>
-  <section style="padding-top:0; padding-bottom:90px;">
+  <section style="padding-top:0; padding-bottom:90px; border-bottom:none;">
     <div class="cta-final">
-      <h2>A missed notice deadline can cost more than a year of this.</h2>
-      <p>Stay ahead of it instead.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Check My Compliance</a>
+      <h2>Most landlords find out what they were required to do from the notice.</h2>
+      <p>Ten minutes of answers is a cheaper way to find out.</p>
+      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Check My Properties</a>
     </div>
   </section>
 </main>
@@ -218,7 +626,8 @@
       <h5>Product</h5>
       <ul>
         <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
+        <li><a href="#checks">What we check</a></li>
+        <li><a href="#coverage">Coverage</a></li>
         <li><a href="#pricing">Pricing</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
@@ -230,7 +639,7 @@
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Landlord Navigator provides AI-generated compliance information for informational purposes only and is not legal advice. Rental laws vary by jurisdiction and change over time — always verify current requirements with your local housing authority or an attorney before acting.</p>
+  <p class="footer-disclaimer">Landlord Navigator identifies which categories of requirement apply to the properties you enter and names the authority that administers each one. It is information, not legal advice, and it never states a fee, a deadline set by law, or an ordinance number. Rental rules vary by jurisdiction and change over time — confirm every finding with the office named beside it, or with an attorney, before acting on it.</p>
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
@@ -247,15 +656,143 @@
   const input = document.getElementById('upload-input');
   const list = document.getElementById('upload-list');
   const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
 
-  document.querySelectorAll('.category-chip').forEach(function(chip){
-    chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
-      chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
+  // --- the property records ------------------------------------------------
+  //
+  // This replaced a single textarea, and the reason is the whole product.
+  // api/_lib/landlord-audit.js decides every finding by matching a city, a
+  // state and a build year against a reference set. A paragraph of prose
+  // cannot be matched against anything, so the old page could only hand a
+  // model some text and hope. City, state and year built are required here for
+  // exactly that reason, and api/navigator-intake.js requires the same three
+  // server-side, so this gate cannot be walked around by calling the endpoint.
+  //
+  // Every other field is optional and each one switches on one more check. The
+  // line under each says which, because "optional" on its own reads as "ignore
+  // me" — and a landlord who skips the lease date loses the one finding on the
+  // report with a countdown attached to it.
+  const propList = document.getElementById('prop-list');
+  const propCount = document.getElementById('prop-count');
+  const addBtn = document.getElementById('add-prop');
+  const MAX_PROPERTIES = 12;
+
+  const STATES = ['AL','AK','AZ','AR','CA','CO','CT','DC','DE','FL','GA','HI','ID','IL','IN','IA',
+    'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND',
+    'OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+
+  function stateOptions() {
+    return '<option value="">Select…</option>'
+      + STATES.map(function(s){ return '<option value="' + s + '">' + s + '</option>'; }).join('');
+  }
+
+  function propertyMarkup() {
+    return ''
+      + '<div class="prop-head">'
+      + '  <h4><span class="n"></span><span class="ttl"></span></h4>'
+      + '  <button type="button" class="prop-remove" data-remove>Remove</button>'
+      + '</div>'
+      + '<div class="field-grid">'
+      + '  <div class="field-block span2"><label>Nickname or street address <span class="opt">(optional)</span></label>'
+      + '    <input type="text" data-f="label" placeholder="e.g. the Cedar St house" maxlength="120"></div>'
+      + '  <div class="field-block"><label>City</label>'
+      + '    <input type="text" data-f="city" placeholder="e.g. Seattle" maxlength="80"></div>'
+      + '  <div class="field-block"><label>State</label>'
+      + '    <select data-f="state">' + stateOptions() + '</select></div>'
+      + '  <div class="field-block"><label>Year built</label>'
+      + '    <input type="number" data-f="year_built" placeholder="e.g. 1962" min="1600" max="2100">'
+      + '    <span class="unlocks">switches on the lead checks</span></div>'
+      + '  <div class="field-block"><label>Number of units <span class="opt">(optional)</span></label>'
+      + '    <input type="number" data-f="units" placeholder="e.g. 1" min="1" max="500"></div>'
+      + '  <div class="field-block"><label>Registered or licensed here?</label>'
+      + '    <select data-f="registered"><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select>'
+      + '    <span class="unlocks">switches on the registration check</span></div>'
+      + '  <div class="field-block"><label>Registration expires</label>'
+      + '    <input type="date" data-f="registration_expires">'
+      + '    <span class="unlocks">switches on the renewal countdown</span></div>'
+      + '  <div class="field-block"><label>Current lease ends</label>'
+      + '    <input type="date" data-f="lease_ends">'
+      + '    <span class="unlocks">switches on the notice window</span></div>'
+      + '  <div class="field-block"><label>Child under six living there?</label>'
+      + '    <select data-f="child_under_six"><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select>'
+      + '    <span class="unlocks">switches on the state lead-hazard check</span></div>'
+      + '  <div class="field-block"><label>Signed lead disclosure on file?</label>'
+      + '    <select data-f="lead_disclosure_on_file"><option value="">Not sure</option><option value="yes">Yes</option><option value="no">No</option></select>'
+      + '    <span class="unlocks">only bites if built before 1978</span></div>'
+      + '  <div class="field-block"><label>Security deposit is held…</label>'
+      + '    <select data-f="deposit_held"><option value="">Not sure</option><option value="separate">In its own account</option><option value="commingled">In my personal account</option><option value="none">I hold no deposit</option></select>'
+      + '    <span class="unlocks">switches on the deposit check</span></div>'
+      + '  <div class="field-block span2"><label>Work you are planning here <span class="opt">(optional)</span></label>'
+      + '    <input type="text" data-f="planned_work" placeholder="e.g. replacing the roof next spring" maxlength="200">'
+      + '    <span class="unlocks">switches on the permit check</span></div>'
+      + '</div>';
+  }
+
+  function renumber() {
+    const cards = propList.querySelectorAll('.prop-card');
+    cards.forEach(function(card, i){
+      card.querySelector('.prop-head .n').textContent = String(i + 1).padStart(2, '0');
+      card.querySelector('.prop-head .ttl').textContent = 'Property ' + (i + 1);
+      // The only property can never be removed, so its button is hidden rather
+      // than left to fail: a control that does nothing is worse than none.
+      card.querySelector('[data-remove]').hidden = cards.length < 2;
     });
+    propCount.textContent = cards.length === 1
+      ? '1 property · checked on its own'
+      : cards.length + ' properties · each checked and written up separately';
+    addBtn.hidden = cards.length >= MAX_PROPERTIES;
+  }
+
+  function addProperty() {
+    const card = document.createElement('div');
+    card.className = 'prop-card';
+    card.innerHTML = propertyMarkup();
+    card.querySelector('[data-remove]').addEventListener('click', function(){
+      card.remove();
+      renumber();
+    });
+    propList.appendChild(card);
+    renumber();
+    return card;
+  }
+
+  addBtn.addEventListener('click', function(){
+    addProperty().querySelector('[data-f="city"]').focus();
   });
+  addProperty();
+
+  function readProperties() {
+    return Array.from(propList.querySelectorAll('.prop-card')).map(function(card){
+      const out = {};
+      card.querySelectorAll('[data-f]').forEach(function(el){
+        const value = String(el.value || '').trim();
+        if (value) out[el.dataset.f] = value;
+      });
+      return out;
+    });
+  }
+
+  // A readable version of the same records, so the write-up has the portfolio
+  // in prose as well as the findings in JSON, and so the generic sufficiency
+  // check in api/navigator-intake.js has something to see.
+  function describe(properties, extra) {
+    const lines = properties.map(function(p, i){
+      const bits = [];
+      if (p.label) bits.push(p.label);
+      bits.push([p.city, p.state].filter(Boolean).join(', '));
+      if (p.year_built) bits.push('built ' + p.year_built);
+      if (p.units) bits.push(p.units + ' unit' + (Number(p.units) === 1 ? '' : 's'));
+      if (p.registered) bits.push('registered: ' + p.registered);
+      if (p.registration_expires) bits.push('registration expires ' + p.registration_expires);
+      if (p.lease_ends) bits.push('lease ends ' + p.lease_ends);
+      if (p.child_under_six) bits.push('child under six: ' + p.child_under_six);
+      if (p.lead_disclosure_on_file) bits.push('lead disclosure on file: ' + p.lead_disclosure_on_file);
+      if (p.deposit_held) bits.push('deposit held: ' + p.deposit_held);
+      if (p.planned_work) bits.push('planned work: ' + p.planned_work);
+      return (i + 1) + ') ' + bits.filter(Boolean).join(' · ');
+    });
+    if (extra) lines.push('', 'From the landlord: ' + extra);
+    return lines.join('\n');
+  }
 
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
@@ -272,9 +809,29 @@
     const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
+
+    // The same three fields api/navigator-intake.js requires. Checked here so
+    // the message points at the empty box, rather than arriving as a server
+    // error after the uploads have already gone up.
+    const NAMES = { city: 'city', state: 'state', year_built: 'year built' };
+    const cards = Array.from(propList.querySelectorAll('.prop-card'));
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      const missing = ['city', 'state', 'year_built'].filter(function(f){
+        return !String(card.querySelector('[data-f="' + f + '"]').value || '').trim();
+      });
+      if (missing.length) {
+        fail('Property ' + (i + 1) + ' still needs its '
+          + missing.map(function(f){ return NAMES[f]; }).join(' and ')
+          + ' — every check is jurisdiction-specific, and the lead checks run off the build year.',
+        card.querySelector('[data-f="' + missing[0] + '"]'));
+        return;
+      }
+    }
+
+    const properties = readProperties();
     const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { fail('Tell us about your properties, or upload a license/registration, so we have something to work with.', descEl); return; }
+    const extra = descEl.value.trim();
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
@@ -282,7 +839,11 @@
       const submission = await submitNavigatorIntake({
         product: 'landlord',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: {
+          properties: properties,
+          notes: extra,
+          description: describe(properties, extra),
+        },
         files: files,
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'landlord' }, email);

@@ -63,20 +63,121 @@ test('no page sells a year the code does not grant', () => {
 
 test('no page sells reference data that does not exist', () => {
   const corpus = fs.readdirSync(path.join(ROOT, 'data')).filter((f) => f !== '.gitkeep');
-  if (corpus.length) return;   // a corpus arrived: these claims become fair game
+
+  // Per product, not per repository.
+  //
+  // This used to return early the moment data/ held anything at all — "a corpus
+  // arrived: these claims become fair game". Landlord Navigator's jurisdiction
+  // set arriving on 2026-09-10 would have switched the guard off for all twelve
+  // pages at once, including the eleven it says nothing about. A reference set
+  // for one product licenses a reference-data claim on that product's page and
+  // nowhere else.
+  const hasCorpus = (product) => corpus.some((f) => f.startsWith(`${product}-`));
 
   // Narrow on purpose. "What that kind of service typically costs" is what the
   // engines actually do — reason from general knowledge and say when unsure.
   // These phrases promise a lookup against data nobody holds.
   const claim = /benchmarks? every|market rate data|rate table|published rates?|live comps?|comparable sales|current market data|against market data/i;
   const offenders = [];
-  for (const { file, src } of PRODUCT_PAGES) {
+  for (const { file, product, src } of PRODUCT_PAGES) {
+    if (hasCorpus(product)) continue;
     visible(src).split('\n').forEach((line, i) => {
       if (claim.test(line)) offenders.push(`${file}:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 80)}`);
     });
   }
   assert.deepEqual(offenders, [],
-    `data/ holds no corpus, so nothing can be compared against reference data:\n  ${offenders.join('\n  ')}`);
+    'data/ holds no corpus for these products, so nothing on their pages can be compared '
+    + `against reference data:\n  ${offenders.join('\n  ')}`);
+});
+
+// --- /landlord: the claims that had nothing behind them ----------------------
+//
+// The audit of 2026-09-10 found four sentences on landlord.html selling a thing
+// that did not exist in any form: "AI tracks relevant rules", "get action items
+// as things change", "turns regulatory changes into specific action items" and
+// "a specific action item for every relevant change". None of the seven crons in
+// vercel.json touched landlord; nothing stored a baseline of rules; nothing ever
+// looked at a submission twice. The page was also selling "required tenant
+// notice periods and formats for your area" on top of a system prompt that
+// explicitly forbade the model from stating one.
+//
+// The fix was to build the deterministic engine the page was describing and
+// rewrite the copy to what it actually does. These keep the two in step.
+
+test('landlord.html does not sell monitoring that nothing performs', () => {
+  const page = visible(fs.readFileSync(path.join(ROOT, 'landlord.html'), 'utf8'));
+  const crons = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')).crons || [];
+  const watched = crons.some((c) => /landlord/i.test(c.path));
+  if (watched) return;   // a job arrived: the claim becomes fair game
+
+  const claim = /tracks? (?:relevant |the )?rules|as things change|regulatory changes|every relevant change|we(?:'ll| will) notify you|notified of changes/i;
+  const offenders = [];
+  page.split('\n').forEach((line, i) => {
+    if (claim.test(line)) offenders.push(`landlord.html:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 90)}`);
+  });
+  assert.deepEqual(offenders, [],
+    'nothing in vercel.json looks at a landlord submission twice, so the page cannot say it '
+    + `does:\n  ${offenders.join('\n  ')}`);
+});
+
+test('landlord.html never promises a figure the engine refuses to print', () => {
+  // The engine holds no fee, no penalty and no statutory notice period, and
+  // tests/landlord-audit.test.js enforces that none appears in a finding. The
+  // page must not sell one either, or the customer buys the one thing the
+  // report is built never to give them.
+  const page = visible(fs.readFileSync(path.join(ROOT, 'landlord.html'), 'utf8'));
+  const forbidden = [
+    /required (?:tenant )?notice periods? (?:and formats? )?for your area/i,
+    /exact notice period/i,
+    /what (?:registration|the licen[cs]e) costs?\b(?!\?)/i,
+    /registration fees?/i,
+  ];
+  for (const re of forbidden) {
+    // The FAQ answers the question by refusing it, which is the opposite of
+    // selling it, so a match is only a failure outside that answer.
+    const hit = page.match(re);
+    if (!hit) continue;
+    const around = page.slice(Math.max(0, page.indexOf(hit[0]) - 400), page.indexOf(hit[0]) + 400);
+    assert.ok(/we do not hold them|we never print one|No, and that is deliberate/i.test(around),
+      `landlord.html sells a figure the engine will not print: ${re}`);
+  }
+});
+
+test('the number of checks landlord.html sells is the number the catalog runs', () => {
+  const page = fs.readFileSync(path.join(ROOT, 'landlord.html'), 'utf8');
+  const { CATALOG } = require('../api/_lib/landlord-audit');
+  const WORDS = { 9: 'Nine', 10: 'Ten', 11: 'Eleven', 12: 'Twelve' };
+  const word = WORDS[CATALOG.length];
+  assert.ok(word, `${CATALOG.length} checks — add the word to this test's map`);
+  assert.ok(new RegExp(`${word} checks`, 'i').test(page),
+    `the catalog runs ${CATALOG.length} checks and the page does not say "${word.toLowerCase()} checks" — `
+    + 'a page that oversells the count by one is the same defect as any other overclaim');
+});
+
+test('every jurisdiction landlord.html lists is one the reference set holds', () => {
+  // The coverage panel is the page's most checkable claim: a customer reads it,
+  // pays, and expects their city to be matched. A city named there and missing
+  // from data/ produces exactly the coverage-gap finding the panel promised
+  // would not happen for them.
+  const page = fs.readFileSync(path.join(ROOT, 'landlord.html'), 'utf8');
+  const panel = page.slice(page.indexOf('<div class="cov-list">'), page.indexOf('</div>', page.indexOf('<div class="cov-list">')));
+  assert.ok(panel.length > 100, 'the coverage panel is gone from landlord.html');
+
+  const held = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'landlord-jurisdictions.json'), 'utf8'));
+  const cities = new Set(Object.values(held.cities).map((c) => c.city.toLowerCase()));
+  const listed = panel
+    .replace(/<[^>]+>/g, ' ')
+    .split('·')[0] === panel ? [] : panel.replace(/<[^>]+>/g, ' ').split('·');
+
+  const missing = listed
+    .map((s) => s.trim().replace(/\s+/g, ' '))
+    .filter((s) => s && !/plus statewide|federal|^and\b/i.test(s))
+    .map((s) => s.replace(/^Washington DC$/i, 'Washington'))
+    .filter((s) => /^[A-Za-z .'-]+$/.test(s))
+    .filter((s) => !cities.has(s.toLowerCase()));
+
+  assert.deepEqual(missing, [],
+    `landlord.html lists jurisdictions data/landlord-jurisdictions.json does not hold: ${missing.join(', ')}`);
 });
 
 test('a page that says the report arrives on its own is swept by a job', () => {

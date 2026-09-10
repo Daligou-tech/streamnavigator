@@ -1,0 +1,364 @@
+{
+  "_readme": [
+    "The reference set behind Landlord Navigator's deterministic checks.",
+    "",
+    "WHAT IS IN HERE, AND WHY IT IS NARROW. Every entry records one thing only:",
+    "whether a jurisdiction runs a named programme a residential landlord has to",
+    "be enrolled in, and which office administers it. That is deliberate. The",
+    "existence of Seattle's RRIO or Philadelphia's rental licence is a stable,",
+    "long-standing, widely documented fact. The fee, the renewal month and the",
+    "ordinance number are none of those things — they change, they vary by unit",
+    "count, and a wrong one printed as fact is worse for a landlord than no",
+    "answer at all. So no fee, no date and no citation appears anywhere in this",
+    "file, and the engine is built so it never needs one: every finding ends by",
+    "naming the office to confirm with.",
+    "",
+    "CONFIDENCE. Each claim carries \"high\" or \"check\". \"high\" means the",
+    "programme is well established and the finding is written as a statement.",
+    "\"check\" means it is likely but the landlord should confirm before acting,",
+    "and the finding says so in those words. A jurisdiction absent from this file",
+    "produces a coverage finding that names the gap rather than silence — see",
+    "the not-covered branch in api/_lib/landlord-audit.js.",
+    "",
+    "MAINTENANCE. This was compiled from general knowledge on the date below and",
+    "has not been reconciled line by line against each authority's current",
+    "published rules. Treat review_by as a real deadline: an entry that is a year",
+    "stale should either be re-checked or removed. Adding a jurisdiction is the",
+    "single highest-value change anyone can make to this product."
+  ],
+  "compiled_on": "2026-09-10",
+  "review_by": "2027-03-10",
+
+  "federal": {
+    "lead_disclosure": {
+      "applies_to": "Residential housing built before 1978, with narrow exemptions such as housing for the elderly or disabled with no child resident, and leases of 100 days or fewer.",
+      "obligation": "Before a lease is signed, the landlord must give the tenant the EPA-approved lead hazard information pamphlet, disclose any known lead-based paint or hazards and any records or reports they hold, and include a signed lead warning statement in the lease. The signed disclosure has to be kept for three years.",
+      "why_it_matters": "This one is federal, so it applies in every state, and it is the obligation small landlords most often have no record of having met. A missing signed disclosure is a documentation failure that is entirely within the landlord's own control to fix at the next lease.",
+      "authority": "U.S. Environmental Protection Agency and the U.S. Department of Housing and Urban Development, administered locally through your state or city housing authority",
+      "confidence": "high"
+    }
+  },
+
+  "states": {
+    "AZ": {
+      "name": "Arizona",
+      "registration": {
+        "required": true,
+        "programme": "Residential rental property registration with the county assessor",
+        "authority": "the county assessor for the county the property sits in",
+        "confidence": "high"
+      }
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "registration": {
+        "required": true,
+        "programme": "Landlord registration",
+        "authority": "your municipal clerk, or the New Jersey Bureau of Housing Inspection for larger buildings",
+        "confidence": "high"
+      },
+      "lead": {
+        "beyond_federal": true,
+        "programme": "Periodic lead-based paint inspection of pre-1978 rental units",
+        "authority": "your municipality's lead inspection or code enforcement office",
+        "confidence": "check"
+      }
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "lead": {
+        "beyond_federal": true,
+        "programme": "The Massachusetts Lead Law",
+        "child_trigger_age": 6,
+        "authority": "the Massachusetts Childhood Lead Poisoning Prevention Program at the Department of Public Health",
+        "what_it_adds": "Massachusetts does not stop at disclosure. Where a child under six lives in a pre-1978 unit, the owner is required to have lead hazards removed or covered, and the duty sits with the owner whether or not they knew about the paint.",
+        "confidence": "high"
+      },
+      "deposit": {
+        "separate_account_required": true,
+        "authority": "the Massachusetts Attorney General's Office",
+        "confidence": "high"
+      }
+    },
+    "MD": {
+      "name": "Maryland",
+      "lead": {
+        "beyond_federal": true,
+        "programme": "Maryland's lead rental certification programme for pre-1978 rental housing",
+        "authority": "the Maryland Department of the Environment",
+        "what_it_adds": "Maryland requires affected pre-1978 rental units to be registered and to hold a current lead inspection certificate, which is a step beyond the federal disclosure.",
+        "confidence": "high"
+      }
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "lead": {
+        "beyond_federal": true,
+        "programme": "Rhode Island's lead certificate requirement for pre-1978 rental units",
+        "authority": "the Rhode Island Department of Health",
+        "what_it_adds": "Rhode Island requires a certificate showing the unit has been inspected for lead hazards, over and above the federal disclosure.",
+        "confidence": "high"
+      }
+    },
+    "NY": {
+      "name": "New York",
+      "deposit": {
+        "separate_account_required": true,
+        "authority": "the New York State Attorney General's Office",
+        "confidence": "high"
+      }
+    },
+    "FL": {
+      "name": "Florida",
+      "deposit": {
+        "separate_account_required": true,
+        "authority": "the Florida Department of Agriculture and Consumer Services",
+        "note": "Florida gives landlords a choice between holding the deposit in a separate account and posting a surety bond, but keeping it in a personal account is not one of the options.",
+        "confidence": "high"
+      }
+    },
+    "CT": {
+      "name": "Connecticut",
+      "deposit": {
+        "separate_account_required": true,
+        "authority": "the Connecticut Department of Banking",
+        "confidence": "check"
+      }
+    }
+  },
+
+  "cities": {
+    "seattle-wa": {
+      "city": "Seattle", "state": "WA",
+      "registration": {
+        "required": true,
+        "programme": "the Rental Registration and Inspection Ordinance (RRIO)",
+        "authority": "the Seattle Department of Construction and Inspections",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "minneapolis-mn": {
+      "city": "Minneapolis", "state": "MN",
+      "registration": {
+        "required": true,
+        "programme": "the city rental licence",
+        "authority": "Minneapolis Regulatory Services",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "saint paul-mn": {
+      "city": "Saint Paul", "state": "MN",
+      "registration": {
+        "required": true,
+        "programme": "the Fire Certificate of Occupancy",
+        "authority": "the Saint Paul Department of Safety and Inspections",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "philadelphia-pa": {
+      "city": "Philadelphia", "state": "PA",
+      "registration": {
+        "required": true,
+        "programme": "the city rental licence",
+        "authority": "the Philadelphia Department of Licenses and Inspections",
+        "confidence": "high"
+      },
+      "lease_attachment": {
+        "required": true,
+        "document": "a current Certificate of Rental Suitability, given to the tenant at or before the start of the lease",
+        "authority": "the Philadelphia Department of Licenses and Inspections",
+        "confidence": "high"
+      }
+    },
+    "baltimore-md": {
+      "city": "Baltimore", "state": "MD",
+      "registration": {
+        "required": true,
+        "programme": "the rental dwelling licence and registration",
+        "authority": "the Baltimore City Department of Housing and Community Development",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "boston-ma": {
+      "city": "Boston", "state": "MA",
+      "registration": {
+        "required": true,
+        "programme": "rental property registration",
+        "authority": "the Boston Inspectional Services Department",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "cambridge-ma": {
+      "city": "Cambridge", "state": "MA",
+      "registration": {
+        "required": true,
+        "programme": "rental property registration",
+        "authority": "the Cambridge Inspectional Services Department",
+        "confidence": "check"
+      }
+    },
+    "washington-dc": {
+      "city": "Washington", "state": "DC",
+      "registration": {
+        "required": true,
+        "programme": "the Basic Business Licence in the Housing: Rental category",
+        "authority": "the DC Department of Licensing and Consumer Protection",
+        "confidence": "high"
+      }
+    },
+    "new york-ny": {
+      "city": "New York", "state": "NY",
+      "registration": {
+        "required": true,
+        "programme": "annual HPD property registration",
+        "authority": "the NYC Department of Housing Preservation and Development",
+        "confidence": "high"
+      }
+    },
+    "los angeles-ca": {
+      "city": "Los Angeles", "state": "CA",
+      "registration": {
+        "required": true,
+        "programme": "registration under the Systematic Code Enforcement Program, plus the Rent Registry for units covered by the Rent Stabilization Ordinance",
+        "authority": "the Los Angeles Housing Department",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "san francisco-ca": {
+      "city": "San Francisco", "state": "CA",
+      "registration": {
+        "required": true,
+        "programme": "the annual Housing Inventory registration for covered units",
+        "authority": "the San Francisco Rent Board",
+        "confidence": "high"
+      }
+    },
+    "portland-or": {
+      "city": "Portland", "state": "OR",
+      "registration": {
+        "required": true,
+        "programme": "annual residential rental registration",
+        "authority": "the City of Portland Revenue Division",
+        "confidence": "high"
+      }
+    },
+    "denver-co": {
+      "city": "Denver", "state": "CO",
+      "registration": {
+        "required": true,
+        "programme": "the residential rental property licence",
+        "authority": "Denver Excise and Licenses",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "check" }
+    },
+    "kansas city-mo": {
+      "city": "Kansas City", "state": "MO",
+      "registration": {
+        "required": true,
+        "programme": "the Healthy Homes rental registration and inspection programme",
+        "authority": "the Kansas City Health Department",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "detroit-mi": {
+      "city": "Detroit", "state": "MI",
+      "registration": {
+        "required": true,
+        "programme": "rental registration and the Certificate of Compliance",
+        "authority": "the Detroit Buildings, Safety Engineering and Environmental Department",
+        "confidence": "high"
+      },
+      "inspection": { "periodic": true, "confidence": "high" }
+    },
+    "cleveland-oh": {
+      "city": "Cleveland", "state": "OH",
+      "registration": {
+        "required": true,
+        "programme": "annual rental registration",
+        "authority": "the Cleveland Department of Building and Housing",
+        "confidence": "check"
+      }
+    },
+    "new orleans-la": {
+      "city": "New Orleans", "state": "LA",
+      "registration": {
+        "required": true,
+        "programme": "the Healthy Homes residential rental registry",
+        "authority": "the New Orleans Department of Safety and Permits",
+        "confidence": "check"
+      }
+    },
+    "chicago-il": {
+      "city": "Chicago", "state": "IL",
+      "registration": {
+        "required": false,
+        "note": "Chicago does not run a general rental registry the way Seattle or Minneapolis do, so there is usually nothing to register. The obligations that catch landlords here are in the Residential Landlord and Tenant Ordinance instead.",
+        "confidence": "high"
+      },
+      "lease_attachment": {
+        "required": true,
+        "document": "the city's summary of the Residential Landlord and Tenant Ordinance, which has to be attached to every lease and to every renewal",
+        "authority": "the Chicago Department of Housing",
+        "confidence": "high"
+      },
+      "deposit_rules": {
+        "stricter_than_state": true,
+        "note": "The RLTO sets its own rules for how a security deposit is held, receipted and returned, and the penalties for getting it wrong are among the stiffest in the country.",
+        "authority": "the Chicago Department of Housing",
+        "confidence": "high"
+      }
+    },
+    "austin-tx": {
+      "city": "Austin", "state": "TX",
+      "registration": {
+        "required": false,
+        "note": "Austin has no general rental registration for ordinary landlords — its registration programme applies to properties that have accumulated code violations.",
+        "confidence": "high"
+      }
+    },
+    "houston-tx": {
+      "city": "Houston", "state": "TX",
+      "registration": { "required": false, "confidence": "check" }
+    },
+    "atlanta-ga": {
+      "city": "Atlanta", "state": "GA",
+      "registration": { "required": false, "confidence": "check" }
+    },
+    "phoenix-az": {
+      "city": "Phoenix", "state": "AZ",
+      "registration": {
+        "required": true,
+        "programme": "residential rental property registration with the county assessor, which Arizona requires statewide",
+        "authority": "the Maricopa County Assessor",
+        "confidence": "high"
+      }
+    },
+    "fort lauderdale-fl": {
+      "city": "Fort Lauderdale", "state": "FL",
+      "registration": {
+        "required": true,
+        "programme": "a local business tax receipt for the rental",
+        "note": "Most Florida municipalities require a business tax receipt of residential landlords; Florida itself runs no statewide rental registry.",
+        "authority": "the City of Fort Lauderdale and the Broward County tax collector",
+        "confidence": "check"
+      }
+    },
+    "miami-fl": {
+      "city": "Miami", "state": "FL",
+      "registration": {
+        "required": true,
+        "programme": "a local business tax receipt for the rental",
+        "authority": "the City of Miami and the Miami-Dade County tax collector",
+        "confidence": "check"
+      }
+    }
+  }
+}

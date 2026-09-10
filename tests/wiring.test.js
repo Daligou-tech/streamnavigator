@@ -54,7 +54,12 @@ test('every form_data key read by an endpoint is declared', () => {
       // navigator-intake writes it for the free-text products, closing never
       // does. It was declared here with a closing owner that never mentioned
       // it, which is what the owner check below was catching.
-      if (['category', 'description', 'zip', 'financing', 'timeline', 'budget', 'notes'].includes(key)) continue;
+      // `properties` is landlord's: the per-property records landlord.html
+      // collects and api/_lib/landlord-audit.js runs its checks against. Like
+      // the others on this line it lives in the same column and belongs to a
+      // different product's contract, not this one.
+      if (['category', 'description', 'zip', 'financing', 'timeline', 'budget', 'notes',
+        'properties'].includes(key)) continue;
       if (!KNOWN_KEYS.includes(key)) undeclared.push(`${rel(file)} reads formData.${key}`);
     }
   }
