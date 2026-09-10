@@ -48,6 +48,18 @@
   .pill{ border:1px solid var(--border); border-radius:2px; background:var(--surface);
     box-shadow:none; color:var(--ink-soft); font-size:.82rem; font-weight:400; }
   .pill .dot{ background:none; color:var(--accent-2); }
+  /* /closing's vertical rhythm as well as its palette. navigator-shared.css
+     runs 110px of section padding and a 64px section-head margin against
+     closing's 60px and 32px — nearly double. On a short viewport that stacks
+     into most of a screen of nothing between two sections, which is what the
+     scroll-reveal was being blamed for. */
+  section{ padding:60px 24px; }
+  .hero{ padding:62px 24px 52px; }
+  .section-head{ margin:0 auto 32px; }
+  @media (max-width:720px){
+    section{ padding:44px 20px; }
+    .hero{ padding:48px 20px 36px; }
+  }
   header{ border-bottom:1px solid var(--border); background:var(--bg); }
   .hero{ background:var(--bg); border-bottom:1px solid var(--border); }
   section{ border-color:var(--border) !important; }
