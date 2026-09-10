@@ -96,7 +96,9 @@ async function checkEntitlement(admin, id, token) {
     .maybeSingle();
 
   if (error || !submission) return { active: false, reason: 'not_found' };
-  if (submission.product !== 'rental') return { active: false, reason: 'not_rental' };
+  // Same list grantEntitlement uses. These drifting apart would mean a product
+  // could be granted a year it could never spend.
+  if (!ENTITLED_PRODUCTS.includes(submission.product)) return { active: false, reason: 'not_entitled' };
   if (submission.access_token !== token) return { active: false, reason: 'bad_token' };
 
   const { data: entitlement } = await admin

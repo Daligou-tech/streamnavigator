@@ -211,13 +211,29 @@ module.exports = async function handler(req, res) {
         if (!response.ok) {
           const body = await response.text().catch(() => '');
           console.error('[rental-reminders] Resend rejected:', body.slice(0, 200));
+          // Give the claim back. A rejection is proof nothing was sent, and
+          // without this the row stays claimed forever: one bad afternoon at
+          // the mail provider would cost that landlord the only reminder they
+          // were ever going to get, silently, six weeks before the renewal it
+          // existed to reach.
+          await admin
+            .from('rental_reminders')
+            .delete()
+            .eq('entitlement_id', entitlement.id)
+            .eq('unit_id', String(unit.unit_id || 'unit'))
+            .eq('lease_end', leaseEndDate);
           skipped.push({ id: entitlement.id, unit: unit.unit_id, reason: 'send_failed' });
           continue;
         }
         sent.push({ id: entitlement.id, unit: unit.unit_id, leaseEnd: leaseEndDate });
       } catch (err) {
-        console.error('[rental-reminders] send failed:', err.message);
-        skipped.push({ id: entitlement.id, unit: unit.unit_id, reason: 'send_error' });
+        // Deliberately NOT released. A rejection above is proof nothing was
+        // sent; a thrown request is not — the mail may have gone out and the
+        // response been lost on the way back. Between a landlord missing one
+        // reminder and a landlord getting the same one every morning until the
+        // lease expires, the first is the one to choose.
+        console.error('[rental-reminders] send failed after the claim:', err.message);
+        skipped.push({ id: entitlement.id, unit: unit.unit_id, reason: 'send_error_claim_kept' });
       }
     }
   }

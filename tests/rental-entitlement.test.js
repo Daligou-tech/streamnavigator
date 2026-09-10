@@ -11,6 +11,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const {
   grantEntitlement, checkEntitlement, consumeEntitlement,
@@ -245,4 +247,57 @@ test('a reminder for a landlord with no findings on that unit still reads honest
   });
   assert.ok(!/flagged this unit/.test(text), 'no finding must not be dressed up as one');
   assert.ok(/used all the audits/.test(text), 'and a spent entitlement is not offered as available');
+});
+
+// --- routing and the claim that has to be given back ------------------------
+
+test('a finding that tells the landlord to ask their manager produces a letter', () => {
+  // The water-billback finding's recommended action reads "Ask your manager or
+  // a local landlord association…" and it carried no routing flag, so the one
+  // product feature that writes the asking left this one for the customer.
+  const { runRentalAudit } = require('../api/_lib/rental-audit');
+  const { buildRentalEmails } = require('../api/_lib/rental-emails');
+  const { leakyFourplex } = require('./fixtures/rental-fixtures');
+
+  const findings = runRentalAudit(leakyFourplex()).findings;
+  const billback = findings.find((f) => f.checkId === 'OWNER_PAID_UTILITY');
+  assert.equal(billback.askManager, true);
+
+  const manager = buildRentalEmails(findings, { propertyAddress: '1428 Garfield Ave' }).manager;
+  assert.ok(/water and sewer/i.test(manager.body), 'and it reaches the letter');
+});
+
+test('every finding that names one of our three parties is routed to them', () => {
+  const { runRentalAudit } = require('../api/_lib/rental-audit');
+  const { leakyFourplex, cleanDuplex } = require('./fixtures/rental-fixtures');
+  const orphans = [];
+  for (const fixture of [leakyFourplex(), cleanDuplex()]) {
+    for (const f of runRentalAudit(fixture).findings) {
+      if (f.severity === 'within_norms') continue;
+      const action = f.recommendedAction || '';
+      const routed = f.askServicer || f.askManager || f.askInsurer;
+      // The warranty provider is deliberately not a recipient: it is a company
+      // we know nothing about, and one finding does not earn a fourth letter.
+      if (/your manager|your agent|the servicer/i.test(action) && !routed) {
+        orphans.push(`${f.checkId}: "${action.slice(0, 70)}"`);
+      }
+    }
+  }
+  assert.deepEqual(orphans, [],
+    `these tell the landlord to ask a party we write letters to, and draft none:\n  ${orphans.join('\n  ')}`);
+});
+
+test('a rejected reminder gives its claim back so the next sweep retries', () => {
+  // The row is inserted before Resend is called, which is right: a crash after
+  // sending must not repeat the mail daily for two months. But a REJECTION is
+  // proof nothing was sent, and leaving that row claimed costs the landlord the
+  // only reminder they were going to get, six weeks before the renewal.
+  const src = fs.readFileSync(path.join(__dirname, '..', 'api', 'rental-reminders.js'), 'utf8');
+  const rejection = src.slice(src.indexOf('if (!response.ok)'), src.indexOf('skipped.push({ id: entitlement.id, unit: unit.unit_id, reason: \'send_failed\' })'));
+  assert.ok(/\.delete\(\)/.test(rejection), 'a rejected send must release the claim');
+
+  const thrown = src.slice(src.indexOf('} catch (err) {', src.indexOf('const response = await fetch')));
+  assert.ok(!/\.delete\(\)/.test(thrown.slice(0, 600)),
+    'a thrown request is not proof nothing was sent, so that claim is kept — one missed '
+    + 'reminder beats the same one every morning until the lease expires');
 });

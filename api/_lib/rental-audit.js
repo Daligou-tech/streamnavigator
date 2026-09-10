@@ -574,6 +574,10 @@ check(
         charged: annual,
         dollarImpact: annual,
         impactKind: ImpactKind.EXPOSURE,
+        // Its recommended action names the manager, so it has to reach the
+        // manager. A finding that tells a landlord to go and ask someone, in a
+        // product that drafts the asking, should not leave them to write it.
+        askManager: true,
         detail: { utility: name, annual, unitCount, perUnitMonth },
       });
     }
