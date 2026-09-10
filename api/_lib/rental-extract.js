@@ -94,6 +94,13 @@ const EXTRACT_TOOL = {
         type: 'number',
         description: 'The total operating expenses figure the statement itself prints. Null if it prints none.',
       },
+      expense_lines_printed: {
+        type: 'number',
+        description: 'Count the individual expense lines printed in the statement\'s operating expense section — '
+          + 'excluding subtotal and total rows — and record how many there are. Count them off the page before you '
+          + 'record them, not afterwards. This is checked against the number you recorded, and a mismatch tells the '
+          + 'audit your list is short so it can decline to draw a conclusion from it.',
+      },
       maintenance_items: {
         type: 'array',
         description: 'Every itemised repair line, one entry each.',
@@ -113,6 +120,11 @@ const EXTRACT_TOOL = {
         type: 'number',
         description: 'The repairs total the statement prints. Record it even when it appears to disagree with the '
           + 'items — especially then. Do not reconcile them and do not adjust either figure.',
+      },
+      maintenance_lines_printed: {
+        type: 'number',
+        description: 'How many individual repair lines are printed on the repair schedule. Counted off the page, '
+          + 'the same way as expense_lines_printed and for the same reason.',
       },
       utility_months: {
         type: 'array',
@@ -220,7 +232,15 @@ Rules, in order of importance:
 
 2. RECORD DISAGREEMENTS AS YOU FIND THEM. If a schedule of line items does not add up to the total printed beside it, record both, exactly as printed. Do not reconcile them, do not correct either one, and do not leave one out. Discrepancies between a document and itself are the single most valuable thing in these files, and your job is to preserve them intact, not to tidy them.
 
-3. Do not double count. Where a statement lists several components and then a subtotal of those same components, record the components and omit the subtotal — otherwise the totals check sees a discrepancy you created.
+3. THE EXPENSE LIST MUST BE COMPLETE, AND IT IS THE ONE PLACE A MISTAKE IS EXPENSIVE. "expenses" is every individual operating expense line printed in the statement's expense section. That includes the management fee. That includes the repairs and maintenance line. It includes them EVEN THOUGH you are also recording the management fee in the management object and the individual repairs in maintenance_items — those are additional views of the same figures, not replacements for the expense line, and a figure appearing twice in this form is correct and expected.
+
+Leaving a line out because you captured it elsewhere does not produce a smaller list. It produces a report telling a landlord that their statement is missing thousands of dollars it is not missing, and sending them to their property manager to demand an explanation for a hole you created. Two live reports on 2026-09-09 led with exactly that: one accused a statement of a $5,480 gap that was the management fee, and one of a $2,415 gap that was the repairs line.
+
+The only rows to leave out are subtotals and totals. Where a statement lists several components and then a subtotal of those same components, record the components and omit the subtotal.
+
+3a. Then count. Count the expense lines printed on the page and put that number in expense_lines_printed, and do the same for the repair schedule in maintenance_lines_printed. If your count and your list disagree, the audit declines to judge the totals rather than reporting a discrepancy it cannot stand behind — which is the outcome we want over a confident wrong answer.
+
+3b. Where an operating statement carries its own debt service section, record it: principal and interest, mortgage insurance, and the total, in debt_service.
 
 4. Classify into the enums given. Where a repair description names a system — a furnace, a condenser, a drain, a roof — classify it. Where nothing fits, use "other".
 

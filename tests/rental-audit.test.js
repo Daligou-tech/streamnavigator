@@ -56,6 +56,63 @@ test('the repair schedule that does not add up is caught, to the dollar', () => 
   assert.equal(f.askManager, true);
 });
 
+// --- a short list must never become an accusation ---------------------------
+//
+// The first live run of this engine produced two "confirmed arithmetic error"
+// findings that were wrong, and both led their report. On the four-unit
+// property it announced a $5,480 hole that was exactly the management fee —
+// recorded in the management object and left out of the expense list. On the
+// single-family property it announced a $2,415 hole that was exactly the
+// repairs line, itemised into maintenance_items and left out of the expense
+// list. Neither statement was short of anything.
+//
+// Declining to test a total costs a landlord nothing. Telling them their
+// manager is missing $5,480 costs them a relationship, and it is the one claim
+// in this product a customer will act on immediately.
+
+test('a management fee missing from the expense list stops the totals check, and does not accuse anyone', () => {
+  const x = leakyFourplex();
+  x.expenses = x.expenses.filter((e) => e.category !== 'management');   // the observed omission
+  const result = runRentalAudit(x);
+  assert.equal(find(result, 'EXPENSE_TOTAL_FOOTS').length, 0,
+    'the gap here is the missing line, not a hole in the statement');
+  assert.ok(result.skipped.some((s) => /expense lines add up/i.test(s)),
+    'and the customer is told the check did not run');
+});
+
+test('a repairs line missing from the expense list stops the totals check too', () => {
+  const x = leakyFourplex();
+  x.expenses = x.expenses.filter((e) => e.category !== 'repairs_maintenance');
+  assert.equal(find(runRentalAudit(x), 'EXPENSE_TOTAL_FOOTS').length, 0);
+});
+
+test('a recorded list shorter than the lines counted on the page is not judged', () => {
+  const x = leakyFourplex();
+  x.expense_lines_printed = x.expenses.length + 1;   // extractor saw one it did not record
+  assert.equal(find(runRentalAudit(x), 'EXPENSE_TOTAL_FOOTS').length, 0);
+
+  const y = leakyFourplex();
+  y.maintenance_lines_printed = y.maintenance_items.length + 1;
+  assert.equal(find(runRentalAudit(y), 'MAINT_SCHEDULE_FOOTS').length, 0,
+    'the $500 gap is real, but not provable from a schedule we know is short');
+});
+
+test('when the counts agree, both totals checks still run', () => {
+  const x = leakyFourplex();
+  x.expense_lines_printed = x.expenses.length;
+  x.maintenance_lines_printed = x.maintenance_items.length;
+  const result = runRentalAudit(x);
+  assert.equal(one(result, 'MAINT_SCHEDULE_FOOTS').dollarImpact, 500);
+  assert.equal(one(result, 'EXPENSE_TOTAL_FOOTS').severity, Severity.WITHIN_NORMS,
+    'these expense lines do add up, and saying so is work the customer paid for');
+});
+
+test('a self-managed landlord with no management line is not treated as an omission', () => {
+  const x = cleanDuplex();
+  assert.ok(runRentalAudit(x).findings.some((f) => f.checkId === 'EXPENSE_TOTAL_FOOTS'),
+    'nobody charges them a management fee, so nothing is missing from the list');
+});
+
 // --- the rest of the catalog ------------------------------------------------
 
 test('the under-rented unit is measured against its own building, not the market', () => {

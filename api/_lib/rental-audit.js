@@ -150,6 +150,48 @@ function label(key) {
   return raw.replace(/[_-]+/g, ' ');
 }
 
+// --- completeness -----------------------------------------------------------
+//
+// A "confirmed arithmetic error" is the strongest thing this product says. It
+// sends a landlord to their property manager to ask why a statement is short.
+// It has to be right every time, and the failure mode is not bad arithmetic —
+// the subtraction is trivial — it is an extracted list with a line missing.
+//
+// Both live reports on 2026-09-09 hit it. One announced a $5,480 hole that was
+// exactly the management fee, recorded in the management object and left out of
+// the expense list. The other announced a $2,415 hole that was exactly the
+// repairs line, itemised into maintenance_items and left out of the expense
+// list. Both led the report. Both would have been read as an accusation.
+//
+// The extractor is now told plainly not to do that. This is the half of the fix
+// that does not depend on it complying: three ways of noticing that a list is
+// short, any of which makes the check decline to run and say so, because
+// "we could not test your totals" costs a customer nothing and "your manager
+// is short $5,480" costs them a relationship.
+function listIsComplete(recorded, printedCount, alsoExpected) {
+  const printed = num(printedCount);
+  if (printed !== null && recorded.length !== printed) return false;
+  for (const expected of alsoExpected || []) {
+    if (expected) return false;
+  }
+  return true;
+}
+
+function expenseListIsComplete(x) {
+  const lines = arr(x.expenses);
+  const hasCategory = (c) => lines.some((e) => e && e.category === c);
+  const management = x.management || {};
+  return listIsComplete(lines, x.expense_lines_printed, [
+    // A fee recorded in the management object with no matching expense line is
+    // the exact shape of the first false positive.
+    management.self_managed !== true
+      && (num(management.fee_annual) !== null || num(management.fee_percent) !== null)
+      && !hasCategory('management'),
+    // And a repairs total with no repairs line is the shape of the second.
+    num(x.maintenance_total_stated) !== null && !hasCategory('repairs_maintenance'),
+  ]);
+}
+
 // --- the catalog ------------------------------------------------------------
 //
 // Each entry declares what it needs, so a check that cannot run is reported by
@@ -170,7 +212,8 @@ function check(id, checkLabel, needs, run, opts) {
 check(
   'MAINT_SCHEDULE_FOOTS',
   'Repair line items add up to the repairs total billed',
-  (x) => arr(x.maintenance_items).length >= 2 && num(x.maintenance_total_stated) !== null,
+  (x) => arr(x.maintenance_items).length >= 2 && num(x.maintenance_total_stated) !== null
+    && listIsComplete(arr(x.maintenance_items), x.maintenance_lines_printed),
   (x) => {
     const items = arr(x.maintenance_items).map((i) => num(i.amount)).filter((n) => n !== null);
     const itemised = sum(items);
@@ -216,7 +259,8 @@ check(
 check(
   'EXPENSE_TOTAL_FOOTS',
   'Operating expense lines add up to the stated total',
-  (x) => arr(x.expenses).length >= 3 && num(x.expense_total_stated) !== null,
+  (x) => arr(x.expenses).length >= 3 && num(x.expense_total_stated) !== null
+    && expenseListIsComplete(x),
   (x) => {
     // Subtotal rows are excluded by the extractor. If one slipped through it
     // would show up as a large positive gap, so the tolerance stays tight and
