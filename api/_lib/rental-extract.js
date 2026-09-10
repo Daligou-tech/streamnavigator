@@ -284,6 +284,59 @@ Do NOT populate prior_period from a single period's figures, and do not estimate
 
 Respond ONLY by calling the record_rental_documents tool.`;
 
+// --- shape normalisation ----------------------------------------------------
+//
+// The tool schema declares objects and arrays. The model does not always return
+// them as objects and arrays — sometimes a field arrives as a STRING containing
+// the JSON that should have been the value.
+//
+// This has now cost two features. The first was missing_or_uncertain on the
+// report side, which threw in the browser and silently cancelled the emailed
+// copy. The second was prior_period on submission b6cdbf87: the extractor read
+// the prior-year column perfectly — fifteen categorised expense lines, both
+// dates, the totals — and handed it over as a string. Every downstream guard
+// asked `Array.isArray(prior.expenses)`, got false, and the year-over-year
+// comparison the customer uploaded a two-year statement for simply did not
+// appear. Nothing failed. Nothing was logged. The section was just absent.
+//
+// The content was right both times. Only the container was wrong, so the fix is
+// to open the container rather than to retry or to discard.
+function parseMaybeJson(value) {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  const opener = trimmed.charAt(0);
+  if (opener !== '{' && opener !== '[') return value;
+  const close = trimmed.lastIndexOf(opener === '{' ? '}' : ']');
+  if (close <= 0) return value;
+  try {
+    return JSON.parse(trimmed.slice(0, close + 1));
+  } catch (err) {
+    return value;
+  }
+}
+
+const OBJECT_FIELDS = ['property', 'income', 'loan', 'debt_service', 'insurance', 'management', 'taxes', 'prior_period'];
+const ARRAY_FIELDS = ['units', 'expenses', 'maintenance_items', 'utility_months', 'utilities_owner_paid', 'documents_seen', 'unreadable'];
+
+function normalizeExtraction(raw) {
+  const x = Object.assign({}, raw || {});
+
+  for (const key of OBJECT_FIELDS) {
+    const value = parseMaybeJson(x[key]);
+    x[key] = (value && typeof value === 'object' && !Array.isArray(value)) ? value : undefined;
+  }
+  for (const key of ARRAY_FIELDS) {
+    const value = parseMaybeJson(x[key]);
+    x[key] = Array.isArray(value) ? value : [];
+  }
+  if (x.prior_period) {
+    const expenses = parseMaybeJson(x.prior_period.expenses);
+    x.prior_period.expenses = Array.isArray(expenses) ? expenses : [];
+    x.prior_period.income = parseMaybeJson(x.prior_period.income) || undefined;
+  }
+  return x;
+}
+
 // Two attempts, because a truncated or missing tool call is worth one retry
 // before a paying customer's report falls back to a thinner analysis.
 async function extractRentalDocuments(apiKey, contentBlocks, options) {
@@ -327,7 +380,7 @@ async function extractRentalDocuments(apiKey, contentBlocks, options) {
       lastError = new Error('Extraction returned no structured result');
       continue;
     }
-    return toolUse.input;
+    return normalizeExtraction(toolUse.input);
   }
 
   throw lastError || new Error('Document extraction failed');
@@ -335,6 +388,7 @@ async function extractRentalDocuments(apiKey, contentBlocks, options) {
 
 module.exports = {
   extractRentalDocuments,
+  normalizeExtraction,
   EXTRACT_TOOL,
   EXTRACT_SYSTEM,
   EXTRACT_MODEL,

@@ -208,3 +208,85 @@ test('dates are parsed in the formats these documents actually print, and no oth
   assert.equal(parseDate('13/45/2025').toISOString().slice(0, 4), '2026',
     'JS date rollover is accepted rather than special-cased — a nonsense date fails the period checks anyway');
 });
+
+// --- the container, not the content -----------------------------------------
+//
+// Submission b6cdbf87 uploaded a two-year statement. The extractor read the
+// prior-year column perfectly — fifteen categorised lines, both dates, the
+// totals — and returned it as a STRING containing that JSON rather than as an
+// object. Every guard downstream asked Array.isArray(prior.expenses), got
+// false, and the comparison the customer had uploaded a second year for simply
+// did not appear. Nothing failed and nothing was logged.
+//
+// Second time this shape has cost a feature; missing_or_uncertain was the
+// first. The content is never what is wrong, so the fix is to open the
+// container rather than retry or discard.
+
+test('an extraction whose objects arrived as JSON strings is opened, not dropped', () => {
+  const { normalizeExtraction } = require('../api/_lib/rental-extract');
+  const raw = {
+    property: JSON.stringify({ address: '1428 Garfield Ave, Kansas City, MO 64127', unit_count: 4 }),
+    income: { period_start: '09/01/2025', period_end: '08/31/2026', gross_scheduled_rent: 57300 },
+    expenses: JSON.stringify([{ label: 'Water', category: 'water_sewer', annual_amount: 6240 }]),
+    prior_period: JSON.stringify({
+      period_start: '09/01/2024',
+      period_end: '08/31/2025',
+      gross_scheduled_rent: 56100,
+      expenses: [{ label: 'Water', category: 'water_sewer', annual_amount: 4180 }],
+    }),
+  };
+  const x = normalizeExtraction(raw);
+  assert.equal(x.property.address, '1428 Garfield Ave, Kansas City, MO 64127');
+  assert.ok(Array.isArray(x.expenses) && x.expenses.length === 1);
+  assert.ok(Array.isArray(x.prior_period.expenses), 'this is the guard that silently failed');
+  assert.equal(x.prior_period.expenses[0].annual_amount, 4180);
+});
+
+test('normalising an extraction leaves a well-formed one untouched', () => {
+  const { normalizeExtraction } = require('../api/_lib/rental-extract');
+  const good = {
+    property: { address: '1428 Garfield Ave' },
+    income: { period_start: '09/01/2025' },
+    expenses: [{ label: 'Water', category: 'water_sewer', annual_amount: 6240 }],
+    units: [{ unit_id: '1', monthly_rent: 950 }],
+    expense_total_stated: 40688,
+  };
+  const x = normalizeExtraction(good);
+  assert.deepEqual(x.expenses, good.expenses);
+  assert.deepEqual(x.units, good.units);
+  assert.equal(x.expense_total_stated, 40688, 'scalars are not touched');
+  assert.equal(x.prior_period, undefined, 'and an absent field stays absent rather than becoming {}');
+});
+
+test('a field that is neither an object nor parseable JSON does not become junk', () => {
+  const { normalizeExtraction } = require('../api/_lib/rental-extract');
+  const x = normalizeExtraction({ property: 'the house on the corner', expenses: 'none provided', units: 42 });
+  assert.equal(x.property, undefined, 'prose where an object belongs is dropped, not half-parsed');
+  assert.deepEqual(x.expenses, []);
+  assert.deepEqual(x.units, []);
+});
+
+test('the trend runs end to end on an extraction that arrived stringified', () => {
+  const { normalizeExtraction } = require('../api/_lib/rental-extract');
+  const x = normalizeExtraction(Object.assign({}, CURRENT, {
+    prior_period: JSON.stringify({
+      period_start: '09/01/2024',
+      period_end: '08/31/2025',
+      gross_scheduled_rent: 56100,
+      expenses: priorPeriod().expenses,
+    }),
+  }));
+  const prior = {
+    source: 'prior_period_in_documents',
+    address: x.property.address,
+    income: {
+      period_start: x.prior_period.period_start,
+      period_end: x.prior_period.period_end,
+      gross_scheduled_rent: x.prior_period.gross_scheduled_rent,
+    },
+    expenses: x.prior_period.expenses,
+  };
+  const result = runRentalTrend(x, prior);
+  assert.ok(result.comparedTo, 'the comparison the customer paid for now appears');
+  assert.equal(byId(result, 'TREND_REPAIRS_MAINTENANCE').dollarImpact, 3300);
+});
