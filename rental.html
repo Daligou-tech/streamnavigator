@@ -43,6 +43,12 @@
     background-clip:initial; color:var(--ink-soft); font-style:italic; }
   .logo, .stat-value, .price-amount{ font-family:"Newsreader",Georgia,serif; font-weight:600; letter-spacing:-0.01em; }
   .sub, .section-head p, .desc, .field-hint, .btn-note{ color:var(--ink-soft); }
+  /* The document list is the thing that takes a report from 6 of 15 checks to
+     15 of 15, and it was rendering at 12px as if it were fine print. Raised to
+     the size of the form's own input text — a real increase, still subordinate
+     to the 17px body. */
+  .field-hint{ font-size:15px; line-height:1.55; }
+  .field-hint strong{ color:var(--ink); font-weight:600; }
   .eyebrow{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
     letter-spacing:.14em; text-transform:uppercase; font-size:.72rem; color:var(--ink-soft); }
   .pill{ border:1px solid var(--border); border-radius:2px; background:var(--surface);
@@ -119,7 +125,7 @@
   <section class="hero" style="padding-bottom:8px;">
     <div class="wrap">
       <div class="pill"><span class="dot">✓</span> Do you own at least one rental property?</div>
-      <h1>The leaks your statement <span class="grad">doesn't mention.</span></h1>
+      <h1>Find the Leaks in Your Statements</h1>
       <p class="sub">Upload your rent roll, statement and mortgage documents. We re-run the arithmetic on them — every total, every unit, every charge — and show you what doesn't hold up, with the letters to send about it.</p>
     </div>
   </section>
@@ -214,8 +220,8 @@
         <div id="entitlement-note" hidden style="margin:16px 0 4px; padding:14px 16px; border:2px solid var(--ink); background:var(--bg-alt); font-size:14.5px; line-height:1.55;"></div>
 
         <div class="field-block">
-          <label>Tell us about your property/portfolio</label>
-          <textarea id="intake-description" placeholder="e.g. 4-unit multifamily, purchased 2019, self-managed..."></textarea>
+          <label>Anything your documents don't say (optional)</label>
+          <textarea id="intake-description" placeholder="e.g. self-managed since 2022 · water bill jumped after a tenant moved in · thinking of selling next year"></textarea>
         </div>
         <div class="field-block">
           <label>Upload your documents — every one you add unlocks more checks</label>
@@ -240,12 +246,6 @@
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers maintenance, utilities, insurance, rents, management fees and debt service</li>
-          <li><span class="tick">✓</span> Ranked by dollar impact</li>
-          <li><span class="tick">✓</span> Drafted letters to your servicer, manager and agent</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
-        </ul>
         <a href="https://buy.stripe.com/4gM14nfIM5QggEQa80abK06" data-stripe-link="rental" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
