@@ -30,7 +30,10 @@ const { runDocumentAudit } = require('./closing-service');
 const { buildEmails } = require('./closing-emails');
 const { rankFindings, Severity } = require('./closing-audit');
 const { extractRentalDocuments } = require('./rental-extract');
-const { runRentalAudit, Severity: RentalSeverity } = require('./rental-audit');
+const {
+  runRentalAudit, rankFindings: rankRentalFindings, Severity: RentalSeverity,
+} = require('./rental-audit');
+const { runRentalTrend, sameProperty } = require('./rental-trend');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 
@@ -164,7 +167,7 @@ The deterministic audit engine has already run every check and produced a ranked
 
 Hard rules:
 - Never state a dollar figure, ratio, threshold or comparison that is not present in the findings you were given. If a cost is not covered by a finding, it is not in the report.
-- Never upgrade a severity. Reproduce the engine's language: a confirmed arithmetic error, a recoverable charge, a unit below comparable units in the same property, an unrecovered owner cost, a cost above a typical range, a capital decision due, something requiring documentation, or within norms. Never say a charge is illegal or improper, never promise a refund, and never call a cost excessive unless the finding says so.
+- Never upgrade a severity. Reproduce the engine's language: a confirmed arithmetic error, a recoverable charge, a unit below comparable units in the same property, an unrecovered owner cost, a cost that rose against the property's own prior period, a cost above a typical range, a capital decision due, something requiring documentation, or within norms. Never say a charge is illegal or improper, never promise a refund, and never call a cost excessive unless the finding says so.
 - THE DOCUMENTS ARE ATTACHED SO YOU CAN QUOTE THEM, NOT SO YOU CAN AUDIT THEM. You will see costs in these documents that no finding mentions. That is the normal case and it needs no explanation: an expense with no finding simply does not appear in the report. Do not list it, do not total it, do not account for its absence, and do not create a section to hold it. Quote the documents only to support a finding you were given — a line label, a date, a lease term.
 - CARRY THE IMPACT KIND THROUGH, every time you state a dollar figure. "recoverable" is money that stops leaving the account once the landlord acts. "excess" is the amount above the property's own baseline. "exposure" is the total currently being borne, only part of which is addressable — an exposure figure is NEVER a saving and must never be described as one, or added into a total of savings. "unexplained" is a discrepancy, not yet money. Never total figures of different kinds together.
 - Distinguish hard rules from market norms exactly as the finding's evidence basis does. Arithmetic from the landlord's own documents, a comparison between units in their own building, and a standard lender threshold are things they can hold someone to. A typical range is not — it is a reason to ask a question.
@@ -175,8 +178,9 @@ HEADLINE AND ORDERING — this determines whether the report reads as work deliv
 Lead with the strongest TRUE statement available, in this order of preference:
 1. Confirmed arithmetic errors or recoverable charges, with the dollar figure.
 2. A unit below comparable units in the same property, or an unrecovered owner cost, with the dollar figure.
-3. Costs above a typical range, or a capital decision that is due.
-4. If there are none of the above: lead with WHAT WAS VERIFIED, and lead with the coverage figure alongside it. Name the specific checks that passed and the numbers behind them — the expense lines adding up to their own total, the escrow reconciling to the taxes and insurance it funds, every unit priced in line with the ones beside it, no system absorbing repeat repair visits. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on these documents was independently reproduced and holds.
+3. A cost that rose against this property's own earlier period, with the dollar increase and the percentage. State which period it is measured against.
+4. Costs above a typical range, or a capital decision that is due.
+5. If there are none of the above: lead with WHAT WAS VERIFIED, and lead with the coverage figure alongside it. Name the specific checks that passed and the numbers behind them — the expense lines adding up to their own total, the escrow reconciling to the taxes and insurance it funds, every unit priced in line with the ones beside it, no system absorbing repeat repair visits. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on these documents was independently reproduced and holds.
 
 A landlord who is told their property is running clean has bought exactly what they came for, and the report must deliver that as a result rather than apologise for the absence of problems. Do not hedge it, do not pad it with things to worry about, and do not imply they got less than a customer with a leaking building did. They paid to find out, and finding out is the service.
 
@@ -340,6 +344,81 @@ function normalizeReport(input) {
   out.key_numbers = (Array.isArray(out.key_numbers) ? out.key_numbers : [])
     .filter((n) => n && typeof n === 'object' && (n.label || n.value));
   return out;
+}
+
+// Finds an earlier period to compare this one against, preferring the one that
+// needs no matching at all.
+//
+// A prior-year column printed beside the current one came out of the same
+// document, so it is definitionally the same building and it works on a
+// customer's first purchase. An earlier submission is the one that makes coming
+// back next year worth something, and it has to clear an address check first —
+// a landlord with three properties will have three histories under one email,
+// and comparing the wrong two would report every difference between two
+// buildings as a year-over-year change.
+async function resolvePriorPeriod(admin, submission, extraction) {
+  const inDocuments = extraction.prior_period;
+  if (inDocuments && Array.isArray(inDocuments.expenses) && inDocuments.expenses.length) {
+    return {
+      source: 'prior_period_in_documents',
+      address: (extraction.property || {}).address || null,
+      income: {
+        period_start: inDocuments.period_start,
+        period_end: inDocuments.period_end,
+        gross_scheduled_rent: inDocuments.gross_scheduled_rent,
+        total_collected: inDocuments.total_collected,
+        net_operating_income: inDocuments.net_operating_income,
+      },
+      expenses: inDocuments.expenses,
+      expense_total_stated: inDocuments.expense_total_stated,
+    };
+  }
+
+  if (!submission.email) return null;
+
+  // Scoped to this customer's own email, so a history is only ever compared
+  // against itself.
+  const { data: earlier, error } = await admin
+    .from('navigator_submissions')
+    .select('id, form_data, created_at')
+    .eq('product', 'rental')
+    .eq('email', submission.email)
+    .eq('status', 'complete')
+    .neq('id', submission.id)
+    .order('created_at', { ascending: false })
+    .limit(8);
+  if (error) return null;
+
+  const candidates = (earlier || [])
+    .map((row) => {
+      // Not named `stored`: tests/wiring.test.js reads `stored.<key>` in this
+      // file as a closing form_data key, and these are fields of a rental
+      // extraction rather than storage keys of any kind.
+      const priorExtraction = (row.form_data || {}).rental_extraction;
+      if (!priorExtraction
+        || !priorExtraction.income
+        || !Array.isArray(priorExtraction.expenses)
+        || !priorExtraction.expenses.length) return null;
+      return {
+        source: 'earlier_submission',
+        address: (priorExtraction.property || {}).address || null,
+        income: priorExtraction.income,
+        expenses: priorExtraction.expenses,
+        expense_total_stated: priorExtraction.expense_total_stated,
+        submissionId: row.id,
+      };
+    })
+    .filter(Boolean);
+
+  if (!candidates.length) return null;
+
+  const currentAddress = (extraction.property || {}).address;
+  const matched = candidates.find((c) => sameProperty(currentAddress, c.address));
+  // No match still returns the most recent, so runRentalTrend can report that a
+  // history exists and could not be tied to this property — a customer whose
+  // address is printed differently on two statements deserves to know why the
+  // comparison they were expecting is missing.
+  return matched || candidates[0];
 }
 
 function guessMediaType(filename) {
@@ -651,11 +730,30 @@ async function generateNavigatorReport(submissionId) {
 
       const audited = extraction ? runRentalAudit(extraction) : { findings: [], skipped: [], checksRun: 0 };
 
-      if (audited.findings.length) {
-        const flagged = audited.findings.filter((f) => f.severity !== RentalSeverity.WITHIN_NORMS);
-        const passed = audited.findings.filter((f) => f.severity === RentalSeverity.WITHIN_NORMS);
+      // Year over year, when there is a year to compare against. Merged into the
+      // same ranked list rather than bolted on at the end: a cost that rose 40%
+      // against the same building last year outranks one that merely sits above
+      // a typical range, and the ordering has to say so.
+      let trend = { findings: [], skipped: [], comparedTo: null };
+      if (extraction) {
+        try {
+          const prior = await resolvePriorPeriod(admin, submission, extraction);
+          if (prior) trend = runRentalTrend(extraction, prior);
+        } catch (err) {
+          // A comparison that cannot be built is a missing section, not a
+          // missing report. The fifteen checks stand on their own.
+          console.error('[rental] year-over-year comparison failed:', err.message);
+        }
+      }
 
-        draftedEmails = buildRentalEmails(audited.findings, {
+      const allFindings = rankRentalFindings(audited.findings.concat(trend.findings));
+      const allSkipped = audited.skipped.concat(trend.skipped);
+
+      if (allFindings.length) {
+        const flagged = allFindings.filter((f) => f.severity !== RentalSeverity.WITHIN_NORMS);
+        const passed = allFindings.filter((f) => f.severity === RentalSeverity.WITHIN_NORMS);
+
+        draftedEmails = buildRentalEmails(allFindings, {
           propertyAddress: (extraction.property || {}).address || null,
           managerName: (extraction.management || {}).company_name || null,
         });
@@ -689,9 +787,24 @@ async function generateNavigatorReport(submissionId) {
           'documents, not the property, are the limit, and the report must name the specific documents',
           'that would raise it — a mortgage statement, a declarations page, a statement showing the',
           'monthly utility figures. Never let a low-coverage report read as a clean bill of health.',
-          audited.skipped.length
+          trend.comparedTo
+            ? [
+              '',
+              `YEAR OVER YEAR — this property was compared against its own ${trend.comparedTo.label} period, `
+                + `taken from ${trend.comparedTo.source === 'earlier_submission'
+                  ? 'the audit this customer bought previously'
+                  : 'the earlier column printed in the documents they uploaded'}.`,
+              'Give this its own section and say which period it is against. These findings are the one',
+              'place the audit can call a cost high without appealing to what is typical anywhere else —',
+              'the comparison is the same building twelve months earlier, which is a fact about their',
+              'property. Say that, because it is what makes the number worth acting on.',
+              'Never compare figures the engine did not compare, and never extend the comparison to a',
+              'line that is not in a finding.',
+            ].join('\n')
+            : '',
+          allSkipped.length
             ? `Checks that could not be run because the required figures were missing or unreadable: `
-              + `${audited.skipped.join('; ')}. Say so plainly rather than implying they passed.`
+              + `${allSkipped.join('; ')}. Say so plainly rather than implying they passed.`
             : '',
           (extraction.unreadable || []).length
             ? `The extraction could not read these parts of the documents: ${(extraction.unreadable || []).join('; ')}.`

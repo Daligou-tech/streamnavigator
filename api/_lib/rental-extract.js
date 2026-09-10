@@ -94,6 +94,36 @@ const EXTRACT_TOOL = {
         type: 'number',
         description: 'The total operating expenses figure the statement itself prints. Null if it prints none.',
       },
+      prior_period: {
+        type: 'object',
+        description: 'A SECOND, EARLIER period, recorded ONLY when the documents actually contain one — a '
+          + 'prior-year column beside the current one, a comparative statement, or a second statement for an '
+          + 'earlier year among the uploads. Many owner statements and P&Ls print one. Omit this entirely when '
+          + 'the documents show a single period; never derive, estimate or carry figures across from the current '
+          + 'period to fill it.',
+        properties: {
+          period_start: { type: 'string' },
+          period_end: { type: 'string' },
+          gross_scheduled_rent: { type: 'number' },
+          total_collected: { type: 'number' },
+          net_operating_income: { type: 'number', description: 'Only if stated.' },
+          expense_total_stated: { type: 'number' },
+          expenses: {
+            type: 'array',
+            description: 'The earlier period\'s expense lines, categorised exactly as the current period\'s are, '
+              + 'so the two can be compared line for line.',
+            items: {
+              type: 'object',
+              properties: {
+                label: { type: 'string' },
+                category: { type: 'string', enum: EXPENSE_CATEGORIES },
+                annual_amount: { type: 'number' },
+              },
+              required: ['label', 'category', 'annual_amount'],
+            },
+          },
+        },
+      },
       expense_lines_printed: {
         type: 'number',
         description: 'Count the individual expense lines printed in the statement\'s operating expense section — '
@@ -241,6 +271,10 @@ The only rows to leave out are subtotals and totals. Where a statement lists sev
 3a. Then count. Count the expense lines printed on the page and put that number in expense_lines_printed, and do the same for the repair schedule in maintenance_lines_printed. If your count and your list disagree, the audit declines to judge the totals rather than reporting a discrepancy it cannot stand behind — which is the outcome we want over a confident wrong answer.
 
 3b. Where an operating statement carries its own debt service section, record it: principal and interest, mortgage insurance, and the total, in debt_service.
+
+3c. IF THE DOCUMENTS CONTAIN AN EARLIER PERIOD, RECORD IT IN prior_period. A prior-year column beside the current one, a comparative statement, a second statement covering an earlier year — these are common and they are the most valuable thing in the upload after the current figures, because they let the audit compare the property against itself a year ago instead of against what is typical elsewhere. Categorise its expense lines exactly as you categorise the current period's, so the two line up. Record the dates it covers; without them the comparison cannot be made and will be declined.
+
+Do NOT populate prior_period from a single period's figures, and do not estimate one. If the documents show one period, omit the field.
 
 4. Classify into the enums given. Where a repair description names a system — a furnace, a condenser, a drain, a roof — classify it. Where nothing fits, use "other".
 

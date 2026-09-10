@@ -39,6 +39,9 @@ const Severity = {
   RECOVERABLE_CHARGE: 'recoverable_charge',
   BELOW_INTERNAL_COMP: 'below_internal_comparable',
   UNRECOVERED_COST: 'unrecovered_owner_cost',
+  // Proved against the same property twelve months earlier, which is why it
+  // outranks a comparison against what is typical elsewhere. See rental-trend.js.
+  COST_ROSE: 'rose_against_prior_period',
   ABOVE_TYPICAL_RANGE: 'above_typical_range',
   CAPITAL_DECISION: 'capital_decision_due',
   REQUIRES_DOCUMENTATION: 'requires_documentation',
@@ -50,10 +53,11 @@ const SEVERITY_ORDER = {
   [Severity.RECOVERABLE_CHARGE]: 1,
   [Severity.BELOW_INTERNAL_COMP]: 2,
   [Severity.UNRECOVERED_COST]: 3,
-  [Severity.ABOVE_TYPICAL_RANGE]: 4,
-  [Severity.CAPITAL_DECISION]: 5,
-  [Severity.REQUIRES_DOCUMENTATION]: 6,
-  [Severity.WITHIN_NORMS]: 7,
+  [Severity.COST_ROSE]: 4,
+  [Severity.ABOVE_TYPICAL_RANGE]: 5,
+  [Severity.CAPITAL_DECISION]: 6,
+  [Severity.REQUIRES_DOCUMENTATION]: 7,
+  [Severity.WITHIN_NORMS]: 8,
 };
 
 // What the finding rests on. The distinction that matters to a landlord is
