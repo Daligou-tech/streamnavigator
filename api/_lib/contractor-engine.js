@@ -21,6 +21,8 @@
 // key to the browser.
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
+const { sendFailureAlert } = require('./alerts');
+const { failurePatch } = require('./provider-outage');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -266,10 +268,39 @@ async function generateContractorReport(submissionId) {
 
     return report;
   } catch (err) {
-    await admin
-      .from('navigator_submissions')
-      .update({ status: 'failed', error: String(err.message || err).slice(0, 500), updated_at: new Date().toISOString() })
-      .eq('id', submissionId);
+    // The last engine that still failed in silence.
+    //
+    // On 2026-09-10 the generic engine was given an alert and an automatic
+    // refund, matching what the HOA engine had always done. Contractor was
+    // excluded from that sweep because it has its own path, and the exclusion
+    // quietly carried the defect with it: a customer whose contractor report
+    // died got a row reading 'failed', no alert to us, and no money back
+    // unless they wrote in. Same hole, one product further along.
+    //
+    // provider-outage.js decides which kind of failure this is. An account out
+    // of credit or a rate limit sends the row back to 'paid' instead, since
+    // that says nothing about the submission and refunding it would return
+    // money for a report the customer is still going to get.
+    const paidForReal = !!submission.stripe_checkout_session_id;
+    const { outage, patch } = failurePatch(err, { paidForReal });
+
+    await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
+
+    // One alert per distinct cause, not one per retry.
+    if (submission.error !== patch.error) {
+      try {
+        await sendFailureAlert({
+          submissionId,
+          product: 'contractor',
+          error: patch.error,
+          refundQueued: patch.refund_state === 'due',
+          paused: outage,
+        });
+      } catch (alertError) {
+        console.error('[contractor] failure alert could not be sent:', alertError.message);
+      }
+    }
+
     throw err;
   }
 }

@@ -41,6 +41,7 @@ const { runRentalOutcomes } = require('./rental-outcomes');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 const { sendFailureAlert } = require('./alerts');
+const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -1157,27 +1158,35 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // cannot queue money it never took. process-refunds re-checks that and
     // three other conditions before a cent moves, including that no report was
     // ever delivered for this submission.
+    // And NOT refunding an outage. See api/_lib/provider-outage.js: an account
+    // out of credit, a rate limit or a 5xx says nothing about this submission,
+    // so the row goes back to 'paid' for the five-minute sweep to retry rather
+    // than to 'failed' with the customer's money on its way back out.
     const paidForReal = !!submission.stripe_checkout_session_id;
-    const patch = {
-      status: 'failed',
-      error: String(err.message || err).slice(0, 500),
-      updated_at: new Date().toISOString(),
-    };
-    if (paidForReal) patch.refund_state = 'due';
+    const { outage, patch } = failurePatch(err, { paidForReal });
 
     await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
 
+    // One alert per submission per distinct cause, not one per attempt. During
+    // an outage the sweep retries three rows every five minutes, and an alarm
+    // that sends forty identical emails an hour is one nobody reads by the
+    // second hour — which is the state the original silence was preferable to.
+    const alreadyReported = submission.error === patch.error;
+
     // Never allowed to mask the original failure: an alert that cannot be sent
     // is a worse alert, not a worse report.
-    try {
-      await sendFailureAlert({
-        submissionId,
-        product: submission.product,
-        error: String(err.message || err).slice(0, 500),
-        refundQueued: paidForReal,
-      });
-    } catch (alertError) {
-      console.error('[navigator] failure alert could not be sent:', alertError.message);
+    if (!alreadyReported) {
+      try {
+        await sendFailureAlert({
+          submissionId,
+          product: submission.product,
+          error: patch.error,
+          refundQueued: patch.refund_state === 'due',
+          paused: outage,
+        });
+      } catch (alertError) {
+        console.error('[navigator] failure alert could not be sent:', alertError.message);
+      }
     }
 
     throw err;

@@ -28,6 +28,7 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateNavigatorReport } = require('./_lib/navigator-engine');
+const { deliverReportByEmail } = require('./_lib/report-delivery');
 
 // Everything api/_lib/navigator-engine.js generates, minus the three products
 // that already have a job of their own.
@@ -71,10 +72,33 @@ module.exports = async function handler(req, res) {
   for (const row of waiting || []) {
     try {
       await generateNavigatorReport(row.id);
-      results.push({ id: row.id, ok: true });
+
+      // And then actually give it to them.
+      //
+      // This sweep exists precisely for the customer who is NOT on the status
+      // page, so every report it produces is one nobody is watching arrive.
+      // Until this line, that report was written to the database and left
+      // there: the PDF email is sent by JavaScript on the status page, so a
+      // customer who paid and closed the tab got a complete, correct,
+      // undelivered report and no way to reach it — localStorage in the
+      // purchasing browser was the only route back to it, and the Stripe
+      // webhook sends nothing.
+      //
+      // Delivery failing must never turn a produced report into a failed one:
+      // the report is stored, the row says 'complete', and process-refunds
+      // must not see this as undelivered work. So it is reported, not thrown.
+      let delivery = 'skipped';
+      try {
+        delivery = await deliverReportByEmail(admin, row.id);
+      } catch (err) {
+        delivery = `error: ${String(err.message || err).slice(0, 120)}`;
+        console.error(`[generate-paid-navigator] delivery failed for ${row.id}:`, err.message);
+      }
+      results.push({ id: row.id, ok: true, delivery });
     } catch (err) {
-      // generateNavigatorReport has already written status:'failed' and the
-      // error onto the row, which is what api/process-refunds.js needs to see.
+      // generateNavigatorReport has already written the row: 'failed' with a
+      // refund queued where the failure was ours, or back to 'paid' where the
+      // model provider was simply unavailable and the next sweep should retry.
       // Swallowing here keeps one bad submission from stopping the sweep.
       results.push({ id: row.id, ok: false, error: String(err.message || err).slice(0, 200) });
     }

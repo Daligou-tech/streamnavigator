@@ -453,9 +453,40 @@ async function pollNavigatorSubmission(id, token, { onUpdate, intervalMs = 3000,
   return null;
 }
 
+// The reference to the customer's own submission: {id, token, product}.
+//
+// A URL beats localStorage when both exist, and that ordering is the whole
+// point of the change made on 2026-09-10. Until then this read localStorage
+// and nothing else, so a paid report was reachable from exactly one browser on
+// exactly one device — the one the purchase was made from. Clear the site
+// data, open the emailed receipt on a phone, or pay on a work laptop and look
+// on a home one, and the status page said "we couldn't find that submission"
+// about a report that existed and had been paid for.
+//
+// api/_lib/report-delivery.js now emails a link carrying ?id=&t=, and this is
+// what makes that link work. The reference is written back to localStorage on
+// arrival so a later visit to the bare URL still finds it.
 function getStoredSubmission() {
+  let stored = null;
   try {
     const raw = localStorage.getItem('sn_last_submission');
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+    stored = raw ? JSON.parse(raw) : null;
+  } catch (e) { stored = null; }
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    const token = params.get('t') || params.get('token');
+    // Both halves or neither. An id on its own is not a credential, and
+    // api/get-navigator-submission.js will refuse it — better to fall through
+    // to whatever localStorage has than to replace a working reference with a
+    // broken one.
+    if (id && token) {
+      const fromUrl = { id, token, product: params.get('p') || (stored && stored.product) || null };
+      try { localStorage.setItem('sn_last_submission', JSON.stringify(fromUrl)); } catch (e) { /* private mode */ }
+      return fromUrl;
+    }
+  } catch (e) { /* no URL API, or no window */ }
+
+  return stored;
 }

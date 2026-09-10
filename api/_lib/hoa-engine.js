@@ -643,12 +643,24 @@ const BILLING_PAUSE_MS = 15 * 60 * 1000;
 //              work, do not spend the retry budget.
 //   otherwise  a real failure of this attempt. Retry until the budget runs
 //              out, then stop and owe the customer their money back.
+// 'billing' is the older name for what api/_lib/provider-outage.js now calls an
+// outage, and the branch below still reads better under it: the pause, the
+// untouched attempt counter and the alert wording were all written for the
+// account-out-of-credit case.
+//
+// What changed on 2026-09-10 is the breadth. This matched billing errors only,
+// so a rate limit or a provider 5xx burned one of three attempts and, on the
+// third, refunded a customer whose report was still perfectly producible. None
+// of those is a fact about the submission, and none of them is fixed by trying
+// again immediately — which is exactly what the pause is for. The shared
+// definition keeps this engine, the generic one, contractor and buying
+// agreeing on which failures are ours and which are the provider's.
+const { isProviderOutage } = require('./provider-outage');
+
 function classifyFailure(err) {
-  const message = String((err && err.message) || err || '');
-  if (/credit balance is too low|insufficient[_ ]quota|billing|payment required|402/i.test(message)) {
-    return 'billing';
-  }
-  return 'attempt';
+  return isProviderOutage(err) || /payment required|\b402\b/i.test(String((err && err.message) || err || ''))
+    ? 'billing'
+    : 'attempt';
 }
 
 function anthropicClient() {

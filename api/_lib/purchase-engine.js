@@ -35,6 +35,7 @@
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const { sendFailureAlert } = require('./alerts');
+const { failurePatch } = require('./provider-outage');
 const { fieldsForCategory, CATEGORIES } = require('../../navigator-buying-rules');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -3360,13 +3361,37 @@ async function generatePurchaseReport(submissionId) {
 
     return genericReport;
   } catch (err) {
-    const errorMessage = String(err.message || err).slice(0, 500);
-    await admin
-      .from('navigator_submissions')
-      .update({ status: 'failed', error: errorMessage, updated_at: new Date().toISOString() })
-      .eq('id', submissionId);
-    if (submission.auto_recovery_attempted) {
-      await sendFailureAlert({ submissionId, product: 'buying', error: errorMessage });
+    // Two changes here on 2026-09-10, both from the same audit.
+    //
+    // An outage is no longer a failure. An account out of credit or a rate
+    // limit says nothing about this submission, and marking it 'failed' costs
+    // the retry that api/retry-failed-buying.js would otherwise have to
+    // arrange — see api/_lib/provider-outage.js. Back to 'paid' instead, which
+    // is the state that gets picked up again.
+    //
+    // And a real failure now returns the money. This engine alerted but never
+    // queued a refund, so buying was the one product where the status page
+    // asked the customer to write in and ask for one. It is queued only where
+    // a Stripe session exists, and process-refunds re-checks three more
+    // conditions before a cent moves.
+    const paidForReal = !!submission.stripe_checkout_session_id;
+    const { outage, patch } = failurePatch(err, { paidForReal });
+
+    await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
+
+    // The auto_recovery_attempted gate stays for ordinary failures: this engine
+    // retries on its own, and alerting on an attempt that the next one fixes is
+    // how an alarm becomes noise. An outage is exempt, because nothing this
+    // engine does on its own can clear one.
+    const worthReporting = outage || submission.auto_recovery_attempted;
+    if (worthReporting && submission.error !== patch.error) {
+      await sendFailureAlert({
+        submissionId,
+        product: 'buying',
+        error: patch.error,
+        refundQueued: patch.refund_state === 'due',
+        paused: outage,
+      });
     }
     throw err;
   }
