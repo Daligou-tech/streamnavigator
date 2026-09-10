@@ -25,6 +25,13 @@
 // with price_cents = 0, and grantEntitlement declines those, so the year cannot
 // extend itself.
 
+// The products a payment actually buys a year of. Exported because the page
+// copy is tested against it: tests/navigator-claims.test.js fails the build if
+// any product page sells a year while its product is not on this list, which
+// is the exact drift that put "$149/year" and "a full year of monitoring" on
+// five pages with nothing behind them.
+const ENTITLED_PRODUCTS = ['rental'];
+
 const ENTITLEMENT_MONTHS = 12;
 const RUNS_ALLOWED = 4;
 
@@ -45,7 +52,7 @@ function addMonths(date, months) {
 // constraint on source_submission_id means a retried generation cannot hand a
 // customer a second year.
 async function grantEntitlement(admin, submission, extraction) {
-  if (!submission || submission.product !== 'rental' || !submission.email) return null;
+  if (!submission || !ENTITLED_PRODUCTS.includes(submission.product) || !submission.email) return null;
 
   // A re-audit spent from an existing entitlement must not create a new one.
   if (submission.price_cents === 0) return null;
@@ -147,6 +154,7 @@ module.exports = {
   grantEntitlement,
   checkEntitlement,
   consumeEntitlement,
+  ENTITLED_PRODUCTS,
   ENTITLEMENT_MONTHS,
   RUNS_ALLOWED,
   _internal: { addMonths },

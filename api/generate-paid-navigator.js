@@ -1,7 +1,6 @@
-// Scheduled sweep for rental submissions that were paid for and never
-// generated.
+// Scheduled sweep for submissions that were paid for and never generated.
 //
-// Rental reports are produced by api/get-navigator-submission.js, which runs
+// These reports are produced by api/get-navigator-submission.js, which runs
 // when the customer's browser polls the status page. That is fine while the
 // customer is watching. It is not fine when they are not: a landlord who pays,
 // sees the Stripe receipt and closes the tab leaves a row sitting at 'paid'
@@ -9,11 +8,15 @@
 // emailed, and api/process-refunds.js never sees them either, because that only
 // considers rows that reached 'failed'. Paid, silent, and invisible.
 //
-// The 2026-09-09 product audit found this and it has since got worse on purpose:
-// the rental pipeline now makes two model calls rather than one — documents are
-// read into figures, then the deterministic checks run, then the write-up — so
-// the wait a customer has to sit through is longer and the odds of them walking
-// away are higher.
+// The 2026-09-09 product audit found this on rental and it was fixed there
+// alone, which was the wrong scope: the same browser-triggered generation runs
+// nine products, and a customer of any of them who pays and closes the tab gets
+// nothing and is not refunded either, because api/process-refunds.js only
+// considers rows that reached "failed".
+//
+// buying, hoa and contractor are excluded because each already has a job of its
+// own — retry-failed-buying, hoa-job, and the contractor engine's own path — and
+// two sweeps racing the same row would pay for the same report twice.
 //
 // Two minutes of grace before this picks a row up, so the ordinary case (the
 // customer IS on the page, and generation is already running inside their poll)
@@ -25,6 +28,13 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateNavigatorReport } = require('./_lib/navigator-engine');
+
+// Everything api/_lib/navigator-engine.js generates, minus the three products
+// that already have a job of their own.
+const SWEPT_PRODUCTS = [
+  'property-tax', 'home-savings', 'rental', 'subscriptions', 'government-money',
+  'home-maintenance', 'landlord', 'insurance', 'closing',
+];
 
 const GRACE_MINUTES = 2;
 const MAX_PER_SWEEP = 3;
@@ -42,7 +52,7 @@ module.exports = async function handler(req, res) {
   const { data: waiting, error: fetchError } = await admin
     .from('navigator_submissions')
     .select('id, updated_at')
-    .eq('product', 'rental')
+    .in('product', SWEPT_PRODUCTS)
     .eq('status', 'paid')
     .lt('updated_at', cutoff)
     .order('updated_at', { ascending: true })

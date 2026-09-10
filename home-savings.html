@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Home Savings Navigator — StreamNavigator AI</title>
-<meta name="description" content="Upload your household bills and recurring expenses. Home Savings Navigator finds concrete opportunities to cancel, downgrade, switch, or renegotiate — for $49/year." />
+<meta name="description" content="Upload your household bills and recurring expenses. Home Savings Navigator finds concrete opportunities to cancel, downgrade, switch, or renegotiate — $49, once." />
 <link rel="canonical" href="https://streamnavigator.ai/home-savings" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,13 +57,13 @@
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
-        <h4>Pay $49/year</h4>
+        <h4>Make a One-Time Payment</h4>
         <p>Covers a full audit now, plus a refreshed check as your bills change through the year.</p>
       </div>
       <div class="step-card">
         <div class="step-num">3</div>
         <h4>AI reviews every line</h4>
-        <p>Each bill is checked against typical market rates and better available options.</p>
+        <p>Each bill is checked against what that kind of service typically costs, and says so when it cannot be sure.</p>
       </div>
       <div class="step-card">
         <div class="step-num">4</div>
@@ -81,7 +81,7 @@
     <div class="wrap" style="max-width:680px;">
       <div class="check-card">
         <ul class="check-list">
-          <li><span class="tick">✓</span> Which recurring expenses are priced above market rate</li>
+          <li><span class="tick">✓</span> Which recurring expenses look priced above what that service usually costs</li>
           <li><span class="tick">✓</span> What to cancel outright</li>
           <li><span class="tick">✓</span> What to downgrade without losing what you actually use</li>
           <li><span class="tick">✓</span> What to switch providers for, and to whom</li>
@@ -97,7 +97,7 @@
     ============================================================================
     To go live for Home Savings Navigator:
       1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Home Savings Navigator Report" — $49 per year
+           "Home Savings Navigator Report" — $49 one-time
       2. Payment links -> New -> pick that price -> Create link.
       3. In the link's "After payment" step, set the redirect to:
            https://streamnavigator.ai/navigator-status
@@ -115,7 +115,7 @@
   <section id="pricing">
     <div class="section-head">
       <div class="eyebrow">Get started</div>
-      <h2>One price. A full year of checks.</h2>
+      <h2>One price. One full bill audit.</h2>
       <p>Upload your bills, pay once, get your savings plan.</p>
     </div>
     <div class="single-price-wrap">
@@ -123,8 +123,8 @@
         <span class="price-badge">One-time</span>
         <h3>Home Savings Navigator Report</h3>
         <p class="desc">A full recurring-expense audit, with a refresh as your bills change.</p>
-        <div class="price-amount">$49<span>/year</span></div>
-        <div class="price-period">billed once per year</div>
+        <div class="price-amount">$49</div>
+        <div class="price-period">charged once &middot; not a subscription</div>
 
         <div class="field-block">
           <label>What kinds of bills are you uploading?</label>
@@ -148,7 +148,7 @@
         <ul class="price-feats">
           <li><span class="tick">✓</span> Covers utilities, insurance, memberships, subscriptions, and more</li>
           <li><span class="tick">✓</span> Ranked by expected savings, highest first</li>
-          <li><span class="tick">✓</span> One price covers a full year of audits</li>
+          <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
         <a href="https://buy.stripe.com/6oU8wPdAE92sdsE6VOabK05" data-stripe-link="home-savings" class="btn btn-primary" id="pay-btn">Get My Report →</a>
@@ -182,8 +182,8 @@
         <div class="faq-a"><div class="faq-a-inner">You'll be told that plainly — the report only recommends changes that are actually worth your time.</div></div>
       </div>
       <div class="faq-item">
-        <button class="faq-q">Can I re-upload later in the year? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes — your $49/year covers refreshed audits as your bills change.</div></div>
+        <button class="faq-q">What if my bills change later? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Each audit is its own $49 report. There is no recurring charge and nothing to cancel — and equally, nothing already paid for sitting unused. If your bills move enough to be worth re-checking, that is a fresh upload and a fresh report.</div></div>
       </div>
     </div>
   </section>
@@ -230,7 +230,7 @@
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Home Savings Navigator provides AI-generated recommendations for informational purposes only and does not execute any cancellation, downgrade, or switch on your behalf. Estimated savings are based on published rates and market information at the time of your report and may vary.</p>
+  <p class="footer-disclaimer">Home Savings Navigator provides AI-generated recommendations for informational purposes only and does not execute any cancellation, downgrade, or switch on your behalf. Estimated savings are reasoned from what that kind of service typically costs and are labelled as estimates, not quotes. We do not hold a database of current prices and do not look them up, so anything specific should be checked with the provider before you act on it.</p>
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>

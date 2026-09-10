@@ -41,7 +41,7 @@
       "schedule": "*/10 * * * *"
     },
     {
-      "path": "/api/generate-paid-rental",
+      "path": "/api/generate-paid-navigator",
       "schedule": "*/5 * * * *"
     },
     {
@@ -83,11 +83,11 @@
     "api/closing-scorecard.js": {
       "maxDuration": 300
     },
-    "api/generate-paid-rental.js": {
-      "maxDuration": 800
-    },
     "api/rental-reminders.js": {
       "maxDuration": 300
+    },
+    "api/generate-paid-navigator.js": {
+      "maxDuration": 800
     }
   }
 }
