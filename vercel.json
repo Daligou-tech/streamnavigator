@@ -39,6 +39,10 @@
     {
       "path": "/api/process-refunds",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/generate-paid-rental",
+      "schedule": "*/5 * * * *"
     }
   ],
   "headers": [
@@ -74,6 +78,9 @@
     },
     "api/closing-scorecard.js": {
       "maxDuration": 300
+    },
+    "api/generate-paid-rental.js": {
+      "maxDuration": 800
     }
   }
 }

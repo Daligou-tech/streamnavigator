@@ -39,8 +39,15 @@ function collectLetters(report) {
   const emails = report && report.emails;
   if (!emails) return [];
   const out = [];
+  // Closing Disclosure Audit routes to two parties; Rental Navigator routes to
+  // three. Both arrive here as report.emails, so the labels are listed rather
+  // than derived — a key this function does not know about would otherwise be
+  // silently dropped from the PDF while still rendering on the web page.
   if (emails.lender) out.push({ who: 'Lender', email: emails.lender });
   if (emails.settlement) out.push({ who: 'Settlement agent', email: emails.settlement });
+  if (emails.servicer) out.push({ who: 'Loan servicer', email: emails.servicer });
+  if (emails.manager) out.push({ who: 'Property manager', email: emails.manager });
+  if (emails.insurer) out.push({ who: 'Insurance agent', email: emails.insurer });
   return out;
 }
 

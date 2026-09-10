@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Rental Navigator — StreamNavigator AI</title>
-<meta name="description" content="Upload your rent roll and expenses. Rental Navigator flags abnormal costs and cash-flow leaks across your rental properties — for $149/year." />
+<meta name="description" content="Upload your rent roll and statement. Rental Navigator re-runs the arithmetic on them, flags what does not hold up, and drafts the letters — $149, once." />
 <link rel="canonical" href="https://streamnavigator.ai/rental" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,8 +39,8 @@
   <section class="hero" style="padding-bottom:8px;">
     <div class="wrap">
       <div class="pill"><span class="dot">✓</span> For landlords with 1+ rental properties</div>
-      <h1>Find the cash-flow leaks <span class="grad">in your rental property.</span></h1>
-      <p class="sub">Upload your rent roll and expenses. StreamNavigator flags abnormal maintenance, utility, insurance, tax, and debt-service costs — and shows you exactly where the leaks are.</p>
+      <h1>The leaks your statement <span class="grad">doesn't mention.</span></h1>
+      <p class="sub">Upload your rent roll, statement and mortgage documents. We re-run the arithmetic on them — every total, every unit, every charge — and show you what doesn't hold up, with the letters to send about it.</p>
     </div>
   </section>
   <section id="how-it-works">
@@ -57,18 +57,18 @@
       </div>
       <div class="step-card reveal">
         <div class="step-num">2</div>
-        <h4>Pay $149/year</h4>
-        <p>One price covers ongoing checks across your properties for a year.</p>
+        <h4>Pay $149, once</h4>
+        <p>One property or one portfolio, one full audit. Not a subscription.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">3</div>
-        <h4>AI benchmarks every line</h4>
-        <p>Maintenance, utilities, insurance, taxes, rents, and debt service are compared against realistic ranges.</p>
+        <h4>Fifteen checks run on your numbers</h4>
+        <p>The same checks every time, on every submission — totals re-added, loan-to-value recalculated, every unit compared against the identical units beside it.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">4</div>
-        <h4>Get your cash-flow report</h4>
-        <p>Every abnormal cost and leak flagged, ranked by dollar impact.</p>
+        <h4>Get the findings and the letters</h4>
+        <p>Every finding ranked by dollar impact, each one traced to the line it came from — plus drafted emails to your servicer, manager and agent.</p>
       </div>
     </div>
   </section>
@@ -81,12 +81,14 @@
     <div class="wrap" style="max-width:680px;">
       <div class="check-card reveal">
         <ul class="check-list">
-          <li><span class="tick">✓</span> Abnormal or above-market maintenance costs</li>
-          <li><span class="tick">✓</span> Utility costs out of line with comparable units</li>
-          <li><span class="tick">✓</span> Insurance and tax costs worth a second look</li>
-          <li><span class="tick">✓</span> Rents that are below what comparable units are getting</li>
-          <li><span class="tick">✓</span> Debt-service and financing costs worth revisiting</li>
-          <li><span class="tick">✓</span> A ranked list of cash-flow leaks by dollar impact</li>
+          <li><span class="tick">✓</span> Totals re-added — when a schedule doesn't match the total billed beside it, you get both figures and the difference</li>
+          <li><span class="tick">✓</span> Mortgage insurance tested against your current loan-to-value, and escrow against the taxes and insurance it funds</li>
+          <li><span class="tick">✓</span> Every unit compared against the identical units in your own building</li>
+          <li><span class="tick">✓</span> Owner-paid utilities measured per unit, and every bill against its own monthly baseline</li>
+          <li><span class="tick">✓</span> Repair spend grouped by system, so repeat visits to one failing thing show up as a repair-or-replace call</li>
+          <li><span class="tick">✓</span> Management fees, insurance limits and deductibles read off your own documents</li>
+          <li><span class="tick">✓</span> Ranked by dollar impact — and labelled, so money that stops leaving your account is never totalled with money that merely might</li>
+          <li><span class="tick">✓</span> Drafted emails to your loan servicer, property manager and insurance agent, built from the findings</li>
         </ul>
       </div>
     </div>
@@ -97,7 +99,7 @@
     ============================================================================
     To go live for Rental Navigator:
       1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Rental Navigator Report" — $149 per year
+           "Rental Navigator Report" — $149 one-time
       2. Payment links -> New -> pick that price -> Create link.
       3. In the link's "After payment" step, set the redirect to:
            https://streamnavigator.ai/navigator-status
@@ -115,16 +117,16 @@
   <section id="pricing">
     <div class="section-head reveal">
       <div class="eyebrow">Get started</div>
-      <h2>One price. A full year of monitoring.</h2>
+      <h2>One price. One full audit.</h2>
       <p>Upload your numbers, pay once, get your cash-flow report.</p>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
         <span class="price-badge">One-time</span>
         <h3>Rental Navigator Report</h3>
-        <p class="desc">A full expense audit and cash-flow leak analysis for your rental property or portfolio.</p>
-        <div class="price-amount">$149<span>/year</span></div>
-        <div class="price-period">billed once per year</div>
+        <p class="desc">Fifteen deterministic checks on your rental property or portfolio, with the letters to send about what they find.</p>
+        <div class="price-amount">$149</div>
+        <div class="price-period">one-time — not a subscription</div>
 
         <div class="field-block">
           <label>Tell us about your property/portfolio</label>
@@ -146,9 +148,9 @@
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers maintenance, utilities, insurance, taxes, rents, and debt service</li>
+          <li><span class="tick">✓</span> Covers maintenance, utilities, insurance, rents, management fees and debt service</li>
           <li><span class="tick">✓</span> Ranked by dollar impact</li>
-          <li><span class="tick">✓</span> One price covers a full year</li>
+          <li><span class="tick">✓</span> Drafted letters to your servicer, manager and agent</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
         <a href="https://buy.stripe.com/4gM14nfIM5QggEQa80abK06" data-stripe-link="rental" class="btn btn-primary" id="pay-btn">Get My Report →</a>
@@ -179,11 +181,11 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Will this tell me if my rents are too low? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes — comparable-rent analysis is part of the report, alongside the expense-side leak detection.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">If you have three or more units of the same floorplan, yes — we compare each one against the median of the others in your own building, which is a comparison we can prove from your rent roll. With fewer than that there is nothing to compare against, and we will tell you so rather than estimating a market rent we cannot verify. We hold no live rent-comp data and do not guess at one.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Is this useful for a single rental property, not just portfolios? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes — it's built for anything from one rental unit up to a multi-property portfolio.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Yes, with one honest caveat. The loan, escrow, insurance, repair and statement checks all run on a single property. The unit-to-unit rent comparison needs three or more like units, so on a single house that check is reported as one we could not run, along with what to send us to make it testable.</div></div>
       </div>
     </div>
   </section>
@@ -230,7 +232,7 @@
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Rental Navigator provides AI-generated financial analysis for informational purposes only and is not accounting, tax, or investment advice. Benchmarks are based on available market data and may not reflect every local factor affecting your property.</p>
+  <p class="footer-disclaimer">Rental Navigator re-runs the arithmetic in the documents you upload and compares your property against itself. It is not accounting, tax, legal, or investment advice. Where a figure is compared against what is typical rather than proved from your own paperwork, the report says which it is. We hold no live market rent or insurance rate data and will not estimate one for you.</p>
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
