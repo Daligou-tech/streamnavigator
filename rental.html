@@ -58,7 +58,7 @@
       <div class="step-card reveal">
         <div class="step-num">2</div>
         <h4>Pay $149, once</h4>
-        <p>One property or one portfolio, one full audit. Not a subscription.</p>
+        <p>One charge, not a subscription — and it covers up to four audits of that property over the next twelve months.</p>
       </div>
       <div class="step-card reveal">
         <div class="step-num">3</div>
@@ -89,6 +89,7 @@
           <li><span class="tick">✓</span> Management fees, insurance limits and deductibles read off your own documents</li>
           <li><span class="tick">✓</span> Ranked by dollar impact — and labelled, so money that stops leaving your account is never totalled with money that merely might</li>
           <li><span class="tick">✓</span> Year over year, if you send two periods — which cost lines rose faster than the rest of the building, in dollars and per cent</li>
+          <li><span class="tick">✓</span> Four audits over twelve months, and an email before each lease ends telling you what your report found about that unit</li>
           <li><span class="tick">✓</span> Drafted emails to your loan servicer, property manager and insurance agent, built from the findings</li>
         </ul>
       </div>
@@ -118,16 +119,18 @@
   <section id="pricing">
     <div class="section-head reveal">
       <div class="eyebrow">Get started</div>
-      <h2>One price. One full audit.</h2>
-      <p>Upload your numbers, pay once, get your cash-flow report.</p>
+      <h2>One price. A year on that property.</h2>
+      <p>Upload your numbers, pay once, get your report in minutes — and three more audits whenever your figures change.</p>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured reveal" id="intake-card">
         <span class="price-badge">One-time</span>
         <h3>Rental Navigator Report</h3>
-        <p class="desc">Fifteen deterministic checks on your rental property or portfolio, with the letters to send about what they find.</p>
+        <p class="desc">Fifteen deterministic checks on your rental property or portfolio, with the letters to send about what they find. Includes four audits over twelve months and a reminder before each lease ends.</p>
         <div class="price-amount">$149</div>
-        <div class="price-period">one-time — not a subscription</div>
+        <div class="price-period">charged once &middot; covers this property for 12 months</div>
+
+        <div id="entitlement-note" hidden style="margin:16px 0 4px; padding:14px 16px; border:2px solid var(--ink); background:var(--bg-alt); font-size:14.5px; line-height:1.55;"></div>
 
         <div class="field-block">
           <label>Tell us about your property/portfolio</label>
@@ -180,6 +183,14 @@
       <h2>Questions, answered.</h2>
     </div>
     <div class="faq-list">
+      <div class="faq-item">
+        <button class="faq-q">What does the year include? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">One charge of $149 covers up to four audits of the same property over twelve months — the first one now, three more whenever your figures change. There is no recurring charge and nothing to cancel; when the twelve months are up it simply stops. We also email you before each lease on the property ends, with what your own report found about that unit, because a renewal is the point most of these findings can actually be acted on. Every one of those emails carries an unsubscribe link.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Can it compare this year against last year? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes, and it is the one comparison that does not rely on what is typical anywhere else — it measures your building against itself twelve months earlier. Send two statements, or one that prints a prior-year column, and the report shows which cost lines rose faster than the rest. Your next audit within the year is compared against the one we already hold, so you do not have to send the old figures again. If the two periods cover different lengths of time or overlap, we say so and decline the comparison rather than pro-rating figures to make them line up.</div></div>
+      </div>
       <div class="faq-item">
         <button class="faq-q">How many properties can I include? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">One report covers the property or portfolio you upload data for — for larger portfolios, email hello@streamnavigator.ai.</div></div>
@@ -268,6 +279,40 @@
     });
   });
 
+  // A returning landlord should not have to remember what they bought. If this
+  // browser holds a report with a live year on it, say so before they get
+  // anywhere near the price, and change the button so it does not read as a
+  // second charge.
+  (async function offerRemainingAudits(){
+    var source = getRentalEntitlementSource();
+    if (!source || !source.id || !source.token) return;
+    var status;
+    try {
+      var resp = await fetch('/api/rental-entitlement', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: source.id, token: source.token }),
+      });
+      status = await resp.json();
+    } catch (err) { return; }   // the ordinary paid flow is the safe default
+    if (!status || !status.ok || !status.active) return;
+
+    var note = document.getElementById('entitlement-note');
+    var until = new Date(status.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    var where = status.propertyAddress ? (' on ' + status.propertyAddress) : '';
+    note.innerHTML = '<strong>You already have audits left' + where + '.</strong><br>'
+      + status.runsLeft + (status.runsLeft === 1 ? ' audit remains' : ' audits remain')
+      + ' until ' + until + ', included in what you paid. Upload your latest statement below '
+      + 'and we will run it — and compare it against the period we already hold.';
+    note.hidden = false;
+
+    var btn = document.getElementById('pay-btn');
+    btn.textContent = 'Run My Next Audit →';
+    var period = document.querySelector('.price-period');
+    if (period) period.textContent = 'already covered — no further charge';
+    var amount = document.querySelector('.price-amount');
+    if (amount) amount.style.textDecoration = 'line-through';
+  })();
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
     const btn = e.currentTarget;
@@ -289,13 +334,23 @@
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
     try {
+      const entitlementSource = getRentalEntitlementSource();
       const submission = await submitNavigatorIntake({
         product: 'rental',
         email: email,
         formData: { category: selectedCategory, description: descEl.value.trim() },
         files: files,
+        entitlement: entitlementSource ? { id: entitlementSource.id, token: entitlementSource.token } : undefined,
       });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'rental' }, email);
+      const handle = { id: submission.id, token: submission.token, product: 'rental' };
+      if (submission.covered) {
+        // Already paid for, at zero, by the year they bought. Sending them to
+        // Stripe here would charge twice for one thing.
+        goToStatusPage(handle, email);
+      } else {
+        rememberRentalEntitlementSource(handle, email);
+        goToStripe(btn.getAttribute('href'), handle, email);
+      }
     } catch (err) {
       fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;

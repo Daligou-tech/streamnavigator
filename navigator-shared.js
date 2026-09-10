@@ -350,7 +350,7 @@ async function uploadFileDirect(product, file) {
 // onProgress({ done, total, name }) is optional — pass it to show which file
 // is uploading, which matters now that a submission can legitimately be tens
 // of megabytes rather than three.
-async function submitNavigatorIntake({ product, email, formData, files, onProgress }) {
+async function submitNavigatorIntake({ product, email, formData, files, onProgress, entitlement }) {
   const list = Array.from(files || []);
 
   // Attached here rather than on each of the eleven pages that call this, so a
@@ -387,11 +387,42 @@ async function submitNavigatorIntake({ product, email, formData, files, onProgre
   const resp = await fetch('/api/navigator-intake', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ product, email, formData: intakeFormData, files: encoded, uploadedPaths }),
+    body: JSON.stringify({ product, email, formData: intakeFormData, files: encoded, uploadedPaths, entitlement }),
   });
   const data = await resp.json();
   if (!resp.ok || !data.ok) throw new Error(data.error || 'Something went wrong saving your submission.');
-  return data; // { id, token }
+  return data; // { id, token, covered?, runsLeft?, expiresAt? }
+}
+
+// A rental customer inside their year does not go to Stripe. The intake told us
+// so — it created the submission already paid at zero and answered `covered` —
+// and sending them to a payment link anyway would charge a second time for
+// something they were promised was included.
+//
+// The previous submission is kept under its own key rather than being
+// overwritten by this one: it holds the token that proves the entitlement, and
+// losing it would strand the rest of the year in a browser that had forgotten
+// how to claim it.
+function rememberRentalEntitlementSource(submission, email) {
+  try {
+    localStorage.setItem('sn_rental_entitlement', JSON.stringify({
+      id: submission.id, token: submission.token, email: email || null, ts: Date.now(),
+    }));
+  } catch (e) { /* private mode */ }
+}
+
+function getRentalEntitlementSource() {
+  try {
+    const raw = localStorage.getItem('sn_rental_entitlement');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function goToStatusPage(submission, email) {
+  localStorage.setItem('sn_last_submission', JSON.stringify({
+    ...submission, product: submission.product, email: email || null, ts: Date.now(),
+  }));
+  window.location.href = '/navigator-status';
 }
 
 function goToStripe(paymentLinkUrl, submission, email) {

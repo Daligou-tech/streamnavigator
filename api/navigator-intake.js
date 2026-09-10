@@ -20,6 +20,7 @@
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
+const { checkEntitlement, consumeEntitlement } = require('./_lib/rental-entitlement');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -157,11 +158,30 @@ module.exports = async function handler(req, res) {
 
   const admin = getSupabaseAdmin();
 
+  // A returning rental customer inside their year does not go to Stripe. They
+  // present the id and token of the report they already bought; if that carries
+  // a live entitlement with a run left, this submission is created already paid
+  // at zero, and the browser skips the payment link entirely.
+  //
+  // price_cents 0 is also what stops the year extending itself: grantEntitlement
+  // declines to hand a new twelve months to a submission that cost nothing.
+  let spentEntitlement = null;
+  if (product === 'rental' && body.entitlement && body.entitlement.id && body.entitlement.token) {
+    const status = await checkEntitlement(admin, String(body.entitlement.id), String(body.entitlement.token));
+    if (status.active) spentEntitlement = status;
+  }
+
   const { data: submission, error: insertError } = await admin
     .from('navigator_submissions')
     // is_test is an analytics marker only — see api/_lib/test-submissions.js.
     // This one insert covers the ten Navigator products that share the intake.
-    .insert({ product, email: email || null, is_test: isTestEmail(email), form_data: formData })
+    .insert({
+      product,
+      email: email || null,
+      is_test: isTestEmail(email),
+      form_data: formData,
+      ...(spentEntitlement ? { status: 'paid', price_cents: 0 } : {}),
+    })
     .select('id, access_token')
     .single();
 
@@ -231,5 +251,29 @@ module.exports = async function handler(req, res) {
       .eq('id', submission.id);
   }
 
-  res.status(200).json({ ok: true, id: submission.id, token: submission.access_token });
+  // Spent only now, once the submission exists and its files are attached, so a
+  // run is never burned on an intake that failed halfway. consumeEntitlement is
+  // conditional on the count it read, so two tabs racing the last audit cannot
+  // both take it — and the loser is put back on the ordinary paid path rather
+  // than being handed a free report the entitlement no longer covers.
+  let covered = false;
+  if (spentEntitlement) {
+    covered = await consumeEntitlement(admin, spentEntitlement.entitlementId);
+    if (!covered) {
+      await admin
+        .from('navigator_submissions')
+        .update({ status: 'pending_payment', price_cents: null, updated_at: new Date().toISOString() })
+        .eq('id', submission.id);
+    }
+  }
+
+  res.status(200).json({
+    ok: true,
+    id: submission.id,
+    token: submission.access_token,
+    // The browser reads this to decide between the Stripe link and the status
+    // page. Absent or false means pay.
+    covered,
+    ...(covered ? { runsLeft: Math.max(0, spentEntitlement.runsLeft - 1), expiresAt: spentEntitlement.expiresAt } : {}),
+  });
 };

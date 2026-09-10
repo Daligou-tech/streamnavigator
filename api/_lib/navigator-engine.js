@@ -36,6 +36,7 @@ const {
 const { runRentalTrend, sameProperty } = require('./rental-trend');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
+const { grantEntitlement } = require('./rental-entitlement');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -720,10 +721,14 @@ async function generateNavigatorReport(submissionId) {
     // still paid, and a thinner analysis they are told is thinner beats an empty
     // report. That fallback is the exception and it announces itself.
     let usedFallbackAnalysis = false;
+    // Hoisted: the entitlement is granted after the report is stored, well below
+    // this block, and it records the property address the extraction found.
+    let rentalExtraction = null;
     if (submission.product === 'rental') {
       let extraction = null;
       try {
         extraction = await extractRentalDocuments(ANTHROPIC_API_KEY, contentBlocks);
+        rentalExtraction = extraction;
       } catch (err) {
         console.error('[rental] extraction failed:', err.message);
       }
@@ -968,6 +973,14 @@ Then do what you can. Work only from what is legibly present, flag anything that
       .from('navigator_submissions')
       .update({ status: 'complete', updated_at: new Date().toISOString() })
       .eq('id', submissionId);
+
+    // The year starts when the report lands, not when the payment clears — a
+    // customer whose first report failed and was regenerated the next morning
+    // has not spent a day of it. Granted after the report is stored so a
+    // generation that dies before this point leaves nothing behind to reconcile.
+    if (submission.product === 'rental') {
+      await grantEntitlement(admin, submission, rentalExtraction);
+    }
 
     return report;
   } catch (err) {
