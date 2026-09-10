@@ -8,8 +8,76 @@
 <link rel="canonical" href="https://streamnavigator.ai/rental" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<style>
+  /* /closing's palette and type, scoped to this page. navigator-shared.css
+     still dresses the other ten products; only the variables it exposes and
+     the few components that carry the old identity are overridden here. */
+  :root{
+    --ink:#1B2A3A; --ink-soft:#5B6570;
+    --bg:#FBFAF7; --bg-alt:#F4F2EC; --surface:#FFFFFF; --surface-2:#FFFFFF;
+    --bg-gradient:none;
+    --text:#1B2A3A; --text-dim:#5B6570; --text-dimmer:#7A828C;
+    --border:#D8DAD5; --border-strong:#1B2A3A;
+    --accent:#FFFFFF; --accent-deep:#1B2A3A;
+    --accent-2:#2C6A57; --accent-2-deep:#2C6A57;
+    --accent-3:#2C6A57; --accent-3-deep:#2C6A57;
+    --yellow:#8A6A16;
+    --gradient:none; --gradient-text:none; --gradient-warm:none;
+    --radius:2px; --radius-sm:2px;
+    --shadow-hard:5px 5px 0 rgba(27,42,58,.08);
+    --shadow-hard-sm:4px 4px 0 rgba(27,42,58,.07);
+    --shadow-hard-xs:3px 3px 0 rgba(27,42,58,.06);
+    --shadow-soft:none; --shadow-glow:0 0 0 1px #D8DAD5;
+  }
+  body{ background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif; font-size:17px; line-height:1.6; }
+  .bg-noise{ display:none; }
+  h1,h2,h3,h4{ font-family:"Newsreader",Georgia,serif; font-weight:500; letter-spacing:-0.01em; color:var(--ink); }
+  h1{ font-size:clamp(2.2rem,5vw,3.3rem); line-height:1.09; }
+  h2{ font-size:clamp(1.55rem,3.1vw,2.05rem); line-height:1.18; }
+  h3{ font-size:1.1rem; line-height:1.35; font-weight:600; }
+  h4{ font-size:1.05rem; line-height:1.3; font-weight:600; }
+  .grad{ background:none; -webkit-background-clip:initial; -webkit-text-fill-color:currentColor;
+    background-clip:initial; color:var(--ink-soft); font-style:italic; }
+  .logo, .stat-value, .price-amount{ font-family:"Newsreader",Georgia,serif; font-weight:600; letter-spacing:-0.01em; }
+  .sub, .section-head p, .desc, .field-hint, .btn-note{ color:var(--ink-soft); }
+  .eyebrow{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
+    letter-spacing:.14em; text-transform:uppercase; font-size:.72rem; color:var(--ink-soft); }
+  .pill{ border:1px solid var(--border); border-radius:2px; background:var(--surface);
+    box-shadow:none; color:var(--ink-soft); font-size:.82rem; font-weight:400; }
+  .pill .dot{ background:none; color:var(--accent-2); }
+  header{ border-bottom:1px solid var(--border); background:var(--bg); }
+  .hero{ background:var(--bg); border-bottom:1px solid var(--border); }
+  section{ border-color:var(--border) !important; }
+  #what-you-get{ background:var(--bg-alt) !important; border-top:1px solid var(--ink) !important;
+    border-bottom:1px solid var(--ink) !important; }
+  .step-card, .check-card, .price-card, .faq-item, .upload-zone, .toast{
+    border:1px solid var(--border); border-radius:2px; box-shadow:none; background:var(--surface); }
+  .price-card.featured{ border:1px solid var(--ink); box-shadow:5px 5px 0 rgba(27,42,58,.08); }
+  .step-num{ background:none; color:var(--ink-soft); border:none; box-shadow:none;
+    font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500; font-size:.8rem; }
+  .check-list li{ border-bottom:1px solid var(--rule-soft,#E9EAE6); }
+  .tick{ background:none; color:var(--accent-2); box-shadow:none; }
+  .price-badge{ background:var(--ink); color:var(--bg); border-radius:2px; box-shadow:none;
+    font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
+    letter-spacing:.1em; text-transform:uppercase; font-size:.68rem; }
+  .price-period{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:.78rem; color:var(--ink-soft); }
+  label{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
+    letter-spacing:.09em; text-transform:uppercase; font-size:.7rem; color:var(--ink-soft); }
+  input, textarea{ border:1px solid var(--border); border-radius:2px; background:var(--surface);
+    font-family:inherit; font-size:.95rem; color:var(--ink); box-shadow:none; }
+  input:focus, textarea:focus{ border-color:var(--ink); outline:none; }
+  .btn{ border-radius:2px; box-shadow:none; font-family:inherit; font-weight:500; font-size:1rem; }
+  .btn-primary{ background:var(--ink); color:var(--bg); border:1px solid var(--ink); }
+  .btn-primary:hover{ background:#122030; }
+  .btn-ghost{ background:transparent; color:var(--ink); border:1px solid var(--border); }
+  .faq-q{ font-family:"IBM Plex Sans",system-ui,sans-serif; font-weight:500; font-size:1rem; color:var(--ink); }
+  .faq-a-inner{ color:var(--ink-soft); font-size:.95rem; }
+  footer{ border-top:1px solid var(--border); background:var(--bg); color:var(--ink-soft); }
+  #entitlement-note{ border:1px solid var(--ink) !important; background:var(--surface) !important; }
+</style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -38,7 +106,7 @@
 <main id="top">
   <section class="hero" style="padding-bottom:8px;">
     <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> For landlords with 1+ rental properties</div>
+      <div class="pill"><span class="dot">✓</span> Do you own at least one rental property?</div>
       <h1>The leaks your statement <span class="grad">doesn't mention.</span></h1>
       <p class="sub">Upload your rent roll, statement and mortgage documents. We re-run the arithmetic on them — every total, every unit, every charge — and show you what doesn't hold up, with the letters to send about it.</p>
     </div>
@@ -57,7 +125,7 @@
       </div>
       <div class="step-card reveal">
         <div class="step-num">2</div>
-        <h4>Pay $149, once</h4>
+        <h4>Make a One-Time Payment</h4>
         <p>One charge, not a subscription — and it covers up to four audits of that property over the next twelve months.</p>
       </div>
       <div class="step-card reveal">
@@ -83,15 +151,15 @@
         <ul class="check-list">
           <li><span class="tick">✓</span> Totals re-added — when a schedule doesn't match the total billed beside it, you get both figures and the difference</li>
           <li><span class="tick">✓</span> Mortgage insurance tested against your current loan-to-value, and escrow against the taxes and insurance it funds</li>
-          <li><span class="tick">✓</span> Every unit compared against the identical units in your own building</li>
+          <li><span class="tick">✓</span> Every unit compared against identical units in your own building</li>
           <li><span class="tick">✓</span> Owner-paid utilities measured per unit, and every bill against its own monthly baseline</li>
-          <li><span class="tick">✓</span> Repair spend grouped by system, so repeat visits to one failing thing show up as a repair-or-replace call</li>
+          <li><span class="tick">✓</span> Repair spend grouped by system, so repeat visits to one failing item show up as a repair-or-replace call</li>
           <li><span class="tick">✓</span> Management fees, insurance limits and deductibles read off your own documents</li>
           <li><span class="tick">✓</span> Ranked by dollar impact — and labelled, so money that stops leaving your account is never totalled with money that merely might</li>
-          <li><span class="tick">✓</span> Year over year, if you send two periods — which cost lines rose faster than the rest of the building, in dollars and per cent</li>
+          <li><span class="tick">✓</span> Year over year, if you send two periods — which cost lines rose faster than the rest of the building</li>
           <li><span class="tick">✓</span> Four audits over twelve months, and an email before each lease ends telling you what your report found about that unit</li>
           <li><span class="tick">✓</span> Your next audit closes out the last one — which findings your documents now prove were fixed, and how much actually stopped leaving your account</li>
-          <li><span class="tick">✓</span> Drafted emails to your loan servicer, property manager and insurance agent, built from the findings</li>
+          <li><span class="tick">✓</span> Drafted emails to your loan servicer, property manager and insurance agent, built based on the findings</li>
         </ul>
       </div>
     </div>
@@ -120,7 +188,7 @@
   <section id="pricing">
     <div class="section-head reveal">
       <div class="eyebrow">Get started</div>
-      <h2>One price. A year on that property.</h2>
+      <h2>One Price for a Whole Year on that property.</h2>
       <p>Upload your numbers, pay once, get your report in minutes — and three more audits whenever your figures change.</p>
     </div>
     <div class="single-price-wrap">
