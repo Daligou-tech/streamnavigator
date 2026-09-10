@@ -29,6 +29,9 @@ const {
 const { runDocumentAudit } = require('./closing-service');
 const { buildEmails } = require('./closing-emails');
 const { rankFindings, Severity } = require('./closing-audit');
+const { extractRentalDocuments } = require('./rental-extract');
+const { runRentalAudit, Severity: RentalSeverity } = require('./rental-audit');
+const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -141,9 +144,50 @@ Review every bill provided: identify what's being paid for and how much, and ass
   'rental': {
     label: 'Rental Navigator',
     requiresFiles: true,
-    task: `You are the analysis engine behind Rental Navigator. A landlord paid for a cash-flow leak analysis and uploaded a rent roll, expense records, and/or mortgage/debt-service details.
+    // Like Closing, and for the same reason: the findings in this report are
+    // produced by api/_lib/rental-audit.js, not by the model. The model's job
+    // is to write them up. It must not originate a number, a threshold, or a
+    // severity.
+    //
+    // What this replaced was a single instruction to read the documents and
+    // find leaks. It worked, unevenly. On a live four-unit audit it caught a
+    // suspicious summer water bill and a run of HVAC calls, and walked straight
+    // past $118 a month of mortgage insurance on a loan at 66% loan-to-value —
+    // while on a different property, with no mortgage insurance to find, the
+    // same prompt volunteered "no PMI (25% down)" unasked. It also never added
+    // up the repair schedule, which was $500 short of the total on its own page.
+    // Neither miss was a reasoning failure. Nothing was checking a list.
+    task: `You are the writer for a Rental Navigator cash-flow audit. A landlord paid for an independent audit of their rent roll, operating statement, and whatever mortgage and insurance documents they had.
 
-Compare each cost line (maintenance, utilities, insurance, taxes, debt service) against realistic ranges for that type of cost and flag anything that looks abnormal or above a typical range, saying plainly when you can't be sure without a local comparable. Assess whether rents charged look below what similar units nearby would likely command — you do not have live rental-comp data, so give a general, reasoned read (e.g., based on what the documents show about unit type, location, and condition) rather than a fabricated specific comparable rent figure. Produce a ranked list of cash-flow leaks by estimated dollar impact, with your reasoning for each, grounded specifically in what was provided — don't pad it with generic landlord tips that aren't tied to this data.`,
+The deterministic audit engine has already run every check and produced a ranked list of findings. Each finding carries a severity, an evidence basis, an actionability label, an impact kind, and where applicable a charged amount, an expected amount, and a dollar impact. Your job is to present those findings clearly. It is not to add to them.
+
+Hard rules:
+- Never state a dollar figure, ratio, threshold or comparison that is not present in the findings you were given. If a cost is not covered by a finding, it is not in the report.
+- Never upgrade a severity. Reproduce the engine's language: a confirmed arithmetic error, a recoverable charge, a unit below comparable units in the same property, an unrecovered owner cost, a cost above a typical range, a capital decision due, something requiring documentation, or within norms. Never say a charge is illegal or improper, never promise a refund, and never call a cost excessive unless the finding says so.
+- THE DOCUMENTS ARE ATTACHED SO YOU CAN QUOTE THEM, NOT SO YOU CAN AUDIT THEM. You will see costs in these documents that no finding mentions. That is the normal case and it needs no explanation: an expense with no finding simply does not appear in the report. Do not list it, do not total it, do not account for its absence, and do not create a section to hold it. Quote the documents only to support a finding you were given — a line label, a date, a lease term.
+- CARRY THE IMPACT KIND THROUGH, every time you state a dollar figure. "recoverable" is money that stops leaving the account once the landlord acts. "excess" is the amount above the property's own baseline. "exposure" is the total currently being borne, only part of which is addressable — an exposure figure is NEVER a saving and must never be described as one, or added into a total of savings. "unexplained" is a discrepancy, not yet money. Never total figures of different kinds together.
+- Distinguish hard rules from market norms exactly as the finding's evidence basis does. Arithmetic from the landlord's own documents, a comparison between units in their own building, and a standard lender threshold are things they can hold someone to. A typical range is not — it is a reason to ask a question.
+- Carry each finding's actionability through: something to act on now, something for the next renewal, a capital decision, or something needing another document.
+
+HEADLINE AND ORDERING — this determines whether the report reads as work delivered or work not done.
+
+Lead with the strongest TRUE statement available, in this order of preference:
+1. Confirmed arithmetic errors or recoverable charges, with the dollar figure.
+2. A unit below comparable units in the same property, or an unrecovered owner cost, with the dollar figure.
+3. Costs above a typical range, or a capital decision that is due.
+4. If there are none of the above: lead with WHAT WAS VERIFIED. Name the specific checks that passed and the numbers behind them — the expense lines adding up to their own total, the escrow reconciling to the taxes and insurance it funds, every unit priced in line with the ones beside it, no system absorbing repeat repair visits. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on these documents was independently reproduced and holds.
+
+Never open with what could not be done. Checks that could not run are real and must be reported honestly — but they belong AFTER the results, not in the headline.
+
+ALWAYS include a section naming what was independently verified, whether or not anything was flagged. Every finding marked "within norms" is a check that ran and passed, and every one is work the customer paid for. Name them and give the numbers behind them. A report that flags four findings and mentions one of eight passed checks has quietly thrown away most of the work it did — and on a well-run property that work is the entire product.
+
+Structure. Open with the headline. Then the findings in the order given, the strongest few at two or three lines each: what the figure is, what it should be, what it rests on, the dollar impact and its kind, and when it can be acted on. Then every remaining finding as one compact line. Then the verified section described above. Then a short section for checks that could not be run, in the engine's words.
+
+Use key_numbers for figures that appear in the findings, and label each one so its kind is unmistakable — "recoverable", "above baseline", "currently unrecovered".
+
+Close by telling the landlord that the letters below were drafted from these findings and are theirs to send under their own name after checking them.
+
+State plainly that this is not legal, tax, or investment advice.`,
   },
 
   'subscriptions': {
@@ -246,6 +290,52 @@ Close with two short ready-to-send emails, one to the lender and one to the sett
 State plainly that this is not legal advice.`,
   },
 };
+
+// The tool schema declares missing_or_uncertain, sections, sections[].items
+// and key_numbers as arrays. The model does not always honour that, and
+// nothing between the API and the customer's screen checked.
+//
+// Observed on a live rental report (submission 37466c44, 2026-09-09):
+// missing_or_uncertain came back as the STRING '["...","..."]}' — a JSON
+// array plus a stray brace, serialised into a string field. It carries no
+// angle brackets, so the tag-leak check above passed it; the JSON parses,
+// so nothing else objected; and it was stored and served.
+//
+// navigator-status.html then called .forEach on a string. That throws
+// partway through rendering, which cost the customer three things at once:
+// the "what I couldn't verify" block rendered as a heading with an empty
+// list, and the two statements that run AFTER it — renderFixups() and the
+// automatic PDF email — never ran at all. The page promises the report is
+// "delivered automatically"; on that report it silently was not.
+//
+// Normalising here rather than retrying is deliberate: the content was
+// entirely correct, only the container was wrong, and a retry would have
+// spent another minute of the customer's wait to re-roll a die.
+function coerceStringArray(value) {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === 'string' && v.trim());
+  if (typeof value !== 'string') return [];
+  const trimmed = value.trim();
+  // '["a","b"]}' — take everything up to the last ']' and try again.
+  const close = trimmed.lastIndexOf(']');
+  if (trimmed.startsWith('[') && close > 0) {
+    try {
+      const parsed = JSON.parse(trimmed.slice(0, close + 1));
+      if (Array.isArray(parsed)) return parsed.filter((v) => typeof v === 'string' && v.trim());
+    } catch (err) { /* fall through and keep the raw string as one item */ }
+  }
+  return trimmed ? [trimmed] : [];
+}
+
+function normalizeReport(input) {
+  const out = { ...input };
+  out.missing_or_uncertain = coerceStringArray(out.missing_or_uncertain);
+  out.sections = (Array.isArray(out.sections) ? out.sections : [])
+    .filter((s) => s && typeof s === 'object')
+    .map((s) => ({ ...s, items: coerceStringArray(s.items) }));
+  out.key_numbers = (Array.isArray(out.key_numbers) ? out.key_numbers : [])
+    .filter((n) => n && typeof n === 'object' && (n.label || n.value));
+  return out;
+}
 
 function guessMediaType(filename) {
   const ext = String(filename).toLowerCase().split('.').pop();
@@ -490,7 +580,91 @@ async function generateNavigatorReport(submissionId) {
       ].filter(Boolean).join('\n');
     }
 
-    const systemPrompt = `${config.task}\n\n${HONESTY_RULES}${auditBlock}\n\nRespond ONLY by calling the submit_navigator_report tool.`;
+    // Rental Navigator, on the same arrangement as Closing: read the documents
+    // into numbers, judge the numbers deterministically, and hand the model the
+    // findings rather than the documents plus an instruction to look for
+    // problems. See api/_lib/rental-audit.js for what that fixed.
+    //
+    // The one branch back to the old behaviour is at the bottom: if extraction
+    // produces nothing a single check can run on — a photograph too dark to
+    // read, a document that turns out not to be a rent roll — the customer has
+    // still paid, and a thinner analysis they are told is thinner beats an empty
+    // report. That fallback is the exception and it announces itself.
+    let usedFallbackAnalysis = false;
+    if (submission.product === 'rental') {
+      let extraction = null;
+      try {
+        extraction = await extractRentalDocuments(ANTHROPIC_API_KEY, contentBlocks);
+      } catch (err) {
+        console.error('[rental] extraction failed:', err.message);
+      }
+
+      const audited = extraction ? runRentalAudit(extraction) : { findings: [], skipped: [], checksRun: 0 };
+
+      if (audited.findings.length) {
+        const flagged = audited.findings.filter((f) => f.severity !== RentalSeverity.WITHIN_NORMS);
+        const passed = audited.findings.filter((f) => f.severity === RentalSeverity.WITHIN_NORMS);
+
+        draftedEmails = buildRentalEmails(audited.findings, {
+          propertyAddress: (extraction.property || {}).address || null,
+          managerName: (extraction.management || {}).company_name || null,
+        });
+
+        // Flagged and passed go over separately for the reason the Closing
+        // branch above documents: severity order puts within-norms last, and a
+        // writer told to name every passed check will summarise the tail of one
+        // long list no matter how firmly it is instructed not to.
+        auditBlock = [
+          '',
+          'AUDIT FINDINGS — these are the report. Write these up. Do not add to them, do not',
+          'recompute them, and do not soften or escalate any severity.',
+          JSON.stringify(flagged, null, 1),
+          '',
+          passed.length
+            ? [
+              `CHECKS THAT RAN AND PASSED — ${passed.length} of them, listed below.`,
+              'These belong in the "what was independently verified" section. Name EVERY ONE,',
+              'each with the figure behind it, in the engine\'s own words. Do not compress them',
+              'into "other checks passed", do not pick a representative few, and do not drop any',
+              'for length — this list is the work the customer paid for.',
+              JSON.stringify(passed.map((f) => ({ title: f.title, basis: f.basis })), null, 1),
+            ].join('\n')
+            : '',
+          audited.skipped.length
+            ? `Checks that could not be run because the required figures were missing or unreadable: `
+              + `${audited.skipped.join('; ')}. Say so plainly rather than implying they passed.`
+            : '',
+          (extraction.unreadable || []).length
+            ? `The extraction could not read these parts of the documents: ${(extraction.unreadable || []).join('; ')}.`
+            : '',
+        ].filter(Boolean).join('\n');
+
+        // Kept on the submission so a future re-run can compare this period
+        // against the next one without asking for these documents again.
+        await admin
+          .from('navigator_submissions')
+          .update({
+            form_data: { ...formData, rental_extraction: extraction, rental_checks_run: audited.checksRun },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
+      } else {
+        usedFallbackAnalysis = true;
+        console.error('[rental] no deterministic findings — falling back to document analysis');
+      }
+    }
+
+    // The pre-engine prompt, used only on the fallback path above. It is the
+    // weaker product and the report has to say so rather than passing an
+    // unverified read off as an audit.
+    const FALLBACK_RENTAL_TASK = `You are the analysis engine behind Rental Navigator. A landlord paid for a cash-flow audit and uploaded documents, but the documents could not be read into figures precisely enough for the audit engine to run a single check on them.
+
+Say that plainly and early, in the summary and again in missing_or_uncertain: the numbers could not be extracted, so what follows is a read of the documents rather than the arithmetic audit that was paid for, and it should be treated as a starting point. Tell them exactly what would fix it — a clearer scan, the original PDF export from their property management system rather than a photograph, or the statement pages that carry the totals.
+
+Then do what you can. Work only from what is legibly present, flag anything that looks abnormal or above a typical range, and never state a figure you cannot point at in the documents. Do not present any of it as verified.`;
+
+    const taskForThisRun = usedFallbackAnalysis ? FALLBACK_RENTAL_TASK : config.task;
+    const systemPrompt = `${taskForThisRun}\n\n${HONESTY_RULES}${auditBlock}\n\nRespond ONLY by calling the submit_navigator_report tool.`;
 
     // Occasionally the model's structured tool-call output gets corrupted —
     // observed in testing as a stray closing tag / parameter fragment (e.g.
@@ -555,12 +729,23 @@ async function generateNavigatorReport(submissionId) {
         continue;
       }
 
-      if (reportLooksContaminated(toolUse.input)) {
+      // Normalised BEFORE the contamination check so the check reads the same
+      // strings the customer will, not a container the renderer would reject.
+      const candidate = normalizeReport(toolUse.input);
+
+      if (reportLooksContaminated(candidate)) {
         lastError = new Error('Model output contained malformed/leaked formatting artifacts');
         continue;
       }
 
-      report = toolUse.input;
+      // A report with no sections is not a report. Retrying costs a minute;
+      // storing an empty one costs the customer the whole purchase.
+      if (!candidate.sections.length) {
+        lastError = new Error('Model returned a report with no sections');
+        continue;
+      }
+
+      report = candidate;
     }
 
     if (!report) throw lastError || new Error('Failed to generate a valid report after retrying');
@@ -570,7 +755,9 @@ async function generateNavigatorReport(submissionId) {
     // here to write up findings, not to reword a letter the customer will sign
     // their name to. Attaching after also keeps them clear of the contamination
     // check above, which is looking for model output, not our own text.
-    if (draftedEmails && (draftedEmails.lender || draftedEmails.settlement)) {
+    const hasLetters = draftedEmails
+      && Object.values(draftedEmails).some((letter) => letter && letter.body);
+    if (hasLetters) {
       report.emails = draftedEmails;
 
       // And they replace closing_body, for exactly the reason above.
@@ -589,7 +776,9 @@ async function generateNavigatorReport(submissionId) {
       // own lender, and the tone of those is not a detail. The voice fix made
       // to closing-emails.js on 2026-09-08 reached only the PDF copy, because
       // nobody had noticed there were two.
-      const rendered = renderLettersAsText(draftedEmails);
+      const rendered = submission.product === 'rental'
+        ? renderRentalLetters(draftedEmails)
+        : renderLettersAsText(draftedEmails);
       if (rendered) {
         report.closing_title = 'Ready-to-send emails';
         report.closing_body = rendered;
@@ -618,4 +807,8 @@ async function generateNavigatorReport(submissionId) {
   }
 }
 
-module.exports = { generateNavigatorReport, PRODUCT_CONFIGS, __internal: { renderLettersAsText } };
+module.exports = {
+  generateNavigatorReport,
+  PRODUCT_CONFIGS,
+  __internal: { renderLettersAsText, normalizeReport, coerceStringArray },
+};

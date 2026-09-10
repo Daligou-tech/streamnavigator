@@ -1,0 +1,74 @@
+// Scheduled sweep for rental submissions that were paid for and never
+// generated.
+//
+// Rental reports are produced by api/get-navigator-submission.js, which runs
+// when the customer's browser polls the status page. That is fine while the
+// customer is watching. It is not fine when they are not: a landlord who pays,
+// sees the Stripe receipt and closes the tab leaves a row sitting at 'paid'
+// with nothing scheduled to look at it again. No report is generated, no PDF is
+// emailed, and api/process-refunds.js never sees them either, because that only
+// considers rows that reached 'failed'. Paid, silent, and invisible.
+//
+// The 2026-09-09 product audit found this and it has since got worse on purpose:
+// the rental pipeline now makes two model calls rather than one — documents are
+// read into figures, then the deterministic checks run, then the write-up — so
+// the wait a customer has to sit through is longer and the odds of them walking
+// away are higher.
+//
+// Two minutes of grace before this picks a row up, so the ordinary case (the
+// customer IS on the page, and generation is already running inside their poll)
+// is left alone rather than raced. generateNavigatorReport moves the row to
+// 'processing' as its first act, and this only ever selects 'paid'.
+//
+// Authenticated via Vercel's auto-provisioned CRON_SECRET, like every other
+// scheduled function here, so it cannot be triggered by a public request.
+
+const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
+const { generateNavigatorReport } = require('./_lib/navigator-engine');
+
+const GRACE_MINUTES = 2;
+const MAX_PER_SWEEP = 3;
+
+module.exports = async function handler(req, res) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
+    res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return;
+  }
+
+  const admin = getSupabaseAdmin();
+  const cutoff = new Date(Date.now() - GRACE_MINUTES * 60 * 1000).toISOString();
+
+  const { data: waiting, error: fetchError } = await admin
+    .from('navigator_submissions')
+    .select('id, updated_at')
+    .eq('product', 'rental')
+    .eq('status', 'paid')
+    .lt('updated_at', cutoff)
+    .order('updated_at', { ascending: true })
+    // Each report is two model calls and the function has a wall clock. Taking
+    // a few per sweep and leaving the rest for the next one finishes a backlog
+    // a minute later than one heroic pass would, and without timing out
+    // half way through somebody's report.
+    .limit(MAX_PER_SWEEP);
+
+  if (fetchError) {
+    res.status(500).json({ ok: false, error: fetchError.message });
+    return;
+  }
+
+  const results = [];
+  for (const row of waiting || []) {
+    try {
+      await generateNavigatorReport(row.id);
+      results.push({ id: row.id, ok: true });
+    } catch (err) {
+      // generateNavigatorReport has already written status:'failed' and the
+      // error onto the row, which is what api/process-refunds.js needs to see.
+      // Swallowing here keeps one bad submission from stopping the sweep.
+      results.push({ id: row.id, ok: false, error: String(err.message || err).slice(0, 200) });
+    }
+  }
+
+  res.status(200).json({ ok: true, considered: (waiting || []).length, results });
+};
