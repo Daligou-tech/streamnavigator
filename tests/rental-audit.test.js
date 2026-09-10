@@ -276,16 +276,16 @@ test('every catalog entry declares a label and a needs test', () => {
 
 test('coverage is reported as a pair, so a thin result cannot pass as a clean one', () => {
   const full = runRentalAudit(leakyFourplex());
-  assert.equal(full.checksTotal, 15);
-  assert.equal(full.checksRun, 15, 'this property carries every document the catalog needs');
+  assert.equal(full.checksTotal, 17);
+  assert.equal(full.checksRun, 17, 'this property carries every document the catalog needs');
 
   const thin = runRentalAudit({
     property: { unit_count: 1 },
     units: [{ unit_id: 'house', monthly_rent: 1650 }],
     documents_seen: ['a lease'],
   });
-  assert.equal(thin.checksTotal, 15, 'the denominator never moves — it is what was on offer');
-  assert.ok(thin.checksRun <= 3, `a lease alone cannot support 15 checks, got ${thin.checksRun}`);
+  assert.equal(thin.checksTotal, 17, 'the denominator never moves — it is what was on offer');
+  assert.ok(thin.checksRun <= 3, `a lease alone cannot support 17 checks, got ${thin.checksRun}`);
   assert.ok(thin.skipped.length >= 12, 'and every one that did not run is named');
 });
 
@@ -295,4 +295,77 @@ test('coverage counts checks, not findings', () => {
   // look better covered than a clean one purely for being leaky.
   const clean = runRentalAudit(cleanDuplex());
   assert.equal(clean.checksRun + clean.skipped.length, clean.checksTotal);
+});
+
+// --- the two ratios that run on a statement alone ---------------------------
+//
+// Added after the live runs showed where coverage lands. The four-unit property
+// with all four documents reached 15 of 15; a well-run duplex reached 6, and a
+// single-family rental 4. Part of that was documents nobody had been asked for,
+// and part was a catalog that leaned on multi-unit, third-party-managed
+// properties. These two need only the statement every customer sends.
+
+test('operating cost share is measured against who actually pays the utilities', () => {
+  // One band for both would tell half of all landlords they are running badly.
+  // An owner carrying water, trash and common electric books costs a
+  // tenant-paid property never sees.
+  const owner = one(runRentalAudit(leakyFourplex()), 'OPEX_RATIO');
+  assert.equal(owner.severity, Severity.ABOVE_TYPICAL_RANGE);
+  assert.equal(owner.detail.ownerPaysUtilities, true);
+  assert.equal(owner.detail.ceiling, 0.62);
+  assert.equal(owner.dollarImpact, 6005.2, 'the amount above the top of the band, not the whole ratio');
+  assert.ok(/not a rule/.test(owner.basis), 'this is a market norm and has to read as one');
+
+  const tenantPaid = one(runRentalAudit(cleanDuplex()), 'OPEX_RATIO');
+  assert.equal(tenantPaid.severity, Severity.WITHIN_NORMS, '30% on a tenant-paid duplex is good, not suspicious');
+  // $216 of common-area hallway lighting is not the owner carrying the
+  // utilities. Measured by cost against collected rent, not by the presence of
+  // a utility line, or this duplex would have been given the wider band and a
+  // genuinely expensive property excused with it.
+  assert.equal(tenantPaid.detail.ownerPaysUtilities, false);
+  assert.equal(tenantPaid.dollarImpact, null);
+});
+
+test('the operating cost finding points back at the findings that make it up', () => {
+  // It is the sum of the other findings, so presenting it as a separate thing
+  // to fix would be counting the same money twice.
+  const f = one(runRentalAudit(leakyFourplex()), 'OPEX_RATIO');
+  assert.ok(/Read this against the individual findings/.test(f.recommendedAction));
+  assert.equal(f.impactKind, ImpactKind.EXCESS);
+});
+
+test('vacancy is measured, and no vacancy is reported as the result it is', () => {
+  const some = one(runRentalAudit(leakyFourplex()), 'VACANCY_RATIO');
+  assert.equal(some.severity, Severity.WITHIN_NORMS, '4.4% is one turnover in a four-unit building');
+
+  const none = one(runRentalAudit(cleanDuplex()), 'VACANCY_RATIO');
+  assert.ok(/no rent to vacancy/.test(none.title), 'a year with no vacancy is worth saying out loud');
+  assert.equal(none.dollarImpact, null);
+});
+
+test('vacancy above the usual band is flagged at the amount above it', () => {
+  const x = leakyFourplex();
+  x.income.vacancy_loss = 9000;               // 15.7% of scheduled
+  const f = one(runRentalAudit(x), 'VACANCY_RATIO');
+  assert.equal(f.severity, Severity.ABOVE_TYPICAL_RANGE);
+  assert.equal(f.dollarImpact, 9000 - 57300 * 0.08);
+  assert.ok(/never arrived/.test(f.basis), 'empty weeks are invisible precisely because nothing is billed');
+});
+
+test('both ratios run on a statement with no rent roll, mortgage or policy', () => {
+  // The single-family customer who sends one document is the case these exist
+  // for: before them that submission produced two substantive results.
+  const statementOnly = {
+    income: { gross_scheduled_rent: 19800, vacancy_loss: 0, total_collected: 19140 },
+    expenses: [
+      { label: 'Repairs', category: 'repairs_maintenance', annual_amount: 2415 },
+      { label: 'Insurance', category: 'insurance', annual_amount: 1780 },
+      { label: 'Taxes', category: 'taxes', annual_amount: 2940 },
+      { label: 'Accounting', category: 'admin', annual_amount: 350 },
+    ],
+    expense_total_stated: 7485,
+  };
+  const result = runRentalAudit(statementOnly);
+  assert.ok(find(result, 'OPEX_RATIO').length === 1);
+  assert.ok(find(result, 'VACANCY_RATIO').length === 1);
 });

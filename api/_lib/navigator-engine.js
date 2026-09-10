@@ -766,7 +766,7 @@ async function generateNavigatorReport(submissionId) {
           }
         } catch (err) {
           // A comparison that cannot be built is a missing section, not a
-          // missing report. The fifteen checks stand on their own.
+          // missing report. The deterministic checks stand on their own.
           console.error('[rental] year-over-year comparison failed:', err.message);
         }
       }

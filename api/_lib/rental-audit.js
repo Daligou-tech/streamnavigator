@@ -984,7 +984,134 @@ check(
   },
 );
 
-// -- 16. Say plainly when the rent question cannot be answered ---------------
+// -- 16. What share of the rent the property spends on itself ----------------
+//
+// Added after the live runs showed where coverage actually lands. A four-unit
+// property with all four documents reached 15 of 15; a well-run duplex reached
+// 6, and a single-family rental 4. Most of that gap is documents nobody was
+// asked for, which the intake now asks for — but the checks themselves also
+// leaned heavily on multi-unit, third-party-managed properties.
+//
+// This one and the next run on any property with a statement, which is the one
+// document every customer sends. On the four-unit audit the figure is 72.7%
+// against a well-run duplex's 30.2%, and it is the single most telling number
+// about that property. The engine was computing it inside the year-over-year
+// comparison and never reporting it on its own.
+check(
+  'OPEX_RATIO',
+  'Operating costs as a share of the rent collected',
+  (x) => arr(x.expenses).length >= 3 && num((x.income || {}).total_collected) > 0,
+  (x) => {
+    const collected = num((x.income || {}).total_collected);
+    const opex = sum(arr(x.expenses).map((e) => num(e.annual_amount)));
+    const ratio = opex / collected;
+
+    // Who pays the utilities moves this band more than anything else: an owner
+    // carrying water, trash and common electric is carrying costs that a
+    // tenant-paid property never books at all. Comparing the two against one
+    // number would tell half of all landlords they are running badly.
+    //
+    // Measured by what the utilities actually cost, not by whether a utility
+    // line exists. A duplex where tenants pay everything still books $216 of
+    // common-area hallway lighting, and treating that as "the owner carries the
+    // utilities" moved its band from 50% to 62% — which would have quietly
+    // excused a genuinely expensive property. Five per cent of collected rent
+    // separates paying the water for four units from paying for a light bulb.
+    const utilityCost = sum(arr(x.expenses)
+      .filter((e) => ['water_sewer', 'trash', 'electric', 'gas'].includes(e && e.category))
+      .map((e) => num(e.annual_amount)));
+    const ownerPaysUtilities = utilityCost / collected >= 0.05;
+    const ceiling = ownerPaysUtilities ? 0.62 : 0.50;
+
+    if (ratio <= ceiling) {
+      return {
+        checkId: 'OPEX_RATIO',
+        title: 'Operating costs take a normal share of the rent you collect',
+        severity: Severity.WITHIN_NORMS,
+        evidence: EvidenceKind.TYPICAL_RANGE,
+        actionability: Actionability.ACT_NOW,
+        basis: `${money(opex)} of operating costs against ${money(collected)} collected is ${pct(ratio)}. `
+          + (ownerPaysUtilities
+            ? 'Up to about 62% is usual where the owner carries the utilities, as you do.'
+            : 'Up to about 50% is usual where tenants pay their own utilities, as they do here.'),
+        charged: opex,
+        dollarImpact: null,
+        detail: { ratio, opex, collected, ownerPaysUtilities },
+      };
+    }
+
+    const excess = opex - collected * ceiling;
+    return {
+      checkId: 'OPEX_RATIO',
+      title: `Operating costs take ${pct(ratio)} of the rent you collect`,
+      severity: Severity.ABOVE_TYPICAL_RANGE,
+      evidence: EvidenceKind.TYPICAL_RANGE,
+      actionability: Actionability.ACT_NOW,
+      basis: `${money(opex)} of operating costs against ${money(collected)} collected. `
+        + (ownerPaysUtilities
+          ? 'Where the owner carries the utilities, up to about 62% is usual; '
+          : 'Where tenants pay their own utilities, up to about 50% is usual; ')
+        + `this property is ${money(excess)} above the top of that range. This is a comparison against `
+        + 'what is typical, not a rule — an older building catching up on deferred work can sit here for '
+        + 'a year legitimately. It is the number to explain, not necessarily the number to fix.',
+      recommendedAction: 'Read this against the individual findings above rather than on its own: this figure '
+        + 'is the sum of them, and it comes down when they do.',
+      charged: opex,
+      dollarImpact: Math.round(excess * 100) / 100,
+      impactKind: ImpactKind.EXCESS,
+      detail: { ratio, opex, collected, ceiling, ownerPaysUtilities },
+    };
+  },
+);
+
+// -- 17. How much rent the property failed to collect ------------------------
+check(
+  'VACANCY_RATIO',
+  'Vacancy loss against scheduled rent',
+  (x) => num((x.income || {}).gross_scheduled_rent) > 0 && num((x.income || {}).vacancy_loss) !== null,
+  (x) => {
+    const scheduled = num((x.income || {}).gross_scheduled_rent);
+    const lost = Math.abs(num((x.income || {}).vacancy_loss));
+    const ratio = lost / scheduled;
+
+    if (ratio <= 0.08) {
+      return {
+        checkId: 'VACANCY_RATIO',
+        title: lost === 0
+          ? 'You lost no rent to vacancy in this period'
+          : 'Vacancy cost you a normal share of the rent',
+        severity: Severity.WITHIN_NORMS,
+        evidence: EvidenceKind.TYPICAL_RANGE,
+        actionability: Actionability.AT_RENEWAL,
+        basis: lost === 0
+          ? `${money(scheduled)} of scheduled rent and no vacancy loss booked against it.`
+          : `${money(lost)} lost against ${money(scheduled)} scheduled is ${pct(ratio)}. `
+            + 'Up to about 8% is usual, and a single turnover in a small property will use most of that.',
+        dollarImpact: null,
+        detail: { ratio, lost, scheduled },
+      };
+    }
+
+    const excess = lost - scheduled * 0.08;
+    return {
+      checkId: 'VACANCY_RATIO',
+      title: `Vacancy cost you ${money(lost)} — ${pct(ratio)} of your scheduled rent`,
+      severity: Severity.ABOVE_TYPICAL_RANGE,
+      evidence: EvidenceKind.TYPICAL_RANGE,
+      actionability: Actionability.AT_RENEWAL,
+      basis: `${money(lost)} lost against ${money(scheduled)} scheduled. Up to about 8% is usual; this is `
+        + `${money(excess)} beyond that. Empty weeks are the most expensive thing a rental does and the `
+        + 'least visible, because nothing is billed for them — they show up only as rent that never arrived.',
+      recommendedAction: 'Look at how long each turnover actually took and where the time went — the make-ready, '
+        + 'the listing, or the screening. That is usually one of the three, and it is usually the same one each time.',
+      dollarImpact: Math.round(excess * 100) / 100,
+      impactKind: ImpactKind.EXCESS,
+      detail: { ratio, lost, scheduled },
+    };
+  },
+);
+
+// -- 18. Say plainly when the rent question cannot be answered ---------------
 //
 // The internal comparison in check 4 needs at least three like units. A single
 // rental house has none, and that is the case the product page has always sold
