@@ -261,3 +261,38 @@ test('every catalog entry declares a label and a needs test', () => {
     assert.equal(typeof entry.run, 'function');
   }
 });
+
+// --- coverage ---------------------------------------------------------------
+//
+// "We found nothing wrong" is two results, not one, and the difference is not
+// a nuance — it is the difference between a property that was examined and a
+// property we could barely see. The well-run duplex had thirteen checks run
+// and pass. The single-family rental had three run and twelve unable to.
+// Both reports opened by saying nothing was wrong.
+//
+// A landlord pays to find out. Finding out is the service and it is worth the
+// fee, which is why there is no refund when a property comes back clean — but
+// only a report that says how much was actually checked has told them anything.
+
+test('coverage is reported as a pair, so a thin result cannot pass as a clean one', () => {
+  const full = runRentalAudit(leakyFourplex());
+  assert.equal(full.checksTotal, 15);
+  assert.equal(full.checksRun, 15, 'this property carries every document the catalog needs');
+
+  const thin = runRentalAudit({
+    property: { unit_count: 1 },
+    units: [{ unit_id: 'house', monthly_rent: 1650 }],
+    documents_seen: ['a lease'],
+  });
+  assert.equal(thin.checksTotal, 15, 'the denominator never moves — it is what was on offer');
+  assert.ok(thin.checksRun <= 3, `a lease alone cannot support 15 checks, got ${thin.checksRun}`);
+  assert.ok(thin.skipped.length >= 12, 'and every one that did not run is named');
+});
+
+test('coverage counts checks, not findings', () => {
+  // A check that runs and passes is coverage. A check that produces three
+  // findings is still one check. Conflating them would let a leaky building
+  // look better covered than a clean one purely for being leaky.
+  const clean = runRentalAudit(cleanDuplex());
+  assert.equal(clean.checksRun + clean.skipped.length, clean.checksTotal);
+});

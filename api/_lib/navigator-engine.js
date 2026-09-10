@@ -175,7 +175,11 @@ Lead with the strongest TRUE statement available, in this order of preference:
 1. Confirmed arithmetic errors or recoverable charges, with the dollar figure.
 2. A unit below comparable units in the same property, or an unrecovered owner cost, with the dollar figure.
 3. Costs above a typical range, or a capital decision that is due.
-4. If there are none of the above: lead with WHAT WAS VERIFIED. Name the specific checks that passed and the numbers behind them — the expense lines adding up to their own total, the escrow reconciling to the taxes and insurance it funds, every unit priced in line with the ones beside it, no system absorbing repeat repair visits. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on these documents was independently reproduced and holds.
+4. If there are none of the above: lead with WHAT WAS VERIFIED, and lead with the coverage figure alongside it. Name the specific checks that passed and the numbers behind them — the expense lines adding up to their own total, the escrow reconciling to the taxes and insurance it funds, every unit priced in line with the ones beside it, no system absorbing repeat repair visits. These are findings marked "within norms" and they are the product when nothing is wrong. State plainly that the arithmetic on these documents was independently reproduced and holds.
+
+A landlord who is told their property is running clean has bought exactly what they came for, and the report must deliver that as a result rather than apologise for the absence of problems. Do not hedge it, do not pad it with things to worry about, and do not imply they got less than a customer with a leaking building did. They paid to find out, and finding out is the service.
+
+The one thing that must never happen is a clean bill of health written over thin coverage. If only a handful of checks could run, the honest headline is about the documents — what is missing and what to send — not about the property, because nobody has established anything about the property yet.
 
 Never open with what could not be done. Checks that could not run are real and must be reported honestly — but they belong AFTER the results, not in the headline.
 
@@ -630,6 +634,15 @@ async function generateNavigatorReport(submissionId) {
               JSON.stringify(passed.map((f) => ({ title: f.title, basis: f.basis })), null, 1),
             ].join('\n')
             : '',
+          `COVERAGE — ${audited.checksRun} of ${audited.checksTotal} checks ran on these documents.`,
+          'This figure goes in key_numbers, labelled "checks run", on every report. It is the number',
+          'that separates two results a customer will otherwise confuse: a property that was examined',
+          'and is fine, and a property we could barely examine. Where coverage is high and nothing was',
+          'flagged, say so with the number — that is a clean bill of health on work actually done, and',
+          'it is what the customer paid for. Where coverage is LOW, the headline must say that the',
+          'documents, not the property, are the limit, and the report must name the specific documents',
+          'that would raise it — a mortgage statement, a declarations page, a statement showing the',
+          'monthly utility figures. Never let a low-coverage report read as a clean bill of health.',
           audited.skipped.length
             ? `Checks that could not be run because the required figures were missing or unreadable: `
               + `${audited.skipped.join('; ')}. Say so plainly rather than implying they passed.`

@@ -1056,8 +1056,25 @@ function runRentalAudit(extraction) {
     }
   }
 
+  // Coverage, returned as a pair rather than left for the reader to count.
+  //
+  // "We found nothing wrong" is two completely different results and the
+  // report has to say which one the customer got. A duplex where thirteen
+  // checks ran and passed has been examined and is fine. A single-family
+  // rental where three ran and twelve could not is a statement about the
+  // documents, not the property, and a landlord who reads the first sentence
+  // and stops must not walk away believing the second was the first.
+  //
+  // It is also the number that tells them whether sending one more document
+  // would change the answer, which is the only useful thing to do about a
+  // thin result.
   const runnable = CATALOG.filter((entry) => !entry.silentSkip).length;
-  return { findings: rankFindings(findings), skipped, checksRun: runnable - skipped.length };
+  return {
+    findings: rankFindings(findings),
+    skipped,
+    checksRun: runnable - skipped.length,
+    checksTotal: runnable,
+  };
 }
 
 module.exports = {
