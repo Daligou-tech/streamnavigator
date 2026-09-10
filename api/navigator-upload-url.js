@@ -34,10 +34,13 @@ const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { hashIp, clientIp } = require('./_lib/rate-limit');
 const {
   MAX_DIRECT_FILE_BYTES,
+  MAX_TABULAR_FILE_BYTES,
   STAGING_PREFIX,
   MAX_STAGED_PER_IP,
-  ALLOWED_UPLOAD_MIME,
-  ALLOWED_UPLOAD_EXT,
+  allowedMimeFor,
+  allowedExtFor,
+  allowsTabular,
+  isTabularUpload,
   safeFileName,
   extensionOf,
   asMB,
@@ -75,18 +78,30 @@ module.exports = async function handler(req, res) {
   // the engines hand image/heic to an API that takes jpeg, png, gif and webp.
   // On the direct-upload products the file was therefore accepted, stored, and
   // failed during analysis, which for HOA is after the customer has paid.
-  if (!ALLOWED_UPLOAD_EXT.includes(ext)) {
-    res.status(400).json({ ok: false, error: 'That file type is not supported. Send a PDF, JPG, PNG or WEBP. '
-        + 'iPhone photos save as HEIC, which we cannot read — open the photo, tap '
-        + 'Share, then Copy Photo and paste it into an email to yourself to get a JPEG, '
-        + 'or send the original PDF of the document, which works best.' });
+  //
+  // What counts as supported now depends on the product. Rental Navigator reads
+  // a CSV rent roll directly; nothing else does, and a .csv accepted by a
+  // product that maps it to image/jpeg is the HEIC failure again with a
+  // different extension. See TABULAR_PRODUCTS in api/_lib/upload-limits.js.
+  const allowedExt = allowedExtFor(product);
+  const allowedMime = allowedMimeFor(product);
+  const typeHelp = allowsTabular(product)
+    ? 'That file type is not supported. Send a PDF, CSV, JPG, PNG or WEBP. '
+      + 'Excel workbooks (.xlsx, .xls) cannot be read directly — in Excel or Google Sheets '
+      + 'choose File, then Save As or Download, and pick CSV. '
+      + 'iPhone photos save as HEIC, which we also cannot read: open the photo, tap Share, '
+      + 'then Copy Photo and paste it into an email to yourself to get a JPEG.'
+    : 'That file type is not supported. Send a PDF, JPG, PNG or WEBP. '
+      + 'iPhone photos save as HEIC, which we cannot read — open the photo, tap '
+      + 'Share, then Copy Photo and paste it into an email to yourself to get a JPEG, '
+      + 'or send the original PDF of the document, which works best.';
+
+  if (!allowedExt.includes(ext)) {
+    res.status(400).json({ ok: false, error: typeHelp });
     return;
   }
-  if (contentType && !ALLOWED_UPLOAD_MIME.includes(contentType)) {
-    res.status(400).json({ ok: false, error: 'That file type is not supported. Send a PDF, JPG, PNG or WEBP. '
-        + 'iPhone photos save as HEIC, which we cannot read — open the photo, tap '
-        + 'Share, then Copy Photo and paste it into an email to yourself to get a JPEG, '
-        + 'or send the original PDF of the document, which works best.' });
+  if (contentType && !allowedMime.includes(contentType)) {
+    res.status(400).json({ ok: false, error: typeHelp });
     return;
   }
 
@@ -95,10 +110,15 @@ module.exports = async function handler(req, res) {
     res.status(400).json({ ok: false, error: 'Could not read that file’s size.' });
     return;
   }
-  if (size > MAX_DIRECT_FILE_BYTES) {
+  // A tabular file is read into the prompt as text, so it has its own, much
+  // lower ceiling — a rent roll is tens of kilobytes and a 50MB CSV is not a
+  // rent roll, it is an export nobody meant to send.
+  const fileCeiling = isTabularUpload(rawName) ? MAX_TABULAR_FILE_BYTES : MAX_DIRECT_FILE_BYTES;
+  if (size > fileCeiling) {
     res.status(400).json({
       ok: false,
-      error: `${rawName} is ${asMB(size)}MB — the limit is ${asMB(MAX_DIRECT_FILE_BYTES)}MB per file.`,
+      error: `${rawName} is ${asMB(size)}MB — the limit is ${asMB(fileCeiling)}MB per file`
+        + `${isTabularUpload(rawName) ? ' for a spreadsheet export' : ''}.`,
     });
     return;
   }

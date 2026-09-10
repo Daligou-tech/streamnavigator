@@ -44,6 +44,8 @@ const {
   MAX_DIRECT_TOTAL_BYTES,
   MAX_FILES,
   isStagingPath,
+  allowedExtFor,
+  extensionOf,
   asMB,
 } = require('./_lib/upload-limits');
 
@@ -126,6 +128,19 @@ module.exports = async function handler(req, res) {
   for (const f of files) {
     if (!f || typeof f.dataBase64 !== 'string' || !f.name) {
       res.status(400).json({ ok: false, error: 'Malformed file upload.' });
+      return;
+    }
+    // The signed-URL route has always checked the extension; this one never
+    // did, so anything at all could be base64'd through here and stored. It
+    // then reached an engine that maps an unknown extension to image/jpeg and
+    // fails on it — after payment. Same allowlist as the other route, and it
+    // is per-product now, because Rental reads a CSV and nothing else does.
+    if (!allowedExtFor(product).includes(extensionOf(f.name))) {
+      res.status(400).json({
+        ok: false,
+        error: `We can't read ${f.name}. Send a PDF or a photo of the document`
+          + `${allowedExtFor(product).includes('csv') ? ', or a CSV export of your spreadsheet' : ''}.`,
+      });
       return;
     }
     const approxBytes = Math.ceil((f.dataBase64.length * 3) / 4);

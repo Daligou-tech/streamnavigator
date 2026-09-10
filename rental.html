@@ -137,9 +137,9 @@
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
+            <div class="upload-sub">PDF, CSV, JPG or PNG &middot; up to 50MB per file (5MB for a CSV), 150MB total</div>
           </div>
-          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <input type="file" id="upload-input" multiple accept=".pdf,.csv,.tsv,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
           <p class="field-hint">
             <strong>Rent roll</strong> — compares each unit against the identical units beside it.<br>
@@ -147,7 +147,7 @@
             <strong>Mortgage statement</strong> — tests mortgage insurance against your loan-to-value, and escrow against what it funds.<br>
             <strong>Insurance declarations page</strong> — checks the dwelling limit, the deductible and the renewal increase.<br>
             <span style="opacity:.85">Monthly utility bills, if you have them, let us compare each month against your own baseline.</span><br><br>
-            Send what you have — the report tells you how many of the 15 checks ran, and which document would unlock the rest. PDFs and photos both work; if your rent roll is a spreadsheet, use File &rarr; Print &rarr; Save as PDF first, as we can&rsquo;t read .xlsx or .csv yet.
+            Send what you have — the report tells you how many of the 15 checks ran, and which document would unlock the rest. PDFs, CSV exports and photos all work. Excel workbooks don&rsquo;t: in Excel or Google Sheets choose File &rarr; Save As (or Download) and pick CSV.
           </p>
         </div>
         <div class="field-block">
@@ -184,7 +184,7 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Do I need property management software? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — a rent roll and expense records are enough to get started. Send them as PDFs or as photos of the statements. Most property-management systems export a PDF directly. We can&rsquo;t read .xlsx or .csv files yet, so if yours is a spreadsheet, print it to PDF first.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">No — a rent roll and expense records are enough to get started, and a CSV export is read directly, which is what most property-management systems and spreadsheets produce. PDFs and photos of statements work too. Excel workbooks are the one thing we can&rsquo;t open: choose File &rarr; Save As (or Download) and pick CSV.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Will this tell me if my rents are too low? <span class="plus">+</span></button>

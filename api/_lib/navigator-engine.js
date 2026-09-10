@@ -32,6 +32,7 @@ const { rankFindings, Severity } = require('./closing-audit');
 const { extractRentalDocuments } = require('./rental-extract');
 const { runRentalAudit, Severity: RentalSeverity } = require('./rental-audit');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
+const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -393,12 +394,50 @@ async function generateNavigatorReport(submissionId) {
     }
 
     const contentBlocks = [];
+    // Files we accepted, stored, and then could not actually read. Told to the
+    // customer rather than silently dropped: a rent roll that did not arrive is
+    // the difference between four checks running and thirteen, and they are the
+    // only person who can send a better copy.
+    const unreadableUploads = [];
+
     for (const path of filePaths) {
       const { data: fileBlob, error: downloadError } = await admin.storage
         .from('navigator-uploads')
         .download(path);
       if (downloadError || !fileBlob) continue;
       const arrayBuffer = await fileBlob.arrayBuffer();
+
+      // A spreadsheet export goes in as text. The document API takes PDFs and
+      // images; handing it a CSV under a guessed image type is how .heic used
+      // to fail, and the whole point of accepting these is that a rent roll
+      // lives in one.
+      if (isTabularUpload(path)) {
+        // Stored as "<product>/<id>/<timestamp>-<original name>"; the customer
+        // only ever knew the last part.
+        const name = path.split('/').pop().replace(/^\d+-/, '');
+        // Strip the byte-order mark Excel writes, which otherwise becomes a
+        // stray character on the first column header.
+        const text = Buffer.from(arrayBuffer).toString('utf8').replace(/^\uFEFF/, '');
+
+        // A renamed .xlsx is a binary file wearing a .csv extension, and it is
+        // a thing customers genuinely do. Nothing at upload time can catch it —
+        // that endpoint sees a filename and a size, never the bytes — so it is
+        // caught here and reported, rather than fed to the model as mojibake.
+        if (text.indexOf('\u0000') !== -1) {
+          unreadableUploads.push(`${name} is not a text CSV — it looks like a binary spreadsheet `
+            + '(an .xlsx or .xls renamed). Re-export it with File, then Save As or Download, and pick CSV.');
+          continue;
+        }
+
+        const clipped = text.length > MAX_TABULAR_CHARS;
+        contentBlocks.push({
+          type: 'text',
+          text: `FILE: ${name}\n\n${clipped ? text.slice(0, MAX_TABULAR_CHARS) : text}`
+            + (clipped ? `\n\n[This file was longer than ${MAX_TABULAR_CHARS} characters and was cut off here. Say so in your output — figures past this point were not read.]` : ''),
+        });
+        continue;
+      }
+
       const base64 = Buffer.from(arrayBuffer).toString('base64');
       const mediaType = guessMediaType(path);
       if (mediaType === 'application/pdf') {
@@ -416,6 +455,13 @@ async function generateNavigatorReport(submissionId) {
       formData.category ? `Customer-selected category: ${formData.category}` : null,
       formData.description ? `Customer's description: ${formData.description}` : null,
       `Number of documents attached: ${contentBlocks.length}`,
+      // A file the customer sent and we could not open is not a gap in their
+      // property, it is a gap in what we read, and only they can close it.
+      unreadableUploads.length
+        ? `FILES THAT COULD NOT BE READ — say this plainly in missing_or_uncertain, `
+          + `in these words, because the customer is the only person who can fix it: `
+          + unreadableUploads.join(' ')
+        : null,
     ].filter(Boolean).join('\n');
 
     contentBlocks.push({ type: 'text', text: contextLines || 'No additional context or documents were provided — work from the product task alone and flag the lack of input in missing_or_uncertain.' });

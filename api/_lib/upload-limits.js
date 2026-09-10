@@ -101,6 +101,62 @@ const ALLOWED_UPLOAD_MIME = [
 
 const ALLOWED_UPLOAD_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 
+// --- tabular uploads, enabled per product -----------------------------------
+//
+// A rent roll lives in a spreadsheet. Rental Navigator's own page invited one
+// for months while this endpoint returned 400 for .csv and .xlsx, which meant
+// the headline instruction on the page named the likeliest file the customer
+// had and the server refused it.
+//
+// This is deliberately NOT a global addition. The rule above still holds —
+// accepting a file we cannot read is worse than refusing it — and only the
+// products whose engine actually reads a text upload may take one. Everything
+// else maps an unknown extension to image/jpeg and hands it to an API that
+// will reject it, which on a paid product means a failed report after payment.
+const TABULAR_UPLOAD_EXT = ['csv', 'tsv'];
+
+// Browsers report .csv inconsistently, and Excel's file association makes it
+// worse: a .csv on a machine with Excel installed frequently arrives as
+// application/vnd.ms-excel, which is also the type of a binary .xls. Accepting
+// that type here is safe only because the extension check is independent and
+// always applies — a real .xls is refused on its extension before its MIME is
+// ever consulted.
+const TABULAR_UPLOAD_MIME = [
+  'text/csv',
+  'text/tab-separated-values',
+  'text/plain',
+  'application/csv',
+  'application/vnd.ms-excel',
+];
+
+// The opt-in list. Add a product here only once its engine builds a text block
+// for these files — see the tabular branch in api/_lib/navigator-engine.js.
+const TABULAR_PRODUCTS = ['rental'];
+
+// A tabular file is read into the prompt as text rather than handed to the
+// document API, so its real ceiling is context, not storage. 50MB of CSV is
+// tens of millions of tokens; a rent roll is tens of kilobytes. The byte limit
+// stops a pointless upload and the character limit stops a plausible one from
+// costing a customer their report.
+const MAX_TABULAR_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_TABULAR_CHARS = 200 * 1000;
+
+function allowsTabular(product) {
+  return TABULAR_PRODUCTS.indexOf(String(product || '')) !== -1;
+}
+
+function allowedExtFor(product) {
+  return allowsTabular(product)
+    ? ALLOWED_UPLOAD_EXT.concat(TABULAR_UPLOAD_EXT)
+    : ALLOWED_UPLOAD_EXT.slice();
+}
+
+function allowedMimeFor(product) {
+  return allowsTabular(product)
+    ? ALLOWED_UPLOAD_MIME.concat(TABULAR_UPLOAD_MIME)
+    : ALLOWED_UPLOAD_MIME.slice();
+}
+
 const asMB = (bytes) => Math.round((bytes / (1024 * 1024)) * 10) / 10;
 
 // Storage keys are user-influenced, so everything that reaches a path is
@@ -117,6 +173,12 @@ function safeFileName(name) {
 function extensionOf(name) {
   const parts = String(name || '').toLowerCase().split('.');
   return parts.length > 1 ? parts[parts.length - 1] : '';
+}
+
+// Whether a stored path or filename is one of the text uploads above. Used by
+// the engine to decide between a document block and a text block.
+function isTabularUpload(name) {
+  return TABULAR_UPLOAD_EXT.indexOf(extensionOf(name)) !== -1;
 }
 
 // Only paths this server issued may be claimed by a submission. Anything else
@@ -144,6 +206,15 @@ module.exports = {
   MAX_STAGED_PER_IP,
   ALLOWED_UPLOAD_MIME,
   ALLOWED_UPLOAD_EXT,
+  TABULAR_UPLOAD_EXT,
+  TABULAR_UPLOAD_MIME,
+  TABULAR_PRODUCTS,
+  MAX_TABULAR_FILE_BYTES,
+  MAX_TABULAR_CHARS,
+  allowsTabular,
+  allowedExtFor,
+  allowedMimeFor,
+  isTabularUpload,
   STAGING_PATH_RE,
   isStagingPath,
   safeFileName,

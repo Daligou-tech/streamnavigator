@@ -26,7 +26,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
-const { ALLOWED_UPLOAD_EXT } = require('../api/_lib/upload-limits');
+const { allowedExtFor } = require('../api/_lib/upload-limits');
+
+// What a page may offer now depends on which product it sells: Rental Navigator
+// reads a CSV rent roll and nothing else does. The page's filename is the
+// product, give or take the two scorecard pages that sell a product from a
+// second URL.
+function productFor(file) {
+  return path.basename(file, '.html').replace(/-scorecard$/, '');
+}
 
 const PAGES = fs.readdirSync(ROOT)
   .filter((f) => f.endsWith('.html'))
@@ -34,18 +42,19 @@ const PAGES = fs.readdirSync(ROOT)
 
 test('every upload page offers a file picker matching the server allowlist', () => {
   assert.ok(PAGES.length >= 10, `only found ${PAGES.length} pages with a file picker`);
-  const expected = ALLOWED_UPLOAD_EXT.map((e) => `.${e}`).sort().join(',');
   const wrong = [];
   for (const file of PAGES) {
+    const expected = allowedExtFor(productFor(file)).map((e) => `.${e}`).sort().join(',');
     const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
     for (const m of html.matchAll(/accept="([^"]+)"/g)) {
       const got = m[1].split(',').map((s) => s.trim().toLowerCase()).sort().join(',');
-      if (got !== expected) wrong.push(`${file}: accept="${m[1]}"`);
+      if (got !== expected) wrong.push(`${file}: accept="${m[1]}" but the server takes "${expected}"`);
     }
   }
   assert.deepEqual(wrong, [],
-    `a file picker disagrees with ALLOWED_UPLOAD_EXT (${expected}) — the OS picker would `
-    + `offer a file api/navigator-upload-url.js then refuses:\n  ${wrong.join('\n  ')}`);
+    'a file picker disagrees with what api/navigator-upload-url.js accepts for that product — '
+    + 'the OS picker would offer a file the server then refuses, or hide one it would have taken:'
+    + `\n  ${wrong.join('\n  ')}`);
 });
 
 test('no page claims we accept a format the server refuses', () => {
@@ -56,13 +65,20 @@ test('no page claims we accept a format the server refuses', () => {
 
   const offenders = [];
   for (const file of PAGES) {
+    const allowed = allowedExtFor(productFor(file));
     const html = fs.readFileSync(path.join(ROOT, file), 'utf8');
     const text = html.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ');
     for (const sentence of text.split(/(?<=[.!?])\s+|\n/)) {
       const s = sentence.trim();
       if (!s || !UNREADABLE.test(s)) continue;
       const named = s.match(UNREADABLE)[0].toLowerCase().replace(/^\./, '');
-      if (ALLOWED_UPLOAD_EXT.includes(named)) continue;
+      if (allowed.includes(named)) continue;
+      // "spreadsheet" is generic. On a product that reads a CSV export it is a
+      // fair thing to offer; on one that does not, it is the claim that started
+      // this file.
+      if (named === 'spreadsheets' || named === 'spreadsheet') {
+        if (allowed.includes('csv')) continue;
+      }
       if (NEGATED.test(s)) continue;          // "we can't read .csv" is honest copy
       if (!ACCEPTS.test(s)) continue;         // a passing mention, not an offer
       offenders.push(`${file}: ${s.replace(/\s+/g, ' ').slice(0, 140)}`);
