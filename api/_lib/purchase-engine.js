@@ -35,7 +35,7 @@
 
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const { sendFailureAlert } = require('./alerts');
-const { failurePatch } = require('./provider-outage');
+const { failurePatch, isProviderOutage } = require('./provider-outage');
 const { fieldsForCategory, CATEGORIES } = require('../../navigator-buying-rules');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
@@ -3268,13 +3268,33 @@ async function generatePurchaseReport(submissionId) {
     }
 
     if (recoverableError) {
-      if (attemptNumber < MAX_ATTEMPTS) {
+      // An outage is not an attempt.
+      //
+      // This hands back to 'paid' for another try, which is right, but it used
+      // to leave generation_attempts incremented whatever the cause. During the
+      // Anthropic outage of 2026-09-10 that meant the retry budget was spent by
+      // something that never reached the model: two of the four attempts on a
+      // submission went in ten minutes without a single request being answered.
+      // Once all four are gone the pre-check above marks the row 'failed', and
+      // a row that has already been through auto-recovery once is then outside
+      // api/retry-failed-buying.js's filter — so a long enough outage walks a
+      // paying customer all the way to abandoned.
+      //
+      // Giving the attempt back is the same move the verification hand-back
+      // above already makes for the same reason: nothing was attempted.
+      const outage = isProviderOutage(recoverableError);
+      if (outage || attemptNumber < MAX_ATTEMPTS) {
         // Not out of attempts yet — hand back to 'paid' so the next client
         // poll (a few seconds away) triggers a fresh attempt with its own
         // full time budget, rather than retrying inside this same request.
         await admin
           .from('navigator_submissions')
-          .update({ status: 'paid', error: String(recoverableError.message || recoverableError).slice(0, 500), updated_at: new Date().toISOString() })
+          .update({
+            status: 'paid',
+            generation_attempts: outage ? Math.max(0, attemptNumber - 1) : attemptNumber,
+            error: String(recoverableError.message || recoverableError).slice(0, 500),
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', submissionId);
         return null;
       }

@@ -123,6 +123,31 @@ test('a row abandoned mid-generation is picked up too, not just one waiting to s
     + `${longestOwnerMinutes.toFixed(1)} — the same report would generate and bill twice`);
 });
 
+test('an outage does not spend a buying submission’s retry budget', () => {
+  // The path that actually runs during an outage is not the catch block — it
+  // is the recoverable-error hand-back, which returns rather than throwing. It
+  // used to leave generation_attempts incremented whatever the cause, so a
+  // sustained outage spent all four attempts without a single request being
+  // answered. Once they are gone the row is marked 'failed', and a row that has
+  // already been through auto-recovery once falls outside retry-failed-buying's
+  // filter: a long enough outage walks a paying customer to abandoned.
+  //
+  // Observed live on 2026-09-11 — two submissions went from 0 attempts to 2 in
+  // ten minutes against an account with no credit.
+  const src = read('api/_lib/purchase-engine.js');
+  const handback = src.slice(src.indexOf('if (recoverableError) {'));
+  const body = handback.slice(0, handback.indexOf('throw recoverableError;'));
+
+  assert.ok(/isProviderOutage\(/.test(body),
+    'the recoverable hand-back does not ask whose fault the failure was, so an outage '
+    + 'still costs an attempt');
+  assert.ok(/generation_attempts:/.test(body),
+    'the hand-back never writes generation_attempts, so it cannot give an attempt back');
+  assert.ok(/attemptNumber - 1/.test(body),
+    'an attempt that never reached the model has to be returned, the way the '
+    + 'verification hand-back above already returns one');
+});
+
 test('an outage parks a buying row where its own job will find it', () => {
   // 'paid' does not mean the same thing in every product. For the nine on the
   // generic sweep it is the queue; for buying the queue is defined by
