@@ -3377,6 +3377,27 @@ async function generatePurchaseReport(submissionId) {
     const paidForReal = !!submission.stripe_checkout_session_id;
     const { outage, patch } = failurePatch(err, { paidForReal });
 
+    if (outage) {
+      // Buying is excluded from api/generate-paid-navigator.js — it has its own
+      // retry job — so 'paid' alone is not a queue here the way it is for the
+      // other nine products. api/retry-failed-buying.js looks for exactly two
+      // shapes: (failed, not yet in recovery) and (paid, already in recovery).
+      // An outage row left at 'paid' with auto_recovery_attempted still false
+      // matches neither, and would sit untouched forever.
+      //
+      // Caught immediately after the outage handling went in, by asking where
+      // the row goes next rather than assuming 'paid' means the same thing in
+      // every product. It does not.
+      patch.auto_recovery_attempted = true;
+
+      // And an outage must not spend the retry budget. generation_attempts is
+      // incremented before the attempt begins, so without this a provider
+      // being unavailable three times exhausts a submission that was never
+      // actually tried — the same reasoning hoa-engine.js documents for not
+      // incrementing on a billing failure.
+      patch.generation_attempts = submission.generation_attempts || 0;
+    }
+
     await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
 
     // The auto_recovery_attempted gate stays for ordinary failures: this engine

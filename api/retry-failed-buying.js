@@ -31,17 +31,37 @@ module.exports = async function handler(req, res) {
 
   const admin = getSupabaseAdmin();
 
-  // Two groups, in one query: submissions hitting this for the first time
-  // (status:'failed', not yet opted into recovery) and submissions already
-  // mid-recovery from an earlier sweep (status:'paid' because their last
-  // attempt was individually recoverable, auto_recovery_attempted already
-  // true so they keep being found here rather than needing a customer to
-  // revisit the page).
+  // Every paid buying submission that is not moving, in one query.
+  //
+  // This used to name two shapes: (failed, not yet in recovery) and (paid,
+  // already in recovery). A row that was paid and NOT in recovery matched
+  // neither, and nothing else in the system looks at buying — it is excluded
+  // from api/generate-paid-navigator.js on the grounds that it "has its own
+  // job", and this is that job.
+  //
+  // Two real customers had been sitting in that gap since 2026-08-30. Both
+  // had a Stripe session, status 'paid', auto_recovery_attempted false,
+  // generation_attempts 0 and no error: they paid, the browser-triggered
+  // generation never ran or never finished, and there was no second shape for
+  // them to fall into. Eleven days, no report, no refund, no alert.
+  //
+  // Found by asking where an outage row goes next when the failure path was
+  // changed to park one at 'paid' — the same gap, approached from the other
+  // side.
+  //
+  // The grace period is why widening this is safe. Generation sets 'processing'
+  // as its first act, so a row still reading 'paid' minutes later is one nobody
+  // is generating. Without the wait, this sweep could start a second generation
+  // alongside a customer's own browser and bill the same report twice.
+  const GRACE_MINUTES = 5;
+  const cutoff = new Date(Date.now() - GRACE_MINUTES * 60 * 1000).toISOString();
+
   const { data: eligible, error: fetchError } = await admin
     .from('navigator_submissions')
     .select('id, status, auto_recovery_attempted')
     .eq('product', 'buying')
-    .or('and(status.eq.failed,auto_recovery_attempted.eq.false),and(status.eq.paid,auto_recovery_attempted.eq.true)');
+    .lt('updated_at', cutoff)
+    .or('and(status.eq.failed,auto_recovery_attempted.eq.false),status.eq.paid');
 
   if (fetchError) {
     res.status(500).json({ ok: false, error: fetchError.message });
