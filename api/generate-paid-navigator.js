@@ -40,6 +40,24 @@ const SWEPT_PRODUCTS = [
 const GRACE_MINUTES = 2;
 const MAX_PER_SWEEP = 3;
 
+// A row abandoned mid-generation, rather than one waiting to start.
+//
+// generateNavigatorReport sets 'processing' as its first act, so a row in that
+// state is one some process claimed. If that process is killed — a Vercel
+// function hitting its maxDuration is the ordinary way — no catch block runs,
+// nothing writes 'failed', and the row keeps saying 'processing' forever.
+// Nothing looked at those: this sweep selected 'paid' only, process-refunds
+// needs 'failed', and the inline stuck-processing recovery in
+// api/get-navigator-submission.js is written for buying alone. A paying
+// customer's report simply stopped existing, with no refund and no alert.
+//
+// Twenty minutes is comfortably past any process that could still hold it.
+// This function's own ceiling is 800s and the polling endpoint's is 300s, so
+// by thirteen and a half minutes every possible owner is dead. It was worth
+// closing now because raising the output ceiling for large portfolios makes
+// generations longer, and the 300s path is the one a customer sits in front of.
+const ABANDONED_MINUTES = 20;
+
 module.exports = async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
@@ -49,24 +67,50 @@ module.exports = async function handler(req, res) {
 
   const admin = getSupabaseAdmin();
   const cutoff = new Date(Date.now() - GRACE_MINUTES * 60 * 1000).toISOString();
+  const abandoned = new Date(Date.now() - ABANDONED_MINUTES * 60 * 1000).toISOString();
 
-  const { data: waiting, error: fetchError } = await admin
+  // Two states, with different waits, as two queries rather than one `.or()`.
+  //
+  // A combined filter would have to interpolate ISO timestamps into a PostgREST
+  // filter string, where the separator is a dot and the values are full of
+  // them. Two plain queries cannot be got wrong that way, and each carries its
+  // own cutoff plainly enough to read.
+  //
+  // 'paid' is a report that has not started, and needs only enough grace not to
+  // race the customer's own browser. 'processing' is one that started and was
+  // killed, and needs long enough to be certain nothing still holds it.
+  //
+  // Each report is two model calls and this function has a wall clock, so it
+  // takes a few per sweep and leaves the rest for the next one — a backlog
+  // finishes a minute later rather than timing out half way through somebody's
+  // report.
+  const pending = await admin
     .from('navigator_submissions')
-    .select('id, updated_at')
+    .select('id, status, updated_at')
     .in('product', SWEPT_PRODUCTS)
     .eq('status', 'paid')
     .lt('updated_at', cutoff)
     .order('updated_at', { ascending: true })
-    // Each report is two model calls and the function has a wall clock. Taking
-    // a few per sweep and leaving the rest for the next one finishes a backlog
-    // a minute later than one heroic pass would, and without timing out
-    // half way through somebody's report.
     .limit(MAX_PER_SWEEP);
 
+  const stalled = await admin
+    .from('navigator_submissions')
+    .select('id, status, updated_at')
+    .in('product', SWEPT_PRODUCTS)
+    .eq('status', 'processing')
+    .lt('updated_at', abandoned)
+    .order('updated_at', { ascending: true })
+    .limit(MAX_PER_SWEEP);
+
+  const fetchError = pending.error || stalled.error;
   if (fetchError) {
     res.status(500).json({ ok: false, error: fetchError.message });
     return;
   }
+
+  // Abandoned rows first: they have already waited twenty minutes and their
+  // customer has been looking at a spinner for all of it.
+  const waiting = (stalled.data || []).concat(pending.data || []).slice(0, MAX_PER_SWEEP);
 
   const results = [];
   for (const row of waiting || []) {

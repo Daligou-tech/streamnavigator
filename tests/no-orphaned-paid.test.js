@@ -97,6 +97,32 @@ test('the buying job waits before touching a row the customer may be generating'
     'the widened query has no grace period — it can race a generation already in flight');
 });
 
+test('a row abandoned mid-generation is picked up too, not just one waiting to start', () => {
+  // 'processing' is written as the first act of generation, so a row in that
+  // state was claimed by some process. When that process is killed — a Vercel
+  // function hitting maxDuration is the ordinary way — no catch block runs,
+  // nothing writes 'failed', and the row says 'processing' forever. The sweep
+  // read 'paid' only, process-refunds needs 'failed', and the inline stuck-
+  // processing recovery in get-navigator-submission.js is written for buying
+  // alone: for the other nine, a paid report just stopped existing.
+  const sweep = read('api/generate-paid-navigator.js');
+  assert.ok(/status',\s*'processing'/.test(sweep) || /status\.eq\.processing/.test(sweep),
+    'the sweep never looks at a row abandoned mid-generation');
+
+  // And it must wait long enough to be sure nothing still holds the row.
+  // Anything shorter than the longest function that can own one is a race that
+  // generates and bills the same report twice.
+  const m = sweep.match(/ABANDONED_MINUTES\s*=\s*(\d+)/);
+  assert.ok(m, 'the wait before reclaiming an abandoned row is not named');
+  const longestOwnerMinutes = Math.max(
+    ...Object.values(JSON.parse(read('vercel.json')).functions || {})
+      .map((f) => (f.maxDuration || 0) / 60)
+  );
+  assert.ok(Number(m[1]) > longestOwnerMinutes,
+    `reclaiming after ${m[1]} minutes can race a function that runs for up to `
+    + `${longestOwnerMinutes.toFixed(1)} — the same report would generate and bill twice`);
+});
+
 test('an outage parks a buying row where its own job will find it', () => {
   // 'paid' does not mean the same thing in every product. For the nine on the
   // generic sweep it is the queue; for buying the queue is defined by
