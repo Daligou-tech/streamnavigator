@@ -502,7 +502,14 @@
     if (report.headline_tag) {
       tagEl.hidden = false;
       tagEl.textContent = report.headline_tag;
-      tagEl.className = 'verdict-pill' + (/high|critical|moderate|above|over|worth shopping|replace|reconsider|denied|concern/i.test(report.headline_tag) ? ' warn' : '');
+      // The vocabulary here was written for the products that existed at the
+      // time — closing, insurance, buying — and a tag it does not recognise
+      // renders in the neutral style. Landlord Navigator's most urgent possible
+      // badge is "Action required", which matched nothing, so the report that
+      // most needed the warning colour was the one that did not get it.
+      // Extended rather than replaced: every existing product's vocabulary is
+      // still in the list.
+      tagEl.className = 'verdict-pill' + (/high|critical|moderate|above|over|worth shopping|replace|reconsider|denied|concern|action required|unmet|not registered|unregistered|overdue|lapsed|expired|due soon|at risk/i.test(report.headline_tag) ? ' warn' : '');
     } else {
       tagEl.hidden = true;
     }

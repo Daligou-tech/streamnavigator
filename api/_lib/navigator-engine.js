@@ -46,6 +46,34 @@ const { grantEntitlement } = require('./rental-entitlement');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
+// How much room the write-up gets, sized to how much there is to write up.
+//
+// Every product that hands the model a deterministic audit does it through the
+// same `auditBlock`, and every finding in one carries a checkId — closing,
+// rental and landlord alike — so counting those counts the work in front of the
+// writer directly, rather than inferring it from how verbose the JSON happens
+// to be. A products with no deterministic half has an empty block and gets the
+// base, which is the flat ceiling this replaced.
+//
+// Being generous here costs nothing. max_tokens is a ceiling, not a purchase:
+// the bill is for tokens actually generated, so a ceiling set well above what
+// the writer uses is free, while one set below it loses the whole report. The
+// asymmetry is total, and the old flat 8000 was on the wrong side of it —
+// twelve properties produce 73 findings, which cannot be written up honestly
+// in 8000 tokens, so the largest-paying portfolio was the one certain to fail.
+const BASE_MAX_TOKENS = 8000;
+const HARD_MAX_TOKENS = 32000;
+// A finding written up properly is a sentence of what it is, a sentence of why,
+// and an action — with room to spare, because running out costs everything and
+// over-providing costs nothing.
+const TOKENS_PER_FINDING = 220;
+
+function maxTokensForWork(auditBlock) {
+  const block = String(auditBlock || '');
+  const findings = (block.match(/"checkId"/g) || []).length;
+  return Math.min(BASE_MAX_TOKENS + findings * TOKENS_PER_FINDING, HARD_MAX_TOKENS);
+}
+
 // Shared discipline for every product: this is a plain text-completion call
 // with no live web/database access, so it must never present a fabricated
 // specific real-world fact (a comparable property, a named government
@@ -1016,6 +1044,21 @@ Then do what you can. Work only from what is legibly present, flag anything that
     const MAX_ATTEMPTS = 2;
     let report = null;
     let lastError = null;
+    // The output ceiling is sized to the work, not fixed.
+    //
+    // 8000 was a flat number, and the comment beside it already conceded that
+    // "a closing audit with twenty findings plus two drafted emails runs close
+    // to that ceiling". Landlord Navigator made that concrete and worse:
+    // twelve properties — the maximum the intake accepts, and exactly the
+    // customer a flat $149 suits best — produce 76 deterministic findings,
+    // which at any honest length per finding cannot be written inside 8000
+    // tokens. The report would truncate, and truncation throws, so the
+    // largest-paying portfolio was the one guaranteed to fail.
+    //
+    // maxTokensForWork scales with the size of the findings actually handed
+    // over, which works the same way for a closing audit, a rental audit and a
+    // landlord portfolio because all three arrive as the same auditBlock.
+    let maxTokens = maxTokensForWork(auditBlock);
     for (let attempt = 1; attempt <= MAX_ATTEMPTS && !report; attempt++) {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -1026,11 +1069,7 @@ Then do what you can. Work only from what is legibly present, flag anything that
         },
         body: JSON.stringify({
           model: ANTHROPIC_MODEL,
-          // Raised from 4096. A closing audit with twenty findings plus two
-          // drafted emails runs close to that ceiling, and nothing below checks
-          // stop_reason — a truncated tool call would have been saved and billed
-          // as a finished report.
-          max_tokens: 8000,
+          max_tokens: maxTokens,
           system: systemPrompt,
           tools: [REPORT_TOOL],
           tool_choice: { type: 'tool', name: 'submit_navigator_report' },
@@ -1049,10 +1088,17 @@ Then do what you can. Work only from what is legibly present, flag anything that
 
       // mid-sentence is stored and emailed as though it were complete.
 
+      // A truncated response still parses. Without this check, a report cut off
+      // mid-sentence is stored, emailed and billed as though it were complete.
+      //
+      // What it must NOT do is give up, which is what a bare throw here did:
+      // it exits the retry loop entirely, so the first truncation was fatal and
+      // the second attempt the loop exists for never happened. Retrying at the
+      // same ceiling would only truncate again, so the retry raises it.
       if (data.stop_reason === 'max_tokens') {
-
-        throw new Error('Report generation hit the output limit and was truncated — not saved.');
-
+        lastError = new Error('Report generation hit the output limit and was truncated — not saved.');
+        maxTokens = Math.min(Math.round(maxTokens * 2), HARD_MAX_TOKENS);
+        continue;
       }
       const toolUse = (data.content || []).find((b) => b.type === 'tool_use' && b.name === 'submit_navigator_report');
       if (!toolUse) {
@@ -1196,5 +1242,8 @@ Then do what you can. Work only from what is legibly present, flag anything that
 module.exports = {
   generateNavigatorReport,
   PRODUCT_CONFIGS,
-  __internal: { renderLettersAsText, normalizeReport, coerceStringArray },
+  __internal: {
+    renderLettersAsText, normalizeReport, coerceStringArray,
+    maxTokensForWork, BASE_MAX_TOKENS, HARD_MAX_TOKENS,
+  },
 };
