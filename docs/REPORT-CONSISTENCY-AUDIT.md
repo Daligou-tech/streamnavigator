@@ -142,7 +142,8 @@ source before being dismissed rather than waved away.
 - `contractor` and the remaining Navigator products were not audited.
 - `buying`'s tag-leak failure (the model returning its whole tool input as
   parameter-tag text) is a *generation* failure, not a consistency one, and is
-  tracked separately. It was traced to six sibling object-valued fields in the
-  report schema and flattened on 2026-09-09.
+  tracked in [BUYING-ENGINE-AUDIT.md](BUYING-ENGINE-AUDIT.md). It was traced to
+  six sibling object-valued fields in the report schema and flattened on
+  2026-09-09.
 - One `closing` report and one `hoa` report is a small sample. Neither product
   showed a contradiction, but "none found in one report" is not "none exists".
