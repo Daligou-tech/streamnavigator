@@ -51,6 +51,10 @@
     {
       "path": "/api/rental-reminders",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/landlord-reminders",
+      "schedule": "0 15 * * *"
     }
   ],
   "headers": [

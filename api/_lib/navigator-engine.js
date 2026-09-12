@@ -35,7 +35,11 @@ const {
 } = require('./rental-audit');
 const {
   runLandlordAudit, Severity: LandlordSeverity,
+  _internal: { label: landlordLabel },
 } = require('./landlord-audit');
+const { runLandlordOutcomes } = require('./landlord-outcomes');
+const { buildLandlordPack } = require('./landlord-pack');
+const { extractLandlordLicences, applyLicences } = require('./landlord-extract');
 const { runRentalTrend, sameProperty } = require('./rental-trend');
 const { runRentalOutcomes } = require('./rental-outcomes');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
@@ -128,6 +132,16 @@ const REPORT_TOOL = {
           properties: {
             icon: { type: 'string', description: 'A single emoji representing this section.' },
             title: { type: 'string' },
+            // Products that analyse several things at once — a landlord's
+            // portfolio is the case this was added for — need the write-up
+            // grouped by the thing rather than merged into one narrative. The
+            // instruction to do that lives in the prompt; this field is what
+            // makes it checkable afterwards instead of hoped for. Omitted by
+            // every single-subject product, and ignored by the renderer.
+            property: {
+              type: 'string',
+              description: 'For a submission covering several properties, the exact property label this section belongs to, copied from the findings. Omit for a section that is about the portfolio as a whole, or for a product with a single subject.',
+            },
             items: {
               type: 'array',
               items: { type: 'string' },
@@ -273,7 +287,7 @@ This is a legally sensitive product, so the honesty rules below apply especially
 
 Every finding carries a "verifyWith" naming an office. Every action item in your write-up must end at a concrete next step the landlord can take this week — a call to that office, a form to obtain, an account to open, a notice to serve.
 
-Organise the sections by property where the findings are per-property, using the property label the engine gives. A landlord with four rentals wants four checklists, not one merged narrative. Put the portfolio-level findings, if any, in their own section.
+Organise the sections by property where the findings are per-property, using the property label the engine gives, and set each such section's "property" field to that exact label. A landlord with four rentals wants four checklists, not one merged narrative. Put the portfolio-level findings, if any, in their own section, with the "property" field left out.
 
 A landlord whose properties come back clean has bought exactly what they came for. Deliver that as a result rather than apologising for the absence of problems, and name the checks that ran and passed so they can see what was examined.`,
   },
@@ -474,6 +488,36 @@ async function resolvePriorPeriod(admin, submission, extraction) {
   // address is printed differently on two statements deserves to know why the
   // comparison they were expecting is missing.
   return matched || candidates[0];
+}
+
+// The customer's own previous landlord review, if they have one.
+//
+// Scoped to their email and to completed landlord submissions, so a history is
+// only ever compared against itself. Unlike Rental — which has to match an
+// address because one customer can have three buildings under one email — a
+// landlord submission already carries the whole portfolio, so the most recent
+// completed one IS the right comparison and the per-property matching happens
+// inside api/_lib/landlord-outcomes.js.
+async function resolvePriorLandlord(admin, submission) {
+  if (!submission.email) return null;
+
+  const { data: earlier, error } = await admin
+    .from('navigator_submissions')
+    .select('id, form_data, created_at')
+    .eq('product', 'landlord')
+    .eq('email', submission.email)
+    .eq('status', 'complete')
+    .neq('id', submission.id)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error || !earlier || !earlier.length) return null;
+  const row = earlier[0];
+  const findings = Array.isArray((row.form_data || {}).landlord_findings)
+    ? row.form_data.landlord_findings : [];
+  if (!findings.length) return null;
+
+  return { findings, when: String(row.created_at).slice(0, 10), submissionId: row.id };
 }
 
 function guessMediaType(filename) {
@@ -774,6 +818,8 @@ async function generateNavigatorReport(submissionId) {
     // read, a document that turns out not to be a rent roll — the customer has
     // still paid, and a thinner analysis they are told is thinner beats an empty
     // report. That fallback is the exception and it announces itself.
+    // Assembled in the landlord branch below, attached after generation.
+    let landlordPack = null;
     let usedFallbackAnalysis = false;
     // Hoisted: the entitlement is granted after the report is stored, well below
     // this block, and it records the property address the extraction found.
@@ -950,8 +996,44 @@ async function generateNavigatorReport(submissionId) {
     // write up "Seattle runs RRIO and you said this property is not enrolled",
     // it writes that. See api/_lib/landlord-audit.js for what this replaced.
     if (submission.product === 'landlord') {
-      const properties = Array.isArray(formData.properties) ? formData.properties : [];
+      let properties = Array.isArray(formData.properties) ? formData.properties : [];
+
+      // A registration expiry the landlord left blank is usually printed on the
+      // licence they uploaded, and that one date drives both the renewal check
+      // and the reminder that fires before it. Only ever fills a blank — a date
+      // they typed is the one they will recognise, and the document may be an
+      // old copy. See api/_lib/landlord-extract.js.
+      let licencesFilled = [];
+      if (contentBlocks.length > 1) {
+        try {
+          const read = await extractLandlordLicences(ANTHROPIC_API_KEY, contentBlocks);
+          const applied = applyLicences(properties, read.licences);
+          properties = applied.properties;
+          licencesFilled = applied.filled;
+        } catch (err) {
+          // An unreadable licence costs the extra date, never the report.
+          console.error('[landlord] licence extraction failed:', err.message);
+        }
+      }
+
       const audited = runLandlordAudit({ properties });
+
+      // What last year's findings did, read out of this year's answers rather
+      // than asked of the customer. Only runs for somebody who has been here
+      // before — see api/_lib/landlord-outcomes.js for why asking would have
+      // been easier and worth nothing.
+      let outcomes = null;
+      try {
+        const prior = await resolvePriorLandlord(admin, submission);
+        if (prior && prior.findings.length) {
+          const closed = runLandlordOutcomes(prior.findings, properties);
+          if (closed.outcomes.length) outcomes = Object.assign({ when: prior.when }, closed);
+        }
+      } catch (err) {
+        // A comparison that cannot be built is a missing section, not a missing
+        // report. This year's checks stand on their own.
+        console.error('[landlord] outcome comparison failed:', err.message);
+      }
 
       if (audited.findings.length) {
         const flagged = audited.findings.filter((f) => f.severity !== LandlordSeverity.WITHIN_NORMS);
@@ -996,7 +1078,56 @@ async function generateNavigatorReport(submissionId) {
             ? `Checks that could not run because a field was left blank: ${audited.skipped.join('; ')}. `
               + 'Name them rather than implying they passed, and say which answer would turn each one on.'
             : '',
+          licencesFilled.length
+            ? 'DATES READ OFF AN UPLOADED LICENCE, not entered by the customer: '
+              + licencesFilled.map((f) => f.property + ' expires ' + f.expires).join('; ')
+              + '. Say so wherever one of these dates appears — the customer did not give it to us, and a date we read off a document they may have replaced has to be presented as something to confirm.'
+            : '',
+          outcomes
+            ? [
+              '',
+              'WHAT LAST YEAR\'S FINDINGS DID — the outcome of the review this customer already paid',
+              `for, read out of the answers they have just given rather than asked of them. It was run`,
+              `on ${outcomes.when}. Give this its own section, near the top, before this year's findings.`,
+              `${outcomes.resolved} resolved, ${outcomes.improved} improved, ${outcomes.stillOpen} still open, `
+                + `${outcomes.notTestable} not testable from what was entered this time.`,
+              'A "not testable" outcome means a question was left blank this time. It is NOT a pass, it is',
+              'NOT progress, and it must never be written as either — name the answer that would close it.',
+              'An "improved" outcome is not a "resolved" one: say what changed and what still stands.',
+              'Resolutions here rest on the landlord\'s own answers, not on anything we checked with a',
+              'city. Write them as "you told us" rather than as verified fact.',
+              JSON.stringify(outcomes.outcomes, null, 1),
+            ].join('\n')
+            : '',
         ].filter(Boolean).join('\n');
+
+        // Kept on the submission so next year's review can close these out
+        // without asking the customer what they did. The per-finding `answers`
+        // snapshot is what lets a date comparison work — a renewal is only
+        // proved by the expiry moving, which needs the old one.
+        landlordPack = buildLandlordPack(audited.findings, { coverage: audited.coverage });
+
+        const byName = new Map();
+        properties.forEach((p, i) => byName.set(landlordLabel(p, i), p));
+        await admin
+          .from('navigator_submissions')
+          .update({
+            form_data: {
+              ...formData,
+              landlord_checks_run: audited.checksRun,
+              landlord_findings: audited.findings
+                .filter((f) => f.severity !== LandlordSeverity.WITHIN_NORMS && f.property)
+                .map((f) => ({
+                  checkId: f.checkId,
+                  property: f.property,
+                  title: f.title,
+                  severity: f.severity,
+                  answers: byName.get(f.property) || {},
+                })),
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', submissionId);
       } else {
         // No properties entered at all. The intake blocks this client- and
         // server-side, so reaching here means something upstream let a blank
@@ -1132,6 +1263,16 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // here to write up findings, not to reword a letter the customer will sign
     // their name to. Attaching after also keeps them clear of the contamination
     // check above, which is looking for model output, not our own text.
+    // Landlord's equivalent: the action pack, assembled from the audit's own
+    // findings and attached here rather than written by the model. Same reason
+    // as the letters below — this is a document the customer works through, and
+    // a writer that reworded it could turn a requirement into a suggestion. It
+    // replaces whatever closing block the model produced.
+    if (landlordPack) {
+      report.closing_title = 'Your action pack, property by property';
+      report.closing_body = landlordPack;
+    }
+
     const hasLetters = draftedEmails
       && Object.values(draftedEmails).some((letter) => letter && letter.body);
     if (hasLetters) {
