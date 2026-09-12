@@ -484,6 +484,20 @@ function getStoredSubmission() {
     if (id && token) {
       const fromUrl = { id, token, product: params.get('p') || (stored && stored.product) || null };
       try { localStorage.setItem('sn_last_submission', JSON.stringify(fromUrl)); } catch (e) { /* private mode */ }
+
+      // Take the token back out of the address bar now that it is stored.
+      //
+      // It arrives here from a link in the customer's own email, which is the
+      // right way to reach a report from a second device. It should not then
+      // sit in the URL bar through a screenshot, a shared link, or the browser
+      // history of a shared laptop. localStorage already holds it, so the page
+      // reloads fine without it.
+      try {
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      } catch (e) { /* older browser: the link still worked, which is the point */ }
+
       return fromUrl;
     }
   } catch (e) { /* no URL API, or no window */ }

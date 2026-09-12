@@ -30,7 +30,16 @@
 // any product page sells a year while its product is not on this list, which
 // is the exact drift that put "$149/year" and "a full year of monitoring" on
 // five pages with nothing behind them.
-const ENTITLED_PRODUCTS = ['rental'];
+//
+// Landlord joined on 2026-09-12. The audit's central finding was that the page
+// sold "never miss a rental compliance deadline again" over a product that
+// looked at a property once and never again — no entitlement, no second visit,
+// no reminder. The deterministic engine fixed what the report says; this is
+// what makes the deadline part true. A landlord's obligations are dated by
+// nature (a registration renews, a notice window opens), so the reminder is not
+// an upsell bolted on — it is the half of the promise the report cannot keep on
+// its own. See api/landlord-reminders.js.
+const ENTITLED_PRODUCTS = ['rental', 'landlord'];
 
 const ENTITLEMENT_MONTHS = 12;
 const RUNS_ALLOWED = 4;

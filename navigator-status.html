@@ -791,7 +791,7 @@
 
   // (stored is hoisted above the PDF handlers)
   if (!stored || !stored.id || !stored.token) {
-    showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.", false);
+    showWaiting("We couldn't find that submission", "This report opens in the browser it was bought from. If you are on a different device, open the email we sent you — it has a link that works anywhere. If you cannot find it, reach out to hello@streamnavigator.ai.", false);
     return;
   }
 
@@ -817,7 +817,7 @@
     maxTries: 60,
     onUpdate: function(data){
       if (!data.ok) {
-        showWaiting("We couldn't find that submission", "This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.", false);
+        showWaiting("We couldn't find that submission", "This report opens in the browser it was bought from. If you are on a different device, open the email we sent you — it has a link that works anywhere. If you cannot find it, reach out to hello@streamnavigator.ai.", false);
         return;
       }
       if (data.product === 'contractor' && (data.status === 'paid' || data.status === 'processing' || data.status === 'complete')) {

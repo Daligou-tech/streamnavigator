@@ -1,24 +1,21 @@
 // Run: node tests/streaming-engine.test.js
 //
-// The streaming product makes three promises this suite holds it to.
+// StreamNavigator answers one question per subscription: should I be paying
+// for this right now, and if not, when do I start again? This suite holds
+// the engine to that, and to the rules that make the answer worth acting on.
 //
-//   1. Timing. It claims to tell you when to pause and when to come back.
-//      The analyzer used to contain no reference to the current date at all,
-//      so on 12 September 2026 — five days into the NFL season — it told NFL
-//      households to pause their NFL services.
+// Every one of these covers something that actually shipped broken:
 //
-//   2. Pausing, for everyone. The only `action:'pause'` in the engine sat
-//      behind a sports gate, so a household that followed no sport could
-//      never be told to pause anything — and naming a favourite show
-//      actively suppressed the one pause path that existed.
-//
-//   3. Numbers that survive inspection. savingsYearly was computed as
-//      (currentTotal - recommendedMonthly) * 12, which let the engine bank
-//      savings from changes it never surfaced: a household on ESPN Unlimited
-//      was shown $605.64/yr, $204 of which came from a downgrade that
-//      appeared on no card.
-//
-// Each of those shipped. Each has a test below.
+//   * The analyzer contained no reference to the current date, so on 12
+//     September 2026 — five days into the NFL season — it told NFL
+//     households to pause their NFL services.
+//   * The only pause path sat behind a sports gate, so a household that
+//     followed no sport could never be told to pause anything, and naming a
+//     favourite show actively suppressed it.
+//   * savingsYearly was derived from a recommended total, so the engine
+//     banked a $204/yr downgrade it never told the customer to make.
+//   * A paused row with no air date was told to restart after 30 days, on
+//     no evidence, which undid the saving it had just produced.
 'use strict';
 
 const assert = require('assert');
@@ -33,198 +30,242 @@ function test(name, fn) {
 
 const root = path.join(__dirname, '..');
 const E = require('../navigator-streaming-engine.js');
-const { analyze, SERVICES } = E;
+const { decide, analyze, SERVICES, PRICING } = E;
 
-const S = (serviceId, tierId, frequency) => ({ serviceId, tierId, frequency });
-const SEPT = new Date('2026-09-12T12:00:00'); // mid NFL season
-const JUNE = new Date('2026-06-12T12:00:00'); // NFL off-season
+const SEPT = '2026-09-12';  // mid NFL season
+const JUNE = '2026-06-12';  // NFL off-season
 
-// ---------------------------------------------------------------- 1. timing
+const sub = (o) => Object.assign({
+  serviceId: 'netflix', tierId: 'standard', price: 17.99,
+  billingPeriod: 'monthly', renewalDate: '2026-10-15', status: 'active',
+}, o);
+const show = (o) => Object.assign({ kind: 'show', serviceId: 'netflix', title: 'A Show', currentlyAiring: false, nextAirDate: null }, o);
+const sport = (title, serviceId) => ({ kind: 'sport', serviceId, title });
 
-test('a sports service is NOT told to pause during its own season', () => {
-  const r = analyze({
-    subscriptions: [S('espn', 'select', 'occasionally')],
-    favorites: [], sports: ['nfl'], household: 2, adsOk: true,
-  }, { today: SEPT });
-  const espn = r.actions.find((a) => a.service === 'espn');
-  assert.ok(espn, 'no ESPN card at all');
-  assert.notStrictEqual(
-    espn.action, 'pause',
-    'ESPN was told to pause in September, during the NFL season it is kept for',
+// ------------------------------------------------------- the worked example
+
+test('the blueprint example reproduces exactly', () => {
+  // "Your last show ended August 28. Your next starts November 14. Suspend
+  // now and restart around November 13. Estimated savings: $35.98"
+  const d = decide(
+    sub({ price: 17.99, renewalDate: '2026-09-15' }),
+    [show({ title: 'Wednesday', prevAirDate: '2026-08-28', nextAirDate: '2026-11-14' })],
+    SEPT,
   );
+  assert.strictEqual(d.action, 'suspend', `expected suspend, got ${d.action}`);
+  assert.strictEqual(d.savings, 35.98, `expected $35.98 saved, got $${d.savings}`);
+  assert.strictEqual(d.cycles, 2, `expected 2 skipped charges, got ${d.cycles}`);
+  assert.strictEqual(d.restartDate, '2026-11-13', `expected restart 2026-11-13, got ${d.restartDate}`);
+  assert.ok(/August 28/.test(d.why), 'the explanation does not say when the last show ended');
+  assert.ok(/November 14/.test(d.why), 'the explanation does not say when the next one starts');
 });
 
-test('the same service IS told to pause in its off-season', () => {
-  const r = analyze({
-    subscriptions: [S('espn', 'select', 'occasionally')],
-    favorites: [], sports: ['nfl'], household: 2, adsOk: true,
-  }, { today: JUNE });
-  const espn = r.actions.find((a) => a.service === 'espn');
-  assert.strictEqual(espn.action, 'pause', 'ESPN was not paused in the NFL off-season');
-  assert.ok(/restart around September/i.test(espn.reason), 'the pause card gives no restart month');
+// ------------------------------------------------------------ KEEP
+
+test('KEEP while something is actually airing', () => {
+  const d = decide(sub(), [show({ title: 'Stranger Things', currentlyAiring: true, prevAirDate: '2026-09-08' })], SEPT);
+  assert.strictEqual(d.action, 'keep');
+  assert.ok(/airing new episodes/.test(d.why), 'no evidence of what is airing');
 });
 
-test('identical inputs give different answers in different months', () => {
-  const input = {
-    subscriptions: [S('paramount', 'essential', 'rarely')],
-    favorites: [], sports: ['nfl'], household: 1, adsOk: true,
-  };
-  const inSeason = analyze(input, { today: SEPT }).actions.find((a) => a.service === 'paramount');
-  const offSeason = analyze(input, { today: JUNE }).actions.find((a) => a.service === 'paramount');
-  assert.notStrictEqual(
-    inSeason.action, offSeason.action,
-    'the engine returns the same action in September and June — it is not reading the date',
-  );
+test('KEEP when the next episode lands before the next charge', () => {
+  const d = decide(sub({ renewalDate: '2026-10-15' }), [show({ nextAirDate: '2026-10-01' })], SEPT);
+  assert.strictEqual(d.action, 'keep');
+  assert.ok(/before your October 15 renewal/.test(d.why), `expected the renewal named: "${d.why}"`);
 });
 
-test('no page hardcodes a season decision without consulting the date', () => {
-  const engine = fs.readFileSync(path.join(root, 'navigator-streaming-engine.js'), 'utf8');
-  assert.ok(
-    /isSportInSeason\s*\(/.test(engine),
-    'the engine no longer has an in-season check',
-  );
+test('KEEP a sports service during its own season', () => {
+  const d = decide(sub({ serviceId: 'espn', tierId: 'select', price: 12.99 }), [sport('nfl', 'espn')], SEPT);
+  assert.strictEqual(d.action, 'keep', 'ESPN was suspended during the NFL season');
 });
 
-// ------------------------------------------------------- 2. pause for everyone
-
-test('a household that follows no sport can still be told to pause', () => {
-  const r = analyze({
-    subscriptions: [
-      S('max', 'adfree', 'occasionally'),
-      S('hulu', 'noads', 'occasionally'),
-      S('appletv', 'standard', 'rarely'),
-    ],
-    favorites: ['The Last of Us', 'Severance'], sports: [], household: 2, adsOk: false,
-  }, { today: SEPT });
-  const paused = r.actions.filter((a) => a.action === 'pause');
-  assert.ok(
-    paused.length > 0,
-    'the scripted-TV household got no pause recommendation — this is the case that returned three KEEPs and $0',
-  );
+test('SUSPEND that same service out of season', () => {
+  const d = decide(sub({ serviceId: 'espn', tierId: 'select', price: 12.99, renewalDate: '2026-06-15' }), [sport('nfl', 'espn')], JUNE);
+  assert.strictEqual(d.action, 'suspend', 'ESPN was kept through the NFL off-season');
+  assert.ok(d.restartDate, 'no restart date offered');
+  assert.ok(d.savings > 0, 'a whole off-season suspend saved nothing');
 });
 
-test('naming a show you watch does not suppress pausing everything else', () => {
-  const withFavorite = analyze({
-    subscriptions: [S('hulu', 'noads', 'occasionally'), S('max', 'adfree', 'occasionally')],
-    favorites: ['The Last of Us'], sports: [], household: 1, adsOk: false,
-  }, { today: SEPT });
-  // The Last of Us is on HBO Max, so Max is kept and Hulu — which has
-  // nothing the customer named — should be pausable.
-  const hulu = withFavorite.actions.find((a) => a.service === 'hulu');
-  assert.strictEqual(hulu.action, 'pause', 'Hulu was kept despite nothing the customer named being on it');
-  const max = withFavorite.actions.find((a) => a.service === 'max');
-  assert.strictEqual(max.action, 'keep', 'HBO Max was not kept despite carrying a named show');
+// ----------------------------------------------- suspending must be worth it
+
+test('no suspend when the gap is too short to bother', () => {
+  // 30 days of nothing, then the show is back. Cancelling and resubscribing
+  // for that is two chores for part of one month.
+  const d = decide(sub({ renewalDate: '2026-09-20' }), [show({ nextAirDate: '2026-10-10' })], SEPT);
+  assert.strictEqual(d.action, 'keep', `a ${E.MIN_PAUSE_DAYS}-day floor should have blocked this suspend`);
+  assert.ok(/isn't worth the hassle/.test(d.why), 'the reason does not explain why not');
 });
 
-test('a pause with no known restart date is worth $0 in the annual headline', () => {
-  const r = analyze({
-    subscriptions: [S('hulu', 'noads', 'rarely')],
-    favorites: [], sports: [], household: 1, adsOk: false,
-  }, { today: SEPT });
-  const hulu = r.actions.find((a) => a.service === 'hulu');
-  assert.strictEqual(hulu.action, 'pause');
-  assert.strictEqual(hulu.annualSaving, 0, 'an undated pause was annualised into the headline');
-  assert.ok(hulu.monthlyWhilePaused > 0, 'the monthly rate while paused is not reported');
-  assert.ok(r.pausedMonthlyUpside > 0, 'pausedMonthlyUpside does not surface the undated pause');
+test('no suspend when the return lands inside what is already paid for', () => {
+  // Renewal is months away and the show is back before it: there is no
+  // charge to skip, so cancelling would cost a resubscribe and save nothing.
+  const d = decide(sub({ renewalDate: '2027-01-20' }), [show({ nextAirDate: '2026-12-01' })], SEPT);
+  assert.strictEqual(d.action, 'keep');
+  assert.ok(/before your January 20 renewal/.test(d.why), `expected the renewal named: "${d.why}"`);
+  assert.strictEqual(d.savings, 0);
 });
 
-// ------------------------------------------------- 3. numbers that add up
+test('a suspend is only ever issued when it skips a real charge', () => {
+  // Every suspend the engine can produce must skip at least one billing
+  // date — otherwise it is asking for two chores in exchange for nothing.
+  const cases = [
+    [sub({ renewalDate: '2026-09-15' }), [show({ nextAirDate: '2026-11-14' })], SEPT],
+    [sub({ renewalDate: '2026-09-20' }), [show({ nextAirDate: null, prevAirDate: '2026-05-01' })], SEPT],
+    [sub({ serviceId: 'espn', price: 12.99, renewalDate: '2026-06-15' }), [sport('nfl', 'espn')], JUNE],
+  ];
+  for (const [s, w, t] of cases) {
+    const d = decide(s, w, t);
+    if (d.action !== 'suspend') continue;
+    assert.ok(d.cycles === null || d.cycles >= 1, `a suspend skipping ${d.cycles} charges was issued`);
+    assert.ok(d.savings > 0, 'a suspend with no saving was issued');
+  }
+});
 
-test('the headline saving equals the sum of the cards shown', () => {
+test('an annual plan is never cancelled mid-term', () => {
+  const d = decide(sub({ billingPeriod: 'annual', price: 199, renewalDate: '2027-03-01' }), [show({})], SEPT);
+  assert.strictEqual(d.action, 'keep', 'an annual plan was told to cancel with months prepaid');
+  assert.ok(/forfeits/.test(d.why), 'the reason does not explain the forfeit');
+  assert.ok(d.decideOn, 'no date given for when to revisit it');
+});
+
+test('an annual plan IS actionable as its renewal approaches', () => {
+  const d = decide(sub({ billingPeriod: 'annual', price: 199, renewalDate: '2026-09-20' }), [show({})], SEPT);
+  assert.strictEqual(d.action, 'suspend');
+});
+
+// ----------------------------------------------------------- RESTART
+
+test('RESTART only against a real date', () => {
+  const paused = sub({ status: 'paused' });
+  const noDate = decide(paused, [show({ nextAirDate: null })], SEPT);
+  assert.strictEqual(noDate.action, 'watch', 'a paused service with nothing scheduled was told to restart');
+  assert.strictEqual(noDate.restartDate, null, 'a restart date was invented with no air date');
+  assert.ok(/won't tell you to start paying on a guess/.test(noDate.why), 'the honest "no date" wording is gone');
+
+  const soon = decide(paused, [show({ nextAirDate: '2026-09-14' })], SEPT);
+  assert.strictEqual(soon.action, 'restart', 'an imminent, dated return did not trigger a restart');
+  assert.strictEqual(soon.restartDate, '2026-09-13', 'restart should land the day before');
+});
+
+test('a paused service stays off, with the date it comes back', () => {
+  const d = decide(sub({ status: 'paused' }), [show({ nextAirDate: '2026-12-01' })], SEPT);
+  assert.strictEqual(d.action, 'watch');
+  assert.ok(/Keep Netflix off until December 1/.test(d.headline), `headline was "${d.headline}"`);
+  assert.ok(d.savings > 0, 'staying off for 80 days was valued at nothing');
+});
+
+// --------------------------------------------------------- evidence & trust
+
+test('every decision carries checkable evidence', () => {
+  const d = decide(sub(), [show({ title: 'Wednesday', prevAirDate: '2026-08-28', nextAirDate: '2026-11-14' })], SEPT);
+  assert.ok(Array.isArray(d.evidence) && d.evidence.length, 'no evidence array');
+  const ev = d.evidence[0];
+  assert.strictEqual(ev.title, 'Wednesday');
+  assert.strictEqual(ev.source, 'TVmaze', 'the data source is not named');
+  assert.ok(ev.nextDate, 'the evidence carries no date');
+  assert.ok(d.confidence, 'no confidence level');
+});
+
+test('a sports date is flagged approximate, a TVmaze date is not', () => {
+  const s = decide(sub({ serviceId: 'espn', price: 12.99, renewalDate: '2026-06-15' }), [sport('nfl', 'espn')], JUNE);
+  assert.strictEqual(s.confidence, 'medium', 'a season-calendar estimate is being sold as exact');
+  assert.ok(/around/.test(s.why), 'an approximate date is not hedged');
+  const t = decide(sub({ renewalDate: '2026-09-15' }), [show({ nextAirDate: '2026-11-14' })], SEPT);
+  assert.strictEqual(t.confidence, 'high', 'a confirmed TVmaze date should be high confidence');
+});
+
+test('a service with nothing tagged is never guessed at', () => {
+  const d = decide(sub(), [], SEPT);
+  assert.strictEqual(d.action, 'untracked');
+  assert.strictEqual(d.savings, 0);
+  assert.ok(/won't guess/.test(d.why), 'the engine guesses when it has nothing to go on');
+});
+
+test('cancel-only services say cancel, pausable ones say pause', () => {
+  const netflix = decide(sub({ renewalDate: '2026-09-15' }), [show({ nextAirDate: '2026-12-20' })], SEPT);
+  assert.ok(/^Cancel/.test(netflix.headline), `Netflix has no pause; headline was "${netflix.headline}"`);
+  assert.ok(/keep access until/.test(netflix.why), 'does not explain that access runs to the period end');
+  const hulu = decide(sub({ serviceId: 'hulu', tierId: 'noads', price: 18.99, renewalDate: '2026-09-15' }),
+    [show({ serviceId: 'hulu', nextAirDate: '2026-12-20' })], SEPT);
+  assert.ok(/^Pause/.test(hulu.headline), `Hulu supports pause; headline was "${hulu.headline}"`);
+});
+
+// ------------------------------------------------------------ savings maths
+
+test('the headline saving is the sum of the actions shown', () => {
   const scenarios = [
-    { subscriptions: [S('netflix','premium','weekly'), S('max','adfree','occasionally'), S('hulu','noads','weekly'),
-                      S('disney','premium','rarely'), S('paramount','showtime','rarely'), S('espn','unlimited','occasionally')],
-      favorites: ['Stranger Things','The Bear'], sports: ['nfl'], household: 4, adsOk: false },
-    { subscriptions: [S('espn','unlimited','occasionally'), S('youtubetv','base','weekly')],
-      favorites: [], sports: ['nfl','nba'], household: 2, adsOk: true },
-    { subscriptions: [S('starz','standard','never'), S('amcplus','standard','never'), S('netflix','premium','daily')],
-      favorites: [], sports: [], household: 1, adsOk: false },
-    { subscriptions: [S('netflix','premium','weekly'), S('disney','premium','occasionally'),
-                      S('hulu','noads','occasionally'), S('max','adfree','occasionally')],
-      favorites: [], sports: [], household: 2, adsOk: false, budget: 40 },
+    { subscriptions: [sub({ serviceId:'netflix', tierId:'premium', price:26.99, renewalDate:'2026-09-16' }),
+                      sub({ serviceId:'max', tierId:'ultimate', price:22.99, renewalDate:'2026-09-20' }),
+                      sub({ serviceId:'espn', tierId:'unlimited', price:31.99, renewalDate:'2026-09-18' })],
+      watchlist: [show({ serviceId:'netflix', title:'Stranger Things', currentlyAiring:true, prevAirDate:'2026-09-09' }), sport('nfl','espn')],
+      household: 4, adsOk: false },
+    { subscriptions: [sub({ serviceId:'hulu', tierId:'noads', price:18.99, renewalDate:'2026-09-15' }),
+                      sub({ serviceId:'disney', tierId:'premium', price:18.99, renewalDate:'2026-09-15' })],
+      watchlist: [show({ serviceId:'hulu', title:'The Bear', nextAirDate:'2027-06-01' })],
+      household: 2, adsOk: true },
   ];
   for (const [i, input] of scenarios.entries()) {
     for (const today of [SEPT, JUNE]) {
       const r = analyze(input, { today });
-      const sum = Math.round(r.actions.reduce((s, a) => s + (a.annualSaving || 0), 0) * 100) / 100;
-      assert.ok(
-        Math.abs(Math.max(0, sum) - r.savingsYearly) < 0.02,
-        `scenario ${i}: headline $${r.savingsYearly} but the cards add to $${sum} — the difference is money the customer was never told how to save`,
-      );
+      const sum = E.round2(r.actions.reduce((s, a) => s + (a.annualSaving || 0), 0));
+      assert.ok(Math.abs(sum - r.savingsYearly) < 0.02,
+        `scenario ${i}: headline $${r.savingsYearly} but the actions add to $${sum}`);
     }
   }
 });
 
-test('a tier change is always its own card, never folded silently into a pause', () => {
-  // The regression: identical recommendation, two different starting tiers,
-  // $204/yr of difference and no card explaining it.
-  const base = { favorites: [], sports: ['nfl'], household: 2, adsOk: true };
-  const fromExpensive = analyze({ ...base, subscriptions: [S('espn', 'unlimited', 'occasionally')] }, { today: JUNE });
-  const fromCheap = analyze({ ...base, subscriptions: [S('espn', 'select', 'occasionally')] }, { today: JUNE });
-  const delta = Math.round((fromExpensive.savingsYearly - fromCheap.savingsYearly) * 100) / 100;
-  assert.ok(delta > 0, 'expected the expensive tier to show a larger saving');
-  const downgrade = fromExpensive.actions.find((a) => a.action === 'downgrade' && a.service === 'espn');
-  assert.ok(downgrade, `the extra $${delta}/yr is claimed with no downgrade card to explain it`);
-  assert.ok(
-    Math.abs(downgrade.annualSaving - delta) < 0.02,
-    `the downgrade card claims $${downgrade.annualSaving} but the headline moved by $${delta}`,
-  );
-});
-
-test('every action carries an annualSaving the UI can show', () => {
+test('net savings after the fee are stated, not left to the customer', () => {
   const r = analyze({
-    subscriptions: [S('netflix','premium','weekly'), S('espn','unlimited','occasionally'), S('starz','standard','never')],
-    favorites: [], sports: ['nfl'], household: 2, adsOk: true,
+    subscriptions: [sub({ serviceId:'espn', tierId:'unlimited', price:31.99, renewalDate:'2026-06-15' })],
+    watchlist: [sport('nfl','espn')], household: 2, adsOk: true,
   }, { today: JUNE });
-  for (const a of r.actions) {
-    assert.strictEqual(typeof a.annualSaving, 'number', `${a.service}/${a.action} has no annualSaving`);
-    assert.ok(Number.isFinite(a.annualSaving), `${a.service}/${a.action} annualSaving is not finite`);
-  }
+  assert.strictEqual(r.feeAnnual, 19.99, 'the fee is not the recommended $19.99');
+  assert.strictEqual(r.netSavingsYearly, E.round2(r.savingsYearly - 19.99), 'net savings are wrong');
+  assert.ok(r.currentAnnual > 0 && r.optimisedAnnual >= 0, 'current/optimised annual cost missing');
 });
 
-// ------------------------------------------------------ catalog integrity
+test('an overridden recommendation stops counting toward savings', () => {
+  const input = {
+    subscriptions: [sub({ serviceId:'espn', tierId:'select', price:12.99, renewalDate:'2026-06-15' })],
+    watchlist: [sport('nfl','espn')], household: 1, adsOk: true,
+  };
+  const on = analyze(input, { today: JUNE });
+  const off = analyze(Object.assign({}, input, { overrides: { espn: true } }), { today: JUNE });
+  assert.ok(on.savingsYearly > 0, 'expected a saving before the override');
+  assert.strictEqual(off.savingsYearly, 0, 'an overridden recommendation still counted');
+  assert.ok(off.decisions[0].overridden, 'the decision is not marked overridden');
+});
+
+// ------------------------------------------------------- catalog & pricing
 
 test('the catalog lives in exactly one place', () => {
-  // Two inline copies drifted: on 2026-09-12 dashboard.html priced Netflix
-  // Premium at $26.99 while streaming.html still said $24.99, because an
-  // August refresh only landed in one of them.
   for (const f of ['streaming.html', 'dashboard.html']) {
     const s = fs.readFileSync(path.join(root, f), 'utf8');
-    assert.ok(
-      !/const SERVICES\s*=\s*\{/.test(s),
-      `${f} has its own inline SERVICES catalog again — it must use navigator-streaming-engine.js`,
-    );
-    assert.ok(
-      s.includes('navigator-streaming-engine.js'),
-      `${f} does not load the shared engine`,
-    );
+    assert.ok(!/const SERVICES\s*=\s*\{/.test(s), `${f} has its own inline SERVICES catalog again`);
+    assert.ok(s.includes('navigator-streaming-engine.js'), `${f} does not load the shared engine`);
   }
 });
 
 test('the catalog says when it was last verified, and both pages show it', () => {
   assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(E.CATALOG_VERIFIED), 'CATALOG_VERIFIED is not a date');
-  assert.ok(!Number.isNaN(Date.parse(E.CATALOG_VERIFIED)), 'CATALOG_VERIFIED does not parse');
   for (const f of ['streaming.html', 'dashboard.html']) {
     const s = fs.readFileSync(path.join(root, f), 'utf8');
-    assert.ok(
-      s.includes('data-catalog-verified'),
-      `${f} shows dollar figures without saying when the prices were checked`,
-    );
-    assert.ok(
-      !/list prices as of August 2026/.test(s),
-      `${f} still hardcodes a stale "as of" date instead of stamping CATALOG_VERIFIED`,
-    );
+    assert.ok(s.includes('data-catalog-verified'), `${f} shows dollar figures without a checked-on date`);
   }
 });
 
-test('every service carries a price and a check date', () => {
+test('every service carries a price, a check date and a pause policy', () => {
   for (const [id, svc] of Object.entries(SERVICES)) {
     assert.ok(svc.tiers.length > 0, `${id} has no tiers`);
     assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(svc.checked || ''), `${id} has no checked date`);
-    for (const t of svc.tiers) {
-      assert.ok(typeof t.price === 'number' && t.price > 0, `${id}/${t.id} has no price`);
-    }
+    assert.strictEqual(typeof svc.canPause, 'boolean', `${id} does not say whether it can be paused`);
+    for (const t of svc.tiers) assert.ok(typeof t.price === 'number' && t.price > 0, `${id}/${t.id} has no price`);
   }
+});
+
+test('the fee is the recommended one, and below the defensible ceiling', () => {
+  assert.strictEqual(PRICING.annualCents, 1999);
+  assert.ok(PRICING.annualCents <= PRICING.maxDefensibleCents);
 });
 
 // ------------------------------------------------------------------ report

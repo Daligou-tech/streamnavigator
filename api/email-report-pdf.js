@@ -91,6 +91,14 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // Built from the credentials the caller already proved they hold — the same
+  // id and token this request was authenticated with a few lines above. No new
+  // capability is minted here; the link carries the one the customer's browser
+  // has had all along, to somewhere their browser can no longer reach.
+  const reportUrl = `https://streamnavigator.ai/navigator-status?id=${encodeURIComponent(submission.id)}`
+    + `&t=${encodeURIComponent(submission.access_token)}`
+    + `&p=${encodeURIComponent(submission.product)}`;
+
   try {
     const resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -99,7 +107,29 @@ module.exports = async function handler(req, res) {
         from: RESEND_FROM_EMAIL,
         to: email,
         subject: 'Your StreamNavigator report (PDF)',
-        text: 'Attached is a PDF copy of your StreamNavigator report. Thanks for using StreamNavigator!',
+        // The link is the point of this email as much as the attachment is.
+        //
+        // A report is reachable from the browser that bought it and nowhere
+        // else: navigator-shared.js keys it to localStorage. Pay on a phone,
+        // open on a laptop, and the status page says "We couldn't find that
+        // submission" about a report that exists and is paid for. The audit
+        // found that and it was the last gap left.
+        //
+        // getStoredSubmission() already accepts id and token from the query
+        // string and adopts them — that half was built. Nothing ever sent the
+        // customer the URL, so the capability existed and no customer could
+        // reach it. This is the other half.
+        text: [
+          'Your StreamNavigator report is attached as a PDF.',
+          '',
+          'You can also open it in your browser, on any device:',
+          reportUrl,
+          '',
+          'That link is the only way back to this report, so keep this email. '
+            + 'Anyone holding the link can read the report, so treat it like the report itself.',
+          '',
+          'Thanks for using StreamNavigator.',
+        ].join('\n'),
         attachments: [{ filename: 'streamnavigator-report.pdf', content: pdfBuffer.toString('base64') }],
       }),
     });

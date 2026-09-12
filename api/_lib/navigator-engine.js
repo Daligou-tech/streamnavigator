@@ -1182,6 +1182,18 @@ Then do what you can. Work only from what is legibly present, flag anything that
       await grantEntitlement(admin, submission, rentalExtraction);
     }
 
+    // Landlord grants the same year, for the reason the reminder exists: a
+    // registration renews and a notice window opens on a date, and a report
+    // that names the date without ever coming back to it has done half the job.
+    // The address recorded is the first property's, purely so the reminder mail
+    // and the entitlement row are recognisable — every property is carried on
+    // the submission itself and api/landlord-reminders.js reads them all.
+    if (submission.product === 'landlord') {
+      const first = (Array.isArray(formData.properties) ? formData.properties : [])[0] || {};
+      const where = [first.label || first.line1, first.city, first.state].filter(Boolean).join(', ');
+      await grantEntitlement(admin, submission, { property: { address: where || null } });
+    }
+
     return report;
   } catch (err) {
     // Failing loudly, and paying the money back.
