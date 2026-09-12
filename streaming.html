@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>StreamNavigator — The AI subscription manager for streaming</title>
+<title>StreamNavigator — stop paying for streaming between seasons</title>
 <meta name="description" content="StreamNavigator is a monthly subscription — you tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel the ones you're not using — with a direct link to do it in one tap." />
 <link rel="canonical" href="https://streamnavigator.ai/streaming" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -234,10 +234,12 @@
   .svc-chip-add:hover{ color:var(--accent-3-deep); border-color:var(--accent-3-deep); }
   .custom-add-form input::placeholder{ color:var(--text-dimmer); }
   .svc-detail{
-    display:none; grid-template-columns:1fr 1fr; gap:10px; background:var(--surface); border:1.5px solid var(--border-strong);
-    border-radius:10px; padding:12px; margin-top:-2px; width:100%;
+    display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:8px; background:var(--surface); border:1.5px solid var(--border-strong);
+    border-radius:10px; padding:10px; margin-top:6px; width:100%;
   }
-  .svc-detail.show{ display:grid; }
+  .svc-detail.custom-add-form{ display:none; grid-template-columns:1.4fr 1fr 1fr auto; }
+  .svc-detail.custom-add-form.open{ display:grid; }
+  .svc-item{ display:flex; flex-direction:column; align-items:flex-start; width:100%; }
   .svc-detail-full{ grid-column:1 / -1; font-size:12.5px; color:var(--text-dimmer); margin-bottom:-2px; }
   .a-select{
     width:100%; padding:9px 12px; border-radius:8px; border:1.5px solid var(--border-strong); background:var(--bg);
@@ -270,38 +272,69 @@
   .budget-field input{ flex:1; background:none; border:none; outline:none; color:var(--text); font-size:13.5px; font-family:inherit; width:100%; }
   .analyze-btn{ width:100%; padding:14px; font-size:15px; }
   .analyzer-results{ display:flex; flex-direction:column; gap:18px; padding-top:6px; border-top:1px solid var(--border); }
-  .result-stats{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  .stat-box{ flex:1; min-width:130px; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
-  .stat-box.featured-stat{ border-color:var(--ink); box-shadow:var(--shadow-hard-xs); }
-  .stat-box.save-stat{ border-color:var(--status-active); }
-  .stat-label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dimmer); margin-bottom:8px; }
-  .stat-value{ display:block; font-family:'Sora',sans-serif; font-weight:800; font-size:1.5rem; }
-  .stat-box.save-stat .stat-value{ color:var(--status-active-deep); }
-  .stat-arrow{ color:var(--text-dimmer); font-size:20px; flex-shrink:0; }
-  .actions-list{ display:flex; flex-direction:column; gap:10px; }
-  .action-card{ display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; }
-  .action-badge{
-    flex-shrink:0; width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
-    font-size:14px; font-weight:800;
-  }
-  .action-badge.cancel{ background:rgba(29,95,168,0.13); color:#1D5FA8; }
-  .action-badge.downgrade{ background:rgba(11,111,132,0.14); color:#0B6F84; }
-  .action-badge.pause{ background:rgba(15,138,125,0.14); color:#0F7E73; }
-  .action-badge.add{ background:rgba(27,122,61,0.14); color:#1B7A3D; }
-  .action-badge.bundle{ background:rgba(106,63,196,0.14); color:#6A3FC4; }
-  .action-badge.keep{ background:rgba(31,27,22,0.06); color:var(--text-dim); }
-  .action-badge.info{ background:rgba(31,27,22,0.045); color:var(--text-dimmer); }
-  .action-copy .a-title{ font-size:13.5px; font-weight:700; margin-bottom:2px; }
-  .action-copy .a-desc{ font-size:13px; color:var(--text-dim); }
-  .a-link{ display:inline-flex; align-items:center; gap:4px; margin-top:8px; font-size:12.5px; font-weight:700; color:var(--accent-3-deep); text-decoration:none; }
-  .a-link:hover{ text-decoration:underline; }
-  .analyzer-disclaimer{ font-size:11.5px; color:var(--text-dimmer); text-align:center; }
+  /* ---- the money, stated so nobody has to do arithmetic ---- */
+  .money-panel{ background:var(--surface); border:1.5px solid var(--border-strong); border-radius:14px; padding:20px 22px; }
+  .money-grid{ display:flex; flex-direction:column; gap:8px; }
+  .money-row{ display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:baseline; font-size:14px; }
+  .money-row .mk{ color:var(--text-dim); }
+  .money-row .mv{ font-weight:800; font-variant-numeric:tabular-nums; }
+  .money-row .ms{ font-size:12.5px; color:var(--text-dimmer); font-variant-numeric:tabular-nums; min-width:92px; text-align:right; }
+  .money-headline{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:2px solid var(--ink); }
+  .mh-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-dimmer); }
+  .mh-value{ font-family:'Sora',sans-serif; font-weight:800; font-size:2.1rem; line-height:1; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .mh-unit{ font-size:13px; color:var(--text-dim); }
+  .money-headline.none .mh-label{ font-size:14px; text-transform:none; letter-spacing:0; color:var(--text-dim); font-weight:700; }
+  .money-net{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:13.5px; color:var(--text-dim); }
+  .net-arrow{ color:var(--text-dimmer); }
+  .net-good{ color:var(--status-active-deep); }
+  .net-bad{ color:var(--danger-deep); }
+  .money-ratio{ margin-top:10px; font-size:12.5px; color:var(--text-dimmer); line-height:1.6; }
+  /* ---- one card per subscription ---- */
+  .actions-list{ display:flex; flex-direction:column; gap:12px; }
+  .decision-card{ background:var(--surface); border:1.5px solid var(--border); border-left-width:4px; border-radius:12px; padding:15px 17px; }
+  .decision-card.act-suspend{ border-left-color:var(--status-active-deep); }
+  .decision-card.act-restart{ border-left-color:#1D5FA8; }
+  .decision-card.act-watch{ border-left-color:#0B6F84; }
+  .decision-card.act-keep{ border-left-color:var(--border-strong); }
+  .decision-card.act-untracked{ border-left-color:#B54708; }
+  .decision-card.overridden{ opacity:0.62; }
+  .dc-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .dc-badge{ flex-shrink:0; width:26px; height:26px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:800; background:rgba(31,27,22,0.06); color:var(--text-dim); }
+  .act-suspend .dc-badge{ background:rgba(15,138,125,0.15); color:var(--status-active-deep); }
+  .act-restart .dc-badge{ background:rgba(29,95,168,0.14); color:#1D5FA8; }
+  .dc-title{ font-size:15px; font-weight:800; flex:1; min-width:180px; }
+  .dc-money{ font-family:'Sora',sans-serif; font-weight:800; font-size:16px; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .dc-why{ font-size:13.5px; color:var(--text-dim); margin:8px 0 0; line-height:1.55; }
+  .dc-dates{ display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:11px; }
+  .dc-dates span{ font-size:12.5px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+  .dc-dates b{ display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-dimmer); font-weight:700; }
+  .dc-evidence{ list-style:none; margin:11px 0 0; padding:10px 12px; background:var(--bg); border-radius:8px; }
+  .dc-evidence li{ font-size:12px; color:var(--text-dim); line-height:1.6; }
+  .dc-src{ color:var(--text-dimmer); }
+  .dc-foot{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:12px; }
+  .dc-link{ font-size:12.5px; font-weight:700; color:var(--accent-3-deep); text-decoration:none; }
+  .dc-link:hover{ text-decoration:underline; }
+  .dc-override{ background:none; border:none; padding:0; font-family:inherit; font-size:12.5px; color:var(--text-dimmer);
+    text-decoration:underline; cursor:pointer; }
+  .dc-override:hover{ color:var(--text-dim); }
+  .dc-conf{ margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; font-weight:700; padding:3px 8px; border-radius:20px; }
+  .conf-high{ background:rgba(15,138,125,0.13); color:var(--status-active-deep); }
+  .conf-medium{ background:rgba(181,71,7,0.12); color:#B54708; }
+  .dc-floor{ margin:8px 0 0; font-size:12.5px; color:var(--text-dim); line-height:1.55; }
+  .dc-floor strong{ color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:rgba(29,95,168,0.07); border-radius:8px;
+    font-size:12px; color:var(--text-dim); line-height:1.55; }
+  .a-hint{ font-size:12px; color:var(--text-dimmer); margin-top:8px; line-height:1.55; }
+  .tag-show{ align-items:center; }
+  .tag-select{ font-family:inherit; font-size:11.5px; border:1px solid var(--border-strong); border-radius:6px;
+    background:var(--bg); color:var(--text-dim); padding:2px 4px; margin:0 4px; max-width:140px; }
   .analyzer-empty{ font-size:13px; color:var(--text-dimmer); padding:8px 2px; }
   @media (max-width: 640px){
     .analyzer-section.two-col{ grid-template-columns:1fr; }
-    .svc-detail{ grid-template-columns:1fr; }
-    .result-stats{ flex-direction:column; }
-    .stat-arrow{ transform:rotate(90deg); }
+    .svc-detail, .svc-detail.custom-add-form{ grid-template-columns:1fr; }
+    .money-row{ grid-template-columns:1fr auto; }
+    .money-row .ms{ grid-column:2; text-align:right; }
   }
   .search-row{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--border); border-radius:10px; padding:12px 16px; }
   .search-row .ico{ width:16px;height:16px; color:var(--text-dimmer); flex-shrink:0; }
@@ -587,7 +620,7 @@
   <section class="hero" style="padding-top:96px; padding-bottom:0;">
     <div class="pill"><span class="dot">✦</span> Now live &mdash; start saving on streaming today</div>
     <h1>Stop paying for streaming<br/>you <span class="grad">don't even watch</span>.</h1>
-    <p class="sub">StreamNavigator is your AI subscription manager. You tell it what you're subscribed to and what you're watching, and it tells you exactly when to pause, downgrade, or cancel something you're not using &mdash; with a direct link to do it in one tap, and a nudge to bring it back once the service actually has something worth watching.</p>
+    <p class="sub">Tell it what you pay for, when each one renews, and what you actually watch. It checks the real TV schedule and tells you <strong>which day to switch something off</strong> &mdash; and <strong>which day your show is back</strong>, so you turn it on again having missed nothing and wasted nothing.</p>
   </section>
 
   <!-- PRODUCT EXPLANATION -->
@@ -693,7 +726,7 @@
     <div class="hero-form">
       <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
     </div>
-    <p class="hero-note"><strong>Free to start.</strong> Early users save up to $300 or more per year.</p>
+    <p class="hero-note"><strong>The analyzer below is free and needs no account.</strong> It uses your real prices and your real renewal dates.</p>
 
     <div class="program-guide reveal" id="program-guide">
       <div class="pg-head">
@@ -720,76 +753,56 @@
       <div class="browser-body">
         <div class="analyzer" id="analyzer">
           <div class="analyzer-head">
-            <h3>Try the real analyzer</h3>
-            <p>Tell it what you've got. This runs entirely in your browser using real published pricing — nothing is sent anywhere.</p>
+            <h3>Find out what you can stop paying for</h3>
+            <p>Three things: what you subscribe to, when it renews, and what you actually watch. We check the real TV schedule and tell you what to switch off and exactly when to switch it back on. Runs in your browser — nothing is sent anywhere, and there is nothing to sign up for.</p>
           </div>
 
           <div class="analyzer-section">
-            <label class="a-label">Which services do you subscribe to?</label>
+            <label class="a-label">1 · Which services do you pay for?</label>
             <div class="svc-grid" id="svc-grid"></div>
-
             <div class="tag-list" id="custom-svc-list"></div>
-
             <button type="button" class="svc-chip svc-chip-add" id="add-custom-btn">+ Add a service not listed</button>
             <div class="svc-detail custom-add-form" id="custom-add-form">
-              <div class="svc-detail-full">Add a custom service</div>
-              <div><input type="text" id="custom-name" class="a-select" placeholder="Service name, e.g. Britbox" /></div>
-              <div><div class="budget-field"><span>$</span><input type="number" id="custom-price" placeholder="e.g. 15" min="0" step="0.01" /><span>/mo</span></div></div>
-              <div>
-                <select id="custom-freq" class="a-select">
-                  <option value="daily">Watch daily</option>
-                  <option value="weekly" selected>Watch weekly</option>
-                  <option value="occasionally">Occasionally</option>
-                  <option value="rarely">Rarely</option>
-                  <option value="never">Never / forgot I had it</option>
-                </select>
-              </div>
+              <div class="svc-detail-full">Add a service we don't have pricing for</div>
+              <div><input type="text" id="custom-name" class="a-select" placeholder="Service name, e.g. BritBox" /></div>
+              <div><div class="budget-field"><span>$</span><input type="number" id="custom-price" placeholder="e.g. 9.99" min="0" step="0.01" /><span>/mo</span></div></div>
+              <div><input type="date" id="custom-renewal" class="a-select" aria-label="Next renewal date" /></div>
               <div><button type="button" class="btn btn-primary btn-sm" id="custom-add-confirm" style="width:100%;">Add it</button></div>
             </div>
+            <p class="a-hint" id="renewal-hint" hidden>The renewal date is what turns advice into money. Without it we can tell you <em>whether</em> to cancel; with it we can tell you <em>which day</em>, so you never hand over a month you didn't need.</p>
           </div>
 
           <div class="analyzer-section two-col">
             <div>
-              <label class="a-label">Favorite shows or movies</label>
-              <div class="tag-field"><input type="text" id="fav-text" placeholder="Type a title, hit Enter" /></div>
+              <label class="a-label">2 · What are you actually watching?</label>
+              <div class="tag-field"><input type="text" id="fav-text" placeholder="A show you follow — type it, hit Enter" /></div>
               <div class="tag-list" id="fav-tags"></div>
+              <p class="a-hint">We look each one up on TVmaze, the free public TV schedule, to see whether it's airing and when it's back. Name at least one per service — we won't guess on your behalf.</p>
             </div>
             <div>
-              <label class="a-label">Sports you care about</label>
+              <label class="a-label">Sports you follow</label>
               <div class="chip-row" id="sports-grid"></div>
-            </div>
-          </div>
-
-          <div class="analyzer-section two-col">
-            <div>
-              <label class="a-label">Household size</label>
+              <label class="a-label" style="display:block; margin:16px 0 8px;">Household</label>
               <select id="household" class="a-select">
                 <option value="1">Just me</option>
                 <option value="2">2 people</option>
-                <option value="4">3&ndash;4 people</option>
+                <option value="3">3&ndash;4 people</option>
                 <option value="5">5+ people</option>
               </select>
-              <label class="a-label" style="display:block; margin:14px 0 8px;">Monthly budget</label>
-              <div class="budget-field"><span>$</span><input type="number" id="budget" placeholder="e.g. 80" min="0" step="1" /><span>/mo</span></div>
-            </div>
-            <div>
-              <label class="a-label" style="display:block; margin-bottom:8px;">Preferences</label>
-              <label class="check-row"><input type="checkbox" id="ads-ok" /> I don't mind ads to save money</label>
-              <label class="check-row"><input type="checkbox" id="kids-important" /> Kid-friendly content matters</label>
+              <label class="check-row" style="margin-top:12px;"><input type="checkbox" id="ads-ok" /> I'll take ads to pay less</label>
             </div>
           </div>
 
-          <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
+          <button class="btn btn-primary analyze-btn" id="analyze-btn" type="button">Show me what I can stop paying for</button>
 
           <div class="analyzer-results" id="analyzer-results" hidden>
-            <div class="result-stats">
-              <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
-              <div class="stat-arrow">→</div>
-              <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
-              <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings">$0/yr</span></div>
-            </div>
+            <div class="money-panel" id="money-panel"></div>
             <div class="actions-list" id="actions-list"></div>
-            <p class="analyzer-disclaimer">Estimates use published list prices, verified by hand on <span data-catalog-verified>—</span>. Actual promo and legacy pricing varies, and an annual plan can't be paused mid-term. Check the current price on the service before you cancel or switch.</p>
+            <p class="analyzer-disclaimer">
+              Prices are published US list prices, checked by hand on <span data-catalog-verified>—</span>; promo and legacy rates differ, so confirm yours before you cancel.
+              Show dates come from <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> (CC BY-SA) and are only as current as the broadcaster's own announcement.
+              Sports dates are typical season windows, not a game schedule — we say "around" when we mean it.
+            </p>
           </div>
         </div>
       </div>
@@ -881,21 +894,25 @@
     ============================================================================
     PAYMENT PORTAL SETUP (Stripe Payment Links — no backend required)
     ============================================================================
-    The two "Subscribe" buttons below (Pro and Family) link straight to Stripe's
+    The single "Subscribe" button below links straight to Stripe's
     own hosted checkout page, so real payments work without any server code.
     To go live:
       1. Log into your Stripe Dashboard (dashboard.stripe.com). Use test mode
          first, switch to live mode when you're ready to accept real cards.
       2. Product catalog → add two recurring Products/Prices:
-           "StreamNavigator Pro"    — $4.99 / month
-           "StreamNavigator Family" — $8.99 / month
-      3. Payment links → New → pick each Price → Create link. Stripe gives you
-         a URL like https://buy.stripe.com/xxxxxxxxxxxx for each one.
+           "StreamNavigator" — $19.99 / year (one tier, household included)
+      3. Payment links → New → pick the $19.99/year Price → Create link.
+         Stripe gives you a URL like https://buy.stripe.com/xxxxxxxxxxxx.
       4. In the "After payment" step of each Payment Link, you can set a custom
          confirmation page or redirect back to this site (e.g. this page's URL
          with #welcome appended) instead of Stripe's default receipt screen.
-      5. Paste the two URLs over the data-stripe-link placeholders on the
-         "Subscribe to Pro" and "Subscribe to Family" buttons just below.
+      5. Paste that URL over REPLACE_WITH_ANNUAL_PAYMENT_LINK on the
+         Subscribe button below. Until you do, the button shows a "not
+         connected yet" notice rather than charging the wrong amount — see
+         the data-stripe-link handler further down this file.
+         The old $4.99/mo and $8.99/mo links must be DEACTIVATED in Stripe:
+         they are still live, and anyone holding a URL could subscribe at a
+         price this product no longer sells.
       6. For existing subscribers to cancel or update a card themselves: no
          setup needed here — the "Manage billing" / "Cancel subscription"
          links in the footer send them to dashboard.html#billing, which
@@ -912,58 +929,42 @@
   <section id="pricing" style="padding-bottom:32px;">
     <div class="section-head reveal">
       <div class="eyebrow">Pricing</div>
-      <h2>Simple pricing that pays for itself.</h2>
-      <p>Start free. Upgrade for real-time reminders and direct links the moment it's time to act.</p>
+      <h2>$19.99 a year. That's the whole product.</h2>
+      <p>The analyzer on this page is free forever and always will be. The paid part is the watching — every day, for every show you follow, so the restart date finds you instead of you going looking for it.</p>
     </div>
-    <div class="pricing-grid">
+    <div class="pricing-grid pricing-single">
 
       <div class="price-card reveal">
-        <h3>Starter</h3>
-        <p class="desc">For a first look at what you're overpaying for.</p>
+        <h3>Free</h3>
+        <p class="desc">The analyzer on this page. No account, no card, no limit on how often you use it.</p>
         <div class="price-amount">$0</div>
-        <div class="price-period">forever free</div>
+        <div class="price-period">no sign-up</div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Track up to 5 subscriptions</li>
-          <li><span class="tick">✓</span> Monthly usage insights</li>
-          <li><span class="tick">✓</span> See your total monthly spend across tracked subscriptions</li>
+          <li><span class="tick">✓</span> Check every service you pay for, right now</li>
+          <li><span class="tick">✓</span> Real air dates from the public TV schedule</li>
+          <li><span class="tick">✓</span> The exact date to cancel, and what it saves</li>
         </ul>
-        <a href="dashboard.html" class="btn btn-ghost">Get Started Free</a>
+        <a href="#analyzer" class="btn btn-ghost">Use it now</a>
       </div>
 
       <div class="price-card featured reveal">
-        <span class="price-badge">Most Popular</span>
-        <h3>Pro</h3>
-        <p class="desc">For people ready to actually save.</p>
-        <div class="price-amount">$4.99<span>/mo</span></div>
-        <div class="price-period">billed monthly, cancel anytime</div>
+        <h3>StreamNavigator</h3>
+        <p class="desc">For the half of the job this page can't do: noticing, months later, that your show has a date.</p>
+        <div class="price-amount">$19.99<span>/yr</span></div>
+        <div class="price-period">one price, whole household &middot; about $1.67 a month</div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Unlimited subscription tracking</li>
-          <li><span class="tick">✓</span> Real-time pause &amp; resume reminders, timed to what's worth watching</li>
-          <li><span class="tick">✓</span> Direct links to cancel &amp; downgrade in one tap</li>
-          <li><span class="tick">✓</span> Price-change log across every tracked service</li>
-          <li><span class="tick">✓</span> Monthly savings report</li>
+          <li><span class="tick">✓</span> We check the schedule every day, for every show you follow</li>
+          <li><span class="tick">✓</span> An email before your renewal when it's time to switch something off</li>
+          <li><span class="tick">✓</span> An email two days before a show is actually back — never on a guess</li>
+          <li><span class="tick">✓</span> Everyone in the house, one price</li>
+          <li><span class="tick">✓</span> Direct links to cancel, pause and resubscribe</li>
         </ul>
-        <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" data-stripe-link="pro" class="btn btn-primary">Subscribe to Pro →</a>
-        <p class="price-secure">🔒 Secured by Stripe</p>
-      </div>
-
-      <div class="price-card reveal">
-        <h3>Family</h3>
-        <p class="desc">For households splitting streaming costs.</p>
-        <div class="price-amount">$8.99<span>/mo</span></div>
-        <div class="price-period">per household, up to 6 members</div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Everything in Pro</li>
-          <li><span class="tick">✓</span> Up to 6 shared accounts</li>
-          <li><span class="tick">✓</span> Household usage breakdown</li>
-          <li><span class="tick">✓</span> One bill view across the whole household</li>
-        </ul>
-        <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" data-stripe-link="family" class="btn btn-ghost">Subscribe to Family →</a>
+        <a href="REPLACE_WITH_ANNUAL_PAYMENT_LINK" data-stripe-link="annual" class="btn btn-primary">Subscribe &mdash; $19.99/year &rarr;</a>
         <p class="price-secure">🔒 Secured by Stripe</p>
       </div>
 
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details. <a href="dashboard.html#billing" class="footnote-link">Cancel anytime</a>, no phone calls or emails required.</p>
+    <p class="pricing-footnote">One tier, because there is only one thing worth charging for: watching the schedule so you don't have to. If a year of it doesn't save you several times what it costs, cancel it — the analyzer above stays free either way. Payments are processed by Stripe; StreamNavigator never sees your card. <a href="dashboard.html#billing" class="footnote-link">Cancel anytime</a>.</p>
   </section>
 
   <!-- FAQ -->
@@ -977,32 +978,32 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">How does StreamNavigator find my subscriptions? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You add each subscription manually — the service, the price, and how often you watch it. From there, StreamNavigator keeps an eye on things for you: if you tell us a show you're waiting on, we check a free public TV schedule daily for its next air date, so your pause and resume timing stays current without you having to check back.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">You type them in — the service, what you pay, and the date it renews. That renewal date is the important one: it's the difference between "you could cancel Netflix" and "cancel Netflix by Tuesday or you'll pay for another month you don't want". Then you name the shows and sports you actually watch, and we check the public TV schedule for when they're on.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">Is my financial data safe? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Yes — because there isn't any to connect. StreamNavigator never links to your bank or card statements; every subscription in your list is one you typed in yourself. Your account password is hashed by Supabase and never seen or stored in plain text, and if you upgrade to Pro or Family, your card details go straight to Stripe — they never touch StreamNavigator's servers.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Yes — because there isn't any to connect. We never link to your bank or card statements, and we never ask for a streaming login. Every subscription in your list is one you typed in yourself. Your password is hashed by Supabase and never stored in plain text, and if you subscribe, your card goes straight to Stripe and never touches our servers.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">How does pausing and resuming work? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">When a service isn't worth what you're paying right now, StreamNavigator tells you to pause it instead of cancelling it for good — and sends a direct link to that service's account page so you can do it in one tap. It keeps watching that service's offering on your behalf, and sends you a resume reminder, with another direct link, right before there's something worth watching again — a new season premiere, a big release, or the start of your team's season. You stay in control of every change; StreamNavigator just makes sure you never miss the right moment.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Two rules, and they're the whole product. We only tell you to switch something off if it skips a real charge — if your show is back before your next renewal, we tell you to keep it, because cancelling would cost you a resubscribe to save nothing. And we only tell you to switch it back on against a date we can actually point at: an episode with an announced air date, or the start of a season. If nothing is scheduled, we say so and stay quiet. We will never tell you to start paying again because a month has passed.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">How do you access and monitor my streaming data? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">We never log into your Netflix, Hulu, Disney+, or any other streaming account — nothing connects to them, and we can't see what you actually watch or what you're billed there. Every subscription you track is entered by you. The one automated piece: if you tell us a show you're waiting on, we check a free public TV schedule once a day for its next air date and update your resume reminder automatically. No passwords, no bank link, nothing running in the background beyond that one daily check.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">We never log into Netflix, Hulu, Disney+ or anything else — there is no connection to them, and we cannot see what you watch or what you were charged. Everything you track, you typed in. The one automated piece is a daily check of <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a>, a free public TV schedule, for the shows you named. That's it. No passwords, no bank link, nothing else running.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">Can it actually cancel subscriptions for me? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — and we'd be skeptical of any subscription app that claims it can. Almost no streaming service offers a public API for cancelling, pausing, or changing your plan on someone else's behalf, so StreamNavigator can't (and won't pretend to) execute those changes for you. What it does do: tell you exactly when to cancel, downgrade, or pause something, and hand you a direct link straight to that service's account page so you can do it yourself in one tap.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">No — and be sceptical of any subscription app that says it can. Almost no streaming service offers a way to cancel or pause on someone else's behalf, so we can't, and we won't pretend otherwise. What we do is tell you exactly which day to do it and what it saves, and hand you a direct link to that service's own account page. We also tell you which services genuinely offer a pause and which only offer cancel — on the cancel-only ones you keep access until the end of the period you've already paid for, so the timing matters even more.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">How do I cancel my StreamNavigator subscription? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Click "Manage billing" or "Cancel subscription" in the footer, log in if you aren't already, and select Cancel Plan in the billing portal — no phone calls, emails, or retention pitches. You'll keep Pro or Family access through the end of your current billing period and won't be charged again. (This cancels your StreamNavigator plan itself — see the next question if you're asking about cancelling a streaming service like Netflix or Hulu.)</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Click "Manage billing" in the footer, log in, and select Cancel Plan — no phone calls, no retention pitch. You keep access to the end of the year you've paid for and won't be charged again. (That cancels StreamNavigator itself — the next question is about cancelling a streaming service like Netflix.)</div></div>
       </div>
 
       <div class="faq-item reveal">
@@ -1012,17 +1013,17 @@
 
       <div class="faq-item reveal">
         <button class="faq-q">Which streaming services does it support? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Any of them. The big names — Netflix, Prime Video, HBO Max, Disney+, YouTube Premium, Paramount+, Hulu, Peacock, Apple TV+, ESPN+, Crunchyroll — are one click away, and niche ones like AMC+, BritBox, or PBS Masterpiece are right there too. Don't see yours listed? Just type the name in — every subscription is tracked the same way, whether it's a major service or something niche.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Nineteen services come with current published pricing and plan tiers built in — Netflix, Prime Video, HBO Max, Disney+, Paramount+, Hulu, Peacock, Apple TV, ESPN, YouTube TV, Fubo, Sling, Starz, AMC+, Discovery+, Crunchyroll, MLB.TV, NBA League Pass and NFL+. Anything else, type the name and what you pay. We can still tell you when it's idle; we just can't check its plan tiers, because we don't hold pricing for it.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">How much can I expect to save? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Early users save up to $300 or more per year by pausing subscriptions between seasons, cancelling ones they never open, downgrading plans they've outgrown, and keeping a price change visible once you log it.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">It depends entirely on how much you currently pay for things nobody in your house is watching, so use the analyzer above — it uses your real prices and your real renewal dates and gives you your own number in under a minute. As a rough guide from the households we've modelled: one or two services and not much idle time, $0&ndash;60 a year. Three or four services, $90&ndash;200. A big household with sports and a lot of between-season gaps, $240&ndash;360. If your number comes out under about $60, we'd honestly rather you didn't subscribe.</div></div>
       </div>
 
       <div class="faq-item reveal">
         <button class="faq-q">Does it cost anything? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">The Starter plan is free forever. Pro and Family plans unlock pause-and-resume reminders timed to real air dates and your renewal date, direct-link cancellation, and a price-change log, starting at $4.99/mo.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">The analyzer on this page is free, needs no account, and always will be. One paid tier at $19.99 a year covers your whole household, and buys the one thing the free page can't do: checking the schedule every day so the restart date finds you.</div></div>
       </div>
 
     </div>
@@ -1036,7 +1037,7 @@
       <div class="hero-form">
         <a href="dashboard.html" class="btn btn-primary">Get Started Free →</a>
       </div>
-      <p class="hero-note" style="margin-bottom:0;">Free to start. Early users save up to $300 or more per year.</p>
+      <p class="hero-note" style="margin-bottom:0;">Free analyzer, no account. $19.99/year if you want us watching the schedule for you.</p>
     </div>
   </section>
 
@@ -1114,7 +1115,7 @@
     link.addEventListener('click', (e) => {
       if (link.getAttribute('href').includes('REPLACE_WITH_')) {
         e.preventDefault();
-        showToast('Payment portal not connected yet — add your Stripe link to enable checkout.');
+        showToast("Checkout isn't open yet — the analyzer above is free and works now. Nothing has been charged.");
       }
     });
   });
@@ -1133,27 +1134,10 @@
    ========================================================================= */
 (function(){
   const {
-    MONTH_NAMES, SERVICES, BUNDLES, SPORT_LABELS, CATALOG_VERIFIED,
-    analyze, manageLink, fmt,
+    MONTH_NAMES, SERVICES, BUNDLES, SPORT_LABELS, MANAGE_URLS, CATALOG_VERIFIED,
+    analyze, decide, lookupShow, manageLink, serviceForTitle,
+    fmt, prettyDate, prettyDateYear,
   } = window.StreamingEngine;
-  // A pause we cannot date is real money, but it is not an annual figure —
-  // we do not know when it ends. The headline stays what we can defend for
-  // twelve months; this reports the rest honestly, as a rate.
-  function renderPausedUpside(result){
-    const host = document.querySelector('.result-stats');
-    if (!host) return;
-    let el = document.getElementById('stat-paused-upside');
-    if (!result.pausedMonthlyUpside) { if (el) el.remove(); return; }
-    if (!el) {
-      el = document.createElement('p');
-      el.id = 'stat-paused-upside';
-      el.className = 'analyzer-disclaimer';
-      el.style.marginTop = '10px';
-      host.insertAdjacentElement('afterend', el);
-    }
-    el.innerHTML = 'Plus <strong>' + fmt(result.pausedMonthlyUpside) + '/mo</strong> for every month those paused services stay off. '
-      + "That's not in the yearly figure above — we can't put a restart date on it from this page, and we won't annualise a number we can't stand behind.";
-  }
 
   // The catalog's verification date is stamped from the engine rather than
   // typed into the markup, so a price refresh can never leave a stale "as
@@ -1260,231 +1244,449 @@
     }
   })();
 
-  /* ---------------- DOM wiring ---------------- */
+  /* ---------------- DOM wiring ----------------
+     The input model is deliberately small. We ask for three things — what
+     you pay for, when it renews, and what you watch — and infer the rest.
+     Nothing is asked twice, and nothing is asked that does not change a
+     recommendation. The old "how often do you watch this?" dropdown is
+     gone: it was guesswork the customer was bad at, and the engine leaned
+     on it harder than on the actual TV schedule. */
   const svcGrid = document.getElementById('svc-grid');
   const sportsGrid = document.getElementById('sports-grid');
   const favText = document.getElementById('fav-text');
   const favTags = document.getElementById('fav-tags');
   const resultsEl = document.getElementById('analyzer-results');
   const actionsListEl = document.getElementById('actions-list');
+  const moneyEl = document.getElementById('money-panel');
+  const renewalHint = document.getElementById('renewal-hint');
   if (!svcGrid) return; // analyzer not on this page
 
-  const selectedServices = {}; // id -> true
-  const selectedSports = {};   // id -> true
-  const favorites = [];
+  const selected = {};        // serviceId -> { tierId, renewalDate, billingPeriod }
+  const customSubs = [];      // { id, name, price, renewalDate, billingPeriod }
+  const selectedSports = {};  // sportKey -> true
+  const shows = [];           // { title, serviceId|null, lookup }
+  const overrides = {};       // serviceId -> true (customer dismissed the advice)
 
   function bestDefaultTier(svc){
-    const adFreeTiers = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
-    return (adFreeTiers[0] || svc.tiers[svc.tiers.length-1]).id;
+    const adFree = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
+    return (adFree[0] || svc.tiers[svc.tiers.length-1]).id;
+  }
+  function selectedServiceIds(){
+    return Object.keys(selected).concat(customSubs.map(c => c.id));
+  }
+  function serviceLabel(id){
+    if (SERVICES[id]) return SERVICES[id].name;
+    const c = customSubs.find(x => x.id === id);
+    return c ? c.name : id;
   }
 
-  Object.values(SERVICES).forEach(svc => {
-    const wrap = document.createElement('div');
-    wrap.style.width = '100%';
+  /* ---- service picker ---- */
+  function buildServiceGrid(){
+    svcGrid.innerHTML = '';
+    Object.values(SERVICES).forEach(svc => {
+      const wrap = document.createElement('div');
+      wrap.className = 'svc-item';
 
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'svc-chip';
-    chip.textContent = svc.name;
-    wrap.appendChild(chip);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'svc-chip' + (selected[svc.id] ? ' active' : '');
+      chip.textContent = svc.name;
+      chip.setAttribute('aria-pressed', selected[svc.id] ? 'true' : 'false');
+      chip.addEventListener('click', () => {
+        if (selected[svc.id]) delete selected[svc.id];
+        else selected[svc.id] = { tierId: bestDefaultTier(svc), renewalDate: '', billingPeriod: 'monthly' };
+        buildServiceGrid(); renderShowTags(); updateHints();
+      });
+      wrap.appendChild(chip);
 
-    const detail = document.createElement('div');
-    detail.className = 'svc-detail';
-    detail.innerHTML = `
-      <div class="svc-detail-full">${svc.name} — current plan &amp; usage</div>
-      <div>
-        <select class="a-select tier-select" data-service="${svc.id}">
-          ${svc.tiers.map(t => `<option value="${t.id}">${t.name} — ${fmt(t.price)}/mo</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <select class="a-select freq-select" data-service="${svc.id}">
-          <option value="daily">Watch daily</option>
-          <option value="weekly" selected>Watch weekly</option>
-          <option value="occasionally">Occasionally</option>
-          <option value="rarely">Rarely</option>
-          <option value="never">Never / forgot I had it</option>
-        </select>
-      </div>`;
-    wrap.appendChild(detail);
-    svcGrid.appendChild(wrap);
+      if (selected[svc.id]) {
+        const det = document.createElement('div');
+        det.className = 'svc-detail';
 
-    const tierSelect = detail.querySelector('.tier-select');
-    tierSelect.value = bestDefaultTier(svc);
+        const tier = document.createElement('select');
+        tier.className = 'a-select tier-select';
+        tier.setAttribute('data-service', svc.id);
+        tier.setAttribute('aria-label', svc.name + ' plan');
+        svc.tiers.forEach(t => {
+          const o = document.createElement('option');
+          o.value = t.id; o.textContent = `${t.name} — ${fmt(t.price)}/mo`;
+          if (t.id === selected[svc.id].tierId) o.selected = true;
+          tier.appendChild(o);
+        });
+        tier.addEventListener('change', () => { selected[svc.id].tierId = tier.value; });
+        det.appendChild(tier);
 
-    chip.addEventListener('click', () => {
-      const active = chip.classList.toggle('active');
-      detail.classList.toggle('show', active);
-      if (active) selectedServices[svc.id] = true; else delete selectedServices[svc.id];
+        const renew = document.createElement('input');
+        renew.type = 'date';
+        renew.className = 'a-select renewal-input';
+        renew.setAttribute('data-service', svc.id);
+        renew.setAttribute('aria-label', svc.name + ' next renewal date');
+        renew.value = selected[svc.id].renewalDate || '';
+        renew.addEventListener('change', () => { selected[svc.id].renewalDate = renew.value; updateHints(); });
+        det.appendChild(renew);
+
+        const period = document.createElement('select');
+        period.className = 'a-select period-select';
+        period.setAttribute('data-service', svc.id);
+        period.setAttribute('aria-label', svc.name + ' billing period');
+        period.innerHTML = '<option value="monthly">Billed monthly</option><option value="annual">Billed annually</option>';
+        period.value = selected[svc.id].billingPeriod;
+        period.addEventListener('change', () => { selected[svc.id].billingPeriod = period.value; });
+        det.appendChild(period);
+
+        wrap.appendChild(det);
+      }
+      svcGrid.appendChild(wrap);
     });
-  });
-
-  Object.keys(SPORT_LABELS).forEach(sp => {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'chip-toggle';
-    chip.textContent = SPORT_LABELS[sp];
-    chip.addEventListener('click', () => {
-      const active = chip.classList.toggle('active');
-      if (active) selectedSports[sp] = true; else delete selectedSports[sp];
-    });
-    sportsGrid.appendChild(chip);
-  });
-
-  function renderTags(){
-    favTags.innerHTML = '';
-    favorites.forEach((f, i) => {
-      const pill = document.createElement('span');
-      pill.className = 'tag-pill';
-      pill.innerHTML = `${f} <button type="button" aria-label="Remove">✕</button>`;
-      pill.querySelector('button').addEventListener('click', () => { favorites.splice(i, 1); renderTags(); });
-      favTags.appendChild(pill);
-    });
+    renderCustomList();
   }
-  favText.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && favText.value.trim()) {
-      e.preventDefault();
-      favorites.push(favText.value.trim());
-      favText.value = '';
-      renderTags();
-    }
-  });
-
-  // Custom services — for anything not in our built-in catalog (a niche or regional
-  // streaming app, a work perk, etc). Scored on usage frequency only, since we have no
-  // pricing tiers or content catalog to match against.
-  const customServices = [];
-  let customCounter = 0;
-  const customList = document.getElementById('custom-svc-list');
-  const addCustomBtn = document.getElementById('add-custom-btn');
-  const customAddForm = document.getElementById('custom-add-form');
-  const customNameInput = document.getElementById('custom-name');
-  const customPriceInput = document.getElementById('custom-price');
-  const customFreqSelect = document.getElementById('custom-freq');
-
-  addCustomBtn.addEventListener('click', () => {
-    customAddForm.classList.toggle('show');
-    if (customAddForm.classList.contains('show')) customNameInput.focus();
-  });
 
   function renderCustomList(){
-    customList.innerHTML = '';
-    customServices.forEach((c, i) => {
-      const pill = document.createElement('span');
-      pill.className = 'tag-pill';
-      pill.innerHTML = `${c.name} — ${fmt(c.price)}/mo <button type="button" aria-label="Remove">✕</button>`;
-      pill.querySelector('button').addEventListener('click', () => { customServices.splice(i, 1); renderCustomList(); });
-      customList.appendChild(pill);
+    const host = document.getElementById('custom-svc-list');
+    host.innerHTML = '';
+    customSubs.forEach((c, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = `${c.name} · ${fmt(c.price)}/mo${c.renewalDate ? ' · renews ' + c.renewalDate : ''}`;
+      const x = document.createElement('button');
+      x.type = 'button'; x.setAttribute('aria-label', 'Remove ' + c.name); x.textContent = '×';
+      x.addEventListener('click', () => { customSubs.splice(i,1); renderCustomList(); renderShowTags(); });
+      tag.appendChild(x);
+      host.appendChild(tag);
     });
   }
 
-  function addCustomService(){
-    const name = customNameInput.value.trim();
-    const price = parseFloat(customPriceInput.value);
-    const nameOk = !!name;
-    const priceOk = !isNaN(price) && price > 0;
-    customNameInput.style.borderColor = nameOk ? '' : '#1D5FA8';
-    customPriceInput.parentElement.style.borderColor = priceOk ? '' : '#1D5FA8';
-    if (!nameOk || !priceOk) return;
-
-    customCounter++;
-    customServices.push({ id: 'custom-' + customCounter, name, price, frequency: customFreqSelect.value });
-    renderCustomList();
-
-    customNameInput.value = '';
-    customPriceInput.value = '';
-    customFreqSelect.value = 'weekly';
-    customNameInput.style.borderColor = '';
-    customPriceInput.parentElement.style.borderColor = '';
-    customAddForm.classList.remove('show');
+  function updateHints(){
+    const ids = Object.keys(selected);
+    const anyMissing = ids.some(id => !selected[id].renewalDate) || customSubs.some(c => !c.renewalDate);
+    if (renewalHint) renewalHint.hidden = !(ids.length || customSubs.length) || !anyMissing;
   }
-  document.getElementById('custom-add-confirm').addEventListener('click', addCustomService);
-  customPriceInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
-  customNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomService(); } });
 
-  const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
-  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', 'pause-later':'◷', add:'+', bundle:'◆', keep:'✓', info:'i' };
-  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause now', 'pause-later':'Keep now, pause later', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
-
-  document.getElementById('analyze-btn').addEventListener('click', () => {
-    const subscriptions = Object.keys(selectedServices).map(id => {
-      const tierSel = svcGrid.querySelector(`.tier-select[data-service="${id}"]`);
-      const freqSel = svcGrid.querySelector(`.freq-select[data-service="${id}"]`);
-      return { serviceId:id, tierId: tierSel.value, frequency: freqSel.value };
+  /* ---- sports ---- */
+  Object.keys(SPORT_LABELS).forEach(key => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip-toggle'; b.textContent = SPORT_LABELS[key];
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      if (selectedSports[key]) delete selectedSports[key]; else selectedSports[key] = true;
+      b.classList.toggle('active', !!selectedSports[key]);
+      b.setAttribute('aria-pressed', selectedSports[key] ? 'true' : 'false');
     });
+    sportsGrid.appendChild(b);
+  });
 
-    const hasSports = Object.keys(selectedSports).length > 0;
-    const hasFavorites = favorites.length > 0;
-    const hasCustom = customServices.length > 0;
-    if (!subscriptions.length && !hasCustom && !hasSports && !hasFavorites) {
-      actionsListEl.innerHTML = '<p class="analyzer-empty">Select at least one subscription, sport, or favorite above to run the analysis.</p>';
-      document.getElementById('stat-current').textContent = '$0/mo';
-      document.getElementById('stat-recommended').textContent = '$0/mo';
-      document.getElementById('stat-savings').textContent = '$0/yr';
-      resultsEl.hidden = false;
-      resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
-      return;
+  /* ---- shows ----
+     A show is tagged to a service automatically where the catalog knows it
+     (Severance -> Apple TV). Where it doesn't, and the customer has more
+     than one service, we ask — once, on the tag itself. Never a form. */
+  function addShow(title){
+    const t = String(title || '').trim();
+    if (!t || shows.some(s => s.title.toLowerCase() === t.toLowerCase())) return;
+    const guess = serviceForTitle(t);
+    const ids = selectedServiceIds();
+    const auto = (guess && selected[guess]) ? guess : (ids.length === 1 ? ids[0] : null);
+    shows.push({ title: t, serviceId: auto, lookup: null });
+    renderShowTags();
+  }
+  favText.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addShow(favText.value); favText.value = ''; }
+  });
+
+  function renderShowTags(){
+    favTags.innerHTML = '';
+    const ids = selectedServiceIds();
+    shows.forEach((s, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'tag tag-show';
+      const label = document.createElement('span');
+      label.textContent = s.title;
+      tag.appendChild(label);
+
+      if (ids.length) {
+        const sel = document.createElement('select');
+        sel.className = 'tag-select';
+        sel.setAttribute('aria-label', 'Which service is ' + s.title + ' on?');
+        const none = document.createElement('option');
+        none.value = ''; none.textContent = 'on which service?';
+        sel.appendChild(none);
+        ids.forEach(id => {
+          const o = document.createElement('option');
+          o.value = id; o.textContent = serviceLabel(id);
+          if (s.serviceId === id) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.addEventListener('change', () => { s.serviceId = sel.value || null; });
+        tag.appendChild(sel);
+      }
+
+      const x = document.createElement('button');
+      x.type = 'button'; x.setAttribute('aria-label', 'Remove ' + s.title); x.textContent = '×';
+      x.addEventListener('click', () => { shows.splice(i,1); renderShowTags(); });
+      tag.appendChild(x);
+      favTags.appendChild(tag);
+    });
+  }
+
+  /* ---- custom service ---- */
+  document.getElementById('add-custom-btn').addEventListener('click', () => {
+    const f = document.getElementById('custom-add-form');
+    f.classList.toggle('open');
+  });
+  document.getElementById('custom-add-confirm').addEventListener('click', () => {
+    const name = document.getElementById('custom-name').value.trim();
+    const price = parseFloat(document.getElementById('custom-price').value);
+    const renewalDate = document.getElementById('custom-renewal').value || '';
+    if (!name || isNaN(price)) return;
+    customSubs.push({ id: 'custom:' + name.toLowerCase().replace(/[^a-z0-9]+/g,'-'), name, price, renewalDate, billingPeriod: 'monthly' });
+    document.getElementById('custom-name').value = '';
+    document.getElementById('custom-price').value = '';
+    document.getElementById('custom-renewal').value = '';
+    document.getElementById('custom-add-form').classList.remove('open');
+    renderCustomList(); renderShowTags(); updateHints();
+  });
+
+  /* ---- run it ---- */
+  const runBtn = document.getElementById('analyze-btn');
+  runBtn.addEventListener('click', async () => {
+    const ids = selectedServiceIds();
+    if (!ids.length) { showToast('Pick at least one service first.'); return; }
+
+    runBtn.disabled = true;
+    const originalLabel = runBtn.textContent;
+    runBtn.textContent = 'Checking the TV schedule…';
+
+    // One TVmaze call per named show. Free, no key, 20 calls / 10s — we
+    // stay well inside that and fail soft: a lookup that errors becomes a
+    // show with no date, which the engine treats as "no date announced"
+    // rather than inventing one.
+    for (const s of shows) {
+      if (s.lookup) continue;
+      s.lookup = await lookupShow(s.title);
     }
 
-    const budgetInput = document.getElementById('budget').value;
+    const subscriptions = [];
+    Object.keys(selected).forEach(id => {
+      const svc = SERVICES[id];
+      const tier = svc.tiers.find(t => t.id === selected[id].tierId) || svc.tiers[0];
+      subscriptions.push({
+        serviceId: id, tierId: tier.id, price: tier.price,
+        renewalDate: selected[id].renewalDate || null,
+        billingPeriod: selected[id].billingPeriod, status: 'active',
+      });
+    });
+    customSubs.forEach(c => subscriptions.push({
+      serviceId: c.id, name: c.name, price: c.price,
+      renewalDate: c.renewalDate || null, billingPeriod: c.billingPeriod, status: 'active',
+    }));
+
+    const watchlist = [];
+    shows.forEach(s => {
+      if (!s.serviceId) return;
+      const L = s.lookup || {};
+      watchlist.push({
+        kind: 'show', serviceId: s.serviceId, title: L.name || s.title,
+        nextAirDate: L.nextAirDate || null, prevAirDate: L.prevAirDate || null,
+        currentlyAiring: !!L.currentlyAiring, found: L.found !== false,
+        checkedAt: L.checkedAt || null,
+      });
+    });
+    // A sport counts for every service the customer holds that carries it.
+    Object.keys(selectedSports).forEach(sp => {
+      ids.forEach(id => {
+        if (SERVICES[id] && SERVICES[id].sports.includes(sp)) {
+          watchlist.push({ kind: 'sport', serviceId: id, title: sp });
+        }
+      });
+    });
+
     const result = analyze({
-      subscriptions,
-      customSubscriptions: customServices,
-      favorites,
-      sports: Object.keys(selectedSports),
+      subscriptions, watchlist,
       household: parseInt(document.getElementById('household').value, 10) || 1,
       adsOk: document.getElementById('ads-ok').checked,
-      kidsImportant: document.getElementById('kids-important').checked,
-      budget: budgetInput ? parseFloat(budgetInput) : Infinity
+      overrides,
     });
 
-    document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
-    document.getElementById('stat-recommended').textContent = fmt(result.recommendedMonthly) + '/mo';
-    document.getElementById('stat-savings').textContent = fmt(result.savingsYearly) + '/yr';
-    renderPausedUpside(result);
+    renderResult(result);
+    runBtn.disabled = false;
+    runBtn.textContent = originalLabel;
+    resultsEl.hidden = false;
+    resultsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 
-    const sorted = result.actions.slice().sort((a,b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
-    actionsListEl.innerHTML = '';
-    if (!sorted.length) {
-      actionsListEl.innerHTML = '<p class="analyzer-empty">Your setup already looks optimized.</p>';
-    }
-    const LINKABLE = { cancel:1, downgrade:1, pause:1, add:1, bundle:1 };
-    sorted.forEach(a => {
-      const svc = SERVICES[a.service] || BUNDLES.find(b => b.id === a.service) || { name: a.name || SPORT_LABELS[a.service] || a.service };
-      const card = document.createElement('div');
-      card.className = 'action-card';
-      const title = ACTION_TITLE[a.action] || a.action;
-      const titleEl = document.createElement('div');
-      titleEl.className = 'a-title';
-      titleEl.textContent = title + (svc.name ? ' — ' + svc.name : '');
-      const descEl = document.createElement('div');
-      descEl.className = 'a-desc';
-      descEl.textContent = a.reason;
-      const copyEl = document.createElement('div');
-      copyEl.className = 'action-copy';
-      copyEl.appendChild(titleEl);
-      copyEl.appendChild(descEl);
-      if (LINKABLE[a.action]) {
-        const { url, label } = manageLink(a.service, svc.name);
-        const linkEl = document.createElement('a');
-        linkEl.className = 'a-link';
-        linkEl.href = url;
-        linkEl.target = '_blank';
-        linkEl.rel = 'noopener noreferrer';
-        linkEl.textContent = label + ' →';
-        copyEl.appendChild(linkEl);
+  /* ---- results ---- */
+  const ACTION_META = {
+    suspend:   { icon:'⏸', label:'Stop paying',  cls:'act-suspend' },
+    restart:   { icon:'▶', label:'Start again',  cls:'act-restart' },
+    watch:     { icon:'◷', label:'Stay off',     cls:'act-watch' },
+    keep:      { icon:'✓', label:'Keep paying',  cls:'act-keep' },
+    untracked: { icon:'?', label:'Tell us more', cls:'act-untracked' },
+  };
+  const ORDER = { suspend:0, restart:1, watch:2, untracked:3, keep:4 };
+
+  function renderResult(r){
+    // --- the money, stated so nobody has to do arithmetic ---
+    const rows = [
+      ['You pay now', `${fmt(r.currentMonthly)}/mo`, `${fmt(r.currentAnnual)} a year`],
+      ['After these changes', `${fmt(r.optimisedAnnual/12)}/mo`, `${fmt(r.optimisedAnnual)} a year`],
+    ];
+    let html = '<div class="money-grid">';
+    rows.forEach(([k,a,b]) => {
+      html += `<div class="money-row"><span class="mk">${k}</span><span class="mv">${a}</span><span class="ms">${b}</span></div>`;
+    });
+    html += '</div>';
+
+    if (r.savingsYearly > 0) {
+      html += `<div class="money-headline"><span class="mh-label">You keep</span><span class="mh-value">${fmt(r.savingsYearly)}</span><span class="mh-unit">a year</span></div>`;
+      html += `<div class="money-net">`
+        + `<span>StreamNavigator costs <strong>${fmt(r.feeAnnual)}/year</strong></span>`
+        + `<span class="net-arrow">→</span>`
+        + `<span>you're <strong class="${r.netSavingsYearly > 0 ? 'net-good' : 'net-bad'}">${fmt(Math.abs(r.netSavingsYearly))} ${r.netSavingsYearly > 0 ? 'ahead' : 'behind'}</strong></span>`
+        + `</div>`;
+      if (r.netSavingsYearly > 0) {
+        const ratio = (r.savingsYearly / r.feeAnnual).toFixed(1);
+        // The headline is a floor, so the ratio is a floor too. Saying "1.6x"
+        // flat would understate a household whose services stay off for
+        // months — and overstating is not the fix for that.
+        html += `<p class="money-ratio">That's <strong>${r.monthlyWhileOff > 0 ? 'at least ' : ''}${ratio}&times;</strong> what we charge${r.monthlyWhileOff > 0 ? ', before counting a single month beyond the first' : ''}. If it ever stops clearing what you pay us, cancel us first.</p>`;
       }
-      const badgeEl = document.createElement('div');
-      badgeEl.className = 'action-badge ' + a.action;
-      badgeEl.textContent = ACTION_ICON[a.action] || '•';
-      card.appendChild(badgeEl);
-      card.appendChild(copyEl);
+    } else {
+      html += `<div class="money-headline none"><span class="mh-label">Nothing to cut right now</span></div>`;
+      html += `<p class="money-ratio">Everything you pay for has something on it, or comes back before your next charge. That's the right answer — don't pay us for it. Come back when a season ends.</p>`;
+    }
+    if (r.monthlyWhileOff > 0) {
+      html += `<p class="money-ratio">The figure above counts only the <strong>next charge</strong> on each service you switch off — the one we know for certain you skip. After that it's <strong>${fmt(r.monthlyWhileOff)} a month</strong> for as long as they stay off. We don't put that in the headline because we don't know when your shows come back, and we won't annualise a guess.</p>`;
+    }
+    moneyEl.innerHTML = html;
+
+    // --- one card per subscription ---
+    actionsListEl.innerHTML = '';
+    const sorted = r.decisions.slice().sort((a,b) => (ORDER[a.action]??9) - (ORDER[b.action]??9));
+    sorted.forEach(d => {
+      const meta = ACTION_META[d.action] || ACTION_META.keep;
+      const card = document.createElement('div');
+      card.className = 'decision-card ' + meta.cls + (d.overridden ? ' overridden' : '');
+
+      const head = document.createElement('div');
+      head.className = 'dc-head';
+      // savings is already a per-period figure. When it is a rate (we don't
+      // know when the gap ends) it is the MONTHLY price, not an annual sum —
+      // dividing it by twelve turned $26.99/mo into $2.25/mo on the card.
+      // Two different numbers, never conflated. A dated suspend has an exact
+      // total. An open-ended one has a floor — the next charge, which we
+      // know it skips — and then a monthly rate on top.
+      head.innerHTML = `<span class="dc-badge">${meta.icon}</span>`
+        + `<span class="dc-title">${escapeHtml(d.headline)}</span>`
+        + (d.savings > 0 ? `<span class="dc-money">${fmt(d.savings)}${d.savingsIsRate ? '/mo off' : ''}</span>` : '');
+      card.appendChild(head);
+      if (d.openEnded && d.monthlyWhileOff > 0) {
+        const floor = document.createElement('p');
+        floor.className = 'dc-floor';
+        floor.innerHTML = `<strong>${fmt(d.savings)}</strong> the moment you cancel — that's the ${escapeHtml(prettyDateYear(d.renewalDate))} charge you won't pay — then <strong>${fmt(d.monthlyWhileOff)}</strong> again every month it stays off.`;
+        card.appendChild(floor);
+      }
+
+      const why = document.createElement('p');
+      why.className = 'dc-why';
+      why.textContent = d.why;
+      card.appendChild(why);
+
+      // Dates the customer acts on, stated plainly.
+      const when = [];
+      if (d.actBy) when.push(['Do it by', prettyDateYear(d.actBy)]);
+      if (d.restartDate) when.push(['Turn it back on', prettyDateYear(d.restartDate)]);
+      if (d.decideOn) when.push(['We’ll revisit', prettyDateYear(d.decideOn)]);
+      if (d.renewalDate) when.push(['Next charge', prettyDateYear(d.renewalDate)]);
+      if (when.length) {
+        const dl = document.createElement('div');
+        dl.className = 'dc-dates';
+        dl.innerHTML = when.map(([k,v]) => `<span><b>${k}</b>${escapeHtml(v)}</span>`).join('');
+        card.appendChild(dl);
+      }
+
+      // The evidence, so the customer can check us rather than trust us.
+      if (d.evidence && d.evidence.length) {
+        const ev = document.createElement('ul');
+        ev.className = 'dc-evidence';
+        d.evidence.forEach(e => {
+          const li = document.createElement('li');
+          const bits = [`<b>${escapeHtml(e.title)}</b>`, escapeHtml(e.state)];
+          if (e.nextDate) bits.push('next ' + escapeHtml(prettyDateYear(e.nextDate)) + (e.approximate ? ' (approx)' : ''));
+          if (e.lastAired) bits.push('last aired ' + escapeHtml(prettyDateYear(e.lastAired)));
+          bits.push(`<span class="dc-src">${escapeHtml(e.source)}${e.checkedAt ? ', checked ' + escapeHtml(e.checkedAt) : ''}</span>`);
+          li.innerHTML = bits.join(' · ');
+          ev.appendChild(li);
+        });
+        card.appendChild(ev);
+      }
+
+      const foot = document.createElement('div');
+      foot.className = 'dc-foot';
+      if (SERVICES[d.serviceId] || MANAGE_URLS[d.serviceId]) {
+        const { url, label } = manageLink(d.serviceId, d.name);
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.className = 'dc-link'; a.textContent = label + ' →';
+        foot.appendChild(a);
+      }
+      if (d.action === 'suspend' || d.action === 'watch') {
+        const ov = document.createElement('button');
+        ov.type = 'button'; ov.className = 'dc-override';
+        ov.textContent = d.overridden ? 'Undo — count this again' : 'No, I want to keep this';
+        ov.addEventListener('click', () => {
+          if (overrides[d.serviceId]) delete overrides[d.serviceId]; else overrides[d.serviceId] = true;
+          runBtn.click();
+        });
+        foot.appendChild(ov);
+      }
+      if (d.confidence && d.confidence !== 'none') {
+        const c = document.createElement('span');
+        c.className = 'dc-conf conf-' + d.confidence;
+        c.textContent = d.confidence === 'high' ? 'confirmed' : 'approximate';
+        foot.appendChild(c);
+      }
+      card.appendChild(foot);
+
+      // A suspend we can't date is exactly where the paid product earns its
+      // keep, and the only place the page is allowed to say so.
+      if ((d.action === 'suspend' || d.action === 'watch') && !d.restartDate && !d.overridden) {
+        const n = document.createElement('p');
+        n.className = 'dc-nudge';
+        n.textContent = 'This page checked the schedule once, just now. Watching it every day and emailing you the moment a return date is announced is the paid part — that is the whole difference.';
+        card.appendChild(n);
+      }
       actionsListEl.appendChild(card);
     });
 
-    resultsEl.hidden = false;
-    resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
-  });
+    // Cross-service savings — a plan bigger than the household needs, or a
+    // bundle that beats paying separately. These carry real money, so they
+    // get their own cards: every dollar in the headline must trace to
+    // something the customer was actually told to do.
+    r.actions.filter(a => a.type === 'downgrade' || a.type === 'bundle').forEach(a => {
+      const card = document.createElement('div');
+      card.className = 'decision-card act-restart';
+      card.innerHTML = `<div class="dc-head">`
+        + `<span class="dc-badge">${a.type === 'bundle' ? '◆' : '▼'}</span>`
+        + `<span class="dc-title">${a.type === 'bundle' ? 'Switch to the ' + escapeHtml(a.name) : 'Move ' + escapeHtml(a.name) + ' to a smaller plan'}</span>`
+        + `<span class="dc-money">${fmt(a.annualSaving)}/yr</span></div>`
+        + `<p class="dc-why">${escapeHtml(a.detail)}</p>`;
+      const foot = document.createElement('div');
+      foot.className = 'dc-foot';
+      const { url, label } = manageLink(a.serviceId, a.name);
+      const link = document.createElement('a');
+      link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      link.className = 'dc-link'; link.textContent = label + ' →';
+      foot.appendChild(link);
+      card.appendChild(foot);
+      actionsListEl.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  buildServiceGrid();
+  updateHints();
 })();
 </script>
 

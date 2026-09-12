@@ -265,6 +265,41 @@
   .plan-status-subtext{ font-size:13px; font-weight:500; color:var(--text-dimmer); margin-bottom:0; }
   .upgrade-grid{ display:grid; grid-template-columns:1fr 1fr; gap:18px; }
   @media (max-width:680px){ .upgrade-grid{ grid-template-columns:1fr; } }
+  /* ---- decision cards and the money panel (same components as /streaming) ---- */
+  .money-panel{ background:var(--surface); border:1.5px solid var(--border-strong); border-radius:14px; padding:20px 22px; }
+  .money-grid{ display:flex; flex-direction:column; gap:8px; }
+  .money-row{ display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:baseline; font-size:14px; }
+  .money-row .mk{ color:var(--text-dim); }
+  .money-row .mv{ font-weight:800; font-variant-numeric:tabular-nums; }
+  .money-row .ms{ font-size:12.5px; color:var(--text-dimmer); font-variant-numeric:tabular-nums; min-width:92px; text-align:right; }
+  .money-headline{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:2px solid var(--ink); }
+  .mh-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-dimmer); }
+  .mh-value{ font-family:'Sora',sans-serif; font-weight:800; font-size:2.1rem; line-height:1; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .mh-unit{ font-size:13px; color:var(--text-dim); }
+  .money-headline.none .mh-label{ font-size:14px; text-transform:none; letter-spacing:0; color:var(--text-dim); font-weight:700; }
+  .money-ratio{ margin-top:10px; font-size:12.5px; color:var(--text-dimmer); line-height:1.6; }
+  .decision-card{ background:var(--surface); border:1.5px solid var(--border); border-left-width:4px; border-radius:12px; padding:15px 17px; }
+  .decision-card.act-suspend{ border-left-color:var(--status-active-deep); }
+  .decision-card.act-restart{ border-left-color:#1D5FA8; }
+  .decision-card.act-watch{ border-left-color:#0B6F84; }
+  .decision-card.act-keep{ border-left-color:var(--border-strong); }
+  .decision-card.act-untracked{ border-left-color:#B54708; }
+  .dc-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .dc-badge{ flex-shrink:0; width:26px; height:26px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;
+    font-size:13px; font-weight:800; background:rgba(31,27,22,0.06); color:var(--text-dim); }
+  .act-suspend .dc-badge{ background:rgba(15,138,125,0.15); color:var(--status-active-deep); }
+  .act-restart .dc-badge{ background:rgba(29,95,168,0.14); color:#1D5FA8; }
+  .dc-title{ font-size:15px; font-weight:800; flex:1; min-width:180px; }
+  .dc-money{ font-family:'Sora',sans-serif; font-weight:800; font-size:16px; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .dc-why{ font-size:13.5px; color:var(--text-dim); margin:8px 0 0; line-height:1.55; }
+  .dc-dates{ display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:11px; }
+  .dc-dates span{ font-size:12.5px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+  .dc-dates b{ display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-dimmer); font-weight:700; }
+  .dc-evidence{ list-style:none; margin:11px 0 0; padding:10px 12px; background:var(--bg); border-radius:8px; }
+  .dc-evidence li{ font-size:12px; color:var(--text-dim); line-height:1.6; }
+  .dc-src{ color:var(--text-dimmer); }
+  .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:rgba(29,95,168,0.07); border-radius:8px; font-size:12px; color:var(--text-dim); line-height:1.55; }
+  @media (max-width: 640px){ .money-row{ grid-template-columns:1fr auto; } }
   .upgrade-card{ position:relative; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; display:flex; flex-direction:column; }
   .upgrade-card.featured{ background:linear-gradient(180deg, rgba(167,139,250,0.14), var(--surface) 40%); }
   .upgrade-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); white-space:nowrap; }
@@ -430,7 +465,7 @@
     </a>
     <div class="nav-right">
       <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" id="manage-billing-link" data-role="manage-billing" class="btn btn-ghost btn-sm" hidden>Manage Billing</a>
-      <a href="#upgrade-pro-link" id="header-upgrade-link" class="btn btn-primary btn-sm" hidden>Upgrade</a>
+      <a href="#upgrade-annual-link" id="header-upgrade-link" class="btn btn-primary btn-sm" hidden>Upgrade</a>
       <button id="logout-btn" class="btn btn-ghost btn-sm" hidden>Log out</button>
     </div>
   </nav>
@@ -523,26 +558,16 @@
           <a href="https://billing.stripe.com/p/login/7sY7sLfIMfqQcoA93WabK00" class="btn btn-dark" data-role="manage-billing" id="manage-billing-link-sidebar" hidden style="width:100%; justify-content:center; margin-bottom:8px;">Manage Billing</a>
           <div class="upgrade-grid" id="upgrade-grid">
             <div class="upgrade-card featured">
-              <span class="upgrade-badge">Most Popular</span>
-              <h4>Pro</h4>
-              <div class="upgrade-price">$4.99<span>/mo</span></div>
+              <h4>StreamNavigator</h4>
+              <div class="upgrade-price">$19.99<span>/yr</span></div>
               <ul class="upgrade-feats">
-                <li>Real-time pause &amp; resume reminders</li>
-                <li>Direct links to cancel &amp; downgrade</li>
-                <li>Price-change log across every tracked service</li>
-                <li>Personalized plan optimizer — see what you'd save</li>
+                <li>We check the TV schedule every day, for every show you follow</li>
+                <li>An email before your renewal when something is worth switching off</li>
+                <li>An email two days before a show is actually back &mdash; never on a guess</li>
+                <li>Everyone in the household, one price</li>
+                <li>Direct links to cancel, pause and resubscribe</li>
               </ul>
-              <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-ghost" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
-            </div>
-            <div class="upgrade-card">
-              <h4>Family</h4>
-              <div class="upgrade-price">$8.99<span>/mo</span></div>
-              <ul class="upgrade-feats">
-                <li>Everything in Pro</li>
-                <li>Up to 6 shared accounts</li>
-                <li>Household usage breakdown</li>
-              </ul>
-              <a href="https://buy.stripe.com/dRm00j4043I80FSa80abK01" class="btn btn-ghost" id="upgrade-family-link" style="width:100%; justify-content:center;">Subscribe to Family →</a>
+              <a href="REPLACE_WITH_ANNUAL_PAYMENT_LINK" class="btn btn-ghost" id="upgrade-annual-link" style="width:100%; justify-content:center;">Subscribe &mdash; $19.99/year &rarr;</a>
             </div>
           </div>
           <p class="plan-status-text plan-status-subtext" id="upgrade-grid-hidden-note" hidden>You can manage or cancel your plan any time.</p>
@@ -560,7 +585,7 @@
 
     <div class="panel" id="household-panel" hidden>
       <h3>Manage your household</h3>
-      <p class="field-hint">Invite up to 5 people to share your Family plan. Each person logs into their own account with their own tracked subscriptions and gets full Pro features — nobody's individual subscriptions are visible to you or to anyone else in the household.</p>
+      <p class="field-hint">Invite up to 5 people onto your subscription. Each person logs into their own account with their own tracked subscriptions and gets everything you get — nobody's individual subscriptions are visible to you or to anyone else in the household.</p>
 
       <div class="fav-add-grid">
         <div class="field">
@@ -587,7 +612,7 @@
 
     <div class="panel" id="household-member-summary-panel" hidden>
       <h3>Your household</h3>
-      <p class="field-hint">You're sharing a Family plan. Here's the combined household spend — your own tracked subscriptions above still aren't visible to anyone else in the household, including the account owner.</p>
+      <p class="field-hint">You're sharing a household subscription. Here's the combined household spend — your own tracked subscriptions above still aren't visible to anyone else in the household, including the account owner.</p>
       <div class="result-stats" id="household-member-summary-stats" hidden>
         <div class="stat-box"><span class="stat-label">People sharing this plan</span><span class="stat-value" id="household-member-stat-people">0</span></div>
         <div class="stat-box"><span class="stat-label">Combined active spend</span><span class="stat-value" id="household-member-stat-active">$0/mo</span></div>
@@ -620,8 +645,8 @@
         <p class="plan-status-text panel-text-centered">Tag a show or sport and the subscription it's on, and we'll flag right on that subscription above when it's worth activating — using real air dates for shows and typical U.S. season windows for sports.</p>
 
         <div class="upgrade-lock" id="fav-panel-locked" hidden>
-          <p><strong>Real-time pause &amp; resume reminders are a Pro and Family feature.</strong> Tag what you watch and we'll tell you — right on the subscription — when it's worth activating or pausing.</p>
-          <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm" id="fav-panel-upgrade-link">Upgrade to Pro →</a>
+          <p><strong>Daily schedule checks and email reminders are the paid part ($19.99/year, whole household).</strong> Tag what you watch and we'll tell you right here when something is worth switching off — subscribe and we'll also email you, including the day a show finally gets a return date.</p>
+          <a href="#upgrade-annual-link" class="btn btn-ghost btn-sm" id="fav-panel-upgrade-link">See the $19.99/year plan →</a>
         </div>
 
         <div id="fav-panel-body">
@@ -740,8 +765,8 @@
     <div class="panel">
       <div class="analyzer" id="analyzer">
         <div class="upgrade-lock" id="analyzer-locked" hidden>
-          <p><strong>Analyzing your subscriptions against better plans is a Pro and Family feature.</strong> Upgrade to see your current setup, our recommended setup, and exactly what you'd save.</p>
-          <a href="#upgrade-pro-link" class="btn btn-ghost btn-sm">Upgrade to Pro →</a>
+          <p><strong>Want this checked every day instead of only when you visit?</strong> That's the paid part — $19.99/year for the whole household.</p>
+          <a href="#upgrade-annual-link" class="btn btn-ghost btn-sm">See the $19.99/year plan →</a>
         </div>
 
         <div id="analyzer-body">
@@ -752,14 +777,9 @@
           <button class="btn btn-ghost analyze-btn" id="analyze-btn" type="button">Analyze My Subscriptions</button>
 
           <div class="analyzer-results" id="analyzer-results" hidden>
-            <div class="result-stats">
-              <div class="stat-box"><span class="stat-label">Current setup</span><span class="stat-value" id="stat-current">$0/mo</span></div>
-              <div class="stat-arrow">→</div>
-              <div class="stat-box featured-stat"><span class="stat-label">Recommended setup</span><span class="stat-value" id="stat-recommended">$0/mo</span></div>
-              <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings-yr">$0/yr</span></div>
-            </div>
+            <div class="money-panel" id="money-panel"></div>
             <div class="actions-list" id="actions-list"></div>
-            <p class="analyzer-disclaimer">Estimates use published list prices, verified by hand on <span data-catalog-verified>—</span>. Actual promo and legacy pricing varies, and an annual plan can't be paused mid-term. Check the current price on the service before you cancel or switch.</p>
+            <p class="analyzer-disclaimer">Prices are published US list prices, checked by hand on <span data-catalog-verified>—</span>; your own promo or legacy rate may differ. Show dates come from <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a> (CC BY-SA). Sports dates are typical season windows, not a game schedule.</p>
           </div>
         </div>
       </div>
@@ -1247,9 +1267,9 @@
     if (analyzerLocked) analyzerLocked.hidden = pro;
     if (householdPanel) householdPanel.hidden = !isFamilyOwner;
     if (memberSummaryPanel) memberSummaryPanel.hidden = !(userPlan === 'family' && !isFamilyOwner);
-    // Once already on a paid plan, "Subscribe to Pro/Family" no longer makes
-    // sense to show — a customer who just paid should never land back on a
-    // page still offering to sell them the thing they just bought.
+    // Once already subscribed, the pricing card no longer makes sense to
+    // show — a customer who just paid should never land back on a page
+    // still offering to sell them the thing they just bought.
     if (upgradeGrid) upgradeGrid.hidden = pro;
     if (upgradeGridHiddenNote) upgradeGridHiddenNote.hidden = !pro;
     if (upgradeHeading) upgradeHeading.textContent = pro ? 'Your plan' : 'Upgrade your plan';
@@ -1404,9 +1424,13 @@
   // checkout back to the right Supabase account. Without this, a purchase
   // has no way to know which customer to unlock.
   function wireUpgradeLinks(user){
-    ['upgrade-pro-link', 'upgrade-family-link'].forEach(id => {
+    ['upgrade-annual-link'].forEach(id => {
       const a = document.getElementById(id);
       if (!a) return;
+      // Until the Stripe Payment Link exists the href is a placeholder, and
+      // decorating it with a customer id would only produce a dead URL that
+      // looks real. Leave it alone.
+      if (a.getAttribute('href').indexOf('REPLACE_WITH_') === 0) return;
       try {
         const url = new URL(a.href);
         url.searchParams.set('client_reference_id', user.id);
@@ -1425,6 +1449,7 @@
       .select('*')
       .order('created_at', { ascending: true });
     favoriteRows = error ? [] : (data || []);
+    window.__lastFavorites = favoriteRows;
     // A subscription list may have already rendered before favorites finished
     // loading (or vice versa) — re-render it now so suggestions stay in sync
     // regardless of which request came back first.
@@ -1598,52 +1623,25 @@
   function showCountForService(serviceName){
     return favoritesForService(serviceName).filter(f => f.kind === 'show').length;
   }
+  // The dashboard row, the analyzer and the daily email all call the same
+  // decide(). Before this they were three separate implementations of the
+  // same idea, and they drifted.
   function computeSuggestion(row){
-    const svcFavorites = favoritesForService(row.service_name);
-    if (!svcFavorites.length) return null;
-
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const cutoff = addDays(today, 30);
-    let relevant = false;
-    let reason = '';
-
-    for (const f of svcFavorites) {
-      if (f.kind === 'show' && f.currently_airing) {
-        relevant = true;
-        reason = `${f.title} is airing new episodes right now`;
-        break;
-      } else if (f.kind === 'show' && f.next_air_date) {
-        const airDate = new Date(f.next_air_date + 'T00:00:00');
-        if (airDate >= today && airDate <= cutoff) {
-          relevant = true;
-          reason = `${f.title} airs ${f.next_air_date}`;
-          break;
-        }
-      } else if (f.kind === 'sport' && isSportInSeason(f.title)) {
-        relevant = true;
-        reason = `${FAV_SPORT_LABELS[f.title] || f.title} is in season`;
-        break;
-      }
+    const SE = window.StreamingEngine;
+    const d = SE.decide(SE.rowToSubscription(row), (favoriteRows || []).map(SE.favoriteToItem), new Date());
+    if (d.action === 'untracked') return null;
+    if (d.action === 'suspend') {
+      return { type: 'pause', text: 'Suggested: ' + d.headline + ' — ' + d.why, decision: d };
     }
-
-    if (row.status === 'paused' && relevant) {
-      return { type: 'activate', text: `Suggested: Activate — ${reason}` };
+    if (d.action === 'restart') {
+      return { type: 'activate', text: 'Suggested: ' + d.headline + ' — ' + d.why, decision: d };
     }
-    if (row.status === 'active' && !relevant) {
-      const todayStr = toDateValue(today);
-      const base = 'nothing you tagged is airing or in season right now';
-      if (!pauseIsActionable(row, todayStr)) {
-        // Right call, wrong moment. Say it without dressing it as an action
-        // the customer should take today.
-        const days = daysUntilRenewal(row, todayStr);
-        return { type: 'info', text: row.billing_period === 'annual'
-          ? `${capitalize(base)} — but this is an annual plan, so cancelling now forfeits what you've prepaid. We'll remind you before it renews on ${row.next_renewal_date}.`
-          : `${capitalize(base)}. We'll remind you to pause it about a week before it renews on ${row.next_renewal_date} — cancelling earlier just gives away days you've already paid for.` };
-      }
-      return { type: 'pause', text: `Suggested: Pause now — ${base}${renewalPhrase(row, todayStr)}` };
+    if (d.action === 'watch') {
+      return { type: 'info', text: d.headline + ' — ' + d.why, decision: d };
     }
-    return null;
+    return { type: 'info', text: d.headline + ' — ' + d.why, decision: d };
   }
+
   function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // Fallback prompt for rows with no favorites tagged (computeSuggestion
@@ -2607,24 +2605,6 @@
     SERVICES, BUNDLES, SPORT_LABELS, CATALOG_VERIFIED,
     analyze, manageLink, fmt,
   } = window.StreamingEngine;
-  // A pause we cannot date is real money, but it is not an annual figure —
-  // we do not know when it ends. The headline stays what we can defend for
-  // twelve months; this reports the rest honestly, as a rate.
-  function renderPausedUpside(result){
-    const host = document.querySelector('.result-stats');
-    if (!host) return;
-    let el = document.getElementById('stat-paused-upside');
-    if (!result.pausedMonthlyUpside) { if (el) el.remove(); return; }
-    if (!el) {
-      el = document.createElement('p');
-      el.id = 'stat-paused-upside';
-      el.className = 'analyzer-disclaimer';
-      el.style.marginTop = '10px';
-      host.insertAdjacentElement('afterend', el);
-    }
-    el.innerHTML = 'Plus <strong>' + fmt(result.pausedMonthlyUpside) + '/mo</strong> for every month those paused services stay off. '
-      + "That's not in the yearly figure above — we can't put a restart date on it from this page, and we won't annualise a number we can't stand behind.";
-  }
 
   // The catalog's verification date is stamped from the engine rather than
   // typed into the markup, so a price refresh can never leave a stale "as
@@ -2647,117 +2627,106 @@
   // price. Usage frequency defaults from the row's real status (active ->
   // weekly, paused -> rarely), since that's the one usage signal we
   // actually have.
-  const SERVICE_ALIASES = {
-    hbomax:'max', max:'max', primevideo:'primevideo', amazonprimevideo:'primevideo', prime:'primevideo',
-    disney:'disney', disneyplus:'disney', appletv:'appletv', appletvplus:'appletv', youtubetv:'youtubetv',
-    discoveryplus:'discoveryplus', amcplus:'amcplus', crunchyroll:'crunchyroll', paramountplus:'paramount',
-    paramount:'paramount', peacock:'peacock', hulu:'hulu', netflix:'netflix', espn:'espn', espnplus:'espn',
-    starz:'starz', fubotv:'fubotv', fubo:'fubotv', slingtv:'slingtv', sling:'slingtv', mlbtv:'mlbtv',
-    nbaleaguepass:'nbaleaguepass', nflplus:'nflplus',
+  function buildEngineInput(rows){
+    return {
+      subscriptions: (rows || []).map(rowToSubscription),
+      watchlist: (window.__lastFavorites || []).map(favoriteToItem),
+      household: 1,
+      adsOk: false,
+      overrides: {},
+    };
+  }
+
+  const ACTION_META = {
+    suspend:   { icon:'⏸', cls:'act-suspend' },
+    restart:   { icon:'▶', cls:'act-restart' },
+    watch:     { icon:'◷', cls:'act-watch' },
+    keep:      { icon:'✓', cls:'act-keep' },
+    untracked: { icon:'?', cls:'act-untracked' },
   };
-  function matchServiceId(name){
-    const norm = (name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (SERVICE_ALIASES[norm]) return SERVICE_ALIASES[norm];
-    for (const id in SERVICES) {
-      if (SERVICES[id].name.toLowerCase().replace(/[^a-z0-9]/g, '') === norm) return id;
-    }
-    return null;
-  }
-  function nearestTier(svc, price){
-    let best = svc.tiers[0], bestDiff = Infinity;
-    svc.tiers.forEach(t => { const diff = Math.abs(t.price - price); if (diff < bestDiff) { bestDiff = diff; best = t; } });
-    return best;
-  }
-
-  function buildInputFromReal(rows){
-    const subscriptions = [];
-    const customSubscriptions = [];
-    let customCounter = 0;
-    (rows || []).forEach(r => {
-      const freqDefault = r.status === 'active' ? 'weekly' : 'rarely';
-      const matchId = matchServiceId(r.service_name);
-      if (matchId) {
-        const svc = SERVICES[matchId];
-        const tier = nearestTier(svc, Number(r.monthly_price) || 0);
-        subscriptions.push({ serviceId: matchId, tierId: tier.id, frequency: freqDefault });
-      } else {
-        customCounter++;
-        customSubscriptions.push({ id: 'custom-' + customCounter, name: r.service_name, price: Number(r.monthly_price) || 0, frequency: freqDefault });
-      }
-    });
-    return { subscriptions, customSubscriptions };
-  }
-
-  const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
-  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', 'pause-later':'◷', add:'+', bundle:'◆', keep:'✓', info:'i' };
-  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause now', 'pause-later':'Keep now, pause later', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
+  const ORDER = { suspend:0, restart:1, watch:2, untracked:3, keep:4 };
 
   document.getElementById('analyze-btn').addEventListener('click', () => {
     const rows = window.__lastSubRows || [];
-    const { subscriptions, customSubscriptions } = buildInputFromReal(rows);
-
-    if (!subscriptions.length && !customSubscriptions.length) {
-      actionsListEl.innerHTML = '<p class="analyzer-empty">Add a subscription above to run the analysis.</p>';
-      document.getElementById('stat-current').textContent = '$0/mo';
-      document.getElementById('stat-recommended').textContent = '$0/mo';
-      document.getElementById('stat-savings-yr').textContent = '$0/yr';
+    if (!rows.length) {
+      actionsListEl.innerHTML = '<p class="analyzer-empty">Add a subscription above to run this.</p>';
+      document.getElementById('money-panel').innerHTML = '';
       resultsEl.hidden = false;
       resultsEl.scrollIntoView({ behavior:'smooth', block:'nearest' });
       return;
     }
 
-    const result = analyze({
-      subscriptions,
-      customSubscriptions,
-      favorites: [],
-      sports: [],
-      household: 1,
-      adsOk: true,
-      kidsImportant: false,
-      budget: Infinity
-    });
+    const result = analyze(buildEngineInput(rows));
+    const moneyEl = document.getElementById('money-panel');
 
-    document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
-    document.getElementById('stat-recommended').textContent = fmt(result.recommendedMonthly) + '/mo';
-    document.getElementById('stat-savings-yr').textContent = fmt(result.savingsYearly) + '/yr';
-    renderPausedUpside(result);
-
-    const sorted = result.actions.slice().sort((a,b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
-    actionsListEl.innerHTML = '';
-    if (!sorted.length) {
-      actionsListEl.innerHTML = '<p class="analyzer-empty">Your setup already looks optimized.</p>';
-    }
-    const LINKABLE = { cancel:1, downgrade:1, pause:1, add:1, bundle:1 };
-    sorted.forEach(a => {
-      const svc = SERVICES[a.service] || BUNDLES.find(b => b.id === a.service) || { name: a.name || SPORT_LABELS[a.service] || a.service };
-      const card = document.createElement('div');
-      card.className = 'action-card';
-      const title = ACTION_TITLE[a.action] || a.action;
-      const titleEl = document.createElement('div');
-      titleEl.className = 'a-title';
-      titleEl.textContent = title + (svc.name ? ' — ' + svc.name : '');
-      const descEl = document.createElement('div');
-      descEl.className = 'a-desc';
-      descEl.textContent = a.reason;
-      const copyEl = document.createElement('div');
-      copyEl.className = 'action-copy';
-      copyEl.appendChild(titleEl);
-      copyEl.appendChild(descEl);
-      if (LINKABLE[a.action]) {
-        const { url, label } = manageLink(a.service, svc.name);
-        const linkEl = document.createElement('a');
-        linkEl.className = 'a-link';
-        linkEl.href = url;
-        linkEl.target = '_blank';
-        linkEl.rel = 'noopener noreferrer';
-        linkEl.textContent = label + ' →';
-        copyEl.appendChild(linkEl);
+    let html = '<div class="money-grid">'
+      + '<div class="money-row"><span class="mk">You pay now</span><span class="mv">' + fmt(result.currentMonthly) + '/mo</span><span class="ms">' + fmt(result.currentAnnual) + ' a year</span></div>'
+      + '<div class="money-row"><span class="mk">After these changes</span><span class="mv">' + fmt(result.optimisedAnnual/12) + '/mo</span><span class="ms">' + fmt(result.optimisedAnnual) + ' a year</span></div>'
+      + '</div>';
+    if (result.savingsYearly > 0) {
+      html += '<div class="money-headline"><span class="mh-label">You keep</span><span class="mh-value">'
+        + fmt(result.savingsYearly) + '</span><span class="mh-unit">a year</span></div>';
+      if (result.monthlyWhileOff > 0) {
+        html += '<p class="money-ratio">That counts only the <strong>next charge</strong> on each service you switch off &mdash; the one we know for certain you skip. After that it is <strong>'
+          + fmt(result.monthlyWhileOff) + ' a month</strong> for as long as they stay off. We do not put that in the headline because we do not know when your shows come back.</p>';
       }
-      const badgeEl = document.createElement('div');
-      badgeEl.className = 'action-badge ' + a.action;
-      badgeEl.textContent = ACTION_ICON[a.action] || '•';
-      card.appendChild(badgeEl);
-      card.appendChild(copyEl);
+    } else {
+      html += '<div class="money-headline none"><span class="mh-label">Nothing to cut right now</span></div>'
+        + '<p class="money-ratio">Everything you pay for has something on it, or comes back before your next charge.</p>';
+    }
+    moneyEl.innerHTML = html;
+
+    actionsListEl.innerHTML = '';
+    result.decisions.slice()
+      .sort(function(x,y){ return (ORDER[x.action]!=null?ORDER[x.action]:9) - (ORDER[y.action]!=null?ORDER[y.action]:9); })
+      .forEach(function(d){
+        const meta = ACTION_META[d.action] || ACTION_META.keep;
+        const card = document.createElement('div');
+        card.className = 'decision-card ' + meta.cls;
+        card.innerHTML = '<div class="dc-head"><span class="dc-badge">' + meta.icon + '</span>'
+          + '<span class="dc-title">' + escapeHtml(d.headline) + '</span>'
+          + (d.savings > 0 ? '<span class="dc-money">' + fmt(d.savings) + '</span>' : '')
+          + '</div><p class="dc-why">' + escapeHtml(d.why) + '</p>';
+        const when = [];
+        if (d.actBy) when.push(['Do it by', prettyDateYear(d.actBy)]);
+        if (d.restartDate) when.push(['Turn it back on', prettyDateYear(d.restartDate)]);
+        if (d.renewalDate) when.push(['Next charge', prettyDateYear(d.renewalDate)]);
+        if (when.length) {
+          const dl = document.createElement('div');
+          dl.className = 'dc-dates';
+          dl.innerHTML = when.map(function(p){ return '<span><b>' + p[0] + '</b>' + escapeHtml(p[1]) + '</span>'; }).join('');
+          card.appendChild(dl);
+        }
+        if (d.evidence && d.evidence.length) {
+          const ev = document.createElement('ul');
+          ev.className = 'dc-evidence';
+          d.evidence.forEach(function(e){
+            const li = document.createElement('li');
+            const bits = ['<b>' + escapeHtml(e.title) + '</b>', escapeHtml(e.state)];
+            if (e.nextDate) bits.push('next ' + escapeHtml(prettyDateYear(e.nextDate)) + (e.approximate ? ' (approx)' : ''));
+            if (e.lastAired) bits.push('last aired ' + escapeHtml(prettyDateYear(e.lastAired)));
+            bits.push('<span class="dc-src">' + escapeHtml(e.source) + (e.checkedAt ? ', checked ' + escapeHtml(e.checkedAt) : '') + '</span>');
+            li.innerHTML = bits.join(' · ');
+            ev.appendChild(li);
+          });
+          card.appendChild(ev);
+        }
+        if (!d.renewalDate) {
+          const n = document.createElement('p');
+          n.className = 'dc-nudge';
+          n.textContent = 'Add this subscription\u2019s renewal date and we can tell you which day to act, not just whether to.';
+          card.appendChild(n);
+        }
+        actionsListEl.appendChild(card);
+      });
+
+    result.actions.filter(function(x){ return x.type === 'downgrade' || x.type === 'bundle'; }).forEach(function(x){
+      const card = document.createElement('div');
+      card.className = 'decision-card act-restart';
+      card.innerHTML = '<div class="dc-head"><span class="dc-badge">' + (x.type === 'bundle' ? '◆' : '▼') + '</span>'
+        + '<span class="dc-title">' + (x.type === 'bundle' ? 'Switch to the ' + escapeHtml(x.name) : 'Move ' + escapeHtml(x.name) + ' to a smaller plan') + '</span>'
+        + '<span class="dc-money">' + fmt(x.annualSaving) + '/yr</span></div>'
+        + '<p class="dc-why">' + escapeHtml(x.detail) + '</p>';
       actionsListEl.appendChild(card);
     });
 

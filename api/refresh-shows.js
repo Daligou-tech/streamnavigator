@@ -319,6 +319,12 @@ module.exports = async function handler(req, res) {
             continue;
           }
           if (decision.action === row.last_notified_action) continue; // already emailed about this exact recommendation
+          // ...and never more than one email per service per 30 days, even
+          // when the recommendation genuinely changed.
+          if (row.last_notified_at) {
+            const since = Math.round((new Date(todayStr + 'T00:00:00') - new Date(row.last_notified_at)) / 86400000);
+            if (since >= 0 && since < MIN_DAYS_BETWEEN_EMAILS) continue;
+          }
 
           if (!(row.user_id in emailCache)) {
             const { data, error } = await admin.auth.admin.getUserById(row.user_id);
@@ -404,85 +410,33 @@ function isSportInSeason(sportKey) {
   const { startMonth, endMonth } = season;
   return startMonth <= endMonth ? (month >= startMonth && month <= endMonth) : (month >= startMonth || month <= endMonth);
 }
+// The cron does not decide anything itself any more. dashboard.html and this
+// job used to carry separate implementations of "should this be on?", and a
+// customer could open the dashboard and read something different from the
+// email it had just sent them. Both now call the same decide().
+const ENGINE = require('../navigator-streaming-engine.js');
+
+// How close to the next charge a pause email is allowed to land, and how far
+// ahead of a confirmed air date a restart email goes out. Both come from the
+// engine so the page and the email quote the same numbers.
+const RESTART_LEAD_DAYS = ENGINE.RESTART_LEAD_DAYS;
+
+// One email per service per 30 days, whatever happens. The change-detection
+// below already suppresses repeats of the SAME recommendation, but a row that
+// flips between two states (a show gets a date, the date slips, it goes away
+// again) could otherwise mail someone every few days about one subscription.
+const MIN_DAYS_BETWEEN_EMAILS = 30;
+
 function favoritesForService(favorites, serviceName) {
-  return favorites.filter((f) => (f.service_name || '').trim().toLowerCase() === (serviceName || '').trim().toLowerCase());
+  const want = String(serviceName || '').trim().toLowerCase();
+  return (favorites || []).filter(
+    (f) => String(f.service_name || '').trim().toLowerCase() === want,
+  );
 }
 
-// Mirrors dashboard.html's computeSuggestion(): a specific, high-confidence
-// recommendation based on shows/sports the customer actually tagged to this
-// subscription. Returns null if nothing's tagged, or if the current status
-// already matches what's relevant (nothing to recommend).
-function computeFavoriteAction(row, favorites, todayStr) {
-  const svcFavorites = favoritesForService(favorites, row.service_name);
-  if (!svcFavorites.length) return null;
-
-  const today = new Date(todayStr + 'T00:00:00');
-  const cutoff = new Date(today);
-  cutoff.setDate(cutoff.getDate() + 30);
-  let relevant = false;
-  let reason = '';
-
-  for (const f of svcFavorites) {
-    if (f.kind === 'show' && f.currently_airing) {
-      relevant = true;
-      reason = `${f.title} is airing new episodes right now`;
-      break;
-    } else if (f.kind === 'show' && f.next_air_date) {
-      const airDate = new Date(f.next_air_date + 'T00:00:00');
-      if (airDate >= today && airDate <= cutoff) {
-        relevant = true;
-        reason = `${f.title} airs ${f.next_air_date}`;
-        break;
-      }
-    } else if (f.kind === 'sport' && isSportInSeason(f.title)) {
-      relevant = true;
-      reason = `${FAV_SPORT_LABELS[f.title] || f.title} is in season`;
-      break;
-    }
-  }
-
-  if (row.status === 'paused' && relevant) return { action: 'activate', reason };
-  if (row.status === 'active' && !relevant) {
-    // Correct advice at the wrong moment is worth nothing. "Pause Netflix"
-    // the day after it renewed saves the customer $0 and costs them a month
-    // of access they have already paid for. Hold the email until the charge
-    // is actually close, and say the date in it.
-    if (!pauseIsActionable(row, todayStr)) return null;
-    return {
-      action: 'pause',
-      reason: 'nothing you tagged is airing or in season right now' + renewalPhrase(row, todayStr),
-    };
-  }
-  return null;
-}
-
-// ---- Renewal-date helpers (mirrored in dashboard.html) ----
-const RENEWAL_WINDOW_DAYS = 7;
-function daysUntilRenewal(row, todayStr) {
-  if (!row || !row.next_renewal_date) return null;
-  const today = new Date(todayStr + 'T00:00:00');
-  const renew = new Date(row.next_renewal_date + 'T00:00:00');
-  return Math.round((renew - today) / 86400000);
-}
-// Annual plans are prepaid: cancelling one mid-term forfeits the rest of
-// the year rather than saving anything, so they only become actionable as
-// the renewal itself approaches.
-function pauseIsActionable(row, todayStr) {
-  const days = daysUntilRenewal(row, todayStr);
-  if (days === null) return true; // no renewal date on file yet
-  if (days < 0) return true;      // stale date; rollRenewal() fixes it this run
-  if (row.billing_period === 'annual') return days <= 14;
-  return days <= RENEWAL_WINDOW_DAYS;
-}
-function renewalPhrase(row, todayStr) {
-  const days = daysUntilRenewal(row, todayStr);
-  if (days === null || days < 0) return '';
-  if (days === 0) return ', and it renews today';
-  if (days === 1) return ', and it renews tomorrow';
-  return `, and it renews in ${days} days (${row.next_renewal_date})`;
-}
 // Keeps next_renewal_date in the future without asking the customer to
-// re-enter it every cycle.
+// re-enter it every cycle. Everything else about renewal timing — the
+// window, the annual-plan hold — now lives in the engine's decide().
 function rollRenewal(row, todayStr) {
   if (!row.next_renewal_date || row.next_renewal_date >= todayStr) return null;
   const d = new Date(row.next_renewal_date + 'T00:00:00');
@@ -496,31 +450,38 @@ function rollRenewal(row, todayStr) {
   return d.toISOString().slice(0, 10);
 }
 
-// Mirrors dashboard.html's computeCadencePrompt(): the routine check-in
-// fallback for rows with nothing tagged (or where the favorite-driven check
-// above found nothing to say). Only fires once the check-in date set by
-// computeReminder() has actually arrived.
+// Row + that customer's favorites -> the same decision the dashboard shows.
+// Returns the shape the mailer already expects: { action, reason } or null.
+function computeDesiredAction(row, favorites, todayStr) {
+  const sub = ENGINE.rowToSubscription(row);
+  const items = favoritesForService(favorites, row.service_name).map(ENGINE.favoriteToItem);
+  const d = ENGINE.decide(sub, items, todayStr);
+
+  if (d.action === 'suspend') {
+    // The dashboard shows a suspend as soon as it is true, because that is
+    // useful to read. An EMAIL is an interruption, so it waits for the
+    // moment acting on it actually saves the money: d.actionable is the
+    // week before the charge (a fortnight for a prepaid annual plan).
+    if (!d.actionable) return null;
+    return { action: 'pause', reason: d.why, decision: d };
+  }
+  if (d.action === 'restart') {
+    return { action: 'activate', reason: d.why, decision: d };
+  }
+  // 'watch' means paused with nothing scheduled: stay off, say nothing.
+  // 'keep' and 'untracked' are not worth an email either.
+  return null;
+}
+
+// Kept as its own export purely so the timing suite can assert on it: a
+// restart must never be sent without a real, confirmed date behind it.
 function computeCadenceAction(row, todayStr) {
   if (!row.next_reminder_date || row.next_reminder_date > todayStr) return null;
   if (row.reminder_type === 'resume') {
-    // A resume is only ever sent against a confirmed air date. The old
-    // 'cadence' branch emailed "time to activate — it's been about a month
-    // since you paused it", which is an instruction to start paying again
-    // backed by nothing but a calendar. TVmaze has no next air date for
-    // most shows between seasons, so that was the usual outcome of pausing
-    // anything, and it quietly undid the saving it had just produced.
     if (row.reminder_source !== 'air_date') return null;
     return { action: 'activate', reason: 'a new season just started' };
   }
-  if (!pauseIsActionable(row, todayStr)) return null;
-  return {
-    action: 'pause',
-    reason: "you haven't checked in on this in about 2 months" + renewalPhrase(row, todayStr),
-  };
-}
-
-function computeDesiredAction(row, favorites, todayStr) {
-  return computeFavoriteAction(row, favorites, todayStr) || computeCadenceAction(row, todayStr);
+  return null;
 }
 
 // Sends the actual "time to pause/activate" email via Resend's REST API
@@ -603,5 +564,5 @@ function sleep(ms) {
 // they are worth asserting on directly rather than only through the handler.
 module.exports.computeDesiredAction = computeDesiredAction;
 module.exports.computeCadenceAction = computeCadenceAction;
-module.exports.pauseIsActionable = pauseIsActionable;
+module.exports.MIN_DAYS_BETWEEN_EMAILS = MIN_DAYS_BETWEEN_EMAILS;
 module.exports.rollRenewal = rollRenewal;

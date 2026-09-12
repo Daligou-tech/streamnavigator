@@ -1,7 +1,7 @@
 // Run: node tests/refresh-shows-timing.test.js
 //
-// The daily job sends two emails that move money: "pause this" and "activate
-// this". Both used to be sendable with no evidence behind them.
+// The daily job sends two emails that move money: "switch this off" and
+// "switch it back on". Both used to be sendable with no evidence behind them.
 //
 //   A paused subscription with no confirmed air date got reminder_type
 //   'resume' 30 days later, and the job emailed "time to activate HBO Max —
@@ -10,17 +10,18 @@
 //   pausing anything: the product undid its own saving on a 30-day loop.
 //
 //   A pause email could land the day after a subscription renewed, which
-//   saves the customer nothing and costs them a month of access they have
-//   already paid for. On an annual plan it is worse than nothing — it tells
-//   them to forfeit what they prepaid.
+//   saves nothing and costs a month of access already paid for. On an annual
+//   plan it is worse than nothing — it tells someone to forfeit what they
+//   prepaid.
 //
-// These assert both are fixed.
+// The cron no longer decides any of this itself: it calls the same decide()
+// the dashboard renders from, so an email can never disagree with the page.
 'use strict';
 
 const assert = require('assert');
-const {
-  computeDesiredAction, computeCadenceAction, pauseIsActionable, rollRenewal,
-} = require('../api/refresh-shows.js');
+const CRON = require('../api/refresh-shows.js');
+const ENGINE = require('../navigator-streaming-engine.js');
+const { computeDesiredAction, computeCadenceAction, rollRenewal, MIN_DAYS_BETWEEN_EMAILS } = CRON;
 
 let passed = 0;
 const failures = [];
@@ -34,95 +35,105 @@ const row = (over) => Object.assign({
   monthly_price: 18.49, billing_period: 'monthly', next_renewal_date: null,
   next_reminder_date: null, reminder_type: null, reminder_source: null,
 }, over);
+const fav = (over) => Object.assign({
+  kind: 'show', title: 'The Last of Us', service_name: 'HBO Max',
+  next_air_date: null, currently_airing: false,
+}, over);
 
-// ------------------------------------------------- no blind restart
+// ------------------------------------------------- no restart without a date
 
-test('a paused row with no air date is never told to activate', () => {
-  const r = row({
-    status: 'paused', next_reminder_date: '2026-09-01',
-    reminder_type: 'resume', reminder_source: 'cadence',
-  });
-  assert.strictEqual(
-    computeCadenceAction(r, TODAY), null,
-    'the calendar-only resume still fires — this is the email that tells customers to start paying with nothing airing',
-  );
+test('a paused subscription with no air date is never emailed to restart', () => {
+  const r = row({ status: 'paused' });
+  assert.strictEqual(computeDesiredAction(r, [fav()], TODAY), null,
+    'an email told someone to start paying again with nothing scheduled');
 });
 
-test('a paused row WITH a confirmed air date is told to activate', () => {
-  const r = row({
-    status: 'paused', next_reminder_date: '2026-09-10',
-    reminder_type: 'resume', reminder_source: 'air_date',
-  });
-  const a = computeCadenceAction(r, TODAY);
-  assert.ok(a, 'an air-date-backed resume was suppressed');
-  assert.strictEqual(a.action, 'activate');
+test('a paused subscription IS restarted against a confirmed date', () => {
+  const r = row({ status: 'paused' });
+  const a = computeDesiredAction(r, [fav({ next_air_date: '2026-09-13' })], TODAY);
+  assert.ok(a && a.action === 'activate', 'a confirmed, imminent return did not trigger a restart');
+  assert.ok(/September 13/.test(a.reason), `the email does not name the date: "${a.reason}"`);
 });
 
-test('a favourite that is airing still wakes a paused subscription', () => {
-  const favorites = [{ kind: 'show', title: 'The Last of Us', service_name: 'HBO Max', currently_airing: true }];
-  const a = computeDesiredAction(row({ status: 'paused' }), favorites, TODAY);
-  assert.ok(a && a.action === 'activate', 'a genuinely airing show no longer triggers activate');
+test('a paused subscription whose show is airing now is restarted', () => {
+  const a = computeDesiredAction(row({ status: 'paused' }), [fav({ currently_airing: true })], TODAY);
+  assert.ok(a && a.action === 'activate');
   assert.ok(/The Last of Us/.test(a.reason), 'the reason does not name the show');
 });
 
-// ------------------------------------------------- renewal timing
-
-test('pause advice waits for the renewal window', () => {
-  assert.strictEqual(pauseIsActionable(row({ next_renewal_date: '2026-10-20' }), TODAY), false,
-    'a pause email would fire 38 days before the charge, wasting a month of paid access');
-  assert.strictEqual(pauseIsActionable(row({ next_renewal_date: '2026-09-16' }), TODAY), true,
-    'a pause email is suppressed 4 days before the charge, which is exactly when it is useful');
+test('the legacy calendar-only resume can no longer fire', () => {
+  const stale = row({ status: 'paused', next_reminder_date: '2026-09-01', reminder_type: 'resume', reminder_source: 'cadence' });
+  assert.strictEqual(computeCadenceAction(stale, TODAY), null,
+    'a resume reminder left in the table from before the fix still fires');
 });
 
-test('a subscription with no renewal date still behaves as before', () => {
-  assert.strictEqual(pauseIsActionable(row({ next_renewal_date: null }), TODAY), true,
-    'rows without a renewal date went silent instead of degrading to the old behaviour');
-});
+// ------------------------------------------------------------ renewal timing
 
-test('annual plans are not told to cancel mid-term', () => {
-  const annual = row({ billing_period: 'annual', next_renewal_date: '2027-03-01' });
-  assert.strictEqual(pauseIsActionable(annual, TODAY), false,
-    'an annual plan was told to cancel with months prepaid — that forfeits money rather than saving it');
-  const annualDue = row({ billing_period: 'annual', next_renewal_date: '2026-09-20' });
-  assert.strictEqual(pauseIsActionable(annualDue, TODAY), true,
-    'an annual plan renewing in 8 days should be actionable');
-});
-
-test('the pause email says the renewal date out loud', () => {
-  const r = row({ next_renewal_date: '2026-09-16' });
-  const a = computeDesiredAction(r, [], TODAY);
-  // no favourites tagged -> falls through to cadence, which needs a due date
-  const withDue = row({
-    next_renewal_date: '2026-09-16', next_reminder_date: '2026-09-01',
-    reminder_type: 'pause', reminder_source: 'cadence',
-  });
-  const c = computeCadenceAction(withDue, TODAY);
-  assert.ok(c, 'no pause prompt produced inside the renewal window');
-  assert.ok(/renews in 4 days|2026-09-16/.test(c.reason),
-    `the pause reason does not mention the renewal date: "${c.reason}"`);
-  assert.strictEqual(a, null, 'an untagged row produced a favourite-driven action');
-});
-
-test('a favourite-driven pause also respects the renewal window', () => {
-  const favorites = [{ kind: 'show', title: 'The Last of Us', service_name: 'HBO Max', currently_airing: false, next_air_date: null }];
-  const far = row({ status: 'active', next_renewal_date: '2026-11-30' });
-  assert.strictEqual(computeDesiredAction(far, favorites, TODAY), null,
-    'a pause email fired 79 days before the charge');
-  const near = row({ status: 'active', next_renewal_date: '2026-09-15' });
-  const a = computeDesiredAction(near, favorites, TODAY);
+test('a pause email waits for the renewal window', () => {
+  const far = row({ next_renewal_date: '2026-10-20' });
+  assert.strictEqual(computeDesiredAction(far, [fav()], TODAY), null,
+    'a pause email fired 38 days before the charge, wasting a month already paid for');
+  const near = row({ next_renewal_date: '2026-09-16' });
+  const a = computeDesiredAction(near, [fav()], TODAY);
   assert.ok(a && a.action === 'pause', 'no pause email inside the renewal window');
 });
 
-// ------------------------------------------------- renewal roll-forward
+test('the pause email names the date and what it saves', () => {
+  const a = computeDesiredAction(row({ next_renewal_date: '2026-09-16' }), [fav()], TODAY);
+  assert.ok(/September 16/.test(a.reason), `the email does not name the renewal: "${a.reason}"`);
+  assert.ok(a.decision && a.decision.savings > 0, 'the email carries no saving figure');
+});
+
+test('an annual plan is never emailed to cancel mid-term', () => {
+  const annual = row({ billing_period: 'annual', monthly_price: 199, next_renewal_date: '2027-03-01' });
+  assert.strictEqual(computeDesiredAction(annual, [fav()], TODAY), null,
+    'an annual plan was told to cancel with months prepaid — that forfeits money');
+  const due = row({ billing_period: 'annual', monthly_price: 199, next_renewal_date: '2026-09-20' });
+  const a = computeDesiredAction(due, [fav()], TODAY);
+  assert.ok(a && a.action === 'pause', 'an annual plan renewing in 8 days should be actionable');
+});
+
+test('a subscription with nothing tagged is never emailed about', () => {
+  assert.strictEqual(computeDesiredAction(row({ next_renewal_date: '2026-09-16' }), [], TODAY), null,
+    'the job emailed about a service the customer never told us anything about');
+});
+
+test('a service with something airing is never emailed about', () => {
+  assert.strictEqual(computeDesiredAction(row({ next_renewal_date: '2026-09-16' }), [fav({ currently_airing: true })], TODAY), null,
+    'the job emailed a pause for a service actively showing something they watch');
+});
+
+// ------------------------------------------------------- one email per month
+
+test('there is a hard floor of one email per service per 30 days', () => {
+  assert.strictEqual(MIN_DAYS_BETWEEN_EMAILS, 30, 'the email floor is not 30 days');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'api', 'refresh-shows.js'), 'utf8');
+  assert.ok(/since < MIN_DAYS_BETWEEN_EMAILS\) continue/.test(src),
+    'the 30-day floor is defined but never enforced at the send site');
+});
+
+// ------------------------------------------------- one engine, not two
+
+test('the cron decides with the same engine the dashboard renders', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'api', 'refresh-shows.js'), 'utf8');
+  assert.ok(/require\('\.\.\/navigator-streaming-engine\.js'\)/.test(src),
+    'the cron has stopped using the shared engine and will drift from the dashboard again');
+  // And the answers actually match.
+  const r = row({ next_renewal_date: '2026-09-16' });
+  const direct = ENGINE.decide(ENGINE.rowToSubscription(r), [fav()].map(ENGINE.favoriteToItem), TODAY);
+  const viaCron = computeDesiredAction(r, [fav()], TODAY);
+  assert.strictEqual(direct.action, 'suspend');
+  assert.strictEqual(viaCron.reason, direct.why, 'the email text and the dashboard text have diverged');
+});
+
+// ------------------------------------------------------- renewal roll-forward
 
 test('a passed renewal date rolls forward instead of going stale', () => {
   assert.strictEqual(rollRenewal(row({ next_renewal_date: '2026-08-20' }), TODAY), '2026-09-20');
   assert.strictEqual(rollRenewal(row({ next_renewal_date: '2026-03-05' }), TODAY), '2026-10-05',
     'a badly stale monthly date did not roll all the way to the future');
-  assert.strictEqual(
-    rollRenewal(row({ billing_period: 'annual', next_renewal_date: '2025-11-02' }), TODAY), '2026-11-02',
-    'an annual renewal rolled by a month instead of a year',
-  );
+  assert.strictEqual(rollRenewal(row({ billing_period: 'annual', next_renewal_date: '2025-11-02' }), TODAY), '2026-11-02',
+    'an annual renewal rolled by a month instead of a year');
 });
 
 test('a future renewal date is left alone', () => {

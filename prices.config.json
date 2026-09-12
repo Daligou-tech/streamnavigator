@@ -67,11 +67,11 @@
     }
   },
   "_skipped": {
-    "streaming.html": "Multi-tier page ($0 / $4.99 / $8.99 with two links). Different shape from the single-price navigators, so the checker skips it rather than reporting a false mismatch."
+    "streaming.html": "Two-tier page: a free analyzer ($0, no checkout) and one paid subscription at $19.99/year. The paid button is a REPLACE_WITH_ANNUAL_PAYMENT_LINK placeholder until the Stripe Price and Payment Link are created, so there is no link to compare a price against yet. Re-enable this check by moving streaming.html into `pages` once the link exists."
   },
   "unreferencedActiveLinks": {
     "_comment": "Payment links that are ACTIVE in Stripe on purpose while no product page in this config points at them. check-prices.js fails on any active link not listed here, because an unexplained sellable link is exactly what this catches: a retired $29 Closing tier stayed active for six days after the product moved to $59, linked from nowhere, and anyone holding the URL could have bought a $59 report for $29. Each entry needs a reason. If you cannot write one, deactivate the link instead.",
-    "plink_1U6Ie6H9DnCfGBIZwuRsRcpy": "StreamNavigator Pro, $4.99/mo — the streaming subscription, sold from streaming.html, which this config deliberately skips.",
-    "plink_1U6Ie6H9DnCfGBIZpyylQEqI": "StreamNavigator Family, $8.99/mo — same, the family tier of the streaming subscription."
+    "plink_1U6Ie6H9DnCfGBIZwuRsRcpy": "RETIRED — StreamNavigator Pro, $4.99/mo. The streaming product moved to a single $19.99/year tier on 2026-09-12 and no page links here any more. This link is still ACTIVE in Stripe and must be DEACTIVATED: anyone holding the URL can still subscribe at a price we no longer sell, and monthly billing is the structure the pricing change was meant to end. Existing subscribers keep their subscription either way — deactivating a Payment Link stops new sign-ups, it does not cancel anyone.",
+    "plink_1U6Ie6H9DnCfGBIZpyylQEqI": "RETIRED — StreamNavigator Family, $8.99/mo. Same as above: the Family tier no longer exists (household is included in the $19.99/year tier), nothing links here, and the link must be DEACTIVATED in Stripe."
   }
 }

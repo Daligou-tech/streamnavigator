@@ -140,7 +140,9 @@ test('RESTART only against a real date', () => {
   const noDate = decide(paused, [show({ nextAirDate: null })], SEPT);
   assert.strictEqual(noDate.action, 'watch', 'a paused service with nothing scheduled was told to restart');
   assert.strictEqual(noDate.restartDate, null, 'a restart date was invented with no air date');
-  assert.ok(/won't tell you to start paying on a guess/.test(noDate.why), 'the honest "no date" wording is gone');
+  assert.ok(/will not tell you to start paying again on a guess/.test(noDate.why), 'the honest "no date" wording is gone');
+  assert.ok(!/check.{0,12}every day|check daily/i.test(noDate.why),
+    'the engine claims daily monitoring — the free analyzer runs once and watches nothing');
 
   const soon = decide(paused, [show({ nextAirDate: '2026-09-14' })], SEPT);
   assert.strictEqual(soon.action, 'restart', 'an imminent, dated return did not trigger a restart');
@@ -188,6 +190,43 @@ test('cancel-only services say cancel, pausable ones say pause', () => {
   const hulu = decide(sub({ serviceId: 'hulu', tierId: 'noads', price: 18.99, renewalDate: '2026-09-15' }),
     [show({ serviceId: 'hulu', nextAirDate: '2026-12-20' })], SEPT);
   assert.ok(/^Pause/.test(hulu.headline), `Hulu supports pause; headline was "${hulu.headline}"`);
+});
+
+test('a suspend with no known return banks exactly one charge, not zero and not a guess', () => {
+  // Crediting zero made the product look worthless in the case it is most
+  // useful: a household told to cancel three services saw "you save $0".
+  // Crediting a guessed gap length would have been the opposite failure.
+  const d = decide(sub({ price: 18.49, renewalDate: '2026-09-16' }), [show({ nextAirDate: null, prevAirDate: '2025-05-25' })], SEPT);
+  assert.strictEqual(d.action, 'suspend');
+  assert.strictEqual(d.cycles, 1, 'an open-ended suspend should bank exactly one skipped charge');
+  assert.strictEqual(d.savings, 18.49, `expected the one skipped charge, got $${d.savings}`);
+  assert.strictEqual(d.openEnded, true, 'the open-ended flag is missing, so the UI cannot show the rate');
+  assert.strictEqual(d.monthlyWhileOff, 18.49, 'the per-month upside is not reported');
+});
+
+test('a sports service is never downgraded to a cheaper tier', () => {
+  // Cheaper sports tiers carry different games. The catalog does not model
+  // which, so a downgrade here could take away the exact thing being paid
+  // for — worse than no saving at all.
+  const r = analyze({
+    subscriptions: [sub({ serviceId:'peacock', tierId:'premiumplus', price:19.99, renewalDate:'2026-09-16' })],
+    watchlist: [sport('nfl','peacock')], household: 2, adsOk: true,
+  }, { today: SEPT });
+  assert.strictEqual(r.decisions[0].action, 'keep');
+  assert.strictEqual(r.actions.filter((a) => a.type === 'downgrade').length, 0,
+    'a sports service was recommended a cheaper tier that may not carry the games');
+  assert.ok(r.decisions[0].tierNote, 'the customer is not told why no cheaper plan was suggested');
+});
+
+test('a non-sports service still gets right-sized', () => {
+  const r = analyze({
+    subscriptions: [sub({ serviceId:'netflix', tierId:'premium', price:26.99, renewalDate:'2026-09-16' })],
+    watchlist: [show({ serviceId:'netflix', currentlyAiring: true, prevAirDate:'2026-09-09' })],
+    household: 1, adsOk: false,
+  }, { today: SEPT });
+  const dg = r.actions.find((a) => a.type === 'downgrade');
+  assert.ok(dg, 'a one-person household on the 4-stream tier was not right-sized');
+  assert.strictEqual(dg.annualSaving, 84, `expected $84/yr, got $${dg.annualSaving}`);
 });
 
 // ------------------------------------------------------------ savings maths
