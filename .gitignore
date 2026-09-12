@@ -4,3 +4,6 @@ node_modules/
 
 # Local patch files from earlier sessions — working notes, not source.
 *.patch
+
+# Claude Code local permission grants — machine-specific, not source.
+.claude/settings.local.json

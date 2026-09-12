@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
   };
 
   const listRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,user_id,service_name,status,status_changed_at,monthly_price,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source,last_notified_action,last_notified_at`,
+    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,user_id,service_name,status,status_changed_at,monthly_price,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source,last_notified_action,last_notified_at,next_renewal_date,billing_period`,
     { headers }
   );
   if (!listRes.ok) {
@@ -126,16 +126,32 @@ module.exports = async function handler(req, res) {
         await sleep(150);
       }
 
-      // 2) Roll forward any routine (non-air-date) check-in that's overdue,
-      //    so reminders keep advancing even if the customer doesn't visit.
+      // 2) Keep the renewal date in the future so "renews in N days" stays
+      //    true without the customer re-entering it every cycle.
+      const rolled = rollRenewal(row, todayStr);
+      if (rolled) patch.next_renewal_date = rolled;
+
+      // 3) Roll forward an overdue routine check-in, so reminders keep
+      //    advancing even if the customer never visits. Active rows only:
+      //    a paused row has nothing to roll forward to. Waking a paused
+      //    subscription now requires a real air date (see step 1), and a
+      //    paused row with no date simply stays quiet rather than being
+      //    nagged back into paying every 30 days.
       const stillCadence = !patch.reminder_source && row.reminder_source !== 'air_date';
-      if (stillCadence && row.next_reminder_date && row.next_reminder_date < todayStr) {
-        const days = row.status === 'active' ? 60 : 30;
+      if (stillCadence && row.status === 'active' && row.next_reminder_date && row.next_reminder_date < todayStr) {
         const base = row.status_changed_at ? new Date(row.status_changed_at) : new Date();
-        patch.next_reminder_date = addDaysStr(base, days);
-        patch.reminder_type = row.status === 'active' ? 'pause' : 'resume';
+        patch.next_reminder_date = addDaysStr(base, 60);
+        patch.reminder_type = 'pause';
         patch.reminder_source = 'cadence';
         remindersAdvanced++;
+      }
+      // Clear any stale calendar-only resume left over from before that
+      // change, so it can never fire.
+      if (row.status === 'paused' && row.reminder_type === 'resume'
+          && row.reminder_source === 'cadence' && !patch.reminder_source) {
+        patch.next_reminder_date = null;
+        patch.reminder_type = null;
+        patch.reminder_source = null;
       }
 
       if (Object.keys(patch).length) {
@@ -426,8 +442,58 @@ function computeFavoriteAction(row, favorites, todayStr) {
   }
 
   if (row.status === 'paused' && relevant) return { action: 'activate', reason };
-  if (row.status === 'active' && !relevant) return { action: 'pause', reason: 'nothing you tagged is airing or in season right now' };
+  if (row.status === 'active' && !relevant) {
+    // Correct advice at the wrong moment is worth nothing. "Pause Netflix"
+    // the day after it renewed saves the customer $0 and costs them a month
+    // of access they have already paid for. Hold the email until the charge
+    // is actually close, and say the date in it.
+    if (!pauseIsActionable(row, todayStr)) return null;
+    return {
+      action: 'pause',
+      reason: 'nothing you tagged is airing or in season right now' + renewalPhrase(row, todayStr),
+    };
+  }
   return null;
+}
+
+// ---- Renewal-date helpers (mirrored in dashboard.html) ----
+const RENEWAL_WINDOW_DAYS = 7;
+function daysUntilRenewal(row, todayStr) {
+  if (!row || !row.next_renewal_date) return null;
+  const today = new Date(todayStr + 'T00:00:00');
+  const renew = new Date(row.next_renewal_date + 'T00:00:00');
+  return Math.round((renew - today) / 86400000);
+}
+// Annual plans are prepaid: cancelling one mid-term forfeits the rest of
+// the year rather than saving anything, so they only become actionable as
+// the renewal itself approaches.
+function pauseIsActionable(row, todayStr) {
+  const days = daysUntilRenewal(row, todayStr);
+  if (days === null) return true; // no renewal date on file yet
+  if (days < 0) return true;      // stale date; rollRenewal() fixes it this run
+  if (row.billing_period === 'annual') return days <= 14;
+  return days <= RENEWAL_WINDOW_DAYS;
+}
+function renewalPhrase(row, todayStr) {
+  const days = daysUntilRenewal(row, todayStr);
+  if (days === null || days < 0) return '';
+  if (days === 0) return ', and it renews today';
+  if (days === 1) return ', and it renews tomorrow';
+  return `, and it renews in ${days} days (${row.next_renewal_date})`;
+}
+// Keeps next_renewal_date in the future without asking the customer to
+// re-enter it every cycle.
+function rollRenewal(row, todayStr) {
+  if (!row.next_renewal_date || row.next_renewal_date >= todayStr) return null;
+  const d = new Date(row.next_renewal_date + 'T00:00:00');
+  const today = new Date(todayStr + 'T00:00:00');
+  let guard = 0;
+  while (d < today && guard < 400) {
+    guard++;
+    if (row.billing_period === 'annual') d.setFullYear(d.getFullYear() + 1);
+    else d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().slice(0, 10);
 }
 
 // Mirrors dashboard.html's computeCadencePrompt(): the routine check-in
@@ -437,10 +503,20 @@ function computeFavoriteAction(row, favorites, todayStr) {
 function computeCadenceAction(row, todayStr) {
   if (!row.next_reminder_date || row.next_reminder_date > todayStr) return null;
   if (row.reminder_type === 'resume') {
-    const reason = row.reminder_source === 'air_date' ? 'a new season just started' : "it's been about a month since you paused it";
-    return { action: 'activate', reason };
+    // A resume is only ever sent against a confirmed air date. The old
+    // 'cadence' branch emailed "time to activate — it's been about a month
+    // since you paused it", which is an instruction to start paying again
+    // backed by nothing but a calendar. TVmaze has no next air date for
+    // most shows between seasons, so that was the usual outcome of pausing
+    // anything, and it quietly undid the saving it had just produced.
+    if (row.reminder_source !== 'air_date') return null;
+    return { action: 'activate', reason: 'a new season just started' };
   }
-  return { action: 'pause', reason: "you haven't checked in on this in about 2 months" };
+  if (!pauseIsActionable(row, todayStr)) return null;
+  return {
+    action: 'pause',
+    reason: "you haven't checked in on this in about 2 months" + renewalPhrase(row, todayStr),
+  };
 }
 
 function computeDesiredAction(row, favorites, todayStr) {
@@ -520,3 +596,12 @@ function addDaysStr(date, days) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// Exposed for tests/refresh-shows-timing.test.js. These four decide whether a
+// customer gets an email telling them to stop paying for something, or to
+// start again — the two messages that cost real money if they are wrong — so
+// they are worth asserting on directly rather than only through the handler.
+module.exports.computeDesiredAction = computeDesiredAction;
+module.exports.computeCadenceAction = computeCadenceAction;
+module.exports.pauseIsActionable = pauseIsActionable;
+module.exports.rollRenewal = rollRenewal;

@@ -529,7 +529,7 @@
               <ul class="upgrade-feats">
                 <li>Real-time pause &amp; resume reminders</li>
                 <li>Direct links to cancel &amp; downgrade</li>
-                <li>Real-time price-hike alerts</li>
+                <li>Price-change log across every tracked service</li>
                 <li>Personalized plan optimizer — see what you'd save</li>
               </ul>
               <a href="https://buy.stripe.com/bJefZheEI5QgewIbc4abK02" class="btn btn-ghost" id="upgrade-pro-link" style="width:100%; justify-content:center;">Subscribe to Pro →</a>
@@ -714,8 +714,24 @@
                 <option value="paused">Paused</option>
               </select>
             </div>
+            <!-- Renewal date is what turns advice into a saving. "Cancel
+                 Netflix" saves nothing if you cancel the day after it
+                 renewed; "cancel before Thursday" saves a month. Optional,
+                 because a half-filled row is better than no row — but every
+                 recommendation is timed to it when it's there. -->
+            <div class="field">
+              <label for="add-renewal">Next renewal <span style="font-weight:400; opacity:.7">(optional)</span></label>
+              <input type="date" id="add-renewal" />
+            </div>
+            <div class="field">
+              <label for="add-billing">Billed</label>
+              <select id="add-billing" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+                <option value="monthly">Monthly</option>
+                <option value="annual">Annually</option>
+              </select>
+            </div>
           </div>
-          <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Don't see it listed? Just type any name — every subscription tracks the same way, whether it's a big name or a niche one.</p>
+          <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Add the renewal date and we'll time every pause reminder to land <strong>before</strong> you're charged again, not after. Don't see your service listed? Just type any name — every subscription tracks the same way.</p>
           <button type="submit" class="btn btn-ghost">Add</button>
         </form>
       </div>
@@ -743,7 +759,7 @@
               <div class="stat-box save-stat"><span class="stat-label">You save</span><span class="stat-value" id="stat-savings-yr">$0/yr</span></div>
             </div>
             <div class="actions-list" id="actions-list"></div>
-            <p class="analyzer-disclaimer">Estimates use published list prices as of August 2026 — actual promo pricing varies. Verify current pricing before cancelling or switching plans.</p>
+            <p class="analyzer-disclaimer">Estimates use published list prices, verified by hand on <span data-catalog-verified>—</span>. Actual promo and legacy pricing varies, and an annual plan can't be paused mid-term. Check the current price on the service before you cancel or switch.</p>
           </div>
         </div>
       </div>
@@ -1013,21 +1029,62 @@
   function toDateValue(date){
     return date.toISOString().slice(0, 10);
   }
+  // A paused subscription is only ever woken back up by a REAL date: a
+  // confirmed next air date for something the customer tagged. There used to
+  // be a 30-day fallback here that set reminder_type:'resume' with nothing
+  // airing, so the daily job emailed "time to activate HBO Max — it's been
+  // about a month since you paused it". That advice costs the customer the
+  // saving they had just made, on a 30-day loop, on no evidence. TVmaze
+  // returns no next air date for most shows between seasons, so that
+  // fallback was the common case, not the edge case. Now: no date, no
+  // resume reminder. The row simply stays paused and says so.
   function computeReminder(status, statusChangedAt, showNextAirDate){
-    if (status === 'paused' && showNextAirDate) {
-      const airDate = new Date(showNextAirDate + 'T00:00:00');
-      const today = new Date(); today.setHours(0,0,0,0);
-      if (airDate.getTime() >= today.getTime()) {
-        return { next_reminder_date: showNextAirDate, reminder_type: 'resume', reminder_source: 'air_date' };
+    if (status === 'paused') {
+      if (showNextAirDate) {
+        const airDate = new Date(showNextAirDate + 'T00:00:00');
+        const today = new Date(); today.setHours(0,0,0,0);
+        if (airDate.getTime() >= today.getTime()) {
+          return { next_reminder_date: showNextAirDate, reminder_type: 'resume', reminder_source: 'air_date' };
+        }
       }
+      return { next_reminder_date: null, reminder_type: null, reminder_source: null };
     }
-    const days = status === 'active' ? 60 : 30;
     const base = statusChangedAt ? new Date(statusChangedAt) : new Date();
     return {
-      next_reminder_date: toDateValue(addDays(base, days)),
-      reminder_type: status === 'active' ? 'pause' : 'resume',
+      next_reminder_date: toDateValue(addDays(base, 60)),
+      reminder_type: 'pause',
       reminder_source: 'cadence'
     };
+  }
+
+  // ---- Renewal-date helpers ----
+  // The whole point of knowing the renewal date: a pause recommendation is
+  // only worth acting on in the few days BEFORE the next charge. Outside
+  // that window we still show the recommendation, but we don't nag — and
+  // when the window opens we say the date out loud.
+  const RENEWAL_WINDOW_DAYS = 7;
+  function daysUntilRenewal(row, todayStr){
+    if (!row || !row.next_renewal_date) return null;
+    const today = new Date((todayStr || toDateValue(new Date())) + 'T00:00:00');
+    const renew = new Date(row.next_renewal_date + 'T00:00:00');
+    return Math.round((renew - today) / 86400000);
+  }
+  // Annual plans are prepaid. Telling someone to cancel one in month three
+  // does not save them anything — it forfeits the nine months they already
+  // bought. Only act on an annual plan as its renewal actually approaches.
+  function pauseIsActionable(row, todayStr){
+    const days = daysUntilRenewal(row, todayStr);
+    if (days === null) return true;          // no date on file: fall back to old behaviour
+    if (days < 0) return true;               // date is stale; the cron rolls it forward
+    if (row.billing_period === 'annual') return days <= 14;
+    return days <= RENEWAL_WINDOW_DAYS;
+  }
+  function renewalPhrase(row, todayStr){
+    const days = daysUntilRenewal(row, todayStr);
+    if (days === null || days < 0) return '';
+    if (days === 0) return ' — it renews today';
+    if (days === 1) return ' — it renews tomorrow';
+    return ` — it renews in ${days} days (${row.next_renewal_date})`;
   }
 
   // Looks up a show's next episode air date directly from TVmaze's free,
@@ -1573,10 +1630,21 @@
       return { type: 'activate', text: `Suggested: Activate — ${reason}` };
     }
     if (row.status === 'active' && !relevant) {
-      return { type: 'pause', text: 'Suggested: Consider pausing — nothing you tagged is airing or in season right now' };
+      const todayStr = toDateValue(today);
+      const base = 'nothing you tagged is airing or in season right now';
+      if (!pauseIsActionable(row, todayStr)) {
+        // Right call, wrong moment. Say it without dressing it as an action
+        // the customer should take today.
+        const days = daysUntilRenewal(row, todayStr);
+        return { type: 'info', text: row.billing_period === 'annual'
+          ? `${capitalize(base)} — but this is an annual plan, so cancelling now forfeits what you've prepaid. We'll remind you before it renews on ${row.next_renewal_date}.`
+          : `${capitalize(base)}. We'll remind you to pause it about a week before it renews on ${row.next_renewal_date} — cancelling earlier just gives away days you've already paid for.` };
+      }
+      return { type: 'pause', text: `Suggested: Pause now — ${base}${renewalPhrase(row, todayStr)}` };
     }
     return null;
   }
+  function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
 
   // Fallback prompt for rows with no favorites tagged (computeSuggestion
   // returned null), based on the routine check-in cadence set by
@@ -1589,12 +1657,16 @@
   function computeCadencePrompt(row, todayStr){
     if (!row.next_reminder_date || row.next_reminder_date > todayStr) return null;
     if (row.reminder_type === 'resume') {
-      const reason = row.reminder_source === 'air_date'
-        ? 'a new season just started'
-        : "it's been about a month since you paused it";
-      return { type: 'activate', text: `Suggested: Activate — ${reason}` };
+      // Only an air_date-backed resume survives. The old 'cadence' resume
+      // ("it's been about a month since you paused it") told customers to
+      // start paying again with nothing to watch; computeReminder() no
+      // longer creates one, and this guard catches any left in the table
+      // from before that change.
+      if (row.reminder_source !== 'air_date') return null;
+      return { type: 'activate', text: 'Suggested: Activate — a new season just started' };
     }
-    return { type: 'pause', text: "Suggested: Consider pausing — you haven't checked in on this in about 2 months" };
+    if (!pauseIsActionable(row, todayStr)) return null;
+    return { type: 'pause', text: `Suggested: Pause — you haven't checked in on this in about 2 months${renewalPhrase(row, todayStr)}` };
   }
 
   // Last-resort prompt: this service has nothing tagged in "Shows & sports
@@ -2383,6 +2455,8 @@
     const name = document.getElementById('add-name').value.trim();
     const price = parseFloat(document.getElementById('add-price').value);
     const status = document.getElementById('add-status').value;
+    const renewal = document.getElementById('add-renewal').value || null;
+    const billing = document.getElementById('add-billing').value || 'monthly';
     const nowIso = new Date().toISOString();
 
     // No show is attached at creation time anymore — once the subscription
@@ -2395,6 +2469,8 @@
       monthly_price: isNaN(price) ? 0 : price,
       status,
       status_changed_at: nowIso,
+      next_renewal_date: renewal,
+      billing_period: billing,
       ...computeReminder(status, nowIso, null)
     });
     if (error) { showToast('Could not add that subscription.'); return; }
@@ -2514,398 +2590,51 @@
 })();
 </script>
 
+<script src="navigator-streaming-engine.js"></script>
 <script>
 /* =========================================================================
-   StreamNavigator subscription optimizer — same engine as the "Try the real
-   analyzer" tool on the marketing site, ported here and pre-filled with this
+   The same optimiser the marketing site runs, pre-filled with this
    customer's own tracked subscriptions instead of starting blank.
-   Pricing grounded in published list prices as of August 2026. Sources:
-   Tom's Guide streaming price roundup, TechRadar (Paramount+ 2026 pricing),
-   DealNews (YouTube TV 2026 plans), and disneyplus.com (official bundle page).
-   Sports coverage based on 2026 rights reporting (Sports Video Group,
-   SportsMediaWatch, Yahoo Sports). Runs entirely client-side.
-   Netflix/Hulu/Peacock/Apple TV tiers re-checked 2026-08-25 against DealNews'
-   August 2026 breakdown, CNBC's March 2026 Netflix price-hike coverage, and
-   Peacock's own official price-increase notice (peacocktv.com/help) — these
-   are the customer's own tracked services, so they're the ones re-verified
-   here. This is still a manual, point-in-time check, not a live feed: there's
-   no stable pricing API for any of these services, so re-pricing this list
-   means re-running this same research by hand.
+
+   Catalog, pricing and every decision rule come from
+   navigator-streaming-engine.js (loaded above). These used to be two
+   inline copies, and they had already drifted: on 2026-09-12 this page
+   priced Netflix Premium at $26.99 while streaming.html still said
+   $24.99, because an August price refresh only landed in one of them.
    ========================================================================= */
 (function(){
-  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-  const SERVICES = {
-    netflix: { id:'netflix', name:'Netflix',
-      tiers:[ {id:'ads', name:'Standard with Ads', price:8.99, adFree:false, streams:2},
-              {id:'standard', name:'Standard', price:19.99, adFree:true, streams:2},
-              {id:'premium', name:'Premium', price:26.99, adFree:true, streams:4} ],
-      sports:[], kidFriendly:true,
-      flagship:['stranger things','wednesday','squid game','the crown','bridgerton','emily in paris','outer banks'] },
-
-    max: { id:'max', name:'HBO Max',
-      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
-              {id:'adfree', name:'Ad-Free', price:16.99, adFree:true, streams:2},
-              {id:'ultimate', name:'Ultimate', price:20.99, adFree:true, streams:4} ],
-      sports:['nhl','mlb','college'], kidFriendly:false,
-      flagship:['house of the dragon','the last of us','euphoria','the white lotus','hacks','peacemaker'] },
-
-    hulu: { id:'hulu', name:'Hulu',
-      tiers:[ {id:'ads', name:'With Ads', price:11.99, adFree:false, streams:2},
-              {id:'noads', name:'No Ads', price:18.99, adFree:true, streams:2} ],
-      sports:[], kidFriendly:false,
-      flagship:['the bear','only murders in the building','shogun','american horror story',"handmaid's tale"] },
-
-    disney: { id:'disney', name:'Disney+',
-      tiers:[ {id:'ads', name:'With Ads', price:9.99, adFree:false, streams:2},
-              {id:'noads', name:'No Ads', price:16.99, adFree:true, streams:2},
-              {id:'premium', name:'Premium 4K', price:18.99, adFree:true, streams:4} ],
-      sports:['college'], kidFriendly:true,
-      flagship:['the mandalorian','andor','loki','moana','marvel','star wars','percy jackson'] },
-
-    paramount: { id:'paramount', name:'Paramount+',
-      tiers:[ {id:'essential', name:'Essential', price:8.99, adFree:false, streams:2},
-              {id:'showtime', name:'with Showtime', price:13.99, adFree:true, streams:3} ],
-      sports:['nfl','college','other_soccer'], kidFriendly:false,
-      flagship:['yellowstone','landman','tulsa king','star trek','1923','mayor of kingstown'] },
-
-    peacock: { id:'peacock', name:'Peacock',
-      tiers:[ {id:'select', name:'Select', price:8.99, adFree:false, streams:2},
-              {id:'premium', name:'Premium', price:12.99, adFree:false, streams:3},
-              {id:'premiumplus', name:'Premium Plus', price:19.99, adFree:true, streams:3} ],
-      sports:['nfl','nba','mlb','epl','college'], kidFriendly:true,
-      flagship:['the office','days of our lives','poker face','love island usa','bel-air'] },
-
-    youtubetv: { id:'youtubetv', name:'YouTube TV',
-      tiers:[ {id:'entertainment', name:'Entertainment Plan', price:54.99, adFree:false, streams:3},
-              {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
-              {id:'sportsnews', name:'Sports + News Plan', price:71.99, adFree:false, streams:3},
-              {id:'base', name:'Base Plan (all channels)', price:82.99, adFree:false, streams:3} ],
-      sports:['nfl','nba','mlb','nhl','college'], kidFriendly:true,
-      flagship:[] },
-
-    appletv: { id:'appletv', name:'Apple TV',
-      tiers:[ {id:'standard', name:'Apple TV', price:12.99, adFree:true, streams:6} ],
-      sports:['mls'], kidFriendly:true,
-      flagship:['ted lasso','severance','slow horses','the morning show','foundation','silo'] },
-
-    primevideo: { id:'primevideo', name:'Amazon Prime Video',
-      tiers:[ {id:'ads', name:'With Ads', price:8.99, adFree:false, streams:3},
-              {id:'noads', name:'Ad-Free', price:11.99, adFree:true, streams:3},
-              {id:'withprime', name:'Bundled with Prime', price:14.99, adFree:false, streams:3} ],
-      sports:['nfl'], kidFriendly:true,
-      flagship:['the boys','fallout','reacher','the wheel of time','invincible','jack ryan'] },
-
-    espn: { id:'espn', name:'ESPN',
-      tiers:[ {id:'select', name:'ESPN Select', price:12.99, adFree:false, streams:2},
-              {id:'unlimited', name:'ESPN Unlimited', price:29.99, adFree:false, streams:2} ],
-      sports:['nfl','nba','mlb','nhl','college','laliga'], kidFriendly:false,
-      flagship:[] },
-
-    discoveryplus: { id:'discoveryplus', name:'Discovery+',
-      tiers:[ {id:'ads', name:'With Ads', price:5.99, adFree:false, streams:2},
-              {id:'noads', name:'Ad-Free', price:9.99, adFree:true, streams:2} ],
-      sports:[], kidFriendly:false,
-      flagship:['deadliest catch','the pioneer woman','moonshiners','my 600-lb life'] },
-
-    starz: { id:'starz', name:'Starz',
-      tiers:[ {id:'standard', name:'Starz', price:11.99, adFree:true, streams:2} ],
-      sports:[], kidFriendly:false,
-      flagship:['power','outlander','the girlfriend experience'] },
-
-    amcplus: { id:'amcplus', name:'AMC+',
-      tiers:[ {id:'standard', name:'AMC+', price:10.99, adFree:true, streams:2} ],
-      sports:[], kidFriendly:false,
-      flagship:['the walking dead','better call saul','interview with the vampire'] },
-
-    fubotv: { id:'fubotv', name:'Fubo',
-      tiers:[ {id:'sports', name:'Sports Plan', price:64.99, adFree:false, streams:3},
-              {id:'pro', name:'Pro Plan', price:88.99, adFree:false, streams:3} ],
-      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
-      flagship:[] },
-
-    slingtv: { id:'slingtv', name:'Sling TV',
-      tiers:[ {id:'onecolor', name:'Orange or Blue', price:45.99, adFree:false, streams:1},
-              {id:'both', name:'Orange + Blue', price:65.99, adFree:false, streams:4} ],
-      sports:['nfl','nba','mlb','nhl','college','other_soccer'], kidFriendly:true,
-      flagship:[] },
-
-    crunchyroll: { id:'crunchyroll', name:'Crunchyroll',
-      tiers:[ {id:'fan', name:'Fan', price:9.99, adFree:true, streams:1},
-              {id:'megafan', name:'Mega Fan', price:13.99, adFree:true, streams:4},
-              {id:'ultimatefan', name:'Ultimate Fan', price:17.99, adFree:true, streams:6} ],
-      sports:[], kidFriendly:false,
-      flagship:['one piece','jujutsu kaisen','attack on titan','demon slayer','my hero academia'] },
-
-    mlbtv: { id:'mlbtv', name:'MLB.TV',
-      tiers:[ {id:'allteams', name:'All Teams', price:29.99, adFree:true, streams:2} ],
-      sports:['mlb'], kidFriendly:false,
-      flagship:[] },
-
-    nbaleaguepass: { id:'nbaleaguepass', name:'NBA League Pass',
-      tiers:[ {id:'teampass', name:'Team Pass', price:13.99, adFree:true, streams:2},
-              {id:'standard', name:'Standard', price:16.99, adFree:true, streams:2},
-              {id:'premium', name:'Premium', price:24.99, adFree:true, streams:2} ],
-      sports:['nba'], kidFriendly:false,
-      flagship:[] },
-
-    nflplus: { id:'nflplus', name:'NFL+',
-      tiers:[ {id:'regular', name:'Regular', price:6.99, adFree:false, streams:2},
-              {id:'premium', name:'Premium', price:14.99, adFree:true, streams:2} ],
-      sports:['nfl'], kidFriendly:false,
-      flagship:[] },
-  };
-
-  const BUNDLES = [
-    { id:'disneyhulumax', services:['disney','hulu','max'], price:{ads:19.99, noads:32.99}, name:'Disney+ / Hulu / HBO Max Trio Bundle' },
-    { id:'disneyhuluespn', services:['disney','hulu','espn'], price:{ads:35.99, noads:44.99}, name:'Disney+ / Hulu / ESPN Unlimited Bundle' },
-    { id:'disneyhulu', services:['disney','hulu'], price:{ads:12.99, noads:19.99}, name:'Disney+ / Hulu Duo Bundle' },
-  ];
-
-  // Direct links to each service's own account/plan page — this is the mechanism behind
-  // "we tell you, you make the change": every actionable card links straight here rather
-  // than StreamNavigator executing anything on the user's behalf.
-  const MANAGE_URLS = {
-    netflix:'https://www.netflix.com/account',
-    max:'https://www.max.com/settings/subscription',
-    hulu:'https://secure.hulu.com/account',
-    disney:'https://www.disneyplus.com/account/subscription',
-    paramount:'https://www.paramountplus.com/account/',
-    peacock:'https://www.peacocktv.com/account/subscription',
-    youtubetv:'https://tv.youtube.com/subscription/',
-    appletv:'https://tv.apple.com/settings',
-    primevideo:'https://www.amazon.com/mc/pipelines/subscription',
-    espn:'https://www.espn.com/subscription/manage',
-    discoveryplus:'https://www.discoveryplus.com/account',
-    starz:'https://www.starz.com/account',
-    amcplus:'https://www.amcplus.com/account',
-    fubotv:'https://www.fubo.tv/welcome/account',
-    slingtv:'https://www.sling.com/account',
-    crunchyroll:'https://www.crunchyroll.com/account/membership',
-    mlbtv:'https://www.mlb.com/account',
-    nbaleaguepass:'https://www.nba.com/leaguepass/account',
-    nflplus:'https://www.nfl.com/account/profile',
-    disneyhulumax:'https://www.disneyplus.com/account/subscription',
-    disneyhuluespn:'https://www.disneyplus.com/account/subscription',
-    disneyhulu:'https://www.disneyplus.com/account/subscription',
-  };
-  function manageLink(serviceId, name){
-    const url = MANAGE_URLS[serviceId] || `https://www.google.com/search?q=${encodeURIComponent((name || serviceId) + ' manage subscription')}`;
-    const label = MANAGE_URLS[serviceId] ? `Manage on ${name || serviceId}` : `Search: manage ${name || serviceId}`;
-    return { url, label };
-  }
-
-  const SPORT_SEASONS = {
-    nfl: {startMonth:9, endMonth:2, label:'NFL season (Sep–Feb)'},
-    nba: {startMonth:10, endMonth:6, label:'NBA season (Oct–Jun)'},
-    mlb: {startMonth:4, endMonth:10, label:'MLB season (Apr–Oct)'},
-    nhl: {startMonth:10, endMonth:6, label:'NHL season (Oct–Jun)'},
-    epl: {startMonth:8, endMonth:5, label:'Premier League season (Aug–May)'},
-    laliga: {startMonth:8, endMonth:5, label:'La Liga season (Aug–May)'},
-    bundesliga: {startMonth:8, endMonth:5, label:'Bundesliga season (Aug–May)'},
-    mls: {startMonth:2, endMonth:12, label:'MLS season (Feb–Dec)'},
-    other_soccer: {startMonth:8, endMonth:5, label:'European club season (Aug–May)'},
-    college: {startMonth:9, endMonth:1, label:'College football season (Sep–Jan)'}
-  };
-  const SPORT_LABELS = {
-    nfl:'NFL', nba:'NBA', mlb:'MLB', nhl:'NHL',
-    epl:'EPL', laliga:'La Liga', bundesliga:'Bundesliga', mls:'MLS', other_soccer:'Other Soccer',
-    college:'College Football'
-  };
-
-  function activeMonths(season){
-    const {startMonth, endMonth} = season;
-    if (startMonth <= endMonth) return endMonth - startMonth + 1;
-    return (12 - startMonth + 1) + endMonth;
-  }
-
-  function fmt(n){ return '$' + n.toFixed(2).replace(/\.00$/,''); }
-  function cheapest(tiers){ return [...tiers].sort((a,b)=>a.price-b.price)[0]; }
-  function cheapestAdFree(tiers){ const f=[...tiers].filter(t=>t.adFree).sort((a,b)=>a.price-b.price); return f[0] || cheapest(tiers); }
-
-  function favoritesMatch(favorites, flagship){
-    return favorites.some(f => {
-      const fl = f.trim().toLowerCase();
-      if (!fl) return false;
-      return flagship.some(t => t.includes(fl) || fl.includes(t));
-    });
-  }
-
-  function analyze(input){
-    const { subscriptions, customSubscriptions = [], favorites = [], sports = [], household = 1, adsOk = true, kidsImportant = false, budget = Infinity } = input;
-
-    const currentTotal = subscriptions.reduce((sum, s) => {
-      const svc = SERVICES[s.serviceId];
-      const tier = svc.tiers.find(t => t.id === s.tierId) || svc.tiers[0];
-      return sum + tier.price;
-    }, 0) + customSubscriptions.reduce((sum, c) => sum + c.price, 0);
-
-    const actionsMap = {};
-    const kept = {};
-
-    // Custom services (typed in by the user, not in our catalog) — we can't match them
-    // against known tiers, sports, or flagship titles, so scoring is usage-frequency only.
-    customSubscriptions.forEach(c => {
-      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[c.frequency] ?? 1;
-      if (freqScore === 0) {
-        actionsMap[c.id] = { service: c.id, name: c.name, action:'cancel',
-          reason: `You said you never open ${c.name} — cancelling frees up ${fmt(c.price)}/mo.`,
-          amount: c.price };
-        return;
-      }
-      actionsMap[c.id] = { service: c.id, name: c.name, action:'keep',
-        reason: `${c.name} isn't in our catalog yet, so we can't fine-tune its plan — but based on how often you use it, it's worth keeping for now.`,
-        amount: 0 };
-      kept[c.id] = { tierId:'custom', monthly: c.price, score: freqScore, name: c.name };
-    });
-
-    subscriptions.forEach(sub => {
-      const svc = SERVICES[sub.serviceId];
-      const currentTier = svc.tiers.find(t => t.id === sub.tierId) || svc.tiers[0];
-      const freqScore = { daily:4, weekly:3, occasionally:2, rarely:1, never:0 }[sub.frequency] ?? 1;
-
-      let score = freqScore;
-      const favMatch = favoritesMatch(favorites, svc.flagship);
-      if (favMatch) score += 3;
-      const sportMatches = sports.filter(sp => svc.sports.includes(sp));
-      score += sportMatches.length * 2;
-      if (kidsImportant && svc.kidFriendly) score += 1;
-
-      // "Never" is a strong, explicit signal — cancel outright even if a favorite title or
-      // sport nominally matches this service, since the user has told us they don't open it.
-      if (freqScore === 0) {
-        actionsMap[svc.id] = { service: svc.id, action:'cancel',
-          reason: `You said you never open ${svc.name} — cancelling frees up ${fmt(currentTier.price)}/mo.`,
-          amount: currentTier.price };
-        return;
-      }
-      if (score === 0) {
-        actionsMap[svc.id] = { service: svc.id, action:'cancel',
-          reason: `You rated usage as "${sub.frequency}" with no matching shows or sports — cancelling frees up ${fmt(currentTier.price)}/mo.`,
-          amount: currentTier.price };
-        return;
-      }
-
-      let idealTier;
-      if (svc.id === 'youtubetv') {
-        const wantsSports = sportMatches.length > 0;
-        const wantsGeneral = freqScore >= 3;
-        if (wantsSports && wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'sportsnews');
-        else if (wantsSports) idealTier = svc.tiers.find(t => t.id === 'sports');
-        else if (wantsGeneral) idealTier = svc.tiers.find(t => t.id === 'base');
-        else idealTier = svc.tiers.find(t => t.id === 'entertainment');
-      } else {
-        idealTier = adsOk ? cheapest(svc.tiers) : cheapestAdFree(svc.tiers);
-        if (household >= 4) {
-          const need = svc.tiers.filter(t => t.streams >= 3 && (adsOk || t.adFree)).sort((a,b) => a.price - b.price);
-          if (need.length) idealTier = need[0];
-        }
-      }
-
-      const seasonalOnly = svc.id !== 'youtubetv' && sportMatches.length > 0 && freqScore <= 2 && !favMatch;
-      if (seasonalOnly) {
-        const sp = sportMatches[0];
-        const season = SPORT_SEASONS[sp];
-        const months = activeMonths(season);
-        const avgMonthly = idealTier.price * (months / 12);
-        actionsMap[svc.id] = { service: svc.id, action:'pause',
-          reason: `You mainly use ${svc.name} for ${SPORT_LABELS[sp]} — pause it outside the ${season.label} to save ${fmt(idealTier.price)}/mo in the off-season, then use the link below when it's time.`,
-          amount: idealTier.price };
-        kept[svc.id] = { tierId: idealTier.id, monthly: avgMonthly, score, seasonal:true, sport: sp };
-        return;
-      }
-
-      if (idealTier.price < currentTier.price - 0.01) {
-        actionsMap[svc.id] = { service: svc.id, action:'downgrade',
-          reason: `Switch ${svc.name} to "${idealTier.name}" — it covers how you actually use it and saves ${fmt(currentTier.price - idealTier.price)}/mo.`,
-          amount: currentTier.price - idealTier.price };
-        kept[svc.id] = { tierId: idealTier.id, monthly: idealTier.price, score };
-      } else {
-        actionsMap[svc.id] = { service: svc.id, action:'keep',
-          reason: `${svc.name} is already on the right plan for how you use it.`,
-          amount: 0 };
-        kept[svc.id] = { tierId: currentTier.id, monthly: currentTier.price, score };
-      }
-    });
-
-    const coveredSports = new Set();
-    Object.entries(kept).forEach(([sid, k]) => {
-      if (k.seasonal) coveredSports.add(k.sport);
-      else if (SERVICES[sid]) SERVICES[sid].sports.forEach(sp => coveredSports.add(sp));
-    });
-    const alreadySubscribed = new Set(subscriptions.map(s => s.serviceId));
-
-    sports.filter(sp => !coveredSports.has(sp)).forEach(sp => {
-      const candidates = Object.values(SERVICES)
-        .filter(s => s.sports.includes(sp) && !alreadySubscribed.has(s.id) && !kept[s.id]);
-
-      if (!candidates.length) {
-        if (sp === 'bundesliga') {
-          actionsMap['bundesliga-info'] = { service:'bundesliga', action:'info',
-            reason: `Bundesliga doesn't need a new subscription — most matches stream free via Fandango, with select games also on USA Network and Peacock.`,
-            amount: 0 };
-        }
-        return;
-      }
-
-      candidates.sort((a, b) => Math.min(...a.tiers.map(t => t.price)) - Math.min(...b.tiers.map(t => t.price)));
-      const pick = candidates[0];
-      const tier = cheapest(pick.tiers);
-      const season = SPORT_SEASONS[sp];
-      const months = activeMonths(season);
-      const startName = MONTH_NAMES[season.startMonth - 1];
-      const avgMonthly = tier.price * (months / 12);
-      actionsMap[pick.id] = { service: pick.id, action:'add',
-        reason: `Add ${pick.name} (${tier.name}) around ${startName} to catch ${SPORT_LABELS[sp]} for ${fmt(tier.price)}/mo — pause or cancel once the season wraps.`,
-        amount: -tier.price };
-      kept[pick.id] = { tierId: tier.id, monthly: avgMonthly, score: 99, seasonal:true, sport: sp, added:true };
-      alreadySubscribed.add(pick.id);
-    });
-
-    let bundleRec = null;
-    for (const bundle of BUNDLES) {
-      const members = bundle.services.filter(id => kept[id] && !kept[id].seasonal);
-      if (members.length !== bundle.services.length) continue;
-      const sumPrice = members.reduce((s, id) => s + kept[id].monthly, 0);
-      const bundlePrice = adsOk ? bundle.price.ads : bundle.price.noads;
-      if (bundlePrice < sumPrice - 0.01) { bundleRec = { bundle, members, sumPrice, bundlePrice }; break; }
+  const {
+    SERVICES, BUNDLES, SPORT_LABELS, CATALOG_VERIFIED,
+    analyze, manageLink, fmt,
+  } = window.StreamingEngine;
+  // A pause we cannot date is real money, but it is not an annual figure —
+  // we do not know when it ends. The headline stays what we can defend for
+  // twelve months; this reports the rest honestly, as a rate.
+  function renderPausedUpside(result){
+    const host = document.querySelector('.result-stats');
+    if (!host) return;
+    let el = document.getElementById('stat-paused-upside');
+    if (!result.pausedMonthlyUpside) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('p');
+      el.id = 'stat-paused-upside';
+      el.className = 'analyzer-disclaimer';
+      el.style.marginTop = '10px';
+      host.insertAdjacentElement('afterend', el);
     }
-    if (bundleRec) {
-      bundleRec.members.forEach(id => { delete actionsMap[id]; kept[id].monthly = 0; kept[id].bundled = true; });
-      actionsMap[bundleRec.bundle.id] = { service: bundleRec.bundle.id, action:'bundle',
-        reason: `Switch ${bundleRec.members.map(id => SERVICES[id].name).join(' + ')} to the ${bundleRec.bundle.name} — saves ${fmt(bundleRec.sumPrice - bundleRec.bundlePrice)}/mo over paying separately.`,
-        amount: bundleRec.sumPrice - bundleRec.bundlePrice };
-      kept[bundleRec.bundle.id] = { tierId: adsOk ? 'ads' : 'noads', monthly: bundleRec.bundlePrice, score: 99, isBundle:true };
-    }
-
-    function recommendedTotal(){ return Object.values(kept).reduce((s, k) => s + (k.monthly || 0), 0); }
-    let guard = 0;
-    while (recommendedTotal() > budget && guard < 30) {
-      guard++;
-      const trimmable = Object.entries(kept)
-        .filter(([id, k]) => !k.isBundle && (k.monthly || 0) > 0 && !k.added)
-        .sort((a, b) => (a[1].score ?? 0) - (b[1].score ?? 0));
-      if (!trimmable.length) break;
-      const [id, k] = trimmable[0];
-      const name = SERVICES[id] ? SERVICES[id].name : (k.name || (BUNDLES.find(b=>b.id===id) || {}).name || id);
-      actionsMap[id] = { service: id, name: k.name, action:'cancel',
-        reason: k.seasonal
-          ? `To fit your ${fmt(budget)}/mo budget, cancel ${name} outright rather than just pausing it seasonally — it scored lowest on usage, shows, and sports fit.`
-          : `To fit your ${fmt(budget)}/mo budget, cancel ${name} — it scored lowest on usage, shows, and sports fit.`,
-        amount: k.monthly };
-      delete kept[id];
-    }
-
-    const recommendedMonthly = recommendedTotal();
-    const savingsYearly = Math.max(0, (currentTotal - recommendedMonthly) * 12);
-
-    return {
-      currentTotal: Math.round(currentTotal * 100) / 100,
-      recommendedMonthly: Math.round(recommendedMonthly * 100) / 100,
-      savingsYearly: Math.round(savingsYearly * 100) / 100,
-      actions: Object.values(actionsMap)
-    };
+    el.innerHTML = 'Plus <strong>' + fmt(result.pausedMonthlyUpside) + '/mo</strong> for every month those paused services stay off. '
+      + "That's not in the yearly figure above — we can't put a restart date on it from this page, and we won't annualise a number we can't stand behind.";
   }
+
+  // The catalog's verification date is stamped from the engine rather than
+  // typed into the markup, so a price refresh can never leave a stale "as
+  // of" date behind on one page and not the other. That drift is exactly
+  // how these two pages ended up quoting different Netflix prices.
+  document.querySelectorAll('[data-catalog-verified]').forEach((el) => {
+    const d = new Date(CATALOG_VERIFIED + 'T00:00:00');
+    el.textContent = d.toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  });
+
 
   const resultsEl = document.getElementById('analyzer-results');
   const actionsListEl = document.getElementById('actions-list');
@@ -2960,8 +2689,8 @@
   }
 
   const ACTION_ORDER = { cancel:0, downgrade:1, pause:2, bundle:3, add:4, keep:5, info:6 };
-  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', add:'+', bundle:'◆', keep:'✓', info:'i' };
-  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
+  const ACTION_ICON = { cancel:'✕', downgrade:'▼', pause:'⏸', 'pause-later':'◷', add:'+', bundle:'◆', keep:'✓', info:'i' };
+  const ACTION_TITLE = { cancel:'Cancel', downgrade:'Downgrade', pause:'Pause now', 'pause-later':'Keep now, pause later', add:'Add', bundle:'Bundle', keep:'Keep', info:'Good to know' };
 
   document.getElementById('analyze-btn').addEventListener('click', () => {
     const rows = window.__lastSubRows || [];
@@ -2991,6 +2720,7 @@
     document.getElementById('stat-current').textContent = fmt(result.currentTotal) + '/mo';
     document.getElementById('stat-recommended').textContent = fmt(result.recommendedMonthly) + '/mo';
     document.getElementById('stat-savings-yr').textContent = fmt(result.savingsYearly) + '/yr';
+    renderPausedUpside(result);
 
     const sorted = result.actions.slice().sort((a,b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
     actionsListEl.innerHTML = '';
