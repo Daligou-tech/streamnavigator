@@ -156,4 +156,8 @@ async function deliverReportByEmail(admin, submissionId) {
   return 'sent';
 }
 
-module.exports = { deliverReportByEmail, __internal: { statusLink, body, MARKER } };
+// statusLink is exported rather than kept private because api/email-report-pdf.js
+// needs the same URL. Two hand-written copies of one link is how the closing
+// letters ended up with two different wordings for one letter — see
+// docs/REPORT-CONSISTENCY-AUDIT.md. One builder, two callers.
+module.exports = { deliverReportByEmail, statusLink, __internal: { statusLink, body, MARKER } };

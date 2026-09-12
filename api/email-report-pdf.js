@@ -11,6 +11,7 @@
 // modest) work — building a PDF and calling out to Resend.
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
+const { statusLink } = require('./_lib/report-delivery');
 const { buildReportPdfBuffer } = require('./_lib/pdf-report');
 
 module.exports = async function handler(req, res) {
@@ -95,9 +96,13 @@ module.exports = async function handler(req, res) {
   // id and token this request was authenticated with a few lines above. No new
   // capability is minted here; the link carries the one the customer's browser
   // has had all along, to somewhere their browser can no longer reach.
-  const reportUrl = `https://streamnavigator.ai/navigator-status?id=${encodeURIComponent(submission.id)}`
-    + `&t=${encodeURIComponent(submission.access_token)}`
-    + `&p=${encodeURIComponent(submission.product)}`;
+  //
+  // Borrowed from report-delivery.js rather than rebuilt. That module already
+  // sends this link for reports the sweep delivers, and two hand-written copies
+  // of one URL is the shape of defect docs/REPORT-CONSISTENCY-AUDIT.md records
+  // in the closing letters: two independently written versions of one thing,
+  // drifting apart quietly.
+  const reportUrl = statusLink(submission);
 
   try {
     const resendResponse = await fetch('https://api.resend.com/emails', {

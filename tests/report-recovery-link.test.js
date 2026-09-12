@@ -23,11 +23,33 @@ const emailer = fs.readFileSync(path.join(ROOT, 'api', 'email-report-pdf.js'), '
 const shared = fs.readFileSync(path.join(ROOT, 'navigator-shared.js'), 'utf8');
 const statusPage = fs.readFileSync(path.join(ROOT, 'navigator-status.html'), 'utf8');
 
+const delivery = fs.readFileSync(path.join(ROOT, 'api', '_lib', 'report-delivery.js'), 'utf8');
+
 test('the report email carries a link back to the report', () => {
-  assert.ok(/navigator-status\?id=/.test(emailer),
+  assert.ok(/reportUrl/.test(emailer) && /statusLink\(submission\)/.test(emailer),
     'the emailed PDF is the only other copy of the report; without a link it is the only copy at all');
-  assert.ok(/access_token/.test(emailer.slice(emailer.indexOf('reportUrl'), emailer.indexOf('reportUrl') + 400)),
-    'the link must carry the token, or it opens to the same "could not find that submission"');
+  assert.ok(/reportUrl/.test(emailer.slice(emailer.indexOf('text: ['), emailer.indexOf('attachments'))),
+    'the link has to be in the body the customer reads, not merely computed');
+});
+
+test('both emails build the link with one builder, not two', () => {
+  // docs/REPORT-CONSISTENCY-AUDIT.md records what two independently written
+  // copies of one thing did to the closing letters: two wordings for one
+  // letter, drifting apart quietly. The sweep and the status page both send
+  // this link; they must not each own a URL.
+  assert.ok(/statusLink/.test(delivery) && /module\.exports[\s\S]*statusLink/.test(delivery),
+    'report-delivery.js owns the link and must export it');
+  assert.ok(/require\('\.\/_lib\/report-delivery'\)/.test(emailer),
+    'email-report-pdf.js must borrow that builder rather than hand-rolling a second URL');
+  assert.ok(!/navigator-status\?id=\$\{/.test(emailer),
+    'a second hand-built status URL has reappeared in the emailer');
+});
+
+test('the link builder carries every part the status page needs', () => {
+  const fn = delivery.slice(delivery.indexOf('function statusLink'), delivery.indexOf('function body'));
+  for (const part of ['id', 'access_token', 'product']) {
+    assert.ok(fn.includes(part), `statusLink drops ${part}, which the page reads back`);
+  }
 });
 
 test('the link is built from credentials the caller already proved they hold', () => {
