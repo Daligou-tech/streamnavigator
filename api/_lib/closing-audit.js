@@ -1213,6 +1213,24 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
     if (bucket === Bucket.NO_TOL) continue;
     if (toCents(cd.amount) <= 0) continue;
 
+    // Section E is itemised on the Closing Disclosure and aggregated on the
+    // Loan Estimate. That is not an anomaly, it is how the two forms are laid
+    // out: an LE carries one "Recording Fees and Other Taxes" line, and the CD
+    // breaks it into recording fees, state recordation tax, grantor tax and
+    // the local tax. Matching those line by line never succeeds.
+    //
+    // Reporting each as "does not appear on the Loan Estimate" put four
+    // findings on a completely ordinary document, every time a customer
+    // supplied an LE. They carry no dollar impact so nothing is claimed — but
+    // a customer gets one letter's worth of their lender's attention, and four
+    // rows of noise is how a real finding stops being read.
+    //
+    // Nothing is lost by skipping them. Recording fees are already tested in
+    // the 10% aggregate above, and the taxes themselves are tested against
+    // statute by TRANSFER_TAX_TOTAL, which compares the whole Section E tax
+    // total rather than any one line.
+    if (cd.section === 'E') continue;
+
     findings.push(
       finding({
         checkId: 'TRID_UNMATCHED_CHARGE',

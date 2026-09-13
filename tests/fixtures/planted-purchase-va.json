@@ -1,0 +1,107 @@
+{
+  "name": "planted-purchase-va",
+  "note": "The extraction a correct reader would produce from tmp-test-docs/closing-disclosure.pdf (see scripts/make-test-documents.js). Four defects planted on purpose and the transfer taxes deliberately correct. Every other figure reconciles to the cent, so the planted ones are the only things that fire. This is the repository's only fixture that is not clean — the other four are real documents and all four are correct, which meant the harness had never once shown a finding.",
+  "extraction": {
+    "document_type": "closing_disclosure",
+    "is_final": true,
+    "transaction_type": "purchase",
+    "lender_name": "Ficus Bank",
+    "borrower_names": ["Alex Rivera", "Sam Rivera"],
+    "property_address": "4418 Monument Avenue, Richmond, VA 23230",
+    "property_state": "VA",
+    "property_county": "Richmond",
+    "settlement_agent_name": "Old Dominion Title & Escrow LLC",
+    "closing_date": "2026-04-15",
+    "loan_amount": 300000,
+    "sale_price": 375000,
+    "interest_rate_pct": 6.875,
+    "loan_term_years": 30,
+    "pages_present": 3,
+    "document_problems": [],
+    "prorations": [],
+    "line_items": [
+      { "section": "A", "label": "Underwriting Fee", "amount": 1095, "category": "origination", "payee": "Ficus Bank", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "01" },
+      { "section": "A", "label": "Processing Fee", "amount": 670, "category": "origination", "payee": "Ficus Bank", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "02" },
+      { "section": "B", "label": "Appraisal Fee", "amount": 650, "category": "appraisal", "payee": "Dominion Appraisal Group", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "01" },
+      { "section": "B", "label": "Credit Report Fee", "amount": 44, "category": "credit_report", "payee": "Info Co.", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "02" },
+      { "section": "C", "label": "Survey Fee", "amount": 700, "category": "survey", "payee": "Commonwealth Survey Co.", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": true, "amount_present": true, "paid_before_closing": false, "line_number": "01" },
+      { "section": "C", "label": "Title - Settlement Agent Fee", "amount": 900, "category": "settlement_service", "payee": "Old Dominion Title", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": true, "amount_present": true, "paid_before_closing": false, "line_number": "02" },
+      { "section": "C", "label": "Title - Lender's Title Insurance", "amount": 1150, "category": "title_insurance_lenders", "payee": "Old Dominion Title", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": true, "amount_present": true, "paid_before_closing": false, "line_number": "03" },
+      { "section": "E", "label": "Recording Fees", "amount": 128, "category": "recording_fee", "payee": "City of Richmond", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "01" },
+      { "section": "E", "label": "State Recordation Tax", "amount": 1687.5, "category": "transfer_tax", "payee": "Commonwealth of Virginia", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "02" },
+      { "section": "E", "label": "Grantor Tax", "amount": 375, "category": "transfer_tax", "payee": "Commonwealth of Virginia", "page": 2, "confidence": 0.97, "paid_by": "seller", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "03" },
+      { "section": "E", "label": "Local Recordation Tax", "amount": 562.5, "category": "transfer_tax", "payee": "City of Richmond", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "04" },
+      { "section": "F", "label": "Prepaid Interest ( $56.51 per day from 04/15/2026 for 22 days )", "amount": 1243.15, "category": "prepaid_interest", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "01" },
+      { "section": "F", "label": "Homeowner's Insurance Premium (12 mo.)", "amount": 1416, "category": "property_insurance", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "02" },
+      { "section": "H", "label": "Title - Owner's Title Insurance (optional)", "amount": 1800, "category": "title_insurance_owners", "payee": "Old Dominion Title", "page": 2, "confidence": 0.97, "paid_by": "borrower", "shoppable": false, "amount_present": true, "paid_before_closing": false, "line_number": "01" }
+    ],
+    "section_totals": {
+      "A": { "value": 1765, "confidence": 0.97, "page": 2 },
+      "B": { "value": 694, "confidence": 0.97, "page": 2 },
+      "C": { "value": 2750, "confidence": 0.97, "page": 2 },
+      "E": { "value": 2753, "confidence": 0.97, "page": 2 },
+      "F": { "value": 2659.15, "confidence": 0.97, "page": 2 },
+      "G": { "value": 855.15, "confidence": 0.97, "page": 2 },
+      "H": { "value": 1800, "confidence": 0.97, "page": 2 },
+      "J": { "value": 13276.3, "confidence": 0.97, "page": 2 }
+    },
+    "cash_to_close": {
+      "total_closing_costs_j": { "value": 13276.3, "confidence": 0.97, "page": 3 },
+      "closing_costs_paid_before_closing": { "value": 0, "confidence": 0.97, "page": 3 },
+      "down_payment_funds_from_borrower": { "value": 75000, "confidence": 0.97, "page": 3 },
+      "deposit": { "value": 7500, "confidence": 0.97, "page": 3 },
+      "seller_credits": { "value": 4500, "confidence": 0.97, "page": 3 },
+      "stated_cash_to_close": { "value": 76276.3, "confidence": 0.97, "page": 3 }
+    },
+    "prepaid_interest": { "amount": 1243.15, "days": 22, "per_diem": 56.5068, "confidence": 0.97, "page": 2 },
+    "monthly_principal_interest": { "value": 1970.79, "confidence": 0.97, "page": 1 },
+    "loan_calculations": {
+      "total_of_payments": { "value": 709484.4, "confidence": 0.97, "page": 3 },
+      "finance_charge": { "value": 413004.64, "confidence": 0.97, "page": 3 },
+      "amount_financed": { "value": 296479.76, "confidence": 0.97, "page": 3 },
+      "annual_percentage_rate_pct": 6.991,
+      "total_interest_percentage_pct": 136.495
+    },
+    "escrow": {
+      "monthly_escrow_payment": { "value": 618, "confidence": 0.97, "page": 1 },
+      "escrowed_property_costs_year1": { "value": 7416, "confidence": 0.97, "page": 3 },
+      "annual_disbursements": [
+        { "item": "Homeowner's Insurance", "annual_amount": 1416, "confidence": 0.97 },
+        { "item": "Property Taxes", "annual_amount": 6000, "confidence": 0.97 }
+      ],
+      "section_g_total": 855.15,
+      "aggregate_adjustment": -380.85
+    },
+    "seller_credits_on_cd": [
+      { "label": "Seller Credits", "amount": 4500, "confidence": 0.97 }
+    ]
+  },
+  "answers": {
+    "property_type": "single_family",
+    "provider_list": "yes",
+    "transaction_type": "purchase"
+  },
+  "loanEstimates": [
+    {
+      "docId": "LE1",
+      "dateIssued": "2026-03-14",
+      "dateReceived": "2026-03-14",
+      "lenderName": "Ficus Bank",
+      "borrowerNames": ["Alex Rivera", "Sam Rivera"],
+      "propertyAddress": "4418 Monument Avenue, Richmond, VA 23230",
+      "loanAmount": 300000,
+      "interestRatePct": 6.5,
+      "isRevised": false,
+      "changedCircumstanceDocumented": false,
+      "charges": {
+        "origination:underwriting_fee": { "label": "Underwriting Fee", "amount": 795, "category": "origination", "shoppable": false },
+        "origination:processing_fee": { "label": "Processing Fee", "amount": 670, "category": "origination", "shoppable": false },
+        "appraisal:appraisal_fee": { "label": "Appraisal Fee", "amount": 650, "category": "appraisal", "shoppable": false },
+        "credit_report:credit_report_fee": { "label": "Credit Report Fee", "amount": 44, "category": "credit_report", "shoppable": false },
+        "survey:survey_fee": { "label": "Survey Fee", "amount": 475, "category": "survey", "shoppable": true },
+        "settlement_service:title_settlement_agent_fee": { "label": "Title - Settlement Agent Fee", "amount": 900, "category": "settlement_service", "shoppable": true },
+        "title_insurance_lenders:title_lender_s_title_insurance": { "label": "Title - Lender's Title Insurance", "amount": 1150, "category": "title_insurance_lenders", "shoppable": true }
+      }
+    }
+  ]
+}

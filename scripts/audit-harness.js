@@ -32,7 +32,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { runClosingAudit, buildScorecard } = require('../api/_lib/closing-extract');
+// runDocumentAudit, NOT runClosingAudit.
+//
+// This harness existed to catch features wired to nothing, and was itself
+// wired to the wrong engine — the same defect closing-report-parity.test.js was
+// written for after the PAID REPORT was found calling the raw engine.
+//
+// runClosingAudit is the raw engine. runDocumentAudit is what the free
+// scorecard and the paid report both call: the engine PLUS the loan maths
+// (APR, finance charge, total of payments, TIP, monthly P&I, escrow, points)
+// and the statutory transfer-tax check, MINUS the retired cannot-benchmark
+// findings. Against the raw engine this harness showed six "cannot benchmark"
+// rows no customer ever sees, and silently ran none of the loan maths — eight
+// of the checks the marketing page names, on the engine whose job is to find
+// exactly this class of error.
+const { buildScorecard } = require('../api/_lib/closing-extract');
+const { runDocumentAudit } = require('../api/_lib/closing-service');
 
 const FIXTURE_DIR = path.join(__dirname, '..', 'tests', 'fixtures');
 const args = process.argv.slice(2);
@@ -64,7 +79,8 @@ function runOne(fx) {
   const started = Date.now();
   let result, error = null;
   try {
-    result = runClosingAudit(fx.extraction, {
+    result = runDocumentAudit({
+      extraction: fx.extraction,
       answers: fx.answers || {},
       loanEstimates: fx.loanEstimates || null,
       contractTerms: fx.contractTerms || null,

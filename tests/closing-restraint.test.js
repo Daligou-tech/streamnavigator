@@ -109,6 +109,75 @@ test('a charge missing from the Loan Estimate is not treated as a new fee', () =
     'and it must never appear as a tolerance violation');
 });
 
+// --- 2b. Section E, which the two forms lay out differently ------------------
+
+test('Section E taxes are not each reported as missing from the Loan Estimate', () => {
+  // An LE carries one "Recording Fees and Other Taxes" line. A CD breaks it
+  // into recording fees, state recordation tax, grantor tax and the local tax.
+  // Matching those line by line never succeeds, so every customer who supplied
+  // an LE got four "does not appear on the Loan Estimate" rows on a completely
+  // ordinary document. Nothing was claimed — they carry no dollar impact — but
+  // four rows of noise is how a real finding stops being read.
+  const baseline = {
+    docId: 'LE1',
+    dateIssued: '2026-03-14',
+    loanAmount: 300000,
+    interestRatePct: 6.5,
+    propertyAddress: '',
+    borrowerNames: [],
+    lenderName: '',
+    isRevised: false,
+    changedCircumstance: null,
+    charges: [
+      { label: 'Underwriting Fee', amount: 1095, category: 'origination', section: 'A', tolerance: 'zero' },
+      { label: 'Recording Fees and Other Taxes', amount: 2753, category: 'recording_fee', section: 'E', tolerance: 'ten_percent' },
+    ],
+  };
+
+  const { findings } = runDocumentAudit({
+    extraction: base({
+      property_county: 'Richmond',
+      line_items: base().line_items.concat([
+        li('E', 'Recording Fees', 128, 'recording_fee'),
+        li('E', 'State Recordation Tax', 1687.5, 'transfer_tax'),
+        li('E', 'Grantor Tax', 375, 'transfer_tax', { paid_by: 'seller' }),
+        li('E', 'Local Recordation Tax', 562.5, 'transfer_tax'),
+      ]),
+      section_totals: { A: amt(1095), E: amt(2753), J: amt(3848) },
+    }),
+    answers: { provider_list: 'yes' },
+    loanEstimates: [baseline],
+  });
+
+  const unmatched = find(findings, 'TRID_UNMATCHED_CHARGE');
+  assert.deepEqual(unmatched.map((f) => f.title), [],
+    'Section E is tested in aggregate — recording fees in the 10% basket, taxes against statute');
+
+  // And the aggregate test still happens, so nothing was lost by skipping them.
+  const tax = find(findings, 'TRANSFER_TAX_TOTAL');
+  assert.equal(tax.length, 1);
+  assert.equal(tax[0].severity, audit.Severity.WITHIN_NORMS,
+    '$1,687.50 + $375 + $562.50 is exactly the Virginia statutory total for this sale');
+});
+
+test('a charge outside Section E is still reported when it cannot be matched', () => {
+  // The skip must be Section E only, not a general softening.
+  const baseline = {
+    docId: 'LE1', dateIssued: '2026-03-14', loanAmount: 300000, interestRatePct: 6.5,
+    propertyAddress: '', borrowerNames: [], lenderName: '', isRevised: false, changedCircumstance: null,
+    charges: [{ label: 'Underwriting Fee', amount: 1095, category: 'origination', section: 'A', tolerance: 'zero' }],
+  };
+  const { findings } = runDocumentAudit({
+    extraction: base({
+      line_items: base().line_items.concat([li('A', 'Administration Fee', 395, 'lender_fee')]),
+      section_totals: { A: amt(1490), J: amt(1490) },
+    }),
+    answers: { provider_list: 'yes' },
+    loanEstimates: [baseline],
+  });
+  assert.equal(find(findings, 'TRID_UNMATCHED_CHARGE').length, 1);
+});
+
 // --- 3. an escrow cushion that cannot be derived from a Closing Disclosure ---
 
 test('Section G is never tested against the RESPA cap', () => {
