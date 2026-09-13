@@ -298,6 +298,11 @@
   .dc-evidence{ list-style:none; margin:11px 0 0; padding:10px 12px; background:var(--bg); border-radius:8px; }
   .dc-evidence li{ font-size:12px; color:var(--text-dim); line-height:1.6; }
   .dc-src{ color:var(--text-dimmer); }
+  .dc-cautions{ list-style:none; margin:11px 0 0; padding:10px 12px; background:rgba(181,71,7,0.08);
+    border-left:3px solid #B54708; border-radius:0 8px 8px 0; display:flex; flex-direction:column; gap:7px; }
+  .dc-cautions li{ font-size:12.5px; color:var(--text-dim); line-height:1.55; }
+  .decision-card.is-urgent{ border-left-color:var(--danger-deep); box-shadow:0 0 0 1px rgba(168,41,29,0.16); }
+  .decision-card.act-snoozed{ border-left-color:var(--text-dimmer); }
   .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:rgba(29,95,168,0.07); border-radius:8px; font-size:12px; color:var(--text-dim); line-height:1.55; }
   @media (max-width: 640px){ .money-row{ grid-template-columns:1fr auto; } }
   .upgrade-card{ position:relative; background:var(--surface); border:2px solid var(--ink); border-radius:var(--radius); box-shadow:var(--shadow-hard); padding:26px; display:flex; flex-direction:column; }
@@ -755,6 +760,16 @@
                 <option value="annual">Annually</option>
               </select>
             </div>
+            <!-- Cancelling a legacy or promo price usually means coming back
+                 at list price, so the saving may not survive the round trip.
+                 We warn rather than quote a number that won't hold. -->
+            <div class="field">
+              <label for="add-promo">Price</label>
+              <select id="add-promo" style="width:100%; padding:12px 14px; border-radius:12px; border:2px solid var(--ink); font-family:inherit; font-size:14.5px;">
+                <option value="no">Standard rate</option>
+                <option value="yes">Old or discounted rate</option>
+              </select>
+            </div>
           </div>
           <p class="plan-status-text panel-text-centered" style="margin:-6px 0 14px;">Add the renewal date and we'll time every pause reminder to land <strong>before</strong> you're charged again, not after. Don't see your service listed? Just type any name — every subscription tracks the same way.</p>
           <button type="submit" class="btn btn-ghost">Add</button>
@@ -1075,36 +1090,6 @@
       reminder_type: 'pause',
       reminder_source: 'cadence'
     };
-  }
-
-  // ---- Renewal-date helpers ----
-  // The whole point of knowing the renewal date: a pause recommendation is
-  // only worth acting on in the few days BEFORE the next charge. Outside
-  // that window we still show the recommendation, but we don't nag — and
-  // when the window opens we say the date out loud.
-  const RENEWAL_WINDOW_DAYS = 7;
-  function daysUntilRenewal(row, todayStr){
-    if (!row || !row.next_renewal_date) return null;
-    const today = new Date((todayStr || toDateValue(new Date())) + 'T00:00:00');
-    const renew = new Date(row.next_renewal_date + 'T00:00:00');
-    return Math.round((renew - today) / 86400000);
-  }
-  // Annual plans are prepaid. Telling someone to cancel one in month three
-  // does not save them anything — it forfeits the nine months they already
-  // bought. Only act on an annual plan as its renewal actually approaches.
-  function pauseIsActionable(row, todayStr){
-    const days = daysUntilRenewal(row, todayStr);
-    if (days === null) return true;          // no date on file: fall back to old behaviour
-    if (days < 0) return true;               // date is stale; the cron rolls it forward
-    if (row.billing_period === 'annual') return days <= 14;
-    return days <= RENEWAL_WINDOW_DAYS;
-  }
-  function renewalPhrase(row, todayStr){
-    const days = daysUntilRenewal(row, todayStr);
-    if (days === null || days < 0) return '';
-    if (days === 0) return ' — it renews today';
-    if (days === 1) return ' — it renews tomorrow';
-    return ` — it renews in ${days} days (${row.next_renewal_date})`;
   }
 
   // Looks up a show's next episode air date directly from TVmaze's free,
@@ -1642,30 +1627,6 @@
     return { type: 'info', text: d.headline + ' — ' + d.why, decision: d };
   }
 
-  function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
-
-  // Fallback prompt for rows with no favorites tagged (computeSuggestion
-  // returned null), based on the routine check-in cadence set by
-  // computeReminder(). Only produces text once the check-in date has
-  // actually arrived — a future date isn't something to act on yet, so
-  // showing it early was just confusing, inert text. Once due, it's phrased
-  // as the same kind of "Suggested: ..." call to action as the favorite-
-  // based suggestions above, so every row prompts the customer to do
-  // something rather than silently displaying a status.
-  function computeCadencePrompt(row, todayStr){
-    if (!row.next_reminder_date || row.next_reminder_date > todayStr) return null;
-    if (row.reminder_type === 'resume') {
-      // Only an air_date-backed resume survives. The old 'cadence' resume
-      // ("it's been about a month since you paused it") told customers to
-      // start paying again with nothing to watch; computeReminder() no
-      // longer creates one, and this guard catches any left in the table
-      // from before that change.
-      if (row.reminder_source !== 'air_date') return null;
-      return { type: 'activate', text: 'Suggested: Activate — a new season just started' };
-    }
-    if (!pauseIsActionable(row, todayStr)) return null;
-    return { type: 'pause', text: `Suggested: Pause — you haven't checked in on this in about 2 months${renewalPhrase(row, todayStr)}` };
-  }
 
   // Last-resort prompt: this service has nothing tagged in "Shows & sports
   // you like to watch" AND its routine check-in isn't due yet, so the two
@@ -1673,7 +1634,7 @@
   // what read as "not prompted to do anything" on freshly-added services —
   // this nudges toward the one honest, real signal available: there's no
   // stated reason on file for keeping it active. It only fires when
-  // computeSuggestion/computeCadencePrompt have nothing, so it never
+  // computeSuggestion has nothing to say, so it never
   // duplicates or overrides a more specific, real-data-backed suggestion.
   function computeUntaggedPrompt(row){
     if (favoritesForService(row.service_name).length) return null;
@@ -1856,7 +1817,7 @@
       // One prompt per row, not two competing ones: a favorite-based
       // suggestion (real air date / in-season sport) is more specific, so it
       // wins when both apply. The routine check-in cadence is the fallback,
-      // and only speaks up once it's actually due — see computeCadencePrompt.
+      // and only speaks up once the engine has something evidenced to say.
       // Real-time reminders are a Pro feature — a Free-plan customer sees
       // their subscriptions and can still pause/activate manually, but
       // doesn't get the "worth activating/pausing" prompts.
@@ -1866,12 +1827,13 @@
       // check-in threshold), so they earn the red "needs attention"
       // treatment. Nothing tagged + nothing overdue yet is a different,
       // much softer situation — see untaggedSuggestion.
-      const realSuggestion = isPro() ? (computeSuggestion(r) || computeCadencePrompt(r, todayStr)) : null;
+      const realSuggestion = isPro() ? computeSuggestion(r) : null;
       // Fires only when there's no real signal at all — informational, not
       // an alert, so it gets its own neutral gray treatment instead of
       // riding along on the same pink/red styling as a genuine suggestion.
       const untaggedSuggestion = (isPro() && !realSuggestion) ? computeUntaggedPrompt(r) : null;
       const suggestion = realSuggestion || untaggedSuggestion;
+      const snoozed = !!(r.suggestion_snoozed_until && r.suggestion_snoozed_until >= toDateValue(new Date()));
 
       // Real-time price-change alerts (Pro/Family): flagged whenever the
       // price you last saved differs from what it was before you last
@@ -1910,12 +1872,11 @@
       // showing "Activate now" (a paused row).
       const toggleIsActivate = r.status !== 'active';
 
-      // The two "Suggested: Consider pausing — <reason>" messages (from
-      // computeSuggestion/computeCadencePrompt) just restate, in words, what
-      // a blinking-red Pause now button already says — genuinely redundant
-      // once the button itself is the signal. Suppress that one specific
-      // phrasing here.
-      const suppressSuggestionText = !!(realSuggestion && realSuggestion.type === 'pause' && realSuggestion.text.indexOf('Suggested: Consider pausing') === 0);
+      // The headline and the button say the same thing for a pause, so the
+      // long form is redundant next to a lit-up Pause button. The reason is
+      // not redundant, though — that is the evidence — so only the leading
+      // "Suggested: ..." clause is dropped, never the explanation.
+      const suppressSuggestionText = false;
 
       row.innerHTML = `
         <span class="sub-name"><span class="svc-dot" style="background:${svcColorFor(r.service_name)}"></span>${escapeHtml(r.service_name)}</span>
@@ -1932,6 +1893,10 @@
             : `<span class="locked-chip" title="Direct cancel and downgrade links come with the $19.99/year plan">🔒 Direct link</span>`}
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">${untaggedSuggestion ? 'Tag now' : ('See shows' + (showCount ? ' (' + showCount + ')' : ''))}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
+          ${realSuggestion && realSuggestion.type === 'pause'
+            ? `<button class="btn btn-ghost btn-sm" data-action="snooze" data-id="${r.id}">No, keep it</button>`
+            : ''}
+          ${snoozed ? `<button class="btn btn-ghost btn-sm" data-action="unsnooze" data-id="${r.id}">Suggest again</button>` : ''}
           ${pro
             ? `<button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>`
             : `<span class="locked-chip" title="Subscribe and we check the schedule daily and email you when it's time">🔔 Email me when it's time</span>`}
@@ -2158,6 +2123,21 @@
 
     } else if (btn.dataset.action === 'edit-price') {
       openPriceEditor(btn.closest('.sub-row'), row);
+    }
+    // "No, I want to keep this." Holds for 90 days unless taken back: long
+    // enough to cover a couple of billing cycles, short enough that a
+    // decision made about last season does not silence us forever.
+    if (action === 'snooze' || action === 'unsnooze') {
+      let until = null;
+      if (action === 'snooze') {
+        const d = new Date(); d.setDate(d.getDate() + 90);
+        until = toDateValue(d);
+      }
+      const { error } = await client.from('tracked_subscriptions')
+        .update({ suggestion_snoozed_until: until }).eq('id', id);
+      if (error) { showToast('Could not save that — ' + errText(error)); return; }
+      showToast(until ? "Got it — we won't suggest pausing that one for 90 days." : 'Suggestions back on for that one.');
+      loadSubscriptions();
     }
   });
 
@@ -2434,6 +2414,7 @@
         kind: 'sport',
         title: sportKey,
         service_name: row.service_name,
+        viewer: null,
         tvmaze_show_id: null,
         next_air_date: null,
         checked_at: null
@@ -2455,6 +2436,7 @@
     const status = document.getElementById('add-status').value;
     const renewal = document.getElementById('add-renewal').value || null;
     const billing = document.getElementById('add-billing').value || 'monthly';
+    const isPromo = document.getElementById('add-promo').value === 'yes';
     const nowIso = new Date().toISOString();
 
     // No show is attached at creation time anymore — once the subscription
@@ -2469,6 +2451,7 @@
       status_changed_at: nowIso,
       next_renewal_date: renewal,
       billing_period: billing,
+      is_promo_rate: isPromo,
       ...computeReminder(status, nowIso, null)
     });
     if (error) { showToast('Could not add that subscription.'); return; }
@@ -2687,6 +2670,21 @@
           + '<span class="dc-title">' + escapeHtml(d.headline) + '</span>'
           + (d.savings > 0 ? '<span class="dc-money">' + fmt(d.savings) + '</span>' : '')
           + '</div><p class="dc-why">' + escapeHtml(d.why) + '</p>';
+        // The warnings a correct recommendation still needs: a legacy price
+        // that will not come back, a plan carrying non-video benefits, and
+        // somebody else in the house who is still watching.
+        if (d.cautions && d.cautions.length) {
+          const ul = document.createElement('ul');
+          ul.className = 'dc-cautions';
+          d.cautions.forEach(function(cn){
+            const li = document.createElement('li');
+            li.textContent = cn.text;
+            ul.appendChild(li);
+          });
+          card.appendChild(ul);
+        }
+        if (d.urgent) card.classList.add('is-urgent');
+
         const when = [];
         if (d.actBy) when.push(['Do it by', prettyDateYear(d.actBy)]);
         if (d.restartDate) when.push(['Turn it back on', prettyDateYear(d.restartDate)]);

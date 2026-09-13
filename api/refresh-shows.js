@@ -87,7 +87,7 @@ module.exports = async function handler(req, res) {
   };
 
   const listRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,user_id,service_name,status,status_changed_at,monthly_price,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source,last_notified_action,last_notified_at,next_renewal_date,billing_period`,
+    `${SUPABASE_URL}/rest/v1/tracked_subscriptions?select=id,user_id,service_name,status,status_changed_at,monthly_price,show_query,tvmaze_show_id,show_next_air_date,next_reminder_date,reminder_type,reminder_source,last_notified_action,last_notified_at,next_renewal_date,billing_period,is_promo_rate,suggestion_snoozed_until`,
     { headers }
   );
   if (!listRes.ok) {
@@ -229,7 +229,7 @@ module.exports = async function handler(req, res) {
   let favoriteRows = []; // all favorites (shows AND sports), kept for step 5 below
   try {
     const favRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/favorite_watches?select=id,user_id,kind,title,service_name,tvmaze_show_id,next_air_date,currently_airing`,
+      `${SUPABASE_URL}/rest/v1/favorite_watches?select=id,user_id,kind,title,service_name,tvmaze_show_id,next_air_date,currently_airing,viewer`,
       { headers }
     );
     if (favRes.ok) {
@@ -362,6 +362,56 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // 6) Once a month, tell each paying customer what the year has actually
+  //    saved them. This is the only email that is not an instruction, and
+  //    it is the one that answers "am I still getting my money's worth?" —
+  //    which a customer should be able to check without taking our word for
+  //    it. Everything in it is counted from rows they can see on the
+  //    dashboard: services currently off, and what those would have cost.
+  let digestsSent = 0;
+  let digestErrors = 0;
+  if (RESEND_API_KEY && RESEND_FROM_EMAIL && today.getDate() === 1) {
+    try {
+      const subsRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/subscribers?select=user_id,plan&plan=in.(pro,family)`,
+        { headers }
+      );
+      const paidUserIds = new Set(subsRes.ok ? (await subsRes.json()).map((s) => s.user_id) : []);
+      const admin = createClient(SUPABASE_URL, SERVICE_KEY);
+
+      for (const userId of paidUserIds) {
+        try {
+          const mine = rows.filter((r) => r.user_id === userId);
+          if (!mine.length) continue;
+          const off = mine.filter((r) => r.status === 'paused');
+          const savedThisMonth = round2(off.reduce((s, r) => s + (Number(r.monthly_price) || 0), 0));
+          const paying = round2(mine.filter((r) => r.status === 'active')
+            .reduce((s, r) => s + (Number(r.monthly_price) || 0), 0));
+          // Nothing switched off means nothing to report. An empty digest is
+          // a monthly reminder that you are paying us for nothing.
+          if (!off.length) continue;
+
+          const { data, error } = await admin.auth.admin.getUserById(userId);
+          const toEmail = (!error && data && data.user) ? data.user.email : null;
+          if (!toEmail) { digestErrors++; continue; }
+
+          const sent = await sendDigestEmail({
+            apiKey: RESEND_API_KEY,
+            from: RESEND_FROM_EMAIL,
+            to: toEmail,
+            dashboardUrl: PUBLIC_DASHBOARD_URL,
+            off, paying, savedThisMonth,
+          });
+          if (sent) digestsSent++; else digestErrors++;
+        } catch (err) {
+          digestErrors++;
+        }
+      }
+    } catch (err) {
+      // A failed digest must never take down the rest of the daily job.
+    }
+  }
+
   res.status(200).json({
     ok: true,
     rowsProcessed: rows.length,
@@ -373,9 +423,48 @@ module.exports = async function handler(req, res) {
     favoriteErrors,
     emailsSent,
     emailErrors,
+    digestsSent,
+    digestErrors,
     errors,
   });
 };
+
+// The monthly "here is what you actually saved" email. Deliberately plain:
+// a number the customer can check against their own bank statement, the
+// services it came from, and what we cost. If the first is not comfortably
+// bigger than the last, the email says so rather than hiding it.
+async function sendDigestEmail({ apiKey, from, to, dashboardUrl, off, paying, savedThisMonth }) {
+  const FEE_ANNUAL = 19.99;
+  const annualised = round2(savedThisMonth * 12);
+  const rows = off.map((r) => `<tr>
+      <td style="padding:5px 12px 5px 0; color:#5B5347;">${escapeHtmlEmail(r.service_name)}</td>
+      <td style="padding:5px 0; text-align:right; font-weight:700;">$${(Number(r.monthly_price) || 0).toFixed(2)}</td>
+    </tr>`).join('');
+  const verdict = annualised >= FEE_ANNUAL * 3
+    ? `That's more than ${Math.floor(annualised / FEE_ANNUAL)}&times; what StreamNavigator costs you.`
+    : `StreamNavigator costs $${FEE_ANNUAL.toFixed(2)} a year. If this stays below that, cancel us — the free analyzer keeps working.`;
+
+  const html = `
+    <div style="font-family:sans-serif; font-size:15px; color:#201A14; max-width:520px;">
+      <p style="font-size:17px; font-weight:700; margin-bottom:4px;">You're not paying for ${off.length} service${off.length === 1 ? '' : 's'} right now</p>
+      <p style="color:#5B5347; margin-top:0;">That's <strong>$${savedThisMonth.toFixed(2)} a month</strong> you're not being charged, while they stay off.</p>
+      <table style="border-collapse:collapse; margin:14px 0; font-size:14px;">${rows}</table>
+      <p style="color:#5B5347;">Still paying for: <strong>$${paying.toFixed(2)}/mo</strong>. ${verdict}</p>
+      <p><a href="${dashboardUrl}" style="display:inline-block; background:#4FB6E8; color:#1F1B16; font-weight:700; padding:10px 18px; border-radius:999px; text-decoration:none; margin-top:8px;">See the detail &rarr;</a></p>
+      <p style="color:#7A7163; font-size:12.5px; margin-top:24px;">Counted from the subscriptions you've marked as off. We can't see your bank, so check it against your statement — if it doesn't match, the dashboard is where to correct it.</p>
+    </div>
+  `;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: `You saved $${savedThisMonth.toFixed(2)} last month`, html }),
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  }
+}
 
 function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
@@ -565,4 +654,5 @@ function sleep(ms) {
 module.exports.computeDesiredAction = computeDesiredAction;
 module.exports.computeCadenceAction = computeCadenceAction;
 module.exports.MIN_DAYS_BETWEEN_EMAILS = MIN_DAYS_BETWEEN_EMAILS;
+module.exports.sendDigestEmail = sendDigestEmail;
 module.exports.rollRenewal = rollRenewal;

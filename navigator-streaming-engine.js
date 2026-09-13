@@ -407,7 +407,7 @@
           }
         }
         evidence.push({
-          kind: 'sport', title: SPORT_LABELS[it.title] || it.title,
+          kind: 'sport', title: SPORT_LABELS[it.title] || it.title, viewer: it.viewer || null,
           state: isSportInSeason(it.title, t) ? 'in season' : 'off-season',
           nextDate: isSportInSeason(it.title, t) ? null : iso(nextSeasonStart(it.title, t)),
           source: 'StreamNavigator season calendar', approximate: true,
@@ -423,7 +423,7 @@
         next = { date: nd, label: `${it.title} returns`, approximate: false };
       }
       evidence.push({
-        kind: 'show', title: it.title,
+        kind: 'show', title: it.title, viewer: it.viewer || null,
         state: it.currentlyAiring ? 'airing now' : (nd ? 'scheduled' : (it.found === false ? 'not found' : 'no date announced')),
         nextDate: nd ? iso(nd) : null,
         lastAired: it.prevAirDate || null,
@@ -434,13 +434,53 @@
     const renewal = nextRenewalFrom(sub, t);
     const daysToRenewal = renewal ? daysBetween(t, renewal) : null;
 
+    // Things that are true whatever the recommendation, and that a customer
+    // would be angry to discover only after acting on it. Each one exists
+    // because acting on a correct recommendation can still lose you money or
+    // access if nobody mentions these.
+    const cautions = [];
+    if (sub.isPromoRate) {
+      cautions.push({
+        kind: 'promo',
+        text: `You're on a promotional or legacy rate for ${name}. Cancelling almost always means coming back at the current list price, so check what that is before you decide — the saving below may not survive a round trip.`,
+      });
+    }
+    if (svc && svc.nonStreamingBenefits && svc.nonStreamingBenefits === sub.tierId) {
+      cautions.push({
+        kind: 'bundle-benefits',
+        text: `This ${name} plan comes bundled with Prime, which also carries delivery, Prime Music and the rest. Cancelling it drops all of that, not just the video — treat the figure here as the video part of a much bigger decision.`,
+      });
+    }
+    const viewers = [...new Set(tagged.map((i) => i.viewer).filter(Boolean))];
+    if (viewers.length > 1) {
+      cautions.push({
+        kind: 'household',
+        text: `${viewers.join(' and ')} both follow something on ${name}. Check with whoever isn't reading this before you switch it off.`,
+      });
+    }
+
     const base = {
       serviceId: sub.serviceId, name, price, billingPeriod: period, status,
-      renewalDate: iso(renewal), daysToRenewal, evidence,
+      renewalDate: iso(renewal), daysToRenewal, evidence, cautions, viewers,
       canPause: svc ? svc.canPause !== false : false,
+      isPromoRate: !!sub.isPromoRate,
       tracked: tagged.length,
       annualCost: round2(price * (period === 'annual' ? 1 : 12)),
     };
+
+    // The customer said "no, I want to keep this". That answer sticks until
+    // they take it back or the date they set runs out — a product that
+    // re-suggests something you have already declined is one you stop
+    // reading. Snoozing suppresses only the suggestion, never the facts.
+    const snoozedUntil = toDate(sub.snoozedUntil);
+    if (snoozedUntil && snoozedUntil >= t && status === 'active') {
+      return Object.assign(base, {
+        action: 'snoozed',
+        headline: `Keeping ${name} — your call`,
+        why: `You told us to leave this one alone${sub.snoozedUntil ? ` until ${prettyDateYear(snoozedUntil)}` : ''}. We won't suggest switching it off before then. Everything we know about it is still below.`,
+        savings: 0, snoozedUntil: iso(snoozedUntil), confidence: 'none',
+      });
+    }
 
     // ---- nothing tagged: we cannot honestly decide ----
     if (!tagged.length) {
@@ -552,9 +592,28 @@
 
     const actBy = renewal ? addDays(renewal, -1) : null;
     const verb = base.canPause ? 'Pause' : 'Cancel';
+    // What happens to the account is not something to be breezy about. Most
+    // services keep a profile and watchlist for a while after cancellation,
+    // but the window varies and downloads go immediately — so say what is
+    // reliably true and flag the rest rather than promising it all survives.
     const mechanic = base.canPause
-      ? `${name} lets you pause without losing your account.`
-      : `${name} has no pause, so cancel — you keep access until ${renewal ? prettyDateYear(renewal) : 'the end of the period you have already paid for'}, and your profile and watchlist are kept if you come back.`;
+      ? `${name} lets you pause without cancelling, so the account stays exactly as it is.`
+      : `${name} has no pause, so this means cancelling — you keep access until ${renewal ? prettyDateYear(renewal) : 'the end of the period you have already paid for'}.`;
+    if (!base.canPause) {
+      cautions.push({
+        kind: 'account',
+        text: 'Cancelling ends downloads immediately and most services only hold your profile and watchlist for a limited window afterwards. If there is something downloaded you still want, watch it before the date above.',
+      });
+    }
+
+    // Urgency is information, not decoration: inside three days the customer
+    // needs to know this is the last useful moment, not a nice-to-know.
+    const urgent = daysToRenewal !== null && daysToRenewal >= 0 && daysToRenewal <= 3;
+    const urgency = urgent
+      ? (daysToRenewal === 0
+        ? ` It renews TODAY — after today's charge this saving is gone for a month.`
+        : ` It renews in ${daysToRenewal} day${daysToRenewal === 1 ? '' : 's'}, so this is the last useful moment to act.`)
+      : '';
 
     const whenBack = next
       ? `${next.label} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)}, so restart ${prettyDateYear(addDays(next.date, -1))}.`
@@ -566,10 +625,13 @@
       action: 'suspend',
       headline: `${verb} ${name}${actBy ? ` before ${prettyDate(actBy)}` : ''}`,
       why: [
-        lastOn ? `${lastOn.title} last aired ${prettyDateYear(lastOn.lastAired)}.` : `Nothing you follow on ${name} is on right now.`,
+        lastOn
+          ? `${lastOn.viewer ? `${lastOn.viewer}'s ` : ''}${lastOn.title} last aired ${prettyDateYear(lastOn.lastAired)}.`
+          : `Nothing you follow on ${name} is on right now.`,
         whenBack,
-        mechanic,
+        mechanic + urgency,
       ].join(' '),
+      urgent,
       actBy: iso(actBy),
       actionable: daysToRenewal === null ? true : daysToRenewal <= (period === 'annual' ? 14 : ACT_WINDOW_DAYS),
       restartDate: next ? iso(addDays(next.date, -1)) : null,
@@ -774,6 +836,8 @@
       billingPeriod: row.billing_period === 'annual' ? 'annual' : 'monthly',
       renewalDate: row.next_renewal_date || null,
       status: row.status === 'paused' ? 'paused' : 'active',
+      isPromoRate: !!row.is_promo_rate,
+      snoozedUntil: row.suggestion_snoozed_until || null,
     };
   }
   // favorite_watches rows already carry the air dates the daily job keeps
@@ -783,6 +847,7 @@
       kind: f.kind,
       service_name: f.service_name,
       title: f.title,
+      viewer: f.viewer || null,
       nextAirDate: f.next_air_date || null,
       currentlyAiring: !!f.currently_airing,
       checkedAt: f.checked_at ? String(f.checked_at).slice(0, 10) : null,

@@ -126,6 +126,67 @@ test('the analyzer asks for nothing it does not use', () => {
   assert.ok(!/id="kids-important"/.test(site), 'the kid-friendly checkbox is back; nothing in the engine reads it');
 });
 
+test('there is exactly one implementation of the keep/suspend decision', () => {
+  const dash = pages.find(([f]) => f === 'dashboard.html')[1];
+  // dashboard.html used to carry its own computeCadencePrompt, which could
+  // still emit "Suggested: Pause — you haven't checked in on this in about
+  // 2 months" for a service with NOTHING tagged: a pause with no evidence,
+  // which the cron already refused to send. Two implementations, two
+  // different answers, one customer.
+  assert.ok(!/computeCadencePrompt/.test(dash), 'dashboard.html has its own cadence decision again');
+  assert.ok(!/haven't checked in on this in about 2 months/.test(dash),
+    'the evidence-free pause suggestion is back on the dashboard');
+  assert.ok(!/function pauseIsActionable/.test(dash),
+    'dashboard.html has its own copy of the renewal-window rule again');
+  assert.ok(/SE\.decide\(/.test(dash) || /\bdecide\(/.test(dash), 'the dashboard no longer calls the engine');
+});
+
+test('a customer can decline a suggestion, on both surfaces', () => {
+  const site = pages.find(([f]) => f === 'streaming.html')[1];
+  assert.ok(/OVERRIDE_KEY|localStorage/.test(site), 'the analyzer forgets an override as soon as you reload');
+  assert.ok(/saveOverrides\(\)/.test(site), 'the analyzer never persists the override');
+  const dash = pages.find(([f]) => f === 'dashboard.html')[1];
+  assert.ok(/data-action="snooze"/.test(dash), 'there is no way to decline a suggestion on the dashboard');
+  assert.ok(/suggestion_snoozed_until/.test(dash), 'declining is not saved anywhere');
+  assert.ok(/suggestion_snoozed_until/.test(cron), 'the daily email ignores a declined suggestion');
+});
+
+test('the warnings a correct recommendation still needs are collected and shown', () => {
+  const engine = fs.readFileSync(path.join(root, 'navigator-streaming-engine.js'), 'utf8');
+  for (const kind of ['promo', 'bundle-benefits', 'household', 'account']) {
+    assert.ok(new RegExp(`kind: '${kind}'`).test(engine), `the engine never raises a ${kind} caution`);
+  }
+  const site = pages.find(([f]) => f === 'streaming.html')[1];
+  assert.ok(/dc-cautions/.test(site), 'the analyzer computes cautions and never renders them');
+});
+
+test('no catalog field exists without something reading it', () => {
+  // nonStreamingBenefits sat in the catalog for a day doing nothing, which
+  // is the same defect as a marketing claim with no code behind it.
+  const engine = fs.readFileSync(path.join(root, 'navigator-streaming-engine.js'), 'utf8');
+  for (const field of ['nonStreamingBenefits', 'canPause', 'checked', 'flagship', 'sports']) {
+    const uses = engine.split(field).length - 1;
+    assert.ok(uses >= 2, `${field} is declared in the catalog but never read`);
+  }
+});
+
+test('the customer can record a promotional rate, on both surfaces', () => {
+  const site = pages.find(([f]) => f === 'streaming.html')[1];
+  assert.ok(/isPromoRate/.test(site), 'the analyzer cannot be told about a legacy price');
+  const dash = pages.find(([f]) => f === 'dashboard.html')[1];
+  assert.ok(/id="add-promo"/.test(dash), 'the dashboard form has no promotional-rate field');
+  assert.ok(/is_promo_rate: isPromo/.test(dash), 'the promotional rate is collected but never saved');
+});
+
+test('the migrations for all of this are recorded in the repo', () => {
+  const dir = path.join(root, 'data', 'migrations');
+  const files = fs.readdirSync(dir);
+  const all = files.map((f) => fs.readFileSync(path.join(dir, f), 'utf8')).join('\n');
+  for (const col of ['next_renewal_date', 'billing_period', 'is_promo_rate', 'suggestion_snoozed_until', 'viewer']) {
+    assert.ok(all.includes(col), `no migration adds ${col}`);
+  }
+});
+
 // -------------------------------------------------------------------- pricing
 
 test('one tier, at the recommended price, on every surface', () => {

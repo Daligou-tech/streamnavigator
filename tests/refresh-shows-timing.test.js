@@ -25,8 +25,15 @@ const { computeDesiredAction, computeCadenceAction, rollRenewal, MIN_DAYS_BETWEE
 
 let passed = 0;
 const failures = [];
-function test(name, fn) {
-  try { fn(); passed += 1; } catch (err) { failures.push(`${name}\n    ${err.message.split('\n')[0]}`); }
+// Queue every case and run them in order, awaiting each: the digest tests
+// stub global.fetch, so two of them running at once would swap the stub out
+// from under each other and pass for the wrong reason.
+const queue = [];
+function test(name, fn) { queue.push([name, fn]); }
+async function run() {
+  for (const [name, fn] of queue) {
+    try { await fn(); passed += 1; } catch (err) { failures.push(`${name}\n    ${err.message.split('\n')[0]}`); }
+  }
 }
 
 const TODAY = '2026-09-12';
@@ -126,6 +133,70 @@ test('the cron decides with the same engine the dashboard renders', () => {
   assert.strictEqual(viaCron.reason, direct.why, 'the email text and the dashboard text have diverged');
 });
 
+// ---------------------------------------------------- a declined suggestion
+
+test('a suggestion the customer declined is never emailed', () => {
+  const snoozed = row({ next_renewal_date: '2026-09-16', suggestion_snoozed_until: '2026-12-01' });
+  assert.strictEqual(computeDesiredAction(snoozed, [fav()], TODAY), null,
+    'the job emailed a pause the customer had already said no to');
+  const expired = row({ next_renewal_date: '2026-09-16', suggestion_snoozed_until: '2026-08-01' });
+  const a = computeDesiredAction(expired, [fav()], TODAY);
+  assert.ok(a && a.action === 'pause', 'an expired snooze silenced the job for good');
+});
+
+// ------------------------------------------------------- the monthly digest
+
+test('the digest reports money, names the services, and can be checked', async () => {
+  const sent = [];
+  const fakeFetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true }; };
+  const realFetch = global.fetch;
+  global.fetch = fakeFetch;
+  try {
+    const ok = await CRON.sendDigestEmail({
+      apiKey: 'x', from: 'a@b.c', to: 'd@e.f', dashboardUrl: 'https://example.test/dashboard',
+      off: [{ service_name: 'HBO Max', monthly_price: 18.49 }, { service_name: 'Hulu', monthly_price: 18.99 }],
+      paying: 26.99, savedThisMonth: 37.48,
+    });
+    assert.strictEqual(ok, true);
+    const body = sent[0];
+    assert.ok(/\$37\.48/.test(body.subject), `the subject buries the number: "${body.subject}"`);
+    assert.ok(/HBO Max/.test(body.html) && /Hulu/.test(body.html), 'the digest does not say which services');
+    assert.ok(/\$26\.99/.test(body.html), 'the digest does not say what is still being paid for');
+    assert.ok(/statement/i.test(body.html), 'the digest does not invite the customer to check it');
+  } finally { global.fetch = realFetch; }
+});
+
+test('the digest tells a customer to cancel us when we are not earning it', async () => {
+  const sent = [];
+  const realFetch = global.fetch;
+  global.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true }; };
+  try {
+    // $1/mo off is $12/yr — less than the $19.99 we charge.
+    await CRON.sendDigestEmail({
+      apiKey: 'x', from: 'a@b.c', to: 'd@e.f', dashboardUrl: 'u',
+      off: [{ service_name: 'Starz', monthly_price: 1 }], paying: 50, savedThisMonth: 1,
+    });
+    assert.ok(/cancel us/i.test(sent[0].html),
+      'a digest showing less saved than we charge did not say so');
+    sent.length = 0;
+    await CRON.sendDigestEmail({
+      apiKey: 'x', from: 'a@b.c', to: 'd@e.f', dashboardUrl: 'u',
+      off: [{ service_name: 'HBO Max', monthly_price: 18.49 }], paying: 20, savedThisMonth: 18.49,
+    });
+    assert.ok(/times|&times;/.test(sent[0].html), 'a digest well above the fee did not say by how much');
+    assert.ok(!/cancel us/i.test(sent[0].html), 'a digest well above the fee still told them to cancel');
+  } finally { global.fetch = realFetch; }
+});
+
+test('the digest only goes out monthly, and only when something is off', () => {
+  const s = require('fs').readFileSync(require('path').join(__dirname, '..', 'api', 'refresh-shows.js'), 'utf8');
+  assert.ok(/today\.getDate\(\) === 1/.test(s), 'the digest is not gated to once a month');
+  assert.ok(/if \(!off\.length\) continue;/.test(s),
+    'a customer with nothing switched off would get a monthly email saying they saved nothing');
+  assert.ok(/paidUserIds\.has|for \(const userId of paidUserIds\)/.test(s),
+    'the digest is not restricted to paying customers');
+});
+
 // ------------------------------------------------------- renewal roll-forward
 
 test('a passed renewal date rolls forward instead of going stale', () => {
@@ -141,9 +212,11 @@ test('a future renewal date is left alone', () => {
   assert.strictEqual(rollRenewal(row({ next_renewal_date: null }), TODAY), null);
 });
 
-if (failures.length) {
-  console.error(`\nrefresh-shows-timing: ${passed} passed, ${failures.length} FAILED\n`);
-  failures.forEach((f) => console.error('  ✗ ' + f));
-  process.exit(1);
-}
-console.log(`refresh-shows-timing: ${passed} passed`);
+run().then(() => {
+  if (failures.length) {
+    console.error(`\nrefresh-shows-timing: ${passed} passed, ${failures.length} FAILED\n`);
+    failures.forEach((f) => console.error('  ✗ ' + f));
+    process.exit(1);
+  }
+  console.log(`refresh-shows-timing: ${passed} passed`);
+});

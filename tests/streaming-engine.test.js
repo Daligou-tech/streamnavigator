@@ -229,6 +229,111 @@ test('a non-sports service still gets right-sized', () => {
   assert.strictEqual(dg.annualSaving, 84, `expected $84/yr, got $${dg.annualSaving}`);
 });
 
+// ------------------------------------------ things a correct answer can miss
+//
+// Each of these is a way that acting on a RIGHT recommendation can still cost
+// the customer money or access. The audit listed them as failure modes; none
+// of them is caught by getting the keep/suspend call itself correct.
+
+test('a promotional or legacy rate is flagged before you cancel it', () => {
+  const plain = decide(sub({ renewalDate: '2026-09-16' }), [show({})], SEPT);
+  assert.ok(!plain.cautions.some((c) => c.kind === 'promo'), 'a standard rate was flagged as promotional');
+  const promo = decide(sub({ renewalDate: '2026-09-16', isPromoRate: true }), [show({})], SEPT);
+  const c = promo.cautions.find((x) => x.kind === 'promo');
+  assert.ok(c, 'cancelling a legacy price was recommended with no warning that it will not come back');
+  assert.ok(/list price/i.test(c.text), 'the warning does not say what coming back costs');
+});
+
+test('a plan with non-streaming benefits is never treated as just streaming', () => {
+  // Prime Video bundled with Prime carries delivery, music and the rest.
+  const bundled = decide(
+    { serviceId: 'primevideo', tierId: 'withprime', price: 14.99, billingPeriod: 'monthly', status: 'active', renewalDate: '2026-09-16' },
+    [show({ serviceId: 'primevideo', title: 'The Boys' })], SEPT);
+  const c = bundled.cautions.find((x) => x.kind === 'bundle-benefits');
+  assert.ok(c, 'cancelling Prime was recommended as if it were only a video subscription');
+  assert.ok(/delivery/i.test(c.text), 'the warning does not name what else is lost');
+  // The standalone tiers carry no such warning.
+  const standalone = decide(
+    { serviceId: 'primevideo', tierId: 'noads', price: 11.99, billingPeriod: 'monthly', status: 'active', renewalDate: '2026-09-16' },
+    [show({ serviceId: 'primevideo', title: 'The Boys' })], SEPT);
+  assert.ok(!standalone.cautions.some((x) => x.kind === 'bundle-benefits'),
+    'a video-only Prime tier was warned about as if it were the Prime bundle');
+});
+
+test('cancelling is never sold as lossless', () => {
+  // Downloads go immediately and the profile window varies by service.
+  const d = decide(sub({ renewalDate: '2026-09-16' }), [show({})], SEPT);
+  assert.ok(d.cautions.some((c) => c.kind === 'account'), 'no warning about downloads or the profile window');
+  assert.ok(!/watchlist are kept/.test(d.why),
+    'the reason still promises the watchlist survives, which is not reliably true');
+  // A service that genuinely pauses keeps the account, so it needs no warning.
+  const hulu = decide(sub({ serviceId: 'hulu', tierId: 'noads', price: 18.99, renewalDate: '2026-09-16' }),
+    [show({ serviceId: 'hulu' })], SEPT);
+  assert.ok(!hulu.cautions.some((c) => c.kind === 'account'),
+    'a real pause was warned about as if it lost the account');
+});
+
+test('a service two people in the house watch says so', () => {
+  const d = decide(sub({ renewalDate: '2026-09-16' }), [
+    show({ title: 'Wednesday', viewer: 'Sam' }),
+    show({ title: 'Bridgerton', viewer: 'Alex' }),
+  ], SEPT);
+  assert.deepStrictEqual(d.viewers, ['Sam', 'Alex']);
+  const c = d.cautions.find((x) => x.kind === 'household');
+  assert.ok(c, 'a service two people follow was recommended for cancellation with no mention of the other person');
+  assert.ok(/Sam and Alex/.test(c.text), 'the warning does not name them');
+  assert.ok(d.evidence.every((e) => 'viewer' in e), 'the evidence does not carry who follows what');
+});
+
+test('one viewer is not a household warning', () => {
+  const d = decide(sub({ renewalDate: '2026-09-16' }),
+    [show({ title: 'Wednesday', viewer: 'Sam' }), show({ title: 'Bridgerton', viewer: 'Sam' })], SEPT);
+  assert.ok(!d.cautions.some((x) => x.kind === 'household'), 'one person was warned about themselves');
+});
+
+test('the last useful moment is called out as such', () => {
+  const far = decide(sub({ renewalDate: '2026-09-30' }), [show({})], SEPT);
+  assert.ok(!far.urgent, 'a charge 17 days away was marked urgent');
+  const near = decide(sub({ renewalDate: '2026-09-15' }), [show({})], SEPT);
+  assert.strictEqual(near.urgent, true, 'a charge in 2 days was not marked urgent');
+  assert.ok(/last useful moment/.test(near.why), `no urgency in the reason: "${near.why}"`);
+  const today = decide(sub({ renewalDate: SEPT }), [show({})], SEPT);
+  assert.ok(/renews TODAY/.test(today.why), 'a charge landing today reads the same as one in three days');
+});
+
+test('a declined suggestion stays declined', () => {
+  const declined = decide(sub({ renewalDate: '2026-09-16', snoozedUntil: '2026-12-01' }), [show({})], SEPT);
+  assert.strictEqual(declined.action, 'snoozed', 'a suggestion the customer declined came straight back');
+  assert.strictEqual(declined.savings, 0, 'a declined suggestion still counted toward savings');
+  assert.ok(/your call/i.test(declined.headline), 'the card does not make clear this was the customer\'s decision');
+  assert.ok(declined.evidence.length, 'declining hid the evidence as well as the suggestion');
+  // ...until it runs out.
+  const expired = decide(sub({ renewalDate: '2026-09-16', snoozedUntil: '2026-08-01' }), [show({})], SEPT);
+  assert.strictEqual(expired.action, 'suspend', 'an expired snooze still suppressed the suggestion');
+});
+
+test('a declined suggestion is worth nothing in the total', () => {
+  const input = {
+    subscriptions: [sub({ renewalDate: '2026-09-16', snoozedUntil: '2026-12-01' })],
+    watchlist: [show({})], household: 1, adsOk: false,
+  };
+  const r = analyze(input, { today: SEPT });
+  assert.strictEqual(r.savingsYearly, 0, 'a snoozed subscription was counted as a saving');
+  assert.strictEqual(r.actions.filter((a) => a.type === 'suspend').length, 0);
+});
+
+test('the row mapping carries the new fields through', () => {
+  const mapped = E.rowToSubscription({
+    id: 'r1', service_name: 'Netflix', monthly_price: 19.99, status: 'active',
+    next_renewal_date: '2026-09-16', billing_period: 'monthly',
+    is_promo_rate: true, suggestion_snoozed_until: '2026-12-01',
+  });
+  assert.strictEqual(mapped.isPromoRate, true, 'the promo flag is dropped on the way in');
+  assert.strictEqual(mapped.snoozedUntil, '2026-12-01', 'the snooze date is dropped on the way in');
+  const item = E.favoriteToItem({ kind: 'show', title: 'X', service_name: 'Netflix', viewer: 'Sam' });
+  assert.strictEqual(item.viewer, 'Sam', 'the viewer is dropped on the way in');
+});
+
 // ------------------------------------------------------------ savings maths
 
 test('the headline saving is the sum of the actions shown', () => {

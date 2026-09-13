@@ -321,6 +321,14 @@
   .dc-conf{ margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; font-weight:700; padding:3px 8px; border-radius:20px; }
   .conf-high{ background:rgba(15,138,125,0.13); color:var(--status-active-deep); }
   .conf-medium{ background:rgba(181,71,7,0.12); color:#B54708; }
+  .dc-cautions{ list-style:none; margin:11px 0 0; padding:10px 12px; background:rgba(181,71,7,0.08);
+    border-left:3px solid #B54708; border-radius:0 8px 8px 0; display:flex; flex-direction:column; gap:7px; }
+  .dc-cautions li{ font-size:12.5px; color:var(--text-dim); line-height:1.55; }
+  .decision-card.is-urgent{ border-left-color:var(--danger-deep); box-shadow:0 0 0 1px rgba(168,41,29,0.16); }
+  .decision-card.act-snoozed{ border-left-color:var(--text-dimmer); }
+  .promo-row{ grid-column:1 / -1; font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .tag-viewer{ font-family:inherit; font-size:11.5px; border:1px solid var(--border-strong); border-radius:6px;
+    background:var(--bg); color:var(--text-dim); padding:2px 5px; margin:0 4px; width:74px; }
   .dc-floor{ margin:8px 0 0; font-size:12.5px; color:var(--text-dim); line-height:1.55; }
   .dc-floor strong{ color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
   .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:rgba(29,95,168,0.07); border-radius:8px;
@@ -1265,7 +1273,16 @@
   const customSubs = [];      // { id, name, price, renewalDate, billingPeriod }
   const selectedSports = {};  // sportKey -> true
   const shows = [];           // { title, serviceId|null, lookup }
-  const overrides = {};       // serviceId -> true (customer dismissed the advice)
+  // "No, I want to keep this" has to outlive the page. A product that
+  // re-suggests something you have already declined is one you stop reading.
+  const OVERRIDE_KEY = 'sn.analyzer.overrides.v1';
+  const overrides = (() => {
+    try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || '{}') || {}; }
+    catch (e) { return {}; }   // private window, blocked storage — carry on
+  })();
+  function saveOverrides(){
+    try { localStorage.setItem(OVERRIDE_KEY, JSON.stringify(overrides)); } catch (e) {}
+  }
 
   function bestDefaultTier(svc){
     const adFree = svc.tiers.filter(t => t.adFree).sort((a,b)=>a.price-b.price);
@@ -1294,7 +1311,7 @@
       chip.setAttribute('aria-pressed', selected[svc.id] ? 'true' : 'false');
       chip.addEventListener('click', () => {
         if (selected[svc.id]) delete selected[svc.id];
-        else selected[svc.id] = { tierId: bestDefaultTier(svc), renewalDate: '', billingPeriod: 'monthly' };
+        else selected[svc.id] = { tierId: bestDefaultTier(svc), renewalDate: '', billingPeriod: 'monthly', isPromoRate: false };
         buildServiceGrid(); renderShowTags(); updateHints();
       });
       wrap.appendChild(chip);
@@ -1333,6 +1350,20 @@
         period.value = selected[svc.id].billingPeriod;
         period.addEventListener('change', () => { selected[svc.id].billingPeriod = period.value; });
         det.appendChild(period);
+
+        // A legacy or promo price changes the advice: cancelling one usually
+        // means coming back at list price, so the saving may not survive the
+        // round trip. One checkbox is worth more here than any amount of
+        // cleverness elsewhere.
+        const promo = document.createElement('label');
+        promo.className = 'check-row promo-row';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = !!selected[svc.id].isPromoRate;
+        box.addEventListener('change', () => { selected[svc.id].isPromoRate = box.checked; });
+        promo.appendChild(box);
+        promo.appendChild(document.createTextNode(" I'm on an old or discounted price for this"));
+        det.appendChild(promo);
 
         wrap.appendChild(det);
       }
@@ -1385,7 +1416,7 @@
     const guess = serviceForTitle(t);
     const ids = selectedServiceIds();
     const auto = (guess && selected[guess]) ? guess : (ids.length === 1 ? ids[0] : null);
-    shows.push({ title: t, serviceId: auto, lookup: null });
+    shows.push({ title: t, serviceId: auto, viewer: '', lookup: null });
     renderShowTags();
   }
   favText.addEventListener('keydown', e => {
@@ -1418,6 +1449,18 @@
         sel.addEventListener('change', () => { s.serviceId = sel.value || null; });
         tag.appendChild(sel);
       }
+
+      // Who in the house follows this. Optional, and only worth asking
+      // because without it we can tell someone to cancel a service their
+      // partner is in the middle of watching.
+      const who = document.createElement('input');
+      who.type = 'text';
+      who.className = 'tag-viewer';
+      who.placeholder = 'who?';
+      who.value = s.viewer || '';
+      who.setAttribute('aria-label', 'Who watches ' + s.title + '? (optional)');
+      who.addEventListener('input', () => { s.viewer = who.value.trim(); });
+      tag.appendChild(who);
 
       const x = document.createElement('button');
       x.type = 'button'; x.setAttribute('aria-label', 'Remove ' + s.title); x.textContent = '×';
@@ -1472,6 +1515,7 @@
         serviceId: id, tierId: tier.id, price: tier.price,
         renewalDate: selected[id].renewalDate || null,
         billingPeriod: selected[id].billingPeriod, status: 'active',
+        isPromoRate: !!selected[id].isPromoRate,
       });
     });
     customSubs.forEach(c => subscriptions.push({
@@ -1484,7 +1528,7 @@
       if (!s.serviceId) return;
       const L = s.lookup || {};
       watchlist.push({
-        kind: 'show', serviceId: s.serviceId, title: L.name || s.title,
+        kind: 'show', serviceId: s.serviceId, title: L.name || s.title, viewer: s.viewer || null,
         nextAirDate: L.nextAirDate || null, prevAirDate: L.prevAirDate || null,
         currentlyAiring: !!L.currentlyAiring, found: L.found !== false,
         checkedAt: L.checkedAt || null,
@@ -1519,9 +1563,10 @@
     restart:   { icon:'▶', label:'Start again',  cls:'act-restart' },
     watch:     { icon:'◷', label:'Stay off',     cls:'act-watch' },
     keep:      { icon:'✓', label:'Keep paying',  cls:'act-keep' },
+    snoozed:   { icon:'✋', label:'Your call',    cls:'act-snoozed' },
     untracked: { icon:'?', label:'Tell us more', cls:'act-untracked' },
   };
-  const ORDER = { suspend:0, restart:1, watch:2, untracked:3, keep:4 };
+  const ORDER = { suspend:0, restart:1, watch:2, untracked:3, keep:4, snoozed:5 };
 
   function renderResult(r){
     // --- the money, stated so nobody has to do arithmetic ---
@@ -1577,6 +1622,7 @@
       head.innerHTML = `<span class="dc-badge">${meta.icon}</span>`
         + `<span class="dc-title">${escapeHtml(d.headline)}</span>`
         + (d.savings > 0 ? `<span class="dc-money">${fmt(d.savings)}${d.savingsIsRate ? '/mo off' : ''}</span>` : '');
+      if (d.urgent) card.classList.add('is-urgent');
       card.appendChild(head);
       if (d.openEnded && d.monthlyWhileOff > 0) {
         const floor = document.createElement('p');
@@ -1591,6 +1637,19 @@
       card.appendChild(why);
 
       // Dates the customer acts on, stated plainly.
+      // Things that are true whatever the recommendation, and that a
+      // customer would be angry to find out only after acting on it.
+      if (d.cautions && d.cautions.length) {
+        const ul = document.createElement('ul');
+        ul.className = 'dc-cautions';
+        d.cautions.forEach(cn => {
+          const li = document.createElement('li');
+          li.textContent = cn.text;
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+      }
+
       const when = [];
       if (d.actBy) when.push(['Do it by', prettyDateYear(d.actBy)]);
       if (d.restartDate) when.push(['Turn it back on', prettyDateYear(d.restartDate)]);
@@ -1628,12 +1687,13 @@
         a.className = 'dc-link'; a.textContent = label + ' →';
         foot.appendChild(a);
       }
-      if (d.action === 'suspend' || d.action === 'watch') {
+      if (d.action === 'suspend' || d.action === 'watch' || d.action === 'snoozed') {
         const ov = document.createElement('button');
         ov.type = 'button'; ov.className = 'dc-override';
         ov.textContent = d.overridden ? 'Undo — count this again' : 'No, I want to keep this';
         ov.addEventListener('click', () => {
           if (overrides[d.serviceId]) delete overrides[d.serviceId]; else overrides[d.serviceId] = true;
+          saveOverrides();
           runBtn.click();
         });
         foot.appendChild(ov);
