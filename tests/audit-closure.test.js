@@ -154,7 +154,11 @@ test('FM · watchlists and downloads are disclosed, not promised away', () => {
 });
 
 test('FM · churn is bounded', () => {
-  assert.strictEqual(E.MIN_PAUSE_DAYS, 45, 'the minimum pause length is gone');
+  // The churn guard is now the renewal-after-next rule (a suspend must leave
+  // the customer off for a whole cycle); the day floor survives only for rows
+  // with no renewal date, where there is no billing anchor to reason about.
+  assert.ok(/renewalAfter/.test(engine), 'the renewal-after-next churn guard is gone');
+  assert.strictEqual(E.MIN_PAUSE_DAYS, 45, 'the no-renewal-date fallback floor is gone');
   assert.ok(/MIN_DAYS_BETWEEN_EMAILS = 30/.test(cron), 'the one-email-per-month floor is gone');
 });
 
@@ -200,7 +204,7 @@ test('MVP should-haves are all present', () => {
     'pause vs cancel per service': Object.values(E.SERVICES).every((s) => typeof s.canPause === 'boolean'),
     'promo rate flag': /is_promo_rate/.test(dash) && /isPromoRate/.test(engine),
     'multiple viewers per household': /viewer/.test(engine) && /viewer/.test(cron),
-    'minimum pause length': E.MIN_PAUSE_DAYS >= 30,
+    'churn guard on suspend': /renewalAfter/.test(engine) && E.MIN_PAUSE_DAYS >= 30,
     'pre-renewal nudge': /last useful moment/.test(engine),
   };
   for (const [k, v] of Object.entries(shoulds)) assert.ok(v, `MVP should-have missing: ${k}`);

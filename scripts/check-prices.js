@@ -481,6 +481,16 @@ async function main() {
     }
   }
 
+  // The streaming catalog is the one price list nobody bills us for getting
+  // wrong, so nothing forces a refresh. It went five weeks stale once and the
+  // marketing page quoted Netflix $2 under what Netflix charged. There is no
+  // pricing API for these services, so "reviewed monthly" has to be a prompt
+  // rather than an automation — this is that prompt. Deliberately a warning
+  // and not a failure: a calendar date is not evidence about the commit being
+  // deployed, and a gate that blocks a hotfix because a month passed is a
+  // gate people learn to switch off.
+  reportCatalogAge();
+
   if (failed.length) {
     console.log(bold(red('\nProblems\n')));
     for (const r of failed) {
@@ -513,6 +523,36 @@ async function main() {
   process.exit(0);
 }
 
+/** How stale is the streaming catalog, and does anyone need to do anything? */
+function catalogAge(today) {
+  const { CATALOG_VERIFIED, SERVICES } = require(path.join(ROOT, 'navigator-streaming-engine.js'));
+  const now = today ? new Date(today + 'T00:00:00') : new Date();
+  const checked = new Date(CATALOG_VERIFIED + 'T00:00:00');
+  const days = Math.round((now - checked) / 86400000);
+  // Per-service dates matter too: a catalog-wide refresh that skipped half
+  // the entries is the drift this is meant to catch.
+  const stale = Object.values(SERVICES)
+    .filter((s) => Math.round((now - new Date(s.checked + 'T00:00:00')) / 86400000) > 60)
+    .map((s) => s.name);
+  return { days, verified: CATALOG_VERIFIED, stale, due: days > 30 };
+}
+
+function reportCatalogAge() {
+  const a = catalogAge();
+  console.log(bold('\nStreaming catalog\n'));
+  const line = `  prices verified ${a.verified} (${a.days} day${a.days === 1 ? '' : 's'} ago)`;
+  if (a.due) {
+    console.log(yellow(line + ' — due a review'));
+    console.log(dim('    Re-check the published list prices and bump CATALOG_VERIFIED in'));
+    console.log(dim('    navigator-streaming-engine.js. Both pages render that date to the customer.'));
+  } else {
+    console.log(green(line));
+  }
+  if (a.stale.length) {
+    console.log(yellow(`  ${a.stale.length} service(s) not re-checked in over 60 days: ${a.stale.join(', ')}`));
+  }
+}
+
 // Only run the CLI when invoked directly. Without this guard, requiring the
 // file from a test executes main() and calls process.exit, killing the runner.
 if (require.main === module) {
@@ -526,4 +566,4 @@ if (require.main === module) {
 // secret key, so the logic is tested against a stubbed fetch instead — which is
 // the part that has to be right: a dead link, a missing link and a wrong amount
 // must each fail, and a healthy one must pass.
-module.exports = { checkStripeLinks, fetchAllPaymentLinks, linkSuffix };
+module.exports = { checkStripeLinks, fetchAllPaymentLinks, linkSuffix, catalogAge };

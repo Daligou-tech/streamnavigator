@@ -790,6 +790,7 @@
             <div>
               <label class="a-label">Sports you follow</label>
               <div class="chip-row" id="sports-grid"></div>
+              <div class="tag-list" id="sport-viewers" hidden></div>
               <label class="a-label" style="display:block; margin:16px 0 8px;">Household</label>
               <select id="household" class="a-select">
                 <option value="1">Just me</option>
@@ -1271,7 +1272,7 @@
 
   const selected = {};        // serviceId -> { tierId, renewalDate, billingPeriod }
   const customSubs = [];      // { id, name, price, renewalDate, billingPeriod }
-  const selectedSports = {};  // sportKey -> true
+  const selectedSports = {};  // sportKey -> { viewer }
   const shows = [];           // { title, serviceId|null, lookup }
   // "No, I want to keep this" has to outlive the page. A product that
   // re-suggests something you have already declined is one you stop reading.
@@ -1399,12 +1400,40 @@
     b.type = 'button'; b.className = 'chip-toggle'; b.textContent = SPORT_LABELS[key];
     b.setAttribute('aria-pressed', 'false');
     b.addEventListener('click', () => {
-      if (selectedSports[key]) delete selectedSports[key]; else selectedSports[key] = true;
+      if (selectedSports[key]) delete selectedSports[key]; else selectedSports[key] = { viewer: '' };
       b.classList.toggle('active', !!selectedSports[key]);
       b.setAttribute('aria-pressed', selectedSports[key] ? 'true' : 'false');
+      renderSportViewers();
     });
     sportsGrid.appendChild(b);
   });
+
+  // Sports get the same "who in the house follows this" field as shows do.
+  // Without it the engine can tell you to cancel the service carrying the
+  // one thing somebody else in the house watches every week.
+  function renderSportViewers(){
+    const host = document.getElementById('sport-viewers');
+    if (!host) return;
+    const keys = Object.keys(selectedSports);
+    host.innerHTML = '';
+    host.hidden = !keys.length;
+    keys.forEach(key => {
+      const tag = document.createElement('span');
+      tag.className = 'tag tag-show';
+      const label = document.createElement('span');
+      label.textContent = SPORT_LABELS[key] || key;
+      tag.appendChild(label);
+      const who = document.createElement('input');
+      who.type = 'text';
+      who.className = 'tag-viewer';
+      who.placeholder = 'who?';
+      who.value = selectedSports[key].viewer || '';
+      who.setAttribute('aria-label', 'Who follows ' + (SPORT_LABELS[key] || key) + '? (optional)');
+      who.addEventListener('input', () => { selectedSports[key].viewer = who.value.trim(); });
+      tag.appendChild(who);
+      host.appendChild(tag);
+    });
+  }
 
   /* ---- shows ----
      A show is tagged to a service automatically where the catalog knows it
@@ -1538,7 +1567,7 @@
     Object.keys(selectedSports).forEach(sp => {
       ids.forEach(id => {
         if (SERVICES[id] && SERVICES[id].sports.includes(sp)) {
-          watchlist.push({ kind: 'sport', serviceId: id, title: sp });
+          watchlist.push({ kind: 'sport', serviceId: id, title: sp, viewer: selectedSports[sp].viewer || null });
         }
       });
     });

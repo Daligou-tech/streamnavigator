@@ -88,12 +88,47 @@ test('SUSPEND that same service out of season', () => {
 
 // ----------------------------------------------- suspending must be worth it
 
-test('no suspend when the gap is too short to bother', () => {
-  // 30 days of nothing, then the show is back. Cancelling and resubscribing
-  // for that is two chores for part of one month.
+test('no suspend when the customer would be paying again a month later', () => {
+  // Back before the charge AFTER next: switching off skips one charge and
+  // then you are paying again — a round trip for a single month.
   const d = decide(sub({ renewalDate: '2026-09-20' }), [show({ nextAirDate: '2026-10-10' })], SEPT);
-  assert.strictEqual(d.action, 'keep', `a ${E.MIN_PAUSE_DAYS}-day floor should have blocked this suspend`);
-  assert.ok(/isn't worth the hassle/.test(d.why), 'the reason does not explain why not');
+  assert.strictEqual(d.action, 'keep');
+  assert.ok(/round trip for a single month/.test(d.why), `the reason does not explain why not: "${d.why}"`);
+  assert.strictEqual(d.savings, 0);
+});
+
+test('the "not worth it" test is billing dates, not a count of days', () => {
+  // This is the case a fixed 45-day floor got wrong: 37 days out, with a
+  // renewal in 3 days, it said "not worth the hassle" about a real charge
+  // the customer would have skipped. The gap spans two renewals, so it is
+  // worth it, and the engine now says so.
+  const d = decide(sub({ price: 18.99, renewalDate: '2026-09-16' }), [show({ nextAirDate: '2026-10-20' })], SEPT);
+  assert.strictEqual(d.action, 'suspend', 'a 37-day gap spanning two charges was refused');
+  assert.strictEqual(d.cycles, 2, `expected 2 skipped charges, got ${d.cycles}`);
+  assert.strictEqual(d.savings, 37.98);
+});
+
+test('the engine agrees with the blueprint rule across the whole band', () => {
+  // "Suspend when nothing tagged is airing and nothing has a confirmed date
+  // before the renewal after next." Asserted directly rather than through a
+  // day-count approximation of it.
+  const cases = [
+    ['2026-09-16', '2026-10-15'], ['2026-09-16', '2026-10-20'], ['2026-09-16', '2026-11-05'],
+    ['2026-09-14', '2026-10-25'], ['2026-09-30', '2026-11-10'], ['2026-09-16', '2026-09-20'],
+  ];
+  for (const [renewalDate, nextAirDate] of cases) {
+    const d = decide(sub({ price: 18.99, renewalDate }), [show({ nextAirDate })], SEPT);
+    const nextRenewal = E.nextRenewalFrom({ renewalDate, billingPeriod: 'monthly' }, SEPT);
+    const expected = E.toDate(nextAirDate) > E.advance(nextRenewal, 'monthly') ? 'suspend' : 'keep';
+    assert.strictEqual(d.action, expected,
+      `renewal ${renewalDate}, back ${nextAirDate}: engine said ${d.action}, blueprint says ${expected}`);
+  }
+});
+
+test('a title keeps its capitals in the reason', () => {
+  const d = decide(sub({ renewalDate: '2026-09-16' }), [show({ title: "Grey's Anatomy", nextAirDate: '2026-10-15' })], SEPT);
+  assert.ok(/Grey's Anatomy/.test(d.why), `the title was mangled: "${d.why}"`);
+  assert.ok(!/grey's anatomy/.test(d.why), 'a proper noun was lowercased in customer-facing copy');
 });
 
 test('no suspend when the return lands inside what is already paid for', () => {

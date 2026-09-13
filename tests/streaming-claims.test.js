@@ -178,6 +178,28 @@ test('the customer can record a promotional rate, on both surfaces', () => {
   assert.ok(/is_promo_rate: isPromo/.test(dash), 'the promotional rate is collected but never saved');
 });
 
+test('something actually prompts the monthly price review', () => {
+  // The blueprint asked for "a price catalog reviewed monthly with the date
+  // shown". The date was shown; nothing ever asked for the review. There is
+  // no pricing API for these services, so the prompt is the mechanism — and
+  // it is a warning, not a build failure, because a calendar date is not
+  // evidence about the commit being deployed.
+  const { catalogAge } = require('../scripts/check-prices.js');
+  const fresh = catalogAge(ENGINE.CATALOG_VERIFIED);
+  assert.strictEqual(fresh.days, 0);
+  assert.strictEqual(fresh.due, false, 'a catalog checked today is being reported as overdue');
+
+  const later = new Date(ENGINE.CATALOG_VERIFIED + 'T00:00:00');
+  later.setDate(later.getDate() + 45);
+  const stale = catalogAge(later.toISOString().slice(0, 10));
+  assert.strictEqual(stale.due, true, 'a 45-day-old catalog is not flagged for review');
+  assert.ok(Array.isArray(stale.stale), 'per-service check dates are not inspected');
+
+  const src = fs.readFileSync(path.join(root, 'scripts', 'check-prices.js'), 'utf8');
+  assert.ok(/reportCatalogAge\(\)/.test(src), 'the age report is defined but never called');
+  assert.ok(!/process\.exit\(1\)[^]{0,80}catalogAge/.test(src), 'a stale catalog blocks the build');
+});
+
 test('the migrations for all of this are recorded in the repo', () => {
   const dir = path.join(root, 'data', 'migrations');
   const files = fs.readdirSync(dir);

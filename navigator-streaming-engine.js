@@ -540,12 +540,25 @@
       });
     }
 
-    // ---- active, something lands before the next charge ----
-    if (next && renewal && next.date <= renewal) {
+    // ---- active, something lands before you would pay twice more ----
+    //
+    // The test is billing dates, not a number of days. A gap only earns a
+    // cancellation if it spans a charge the customer would otherwise pay,
+    // and leaves them off for a whole cycle rather than resubscribing days
+    // later. A fixed day-count floor used to stand in for this and got it
+    // wrong in both directions: at 37 days out with a renewal in 3, it said
+    // "not worth the hassle" about a real $18.99 the customer would have
+    // skipped. Comparing against the renewal AFTER next is the same churn
+    // guard expressed in the units that actually cost money.
+    const renewalAfter = renewal ? advance(renewal, period) : null;
+    if (next && renewalAfter && next.date <= renewalAfter) {
+      const beforeFirst = next.date <= renewal;
       return Object.assign(base, {
         action: 'keep',
         headline: `Keep ${name}`,
-        why: `${next.label} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)}, before your ${prettyDate(renewal)} renewal. Cancelling now would only mean paying to switch it back on.`,
+        why: beforeFirst
+          ? `${next.label} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)}, before your ${prettyDate(renewal)} renewal. Cancelling now would only mean paying to switch it back on.`
+          : `${next.label} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)}. Switching off would skip one charge on ${prettyDate(renewal)} and you would be paying again by ${prettyDate(renewalAfter)} — a round trip for a single month, which is rarely worth it.`,
         savings: 0, confidence: next.approximate ? 'medium' : 'high',
       });
     }
@@ -566,13 +579,16 @@
     const guaranteedCycles = cycles === null ? 1 : cycles;
     const savings = round2(price * guaranteedCycles);
 
-    // Too short to be worth the chore.
-    if (gapDays !== null && gapDays < MIN_PAUSE_DAYS) {
+    // With no renewal date on file there is no billing anchor to reason
+    // about, so fall back to a plain day count. This is the only place the
+    // day floor still applies, and it is why the renewal date is worth
+    // asking for: without it the engine has to be cruder.
+    if (!renewal && gapDays !== null && gapDays < MIN_PAUSE_DAYS) {
       return Object.assign(base, {
         action: 'keep',
-        headline: `Keep ${name} — not worth switching off`,
-        why: `Nothing you follow is on right now, but ${next.label.toLowerCase()} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)} — only ${gapDays} days away. Cancelling and resubscribing for that gap isn't worth the hassle.`,
-        savings: 0, confidence: 'high',
+        headline: `Keep ${name} for now`,
+        why: `Nothing you follow is on right now, but ${next.label} ${next.approximate ? 'around' : 'on'} ${prettyDateYear(next.date)} — ${gapDays} days away. Add this subscription's renewal date and we can tell you whether switching off would actually skip a charge.`,
+        savings: 0, confidence: 'medium',
       });
     }
 
