@@ -78,6 +78,10 @@ input[type=email]{width:100%;padding:11px 13px;border:1px solid var(--rule);bord
 blockquote.src{margin:16px 0 0;padding:12px 16px;border-left:2px solid var(--rule);background:#FCFCFA;font-style:italic;font-size:.93rem;color:var(--ink)}
 blockquote.src .cite{display:block;font-style:normal;font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-soft);margin-bottom:6px}
 
+.open-questions{border:1px solid rgba(31,27,22,.14);border-radius:14px;padding:16px 18px;margin-bottom:20px;}
+.open-questions h3{margin:0 0 6px;}
+.open-questions ul{margin:10px 0 0;padding-left:18px;line-height:1.6;}
+.open-questions li{margin-bottom:8px;}
 .locked{border:1px solid var(--rule);border-radius:3px;padding:22px;background:linear-gradient(180deg,#FFFFFF 0%,#F6F5F1 100%)}
 .locked ul{list-style:none;padding:0;margin:0 0 18px}
 .locked li{padding:9px 0 9px 26px;position:relative;border-bottom:1px solid var(--rule-soft)}
@@ -149,7 +153,7 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:40px;font-size
 
       <button class="btn" id="run-btn">Run my free check</button>
       <p class="err" id="form-err"></p>
-      <p class="muted" style="margin-top:14px;margin-bottom:0">Your documents are private, are never shared, and the copies we send for analysis are deleted straight afterwards.</p>
+      <p class="muted" style="margin-top:14px;margin-bottom:0">Your documents are private and are never shared. The copies we send for analysis are deleted immediately afterwards; your uploads stay in encrypted storage for 90 days so we can regenerate your report if anything goes wrong, then are deleted automatically.</p>
     </div>
   </div>
 </section>
@@ -174,6 +178,15 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:40px;font-size
     <div class="panel" id="r-concern-panel">
       <h3 id="r-concern"></h3>
       <p id="r-concern-detail" style="margin-bottom:0"></p>
+    </div>
+
+    <!-- Questions these two documents raise and cannot settle. Populated only
+         when this run actually found some; the model is told to return none
+         rather than write a generic one. -->
+    <div id="r-open" class="open-questions" hidden>
+      <h3>What these two documents cannot settle</h3>
+      <p class="muted" style="margin-top:0">Raised by what we just read, and answerable only from documents the free check does not open.</p>
+      <ul id="r-open-list"></ul>
     </div>
 
     <div class="locked" style="margin-bottom:20px">
@@ -379,10 +392,44 @@ footer{border-top:1px solid var(--rule);padding:26px 0;margin-top:40px;font-size
 
     // Every locked line is generated from what this run actually found, so
     // the page never promises something the documents cannot support.
+    // What these two documents raise and cannot settle.
+    //
+    // The free check answers the reserve question completely, and used to say
+    // nothing about the questions it had not asked — so a buyer whose reserves
+    // looked healthy got a free answer and no reason to read further, while the
+    // documents deciding whether they can rent the unit out sat unread. These
+    // are grounded in what this run actually saw; the model is told to return
+    // none rather than invent a generic one.
+    var open = Array.isArray(s.open_questions) ? s.open_questions.filter(function(q){
+      return q && q.question;
+    }) : [];
+    if (open.length) {
+      var openHost = document.getElementById('r-open');
+      var openList = document.getElementById('r-open-list');
+      if (openHost && openList) {
+        openList.innerHTML = '';
+        open.forEach(function(q){
+          var li = document.createElement('li');
+          var strong = document.createElement('b');
+          strong.textContent = q.question;
+          li.appendChild(strong);
+          var tail = document.createElement('span');
+          tail.textContent = (q.needs ? ' Needs ' + q.needs + '.' : '')
+            + (q.why ? ' ' + q.why : '');
+          li.appendChild(tail);
+          openList.appendChild(li);
+        });
+        openHost.hidden = false;
+      }
+    }
+
     var locked = document.getElementById('r-locked');
     var items = [];
     var more = Number(s.further_concern_count || 0);
     if (more > 0) items.push('<b>' + more + ' more concern' + (more===1?'':'s') + '</b> found in these documents, with the page each came from');
+    if (open.length) {
+      items.push('<b>The ' + open.length + ' open question' + (open.length===1?'':'s') + ' above answered</b>, from the documents that can settle them');
+    }
     items.push('<b>Your special-assessment exposure</b> in dollars per unit, short term and mid term');
     if ((data.not_analysed || []).length) {
       items.push('<b>' + data.not_analysed.length + ' document' + (data.not_analysed.length===1?'':'s') + ' you already attached</b> that the free check did not read: ' + data.not_analysed.join(', '));

@@ -554,6 +554,41 @@
             }())
           + '</p>');
 
+      // Show the work, not just the verdict.
+      //
+      // Across every real Closing Disclosure in the repository this audit flags
+      // nothing, and that is the document's fault rather than the engine's —
+      // closing documents are mostly correct. So the most common thing a
+      // customer sees here is "no issues surfaced", which reads as an empty
+      // result and is in fact the product working.
+      //
+      // Naming two checks that ran and passed, with the arithmetic behind them,
+      // turns that into something visible. A customer who can see that the APR
+      // was recomputed against the disclosure's own amount financed, and holds,
+      // knows what they would be buying. An empty state tells them nothing.
+      var verified = Array.isArray(sc.verified) ? sc.verified : [];
+      if (verified.length) {
+        var showing = verified.slice(0, 2);
+        html += '<div class="scorecard-verified">'
+          + '<p class="scorecard-note"><strong>'
+          + (sc.flag_count > 0 ? 'Also verified' : 'What we verified')
+          + '.</strong> '
+          + verified.length + ' check' + (verified.length === 1 ? '' : 's')
+          + ' ran on your document and passed. Two of them:</p><ul>';
+        showing.forEach(function (v) {
+          html += '<li><b>' + escH(v.title) + '</b> &mdash; ' + escH(v.basis) + '</li>';
+        });
+        html += '</ul>';
+        if (verified.length > showing.length) {
+          html += '<p class="scorecard-note">The full report names the other '
+            + (verified.length - showing.length)
+            + ', each with the figure it was measured against. On a document with nothing wrong, '
+            + 'that is the whole product &mdash; the arithmetic on your closing, independently '
+            + 'reproduced and written down.</p>';
+        }
+        html += '</div>';
+      }
+
       panel.innerHTML = html;
 
       // The provider question is asked before the scorecard now, so nothing here

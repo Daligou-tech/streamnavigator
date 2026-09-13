@@ -27,6 +27,7 @@ const {
   extractLoanEstimate, toLoanEstimateRecord,
   extractEscrowStatement, mergeEscrowStatement,
 } = require('./closing-extract');
+const { checkClosingConsistency } = require('./report-consistency');
 const { runDocumentAudit } = require('./closing-service');
 const { buildEmails } = require('./closing-emails');
 const { rankFindings, Severity } = require('./closing-audit');
@@ -658,6 +659,12 @@ async function generateNavigatorReport(submissionId) {
     // nothing routed to a party means no letter, and inventing one would spend
     // the customer's credibility with someone they still have to close with.
     let draftedEmails = null;
+    // Hoisted so the consistency check below can see what the audit actually
+    // computed. The write-up is told "never state a dollar figure that is not
+    // present in the findings you were given" — an instruction, which until now
+    // nothing verified. api/_lib/report-consistency.js verifies it.
+    let closingFindings = null;
+    let closingExtraction = null;
     if (submission.product === 'closing') {
       const stored = submission.form_data || {};
       if (!stored.extraction) {
@@ -775,6 +782,8 @@ async function generateNavigatorReport(submissionId) {
       // the PDF top to bottom would meet the same findings twice in two
       // different priorities.
       const ranked = rankFindings(findings);
+      closingFindings = ranked;
+      closingExtraction = stored.extraction;
 
       draftedEmails = buildEmails(ranked, {
         propertyAddress: stored.extraction.property_address,
@@ -1283,6 +1292,40 @@ Then do what you can. Work only from what is legibly present, flag anything that
     }
 
     if (!report) throw lastError || new Error('Failed to generate a valid report after retrying');
+
+    // Did the write-up state a figure the audit never computed?
+    //
+    // The prompt has always forbidden it. Nothing checked, and on /buying the
+    // identical instruction produced a headline total that disagreed with its
+    // own line items, a fuel cost stated twice about $3,000 apart, and a resale
+    // figure out by a factor of two. An instruction is not a mechanism.
+    //
+    // This does not rewrite the report. Closing's findings are computed, so a
+    // figure that matches nothing is far more likely to be the model quoting
+    // the document in a way the checker does not recognise than a hallucinated
+    // dollar amount — and silently deleting a customer's sentence on that basis
+    // would be worse than the problem. It is logged and recorded, so a pattern
+    // shows up in one place instead of one report at a time.
+    if (submission.product === 'closing' && closingFindings) {
+      try {
+        const { problems, totalImpact } = checkClosingConsistency({
+          report,
+          findings: closingFindings,
+          extraction: closingExtraction,
+        });
+        report.audit_total_impact = totalImpact;
+        if (problems.length) {
+          report.consistency_problems = problems;
+          problems.forEach((p) => {
+            console.warn(`[closing] submission ${submissionId}: ${p.class} — ${p.message}`);
+          });
+        }
+      } catch (err) {
+        // A checker that throws must never cost a customer their report. That
+        // is the whole lesson of the five times this checker was wrong.
+        console.error('[closing] consistency check failed:', err.message);
+      }
+    }
 
     // Attached after generation, never before: the letters are assembled from
     // the audit's own figures and must not pass through the model, which is

@@ -408,6 +408,13 @@ h3,h4{ font-weight:600; }
                document is read separately, so the honest promise scales with the
                size of the package rather than quoting a best case. -->
           <li><span class="tick">✓</span> Delivered automatically — usually 10–15 minutes, up to about 40 for a full document package</li>
+          <!-- What happens when it does not arrive on time. The machinery was
+               already there — api/process-refunds.js returns the money without
+               anyone asking, every ten minutes — and the page had never said
+               so, which is the half that matters to someone inside a
+               three-day contingency watching a clock. -->
+          <li><span class="tick">✓</span> If it runs long, the report still lands in your inbox — you do not have to keep the tab open</li>
+          <li><span class="tick">✓</span> If it cannot be produced at all, you are refunded automatically, without asking</li>
         </ul>
         <a href="https://buy.stripe.com/cNi00jaos92s60cfskabK0d" data-stripe-link="hoa" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- Why this exists rather than a toast: the checks that run before
@@ -446,6 +453,10 @@ h3,h4{ font-weight:600; }
       <div class="faq-item">
         <button class="faq-q">What if the HOA looks financially healthy? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">You'll be told plainly — the report doesn't manufacture concerns that aren't there.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if it takes longer than you said, or fails? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Each document is read separately, so a large package takes longer — up to about forty minutes. You do not need to wait on the page: the report is emailed to you when it is ready. If it cannot be produced at all, the payment is refunded automatically, without you having to ask or explain. That runs on a schedule rather than on somebody noticing.</div></div>
       </div>
     </div>
   </section>

@@ -233,6 +233,9 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .scorecard-rows b{font-size:19px;white-space:nowrap;}
 .scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
 .scorecard-note{font-size:15px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+.scorecard-verified{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule,rgba(31,27,22,.14));}
+.scorecard-verified ul{margin:8px 0 0;padding-left:18px;font-size:.9rem;line-height:1.6;}
+.scorecard-verified li{margin-bottom:6px;}
 /* Everything below the scorecard box. Same size as the rows above it, because
    this is what the customer is deciding on. */
 .sc-panel{margin:16px 0 0;padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.035);}
@@ -374,9 +377,10 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
          of those, and a blank panel would read as a broken product. -->
     <div class="scorecard-empty" id="scorecard-missing" style="display:none;">
       <h1 style="font-size:1.9rem;margin-bottom:14px;">This scorecard is no longer open</h1>
-      <p class="scorecard-lede">Your scorecard lives in this browser tab only &mdash; we do not keep a copy at a
-      guessable address, because it is built from your own closing figures. Upload your
-      Closing Disclosure again and it comes straight back, still free.</p>
+      <p class="scorecard-lede">Your scorecard is not kept at a guessable address, because it is built from
+      your own closing figures &mdash; reopening it needs the private link we emailed you. If you gave us
+      an email address, check your inbox. Otherwise upload your Closing Disclosure again and it comes
+      straight back, still free.</p>
       <a href="/closing" class="btn btn-primary">Run it again &rarr;</a>
     </div>
 
@@ -421,11 +425,61 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
   }
 
   if (!payload || !payload.scorecard) {
+    // Nothing in this tab. If the customer arrived on a resume link, the
+    // scorecard can be rebuilt from their own submission row — see
+    // api/closing-scorecard-resume.js. Seeding sessionStorage and reloading
+    // costs one extra page load and keeps every path below on the single
+    // code path that was already working, rather than forking it.
+    var qs = new URLSearchParams(location.search);
+    var resumeId = qs.get('id');
+    var resumeToken = qs.get('t');
+    if (resumeId && resumeToken) {
+      var missing = document.getElementById('scorecard-missing');
+      missing.style.display = 'block';
+      missing.innerHTML = '<h1 style="font-size:1.9rem;margin-bottom:14px;">Reopening your scorecard&hellip;</h1>'
+        + '<p class="scorecard-lede">One moment.</p>';
+      fetch('/api/closing-scorecard-resume', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: resumeId, token: resumeToken }),
+      }).then(function(r){ return r.json(); }).then(function(data){
+        if (!data || !data.ok || !data.scorecard) throw new Error((data && data.error) || 'expired');
+        sessionStorage.setItem('closing_scorecard', JSON.stringify({
+          scorecard: data.scorecard,
+          answers: data.answers || {},
+          submissionRef: { id: data.id, token: data.token, product: 'closing' },
+        }));
+        // Drop the token out of the address bar before the page comes back, so
+        // it does not sit in history or get pasted into a screenshot.
+        history.replaceState(null, '', '/closing-scorecard');
+        location.reload();
+      }).catch(function(err){
+        missing.innerHTML = '<h1 style="font-size:1.9rem;margin-bottom:14px;">That link is no longer valid</h1>'
+          + '<p class="scorecard-lede">' + (String(err.message) === 'expired'
+            ? 'Run the free check again &mdash; it is still free, and it takes a minute.'
+            : 'We could not reopen it just now. Run the free check again &mdash; it is still free.')
+          + '</p><a href="/closing" class="btn btn-primary">Run it again &rarr;</a>';
+      });
+      return;
+    }
     document.getElementById('scorecard-missing').style.display = 'block';
     return;
   }
 
   document.getElementById('scorecard-wrap').style.display = 'block';
+
+  // Tell them the tab is no longer the only copy. Without this the reassurance
+  // exists only in an inbox they have not checked, which is no reassurance at
+  // the moment they are deciding whether to close the tab.
+  if (payload.resume_link_emailed) {
+    var back = document.createElement('p');
+    back.className = 'field-hint';
+    back.style.marginTop = '14px';
+    back.textContent = 'We have emailed you a private link back to this scorecard, so you can close '
+      + 'this tab and come back to it. Nothing has been charged.';
+    var wrap = document.getElementById('scorecard-wrap');
+    wrap.insertBefore(back, wrap.firstChild);
+  }
 
   const savedAnswers = payload.answers || {};
   let submissionRef = payload.submissionRef || null;

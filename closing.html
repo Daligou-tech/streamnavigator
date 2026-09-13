@@ -230,6 +230,13 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 .scorecard-rows b{font-size:19px;white-space:nowrap;}
 .scorecard-warn{font-size:13px;line-height:1.5;margin:10px 0 0;padding:10px 12px;border-left:3px solid var(--ink);background:rgba(0,0,0,.05);}
 .scorecard-note{font-size:15px;line-height:1.55;margin:12px 0 0;opacity:.85;}
+.clean-result{max-width:62ch;margin:0 auto 30px;padding:18px 20px;border:1px solid var(--rule);background:var(--panel);}
+.clean-result h3{font-size:19px;margin:0 0 10px;}
+.clean-result p{font-size:15.5px;line-height:1.6;margin:0 0 10px;color:var(--ink-soft);}
+.clean-result p:last-child{margin-bottom:0;color:var(--ink);}
+.scorecard-verified{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule,rgba(31,27,22,.14));}
+.scorecard-verified ul{margin:8px 0 0;padding-left:18px;font-size:.9rem;line-height:1.6;}
+.scorecard-verified li{margin-bottom:6px;}
 /* Everything below the scorecard box. Same size as the rows above it, because
    this is what the customer is deciding on. */
 .sc-panel{margin:16px 0 0;padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.035);}
@@ -492,6 +499,16 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
     <h2>See what we find. Then decide.</h2>
     <p class="sec-intro">One price, whatever you upload.</p>
 
+    <!-- Most closing documents are correct. The free scorecard shows that for
+         free, which means the commonest thing a visitor sees is "no issues
+         found" — and until this block existed, nothing on the page told them
+         what they would be buying in that case. -->
+    <div class="clean-result">
+      <h3>Most Closing Disclosures are correct. That is worth having in writing.</h3>
+      <p>If we find nothing, you will know before you pay &mdash; the scorecard shows it free. What the report gives you then is the verification: all twenty-eight checks named, each with the figure it was measured against and what it showed. The arithmetic on the largest document you will sign this decade, independently reproduced, on one page you can hand your lender, your agent, or your own file.</p>
+      <p><strong>If the report misses what it promised, we refund in full.</strong></p>
+    </div>
+
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
         <span class="price-badge">Free scorecard first</span>
@@ -510,6 +527,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
             <li><strong>Initial escrow account statement</strong> — optional. Lets us test the escrow cushion against the federal cap. Your Closing Disclosure shows the whole opening deposit, not the cushion inside it, so this is the one document that can settle it.</li>
           </ul>
           <p class="upload-note">Optional documents unlock extra checks at no extra cost. Drop them all in the same box.</p>
+          <p class="upload-note">Your documents are private and are never shared. The copies we send for analysis are deleted immediately afterwards; your uploads stay in encrypted storage for 90&nbsp;days &mdash; the same window you have to raise a tolerance cure &mdash; so we can regenerate your report if anything goes wrong, then are deleted automatically.</p>
           <div class="upload-zone" id="upload-zone">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
@@ -996,11 +1014,15 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
         id: data.id, token: data.token, product: 'closing',
         unreadable_fields: data.scorecard.unreadable_fields || [],
       };
-      // The scorecard opens on its own URL. Handing it over in sessionStorage
-      // rather than re-fetching keeps it free: there is no endpoint that serves
-      // a scorecard by id, and adding one would put a customer's figures behind
-      // a URL that could be guessed. sessionStorage is same-origin and dies
-      // with the tab.
+      // The scorecard opens on its own URL, handed over in sessionStorage:
+      // same-origin, and it dies with the tab.
+      //
+      // Dying with the tab used to be the whole story, and it cost the funnel
+      // its highest-intent visitors — the ones who close the tab to think, or
+      // to show a spouse. There is now a way back: api/closing-scorecard-resume.js
+      // rebuilds the scorecard from the customer's own submission row, reached
+      // by a link carrying the row's access token. Private rather than
+      // guessable, which is the property the old comment here was protecting.
       //
       // The answers travelled with the upload, so this scorecard already
       // reflects them. Nothing to replay.
@@ -1010,6 +1032,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
           submissionRef: submissionRef,
           answers: savedAnswers,
           email: email,
+          resume_link_emailed: Boolean(data.resume_link_emailed),
           saved_at: Date.now(),
         }));
       } catch (storageErr) {

@@ -32,6 +32,7 @@ const {
 const { checkScorecardRateLimit, hashIp, clientIp } = require('./_lib/rate-limit');
 const { runDocumentAudit } = require('./_lib/closing-service');
 const { isTestEmail } = require('./_lib/test-submissions');
+const { emailScorecardLink } = require('./_lib/scorecard-link');
 const {
   MAX_CLOSING_FILE_BYTES,
   MAX_CLOSING_TOTAL_BYTES,
@@ -690,10 +691,27 @@ module.exports = async (req, res) => {
     })
     .eq('id', submission.id);
 
+  // A way back in, for the customer who closes the tab to think about it.
+  //
+  // Deliberately after the row is written and deliberately not awaited into the
+  // response path: the scorecard is on screen either way, and an email problem
+  // must never delay or fail the thing the customer is waiting for. Only sent
+  // when they gave an address — a run without one stays tab-only, which is what
+  // not typing an email means.
+  emailScorecardLink(admin, {
+    id: submission.id,
+    access_token: submission.access_token,
+    email,
+    form_data: { stage: 'scorecard' },
+  }).catch((err) => console.error('[closing-scorecard] resume link email failed:', err.message));
+
   res.status(200).json({
     ok: true,
     id: submission.id,
     token: submission.access_token,
     scorecard,
+    // So the page can say "we have emailed you a link back to this" rather
+    // than leaving the customer to discover it.
+    resume_link_emailed: Boolean(email),
   });
 };

@@ -388,6 +388,23 @@ function runDocumentAudit(input = {}) {
     // like a failure.
     checks_attempted: attempted.length,
     checks_in_scope: inScopeTotal,
+    // The checks that RAN AND PASSED, with the figure behind each.
+    //
+    // Across every real Closing Disclosure in the repository this audit flags
+    // nothing — not because the engine is silent, but because closing documents
+    // are mostly correct. So the modal customer meets a free scorecard that
+    // says "no issues found", and has been given a reason not to pay.
+    //
+    // What they actually bought is verification, and until now the free step
+    // showed none of it. These are the same within-norms findings the paid
+    // report prints in its "what was independently verified" section, exposed
+    // here so the scorecard can show two or three by name with the arithmetic
+    // attached. A customer who can see that the APR was recomputed against the
+    // amount financed, and that it holds, is being shown the work rather than
+    // an empty state.
+    verified: findings
+      .filter((f) => f.severity === audit.Severity.WITHIN_NORMS && f.basis)
+      .map((f) => ({ title: f.title, basis: f.basis })),
     // The denominator the customer can actually reach with the documents they
     // have given us. "20 of 27" read as a 74% job on a Closing Disclosure that
     // was audited completely -- the 7 counted checks needed documents nobody

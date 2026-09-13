@@ -153,12 +153,41 @@ const SCORECARD_TOOL = {
         type: 'string',
         description: 'One short line copied EXACTLY from one of the documents that most directly supports the percent funded or the funding gap. Checked against the source and discarded if it does not match.',
       },
+      // The free check answers one question completely and, until this field
+      // existed, said nothing about the questions it had not asked. A buyer
+      // whose reserves look healthy was therefore given a free answer and no
+      // reason to go further — while the documents that decide whether they can
+      // rent the unit out, or whether the board has already discussed an
+      // assessment, sat unread.
+      //
+      // This is not a sales hook. It is the honest shape of what two documents
+      // can and cannot establish, and it happens to be the reason to read the
+      // rest.
+      open_questions: {
+        type: 'array',
+        description: 'Two to four specific questions that THESE TWO DOCUMENTS RAISE BUT CANNOT SETTLE, '
+          + 'each naming the document that would settle it. Ground every one in something actually '
+          + 'visible here — a component with no funding plan named, a contribution that changed, a '
+          + 'reference to a study or a vote you cannot see. Never generic ("you should read the '
+          + 'minutes"). If the two documents genuinely raise nothing further, return an empty array '
+          + 'rather than inventing a question.',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            question: { type: 'string', description: 'The question, in a homebuyer’s words.' },
+            needs: { type: 'string', description: 'The document that would answer it, e.g. "the meeting minutes", "the bylaws".' },
+            why: { type: 'string', description: 'One line on what prompted it, citing what you saw.' },
+          },
+          required: ['question', 'needs', 'why'],
+        },
+      },
     },
     required: [
       'headline', 'percent_funded', 'percent_funded_basis', 'band',
       'reserve_balance', 'fully_funded_balance', 'annual_contribution',
       'recommended_contribution', 'funding_gap', 'units', 'largest_project',
-      'top_concern', 'further_concern_count', 'quote',
+      'top_concern', 'further_concern_count', 'quote', 'open_questions',
     ],
   },
 };
@@ -176,6 +205,8 @@ WHAT TO DO
 Work out the reserve position: percent funded, what the budget actually contributes against what the study recommends, and the largest capital project ahead with its per-unit share. Use the code execution tool for every calculation — do not do arithmetic in your head. If the fully funded balance is not stated, you may derive it, but say that you did.
 
 Then name the single most important concern these two documents show, and count honestly how many further concerns you can see. That count is shown to the customer as a number only.
+
+Then fill open_questions. Two documents cannot settle everything, and saying so precisely is more useful to a buyer inside a three-day contingency than a clean-looking answer that quietly leaves the rest unasked. Ground each question in something you actually saw — a component listed with no funding plan, a contribution that changed between years, a reference to a vote or a study you cannot see. A question that would apply to any association at all is not worth their attention; leave the array empty rather than writing one.
 
 BEFORE calling the tool, write two or three sentences quoting the exact lines you used for the reserve figures. Citations are enabled on the documents, so quoting attaches a verifiable source to this check — without it the customer has no way to confirm the numbers are real. Then call ${SCORECARD_TOOL_NAME}.`;
 
