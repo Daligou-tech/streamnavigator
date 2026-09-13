@@ -101,17 +101,28 @@ function confirm(question) {
   });
 }
 
-/** Rewrite the placeholder in the repo, preserving each file's line endings. */
+// Only ever rewrite the placeholder where it is an actual link target. The
+// setup comment above the pricing section names the placeholder in prose
+// ("paste that URL over REPLACE_WITH_..."), and substituting there turns the
+// instructions into nonsense that reads as if the job were still to do.
+const HREF_RE = new RegExp('href="' + PLACEHOLDER + '"', 'g');
+
+/** Rewrite the placeholder hrefs, preserving each file's line endings. */
 function writeUrlIntoRepo(url) {
   const touched = [];
   for (const file of ['streaming.html', 'dashboard.html']) {
     const p = path.join(ROOT, file);
     const raw = fs.readFileSync(p, 'utf8');
-    if (!raw.includes(PLACEHOLDER)) continue;
-    fs.writeFileSync(p, raw.split(PLACEHOLDER).join(url));
+    if (!HREF_RE.test(raw)) { HREF_RE.lastIndex = 0; continue; }
+    HREF_RE.lastIndex = 0;
+    fs.writeFileSync(p, raw.replace(HREF_RE, `href="${url}"`));
     touched.push(file);
   }
   return touched;
+}
+function countHrefs(body) {
+  const m = body.match(HREF_RE);
+  return m ? m.length : 0;
 }
 
 function updateConfig(newLinkId, oldIds) {
@@ -132,6 +143,71 @@ function updateConfig(newLinkId, oldIds) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + '\n');
 }
 
+/**
+ * The half of the plan that can be worked out from the repo alone. Prints
+ * the local file changes exactly, and states plainly which Stripe-side facts
+ * it could not check — rather than implying it verified something it didn't.
+ */
+async function localPlanOnly(oldIds) {
+  console.log(yellow('No Stripe key available, so this is the local half of the plan only.'));
+  console.log(dim('Everything below is read from the repo. Nothing in Stripe has been contacted,\n'
+    + 'so the current state of those links is unknown here — the figures are what this\n'
+    + 'script would create, not what exists today.\n'));
+
+  console.log(bold('Would create in Stripe'));
+  console.log(`  product  "${PRODUCT_NAME}"  ${dim('(reused if one with this name already exists)')}`);
+  console.log(`  price    ${money(TARGET_CENTS)} / ${TARGET_INTERVAL}, USD, recurring  ${dim('(reused if an identical active price exists)')}`);
+  console.log(`  link     one Payment Link for that price, promo codes allowed  ${dim('(reused if one already sells it)')}`);
+
+  console.log(bold('\nWould deactivate in Stripe'));
+  if (!oldIds.length) console.log(dim('  nothing listed'));
+  for (const id of oldIds) {
+    const note = String(cfgNote(id) || '');
+    const label = /4\.99/.test(note) ? '$4.99/mo Pro' : (/8\.99/.test(note) ? '$8.99/mo Family' : 'retired tier');
+    console.log(`  ${id}  ${dim(label)}`);
+  }
+  console.log(dim('  Existing subscribers are unaffected — this only stops new sign-ups.'));
+
+  console.log(bold('\nWould change in this repo'));
+  let any = false;
+  for (const f of ['streaming.html', 'dashboard.html']) {
+    const body = fs.readFileSync(path.join(ROOT, f), 'utf8');
+    const n = countHrefs(body);
+    const prose = (body.split(PLACEHOLDER).length - 1) - n;
+    if (!n) { console.log(`  ${f}  ${green('already wired')} ${dim('(no placeholder link left)')}`); continue; }
+    any = true;
+    console.log(`  ${f}  ${yellow(`${n} link${n === 1 ? '' : 's'}`)} -> the new URL`);
+    body.split('\n').forEach((line, i) => {
+      HREF_RE.lastIndex = 0;
+      if (HREF_RE.test(line)) {
+        const t = line.trim();
+        console.log(dim(`      line ${i + 1}: ${t.length > 104 ? t.slice(0, 104) + '…' : t}`));
+      }
+      HREF_RE.lastIndex = 0;
+    });
+    if (prose > 0) {
+      console.log(dim(`      ${prose} further mention${prose === 1 ? '' : 's'} in comments left alone — replacing those would garble the setup notes`));
+    }
+  }
+  console.log(`  prices.config.json  ${yellow('rewrite')} _skipped["streaming.html"] and mark ${oldIds.length} link(s) DEACTIVATED`);
+  if (!any) console.log(green('\n  The pages are already wired — only Stripe would change.'));
+
+  console.log(bold('\nWhat this run could NOT check'));
+  console.log('  · whether those two links are still active in Stripe right now');
+  console.log('  · whether a $19.99/year price or link already exists (it would be reused)');
+  console.log('  · whether the account is in live or test mode');
+  console.log(dim('\nRun with a key to see the real Stripe state:'));
+  console.log(dim('    npm run stripe-pricing            # same dry run, but reads Stripe'));
+  console.log(dim('    npm run stripe-pricing -- --apply # then does it\n'));
+}
+
+function cfgNote(id) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    return cfg.unreferencedActiveLinks[id];
+  } catch (e) { return null; }
+}
+
 async function main() {
   console.log(bold('\nStripe pricing migration') + dim('  ·  two monthly tiers out, one annual tier in\n'));
 
@@ -141,7 +217,12 @@ async function main() {
     console.log(yellow('No retired links listed in prices.config.json — nothing to deactivate.'));
   }
 
-  const key = process.env.STRIPE_SECRET_KEY || (await readKeyHidden());
+  // A dry run without a key is still worth something: it cannot see Stripe,
+  // but it can show exactly which files it would touch and what it would
+  // create. Only --apply genuinely requires credentials.
+  let key = process.env.STRIPE_SECRET_KEY || null;
+  if (!key && (APPLY || process.stdin.isTTY)) key = await readKeyHidden();
+  if (!key && !APPLY) { await localPlanOnly(oldIds); return; }
   if (!key) { console.error(red('No key given. Nothing done.')); process.exit(1); }
   if (!/^(sk|rk)_(live|test)_/.test(key)) {
     console.error(red('That does not look like a Stripe secret or restricted key (expected sk_live_/sk_test_/rk_...). Nothing done.'));
@@ -243,7 +324,7 @@ async function main() {
   console.log(bold('\nWiring the URL into the site'));
   if (!APPLY || !annualLink) {
     const files = ['streaming.html', 'dashboard.html'].filter((f) =>
-      fs.readFileSync(path.join(ROOT, f), 'utf8').includes(PLACEHOLDER));
+      countHrefs(fs.readFileSync(path.join(ROOT, f), 'utf8')) > 0);
     console.log(files.length
       ? `  ${yellow('would replace')} ${PLACEHOLDER} in ${files.join(', ')}`
       : green('  Already wired.'));
@@ -284,7 +365,7 @@ async function main() {
 // Exported for tests/stripe-migration.test.js. This script rewrites live
 // customer-facing HTML, so the rewriting is worth asserting on rather than
 // finding out about in production.
-module.exports = { writeUrlIntoRepo, updateConfig, PLACEHOLDER, TARGET_CENTS, TARGET_INTERVAL, money };
+module.exports = { writeUrlIntoRepo, updateConfig, countHrefs, PLACEHOLDER, TARGET_CENTS, TARGET_INTERVAL, money };
 
 if (require.main !== module) return;
 

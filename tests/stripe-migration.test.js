@@ -43,10 +43,13 @@ test('the price is read from the engine, not typed in twice', () => {
 // ------------------------------------------------------------- key handling
 
 test('the key is never written to disk or printed', () => {
-  // No writing the key anywhere, and no logging it.
-  assert.ok(!/writeFileSync\([^)]*key/i.test(src), 'the script writes the key to a file');
-  assert.ok(!/console\.log\([^)]*\bkey\b/.test(src), 'the script logs the key');
-  assert.ok(!/\.env/.test(src.replace(/process\.env/g, '')), 'the script touches a .env file');
+  // What matters is whether the key VARIABLE is ever interpolated into
+  // output or a file — not whether the word "key" appears in a message
+  // about it, which it should.
+  const interpolated = /\$\{\s*key\s*\}|['"`]\s*\+\s*key\b|\bkey\s*\+\s*['"`]|console\.\w+\(\s*key\s*[,)]/;
+  assert.ok(!interpolated.test(src), 'the script interpolates the key into output');
+  assert.ok(!/writeFileSync\([^)]*\bkey\b/.test(src), 'the script writes the key to a file');
+  assert.ok(!/\.env\b/.test(src.replace(/process\.env/g, '')), 'the script touches a .env file');
 });
 
 test('the key is not accepted as a command-line argument', () => {
@@ -88,7 +91,19 @@ test('deactivating a LIVE link asks first', () => {
 
 // --------------------------------------------------- the file rewriting
 
-test('the placeholder is replaced everywhere it appears, and nowhere else', () => {
+test('only link targets are rewritten, never the placeholder named in prose', () => {
+  // The setup comment above the pricing section says "paste that URL over
+  // REPLACE_WITH_ANNUAL_PAYMENT_LINK". Substituting there turns the
+  // instructions into nonsense that reads as if the job were still to do.
+  const site = fs.readFileSync(path.join(root, 'streaming.html'), 'utf8');
+  const total = site.split(M.PLACEHOLDER).length - 1;
+  const hrefs = M.countHrefs(site);
+  assert.ok(total > hrefs,
+    'this test is pointless unless streaming.html mentions the placeholder outside an href');
+  assert.strictEqual(hrefs, 1, `expected exactly one placeholder link, found ${hrefs}`);
+});
+
+test('the placeholder is replaced in every link, and nowhere else', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sn-mig-'));
   const before = {};
   const files = ['streaming.html', 'dashboard.html'];
@@ -101,12 +116,17 @@ test('the placeholder is replaced everywhere it appears, and nowhere else', () =
     const touched = M.writeUrlIntoRepo(url);
     for (const f of files) {
       const after = fs.readFileSync(path.join(root, f), 'utf8');
-      if (before[f].includes(M.PLACEHOLDER)) {
-        assert.ok(touched.includes(f), `${f} contained the placeholder but was not reported as touched`);
-        assert.ok(!after.includes(M.PLACEHOLDER), `${f} still contains the placeholder`);
-        assert.ok(after.includes(url), `${f} does not contain the new URL`);
+      const n = M.countHrefs(before[f]);
+      if (n > 0) {
+        assert.ok(touched.includes(f), `${f} contained a placeholder link but was not reported as touched`);
+        assert.strictEqual(M.countHrefs(after), 0, `${f} still has a placeholder link`);
+        assert.ok(after.includes(`href="${url}"`), `${f} does not contain the new URL as a link target`);
+        // Prose mentions in comments must survive untouched.
+        const proseBefore = (before[f].split(M.PLACEHOLDER).length - 1) - n;
+        const proseAfter = after.split(M.PLACEHOLDER).length - 1;
+        assert.strictEqual(proseAfter, proseBefore,
+          `${f}: ${proseBefore - proseAfter} comment mention(s) of the placeholder were rewritten`);
         // Nothing else may change: same length delta as the substitution alone.
-        const n = before[f].split(M.PLACEHOLDER).length - 1;
         assert.strictEqual(after.length, before[f].length + n * (url.length - M.PLACEHOLDER.length),
           `${f} changed by more than the URL substitution`);
         // Line endings must survive.
