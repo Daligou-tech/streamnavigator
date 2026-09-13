@@ -1929,12 +1929,12 @@
         <span class="sub-actions">
           ${pro
             ? `<a class="btn btn-ghost btn-sm" href="${manageUrlFor(r.service_name)}" target="_blank" rel="noopener">Manage on site ↗</a>`
-            : `<span class="locked-chip" title="Direct cancel/downgrade links are a Pro feature">🔒 Direct link — Pro</span>`}
+            : `<span class="locked-chip" title="Direct cancel and downgrade links come with the $19.99/year plan">🔒 Direct link</span>`}
           <button class="btn btn-ghost btn-sm" data-action="see-shows" data-id="${r.id}">${untaggedSuggestion ? 'Tag now' : ('See shows' + (showCount ? ' (' + showCount + ')' : ''))}</button>
           <button class="btn btn-ghost btn-sm" data-action="edit-price" data-id="${r.id}">Edit price</button>
           ${pro
             ? `<button class="btn btn-sm btn-toggle${flagged ? ' needs-attention' : ''}${flagged && toggleIsActivate ? ' toggle-activate' : ''}" data-action="toggle" data-id="${r.id}" data-status="${r.status}">${r.status === 'active' ? 'Pause now' : 'Activate now'}</button>`
-            : `<span class="locked-chip" title="Pro tells you exactly when to pause or activate">🔔 We'll prompt you — Pro</span>`}
+            : `<span class="locked-chip" title="Subscribe and we check the schedule daily and email you when it's time">🔔 Email me when it's time</span>`}
           <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${r.id}">Remove</button>
         </span>
       `;
