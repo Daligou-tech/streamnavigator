@@ -173,6 +173,12 @@ $200–$500. It stays at $49 because the customer's position — mid-decision, o
 under sales pressure, with no free preview — is the wrong place to add friction,
 not because $49 is all it is worth.
 
+The page also now tells people **not** to buy it when the job is under about
+$2,000. The findings scale with the job — a deposit cap on a $900 water heater
+is worth a few hundred dollars at most — and telling someone to go and get a
+second quote instead is worth more to them than the report would be. That
+sentence costs sales and it is the correct sentence.
+
 ## 5. Still open
 
 - **No free scorecard.** `/closing` shows findings before payment. That is the
