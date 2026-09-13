@@ -1,0 +1,109 @@
+{
+  "name": "maple-court-hoa",
+  "note": "The synthesis a correct model would return from the four HOA PDFs in tmp-test-docs (see scripts/make-test-documents.js). This is what the report tool's input looks like BEFORE any of the post-processing runs — the model's own risk_score, its typed percent_funded, one finding whose citations will not resolve, and an empty missing_or_uncertain. Every figure traces to a document, and the right answers are recorded in scripts/hoa-pipeline-harness.js.",
+
+  "evidence": {
+    "1": { "document_title": "hoa-reserve-study.pdf", "start_page": 1, "end_page": 1, "cited_text": "Current reserve balance (as of 09/30/2021) $486,000. Fully funded balance $1,620,000. Percent funded 30.0%. Recommended annual reserve contribution $210,000." },
+    "2": { "document_title": "hoa-reserve-study.pdf", "start_page": 1, "end_page": 1, "cited_text": "Roof membrane replacement (remaining life 8 years, due 2029) $840,000" },
+    "3": { "document_title": "hoa-budget.pdf", "start_page": 1, "end_page": 1, "cited_text": "Transfer to reserves $60,000" },
+    "4": { "document_title": "hoa-budget.pdf", "start_page": 1, "end_page": 1, "cited_text": "Owner delinquency over 90 days stood at 12.4% of units as of the November 2025 financial statement." },
+    "5": { "document_title": "hoa-minutes.pdf", "start_page": 1, "end_page": 1, "cited_text": "MOTION carried 4-1 to establish a $250,000 line of credit with Commonwealth Community Bank, secured against future assessments, to provide interim funding for roof work." },
+    "6": { "document_title": "hoa-minutes.pdf", "start_page": 1, "end_page": 1, "cited_text": "The agent reported that the master policy renewal carries a 5% named-storm deductible, increased from a flat $25,000 at the prior renewal." },
+    "7": { "document_title": "hoa-bylaws.pdf", "start_page": 1, "end_page": 1, "cited_text": "11.1 No more than twenty percent (20%) of the units in the Association may be leased at any one time." },
+    "8": { "document_title": "hoa-bylaws.pdf", "start_page": 1, "end_page": 1, "cited_text": "As of the date of this certificate, seventeen (17) of the eighty-four (84) units are leased, which is the maximum permitted under Article XI. Nine (9) owners are presently on the leasing waiting list." },
+    "9": { "document_title": "hoa-bylaws.pdf", "start_page": 1, "end_page": 1, "cited_text": "12.1 Upon each conveyance of a unit, the purchaser shall pay to the Association a working capital contribution equal to two (2) months of the then-current regular assessment." }
+  },
+
+  "report": {
+    "risk_score": "Moderate",
+    "risk_rationale": "Reserves are thin and the budget funds well below the study's recommendation, but nothing has been formally assessed yet.",
+    "risk_signals": {
+      "unit_count": 84,
+      "delinquency_rate_pct": 12.4,
+      "annual_dues_per_unit": 4980,
+      "special_assessment_announced": false,
+      "association_borrowing": true,
+      "material_litigation": false,
+      "insurance_red_flag": true,
+      "largest_component_due_months": 36,
+      "largest_component_cost": 840000,
+      "reserve_study_year": 2021,
+      "evidence_ids": [1, 3, 4, 5, 6]
+    },
+    "headline": "Reserves are thin against a roof due in 2029, and the board has opened a line of credit",
+    "headline_tag": "Moderate risk",
+    "summary": "Maple Court holds $486,000 against a fully funded balance of $1,620,000 and contributes $60,000 a year where its own study recommends $210,000. The roof is due in 2029 at $840,000.",
+    "short_term_risk": {
+      "likelihood": "Possible",
+      "rationale": "Nothing has been levied, but the board has already sought interim funding.",
+      "estimated_per_unit_low": "",
+      "estimated_per_unit_high": "",
+      "basis": "No assessment has been announced in the minutes provided.",
+      "evidence_ids": [5]
+    },
+    "mid_term_risk": {
+      "likelihood": "Likely",
+      "rationale": "At the current contribution the fund reaches $666,000 by 2029 against an $840,000 roof, a gap of $174,000.",
+      "estimated_per_unit_low": "$2,071",
+      "estimated_per_unit_high": "$2,071",
+      "basis": "Gap of $174,000 over 84 units (our calculation).",
+      "evidence_ids": [1, 2, 3]
+    },
+    "reserve_health": {
+      "percent_funded": "45%",
+      "reserve_balance": "$486,000",
+      "fully_funded_balance": "$1,620,000",
+      "annual_contribution": "$60,000",
+      "recommended_contribution": "$210,000",
+      "assessment": "The association is funding reserves at under a third of what its own study recommends.",
+      "evidence_ids": [1, 3]
+    },
+    "restrictions": {
+      "leasing": {
+        "restricted": "Restricted",
+        "cap": "20% of units",
+        "current_status": "17 of 17 permitted leases in use; 9 owners on the waiting list",
+        "minimum_lease_term": "12 months",
+        "owner_occupancy_requirement": "One year of owner occupancy before leasing",
+        "short_term_rentals": "Prohibited",
+        "detail": "You could not rent this unit out on purchase. The cap is full and leasing rights do not transfer with the unit.",
+        "evidence_ids": [7, 8]
+      },
+      "fees_at_closing": [
+        { "label": "Working capital contribution", "amount": "$830", "payer": "Buyer", "evidence_ids": [9] },
+        { "label": "Transfer fee", "amount": "$350", "payer": "Buyer", "evidence_ids": [9] }
+      ],
+      "use_restrictions": [
+        { "topic": "Pets", "rule": "Two pets maximum, none over 40lb at maturity", "evidence_ids": [7] },
+        { "topic": "Parking", "rule": "One assigned space; no commercial vehicles, boats or RVs", "evidence_ids": [7] }
+      ],
+      "financeability": {
+        "concerns": ["Investor concentration at the 20% cap may limit some conventional lending"],
+        "fha_va_status": "",
+        "detail": "The documents provided do not state FHA or VA approval status.",
+        "evidence_ids": [8]
+      }
+    },
+    "findings": [
+      { "concern": "Reserves are funded at 30% against the association's own study", "severity": "High", "detail": "The 2021 study puts the fully funded balance at $1,620,000 against a balance of $486,000.", "pinpoint": "Percent funded 30.0%", "evidence_ids": [1] },
+      { "concern": "The budget funds less than a third of the recommended contribution", "severity": "High", "detail": "$60,000 contributed against $210,000 recommended, a shortfall of $150,000 a year.", "pinpoint": "Transfer to reserves $60,000", "evidence_ids": [3] },
+      { "concern": "The board has opened a $250,000 line of credit", "severity": "High", "detail": "Associations frequently borrow immediately before, or instead of, assessing.", "pinpoint": "", "evidence_ids": [5] },
+      { "concern": "Leasing is capped at 20% and the cap is full", "severity": "Moderate", "detail": "Seventeen of eighty-four units are leased, with nine owners waiting.", "pinpoint": "", "evidence_ids": [8] },
+      { "concern": "Dues have not risen in three years despite cost inflation", "severity": "Moderate", "detail": "Inferred from the flat assessment noted in the budget.", "pinpoint": "", "evidence_ids": [404] }
+    ],
+    "key_numbers": [
+      { "label": "Reserves funded", "value": "45%" },
+      { "label": "Annual shortfall", "value": "$150,000" },
+      { "label": "Roof due", "value": "2029" }
+    ],
+    "sections": [
+      { "icon": "", "title": "What this means for you", "items": ["The association is underfunding reserves against a large capital item due in 2029."] }
+    ],
+    "documents_reviewed": ["Reserve study (2021)", "Operating budget (FY2026)", "Board minutes (March 2026)", "Bylaws"],
+    "documents_missing": ["Recent financial statements", "Insurance certificate"],
+    "questions_for_hoa": ["Has a more recent reserve study been commissioned?"],
+    "missing_or_uncertain": [],
+    "closing_title": "Before your contingency expires",
+    "closing_body": "Request the current reserve study and ask the board about the roof timeline."
+  }
+}

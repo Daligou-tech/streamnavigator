@@ -293,14 +293,27 @@ function checkHoaConsistency({ report }) {
   // hoa.html promises that every finding cites the page it came from. A finding
   // that arrives with no valid citation has not met that promise, and shipping
   // it beside four that did is the honesty defect the audit calls class 6.
+  //
+  // An uncited finding that demoteUncitedFindings() has already moved below the
+  // cited ones and marked is NOT that. It has been handled: it sits at the end
+  // of the list, it is labelled on the page as drawn from the analysis rather
+  // than quoted, and the reader is told to check it. Reporting it here anyway
+  // put a permanent warning in the logs of every report that has one — and a
+  // warning that always fires is one nobody reads, which is the failure the
+  // offline harness had for months with its rental fixture.
+  //
+  // What this must still catch is a finding with no citation that nothing
+  // marked: either the demotion did not run, or it ran before something else
+  // added a finding.
   (report.findings || []).forEach((f, i) => {
-    if (!f) return;
+    if (!f || f.uncited === true) return;
     const cites = Array.isArray(f.citations) ? f.citations.filter(Boolean) : [];
     if (!cites.length) {
       problems.push({
         class: 'uncited_finding',
         where: `finding ${i + 1}`,
-        message: `"${f.concern || 'untitled'}" carries no citation, and the page promises one for every finding.`,
+        message: `"${f.concern || 'untitled'}" carries no citation and was not marked as uncited, `
+          + 'so it reads on the page exactly like the findings that are sourced.',
       });
     }
   });

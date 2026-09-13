@@ -81,6 +81,35 @@ test('a report with no findings is left alone', () => {
   assert.deepEqual(demoteUncitedFindings({}), { cited: 0, uncited: 0 });
 });
 
+// --- what the grader should and should not still complain about -------------
+
+const { checkHoaConsistency } = require('../api/_lib/hoa-engine');
+
+test('a finding already demoted and marked is not reported again', () => {
+  // checkHoaConsistency runs last, to catch what survived the repairs. An
+  // uncited finding that demoteUncitedFindings moved to the end and marked has
+  // been handled — it is labelled on the page as drawn from the analysis
+  // rather than quoted. Flagging it anyway put a warning in the logs of every
+  // report that has one, and a warning that always fires is one nobody reads.
+  const report = { findings: [finding('cited', [cite(4)]), finding('uncited', [])] };
+  demoteUncitedFindings(report);
+
+  const { problems } = checkHoaConsistency({ report });
+  assert.deepEqual(problems.filter((p) => p.class === 'uncited_finding'), []);
+});
+
+test('a finding with no citation that nothing marked is still reported', () => {
+  // The case that matters: the demotion did not run, or something added a
+  // finding after it did. On the page that finding reads exactly like the ones
+  // that are sourced.
+  const report = { findings: [finding('cited', [cite(4)]), finding('slipped through', [])] };
+
+  const { problems } = checkHoaConsistency({ report });
+  const hit = problems.find((p) => p.class === 'uncited_finding');
+  assert.ok(hit, 'an unmarked uncited finding must still be caught');
+  assert.match(hit.message, /was not marked as uncited/);
+});
+
 // --- percent funded, recomputed from its own two inputs ---------------------
 
 test('a mistyped percent funded is corrected from the balances it is made of', () => {
