@@ -1,307 +1,477 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Contractor Navigator — StreamNavigator AI</title>
-<meta name="description" content="Upload a contractor's estimate before you sign. Contractor Navigator checks the price, flags what's missing, and hands you a ready-to-send negotiation email — for $49." />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contractor Estimate Audit — StreamNavigator</title>
+<meta name="description" content="An independent check of a contractor's estimate before you sign: its own arithmetic, your state's deposit limit, the federal standards that apply to the equipment, and published national price ranges — for $49.">
 <link rel="canonical" href="https://streamnavigator.ai/contractor" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* /contractor only. The shared system is in navigator-editorial.css. */
+.trade-seg{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+.trade-seg button{flex:1 1 33%;background:var(--panel);border:none;border-right:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);padding:12px 8px;font:inherit;font-size:.96rem;cursor:pointer;color:var(--ink-soft)}
+.trade-seg button:last-child{border-right:none}
+.trade-seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.guarantee{border:1px solid var(--ink);background:var(--panel);padding:22px 24px;max-width:780px;margin:0 0 26px}
+.guarantee h3{margin:0 0 8px}
+.guarantee p{font-size:.95rem;color:var(--ink-soft);margin:0 0 10px}
+.guarantee p:last-child{margin:0;color:var(--ink)}
+.trade-note{font-size:.85rem;color:var(--ink-soft);margin:6px 0 0}
+.chk .n{white-space:nowrap}
+.src-note{font-size:.82rem;color:var(--ink-soft);border-left:2px solid var(--rule);padding-left:12px;margin:18px 0 0;max-width:70ch}
+</style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/contractor#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Contractor Navigator</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Contractor Estimate Audit</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#checks">The checks</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> Before you spend $5,000+ on a home repair</div>
-      <h1>Get a second opinion <span class="grad">before you sign that estimate.</span></h1>
-      <p class="sub">Upload one or more contractor estimates. StreamNavigator's AI checks the scope, equipment, and pricing, tells you what's missing, and writes the email that gets you a better deal.</p>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Before you sign, know what the estimate actually says.</h1>
+      <p class="lede">Up to thirty-two checks against the estimate&rsquo;s own arithmetic, the deposit limit your state sets by statute, the federal standards that apply to the equipment, and published national price ranges. Every one named below. HVAC, roofing, windows, plumbing, electrical.</p>
     </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head">
-      <div class="eyebrow">How it works</div>
-      <h2>From upload to action plan in minutes.</h2>
-      <p>No account, no phone call, no waiting on hold with a contractor's office.</p>
+
+    <div class="ledger" aria-label="Example finding">
+      <div class="ledger-head"><b>Quote 1 &mdash; HVAC changeout</b><span>California</span></div>
+      <div class="row"><span class="lbl">Contract price</span><span class="amt">$14,850</span></div>
+      <div class="row hit"><span class="lbl">Deposit at signing</span><span class="amt">$4,000</span></div>
+      <div class="row"><span class="lbl">Statutory cap</span><span class="amt">$1,000</span></div>
+      <div class="note"><b>Finding.</b> California caps a home improvement down payment at the lesser of $1,000 or 10% of the contract price. This estimate asks for $4,000. The cap is set by the contractor&rsquo;s own licensing statute, and citing it is a one-line email.</div>
+      <div class="ledger-foot">$3,000.00 &mdash; not payable at signing</div>
     </div>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">1</div>
-        <h4>Land on this page</h4>
-        <p>Read what Contractor Navigator checks for, then upload your estimate(s) below.</p>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">Upload what you have, answer three questions, and get the report and a drafted email back in a few minutes.</p>
+    <ol class="steps">
+      <li><h3>Upload every estimate you have</h3><p>One quote works. Two or three unlock the comparison checks, which are the strongest price evidence in the report because they are your own market rather than a national average.</p></li>
+      <li><h3>Tell us the trade, your state, and where you were quoted</h3><p>Three taps. The state decides which deposit statute and which federal efficiency minimum apply; where you were quoted decides whether the federal three-day cancellation right attaches at all.</p></li>
+      <li><h3>Pay $49</h3><p>One payment, no account, no subscription.</p></li>
+      <li><h3>We read the estimates into figures, then check the figures</h3><p>Two separate passes. Reading and judging are kept apart on purpose &mdash; every conclusion is arithmetic or a written rule, run the same way on every report.</p></li>
+      <li><h3>Report and drafted email, in your inbox</h3><p>Findings ordered by how firmly they are proved: arithmetic on the estimate first, then statutes and federal standards, then the contract gaps, then the price comparison. Plus an email to each contractor, in your voice, asking rather than accusing.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="checks">
+  <div class="wrap">
+    <h2>Every check, named</h2>
+    <p class="sec-intro">Twenty-six run on any estimate. The rest depend on the trade. Your report says exactly which ran, which could not, and why &mdash; a check you never hear about reads as a check that passed, and it is not.</p>
+
+    <h3 class="group-h">The estimate&rsquo;s own arithmetic</h3>
+    <p class="group-sub">Six checks. Nothing here is a matter of opinion &mdash; it is the contractor&rsquo;s own paper disagreeing with itself.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">01</span><span>The priced line items add up to the contract price</span></div>
+      <div class="chk"><span class="n">02</span><span>Quantity times unit price equals the amount on each line</span></div>
+      <div class="chk"><span class="n">03</span><span>Subtotal plus tax, less any discount, equals the contract price</span></div>
+      <div class="chk"><span class="n">04</span><span>The tax charged matches the tax rate the estimate prints</span></div>
+      <div class="chk"><span class="n">05</span><span>The deposit matches the percentage the estimate claims it is</span></div>
+      <div class="chk"><span class="n">06</span><span>The payment schedule adds up to the contract price</span></div>
+    </div>
+
+    <h3 class="group-h">Deposits and payment structure</h3>
+    <p class="group-sub">Two checks. In California, Nevada, Maryland, Massachusetts and Pennsylvania the deposit limit is a number in a statute and we test against it with the citation. Everywhere else there is no statutory cap, we say so, and the comparison is customary practice.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">07</span><span>The deposit is within your state&rsquo;s statutory limit, or within customary practice where no statute sets one</span></div>
+      <div class="chk"><span class="n">08</span><span>More than half the price is held until work is done</span></div>
+    </div>
+
+    <h3 class="group-h">What the contract does and does not protect</h3>
+    <p class="group-sub">Eleven checks on terms that cost nothing to add before you sign and cannot be added after.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">09</span><span>The estimate carries a contractor licence number you can look up</span></div>
+      <div class="chk"><span class="n">10</span><span>The estimate says when the work will be finished</span></div>
+      <div class="chk"><span class="n">11</span><span>The estimate says who pulls the permit</span></div>
+      <div class="chk"><span class="n">12</span><span>Extra work needs your written approval before it is charged</span></div>
+      <div class="chk"><span class="n">13</span><span>Labour and materials warranties are stated separately</span></div>
+      <div class="chk"><span class="n">14</span><span>The contract addresses mechanics liens</span></div>
+      <div class="chk"><span class="n">15</span><span>The contractor states liability and workers compensation cover</span></div>
+      <div class="chk"><span class="n">16</span><span>The estimate itemises what you are paying for</span></div>
+      <div class="chk"><span class="n">17</span><span>Allowance lines are flagged as the change orders they usually become</span></div>
+      <div class="chk"><span class="n">18</span><span>The estimate says what it does not cover</span></div>
+      <div class="chk"><span class="n">19</span><span>Removing and disposing of the old equipment is in the price</span></div>
+    </div>
+
+    <h3 class="group-h">Federal rules and sales practice</h3>
+    <p class="group-sub">Four checks against things that are not printed on your estimate and cannot be found by reading it.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">20</span><span>A contract signed at your home carries the three-day cancellation notice</span></div>
+      <div class="chk"><span class="n">21</span><span>Any tax credit the estimate promises still exists</span></div>
+      <div class="chk"><span class="n">22</span><span>The price is not conditioned on signing immediately</span></div>
+      <div class="chk"><span class="n">23</span><span>Any financing offered states its rate</span></div>
+    </div>
+
+    <h3 class="group-h">Price</h3>
+    <p class="group-sub">Three checks. Read the section below on what a published range can and cannot tell you before you weigh these.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">24</span><span>The unit price sits inside published national cost ranges</span></div>
+      <div class="chk"><span class="n">25</span><span>Your competing quotes are compared against each other</span></div>
+      <div class="chk"><span class="n">26</span><span>Your quotes are compared on scope, equipment and warranty, not just price</span></div>
+    </div>
+
+    <h3 class="group-h">HVAC only</h3>
+    <p class="group-sub">Six more checks, for thirty-two in total on an HVAC estimate.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">27</span><span>Both halves of the system are being replaced together</span></div>
+      <div class="chk"><span class="n">28</span><span>The equipment meets the federal minimum efficiency for your region</span></div>
+      <div class="chk"><span class="n">29</span><span>You know which refrigerant generation you are buying</span></div>
+      <div class="chk"><span class="n">30</span><span>The system size is plausible for the house</span></div>
+      <div class="chk"><span class="n">31</span><span>A load calculation is behind the equipment size</span></div>
+      <div class="chk"><span class="n">32</span><span>The estimate says what happens to the refrigerant line set</span></div>
+    </div>
+
+    <h3 class="group-h">Roofing only</h3>
+    <p class="group-sub">Three more checks, for twenty-nine in total on a roofing estimate.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">27</span><span>The estimate says whether the old roof comes off</span></div>
+      <div class="chk"><span class="n">28</span><span>The estimate specifies the parts of a roof that leak</span></div>
+      <div class="chk"><span class="n">29</span><span>The price for replacing rotten decking is agreed in advance</span></div>
+    </div>
+
+    <h3 class="group-h">Windows only</h3>
+    <p class="group-sub">Two more checks, for twenty-eight in total on a window estimate.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">27</span><span>The estimate says which kind of window installation you are buying</span></div>
+      <div class="chk"><span class="n">28</span><span>Trim and exterior capping are in the price</span></div>
+    </div>
+
+    <p class="trade-note">Plumbing and electrical estimates run the twenty-six general checks. There is no trade-specific set for them because the work is too varied for one to be honest &mdash; a repipe and a water heater swap have almost nothing in common. Where the job is a standard tank or tankless water heater, or a 200-amp panel upgrade, the published price range still applies.</p>
+
+    <div class="legend">
+      <span class="pill c">Fix before you sign</span>
+      <span class="pill b">Fix before work starts</span>
+      <span class="pill a">Verify yourself</span>
+    </div>
+    <p class="btn-note" style="margin-top:12px">Every finding carries one of these, and the figure it rests on.</p>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>A sample report</h2>
+    <p class="sec-intro">Figures changed. Each finding names the check it came from and what that check measured.</p>
+    <div class="sample">
+      <div class="finding">
+        <div class="finding-h"><h3>The deposit is within your state&rsquo;s statutory limit &mdash; failed</h3><span class="amt">$3,000.00</span></div>
+        <p>California caps a home improvement down payment at the lesser of $1,000 or 10% of the contract price.</p>
+        <div class="basis">10% of $14,850.00 is $1,485.00, so the cap is $1,000.00. This estimate asks for $4,000.00 at signing.</div>
+        <div class="cite">California Business and Professions Code section 7159.5(a)(3)</div>
+        <p style="margin-top:9px"><span class="pill c">Fix before you sign</span></p>
       </div>
-      <div class="step-card">
-        <div class="step-num">2</div>
-        <h4>Upload your estimate(s)</h4>
-        <p>One quote or several — PDFs or photos both work. The more you upload, the better the comparison.</p>
+      <div class="finding">
+        <div class="finding-h"><h3>Quantity times unit price equals the amount on each line &mdash; failed</h3><span class="amt">$200.00</span></div>
+        <p>One line does not multiply out.</p>
+        <div class="basis">&ldquo;Installation labour&rdquo;: 16 at $145.00 is $2,320.00, but the line reads $2,520.00. Both figures are printed on the estimate.</div>
+        <div class="cite">Ran on the estimate&rsquo;s own figures</div>
+        <p style="margin-top:9px"><span class="pill c">Fix before you sign</span></p>
       </div>
-      <div class="step-card">
-        <div class="step-num">3</div>
-        <h4>Pay $49</h4>
-        <p>A single Stripe-secured payment. No subscription, no account required.</p>
+      <div class="finding">
+        <div class="finding-h"><h3>Any tax credit the estimate promises still exists &mdash; failed</h3><span class="amt"></span></div>
+        <p>The estimate says &ldquo;ask us about your $2,000 federal energy tax credit&rdquo;. That credit ended for property placed in service after 31 December 2025.</p>
+        <div class="basis">26 U.S.C. section 25C was terminated by the reconciliation act enacted 4 July 2025. Work installed in 2026 does not qualify. Ask for the price without it.</div>
+        <div class="cite">Checked against federal law, not against your document</div>
+        <p style="margin-top:9px"><span class="pill c">Fix before you sign</span></p>
       </div>
-      <div class="step-card">
-        <div class="step-num">4</div>
-        <h4>AI extracts the details</h4>
-        <p>Scope, equipment, labor, materials, and pricing are pulled straight from your documents.</p>
+      <div class="finding">
+        <div class="finding-h"><h3>The unit price sits inside published national cost ranges &mdash; outside</h3><span class="amt">$4,650.00</span></div>
+        <p>$14,850.00 across 3 tons is $4,950 per ton installed. Published national guides put a changeout on existing ductwork at $1,400&ndash;$3,400 per ton.</p>
+        <div class="basis">A national range is not a quote for your house. Ductwork, electrical upgrades and difficult access all sit above it legitimately &mdash; so this is a question to ask, not a conclusion, and the report says so.</div>
+        <div class="cite">Consolidated 2026 published national cost guides</div>
+        <p style="margin-top:9px"><span class="pill c">Fix before you sign</span></p>
       </div>
-      <div class="step-card">
-        <div class="step-num">5</div>
-        <h4>AI researches the context</h4>
-        <p>Typical price ranges and what's normal for this category are factored in.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">6</div>
-        <h4>Get your report + email</h4>
-        <p>A structured report and a ready-to-send negotiation email, usually within a couple of minutes.</p>
+      <div class="finding">
+        <div class="finding-h"><h3>Both halves of the system are being replaced together &mdash; failed</h3><span class="amt"></span></div>
+        <p>The quote replaces the outdoor unit and leaves the indoor coil in place.</p>
+        <div class="basis">A SEER2 rating belongs to a matched pair, not to a condenser. Most manufacturers will not honour the compressor warranty on an unmatched installation.</div>
+        <div class="cite">Ran on what the estimate does and does not say</div>
+        <p style="margin-top:9px"><span class="pill c">Fix before you sign</span></p>
       </div>
     </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head">
-      <div class="eyebrow">What you get</div>
-      <h2>A straight answer to the questions that actually matter.</h2>
-      
+    <p class="src-note">The report also names every check that passed, with the figure that satisfied it, and every check that could not run, with the reason. Twenty-nine of thirty-two ran on the estimate above.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>One flat price. Refunded if we cannot do the work.</h2>
+    <p class="sec-intro">$49, whatever you upload and however many quotes you send.</p>
+
+    <div class="guarantee">
+      <h3>If your documents do not let us run 60% of the checks, we refund you automatically.</h3>
+      <p>A photograph of a handwritten quote with no legible total gives us a report made almost entirely of contract-terms findings. That is worth reading, and it is not what you paid for. So the report still comes to you, and the charge goes back without you having to ask for it &mdash; your report says how many checks ran, out of how many apply to your trade, and what would have raised the number.</p>
+      <p><strong>Most estimates are mostly fine. That is worth having in writing too.</strong> Where nothing is flagged, the report names every check that ran and the figure it was measured against &mdash; a document you can put in your own file before you hand over five figures.</p>
     </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card">
-        <ul class="check-list">
-          <li><span class="tick">✓</span> Is the price reasonable for this category and scope?</li>
-          <li><span class="tick">✓</span> Are the quotes actually apples-to-apples?</li>
-          <li><span class="tick">✓</span> What appears to be missing from the estimate?</li>
-          <li><span class="tick">✓</span> What could turn into a costly change order later?</li>
-          <li><span class="tick">✓</span> What should you ask the contractor before signing?</li>
-          <li><span class="tick">✓</span> What's worth negotiating — and how to phrase it?</li>
-          <li><span class="tick">✓</span> Which quote is strongest, and why?</li>
-          <li><span class="tick">✓</span> A ready-to-send email to the contractor(s)</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    To go live for Contractor Navigator:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Contractor Navigator Report" — $49 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/contractor-report
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/cNi14n1RW2E4bkw3JCabK03 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
-    This page already appends ?client_reference_id=<submission id> to the
-    link automatically (see navigator-shared.js) so payment ties back to the
-    right submission — nothing else to configure here.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head">
-      <div class="eyebrow">Get started</div>
-      <h2>One flat price. No subscription.</h2>
-      <p>Upload your estimate, pay once, get your report.</p>
-    </div>
+
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
         <span class="price-badge">One-time</span>
-        <h3>Contractor Navigator Report</h3>
-        <p class="desc">A full second opinion on any HVAC, roofing, window, plumbing, or electrical estimate.</p>
-        <div class="price-amount">$49<span>/report</span></div>
-        <div class="price-period">one-time payment, no account needed</div>
-      <div class="field-block">
-        <label>Category</label>
-        <div class="chip-row">
-          <button type="button" class="chip-toggle category-chip" data-value="HVAC">HVAC</button>
-          <button type="button" class="chip-toggle category-chip" data-value="Roofing">Roofing</button>
-          <button type="button" class="chip-toggle category-chip" data-value="Windows">Windows</button>
-          <button type="button" class="chip-toggle category-chip" data-value="Plumbing">Plumbing</button>
-          <button type="button" class="chip-toggle category-chip" data-value="Electrical">Electrical</button>
-        </div>
-      </div>
+        <h3>Contractor Estimate Audit</h3>
+        <p class="desc">An independent check of your estimate against its own arithmetic, your state&rsquo;s deposit statute, the federal standards that apply to the equipment, and published national price ranges.</p>
+        <div class="price-amount">$49</div>
+        <div class="price-period">One flat price per job audited &middot; no account, no subscription</div>
+
         <div class="field-block">
-          <label>Tell us about the job (optional)</label>
-          <textarea id="intake-description" placeholder="e.g. Replacing a 15-year-old central AC unit, 2,000 sq ft house..."></textarea>
+          <label id="trade-label">1. What trade is this estimate for?</label>
+          <div class="trade-seg" role="group" aria-labelledby="trade-label" id="trade-seg">
+            <button type="button" data-value="HVAC" aria-pressed="false">HVAC</button>
+            <button type="button" data-value="Roofing" aria-pressed="false">Roofing</button>
+            <button type="button" data-value="Windows" aria-pressed="false">Windows</button>
+            <button type="button" data-value="Plumbing" aria-pressed="false">Plumbing</button>
+            <button type="button" data-value="Electrical" aria-pressed="false">Electrical</button>
+            <button type="button" data-value="Other" aria-pressed="false">Something else</button>
+          </div>
+          <p class="field-hint" id="trade-hint">Pick one. It decides which trade-specific checks run &mdash; nothing is selected for you.</p>
         </div>
+
         <div class="field-block">
-          <label>Upload your estimate(s)</label>
+          <label for="q-state">2. Which state is the property in?</label>
+          <select id="q-state" autocomplete="off">
+            <option value="">Choose one&hellip;</option>
+          </select>
+          <p class="field-hint">Decides which deposit statute and which federal efficiency minimum apply, and which licensing board to send you to.</p>
+        </div>
+
+        <div class="field-block">
+          <label for="q-at-home">3. Were you quoted during a visit to your home?</label>
+          <select id="q-at-home" autocomplete="off">
+            <option value="">Choose one&hellip;</option>
+            <option value="yes">Yes &mdash; they came to me</option>
+            <option value="no">No &mdash; I went to them, or it came by email</option>
+          </select>
+          <p class="field-hint">The federal three-day cancellation right only attaches to a sale made at your home. Most people assume it applies to everything.</p>
+        </div>
+
+        <div class="field-block">
+          <label>4. Upload your estimate or estimates</label>
+          <ul class="upload-checklist">
+            <li><strong>Every quote you have</strong> &mdash; a second quote unlocks the two comparison checks, at no extra cost.</li>
+            <li><strong>All pages of each one</strong> &mdash; the terms on page two are where half the findings live.</li>
+            <li><strong>The proposal or contract, if they gave you one</strong> &mdash; that is where the deposit, the schedule and the warranty are written.</li>
+          </ul>
+          <p class="upload-note">Your documents are private and are never shared with anyone, including your contractor. We never contact your contractor on your behalf.</p>
           <div class="upload-zone" id="upload-zone">
-            <div class="upload-ico">📎</div>
+            <div class="upload-ico">&#128206;</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
+            <div class="upload-sub">All your estimates go in this one box &middot; PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Attach every competing quote you have — Contractor Navigator will compare them directly.</p>
+          <p class="field-hint">A clear photograph of a paper estimate works. A photograph of a screen usually does not.</p>
         </div>
+
         <div class="field-block">
-          <label>Email</label>
-          <input type="email" id="intake-email" placeholder="you@example.com">
+          <label for="intake-sqft">5. Roughly how big is the house? (optional)</label>
+          <input type="text" id="intake-sqft" inputmode="numeric" placeholder="e.g. 1850">
+          <p class="field-hint">Square feet. Only used on HVAC estimates, to check whether the equipment size is plausible.</p>
         </div>
+
+        <div class="field-block">
+          <label for="intake-email">6. Email</label>
+          <input type="email" id="intake-email" placeholder="you@example.com">
+          <p class="field-hint">Where the report and the drafted email go. The link works on any device.</p>
+        </div>
+
+        <div class="field-block">
+          <label for="intake-description">Anything we should know? (optional)</label>
+          <textarea id="intake-description" placeholder="e.g. Replacing a 15-year-old AC. The salesman said the price expires Friday."></textarea>
+        </div>
+
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Works with any HVAC, roofing, window, plumbing, or electrical estimate</li>
-          <li><span class="tick">✓</span> Compares multiple quotes side by side</li>
-          <li><span class="tick">✓</span> Delivered in minutes, not days</li>
+          <li><span class="tick">&#10003;</span> Delivered automatically, usually within a few minutes</li>
+          <li><span class="tick">&#10003;</span> A drafted email to each contractor, in your voice</li>
+          <li><span class="tick">&#10003;</span> Refunded automatically if fewer than 60% of the checks can run</li>
         </ul>
-        <a href="https://buy.stripe.com/cNi14n1RW2E4bkw3JCabK03" data-stripe-link="contractor" class="btn btn-primary" id="pay-btn">Get My Report →</a>
-        <!-- The checks that run before the upload starts report themselves
-             here rather than through a toast that clears after 3.6 seconds.
-             Someone who reloads the page (which empties the email box), then
-             attaches files and presses the button, otherwise sees a brief
-             flash and nothing else, and no request is ever sent. -->
-        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
-        <p class="price-secure">🔒 Secured by Stripe</p>
+
+        <div class="inline-error" id="intake-error" style="display:none;" role="alert" aria-live="assertive"></div>
+        <a href="https://buy.stripe.com/cNi14n1RW2E4bkw3JCabK03" data-stripe-link="contractor" class="btn btn-primary" id="pay-btn">Get My Report &rarr;</a>
+        <p class="price-secure">&#128274; Secured by Stripe</p>
       </div>
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
-    </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">Do I need to create an account? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No. Upload your estimate, pay, and your report is generated automatically — no login required.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What file types can I upload? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">PDF estimates and photos of paper estimates (JPG, PNG) both work.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Is my contractor's information kept private? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Your documents are stored securely and used only to generate your report. StreamNavigator never contacts your contractor on your behalf.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if I only have one estimate, not several? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">That's fine — you'll still get a full price-reasonableness check, missing-item flags, negotiation points, and a ready-to-send email.</div></div>
-      </div>
-    </div>
-  </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final">
-      <h2>Don't sign until you know what you're signing.</h2>
-      <p>A $49 report is a lot cheaper than a $2,000 surprise.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Upload My Estimate</a>
-    </div>
-  </section>
-</main>
-<footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
-      <a href="/streaming">Streaming Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/home-savings">💡 Home Savings Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/subscriptions">📺 Subscription Navigator</a>
-      <a href="/government-money">🏛️ Government Money Finder</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
-      <a href="/closing">🔍 Closing Navigator</a>
-    </div>
+    <p class="pricing-footnote">Payments are processed securely by Stripe &mdash; StreamNavigator never sees or stores your card details.</p>
   </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Read this before you upload. It is the part most of this page is for.</p>
+    <div class="limits">
       <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul>
-        <li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li>
+        <li><strong>We do not tell you a contractor is overcharging.</strong> Nobody publishes what your job should cost in your town this month. What we have is a set of published national installed-cost ranges, and the strongest thing they support is &ldquo;this falls outside every one of them&rdquo; &mdash; which is a question worth asking, not a verdict. The only real comparison is a second bid on the same scope, which is why the report pushes you towards one.</li>
+        <li><strong>We do not check your contractor&rsquo;s licence for you.</strong> We read the number off the estimate and send you to your state&rsquo;s board to look it up, because a licence status is only worth anything read today, and looking it up yourself also shows you the bond, the insurance and any complaint history.</li>
+        <li><strong>We do not contact your contractor.</strong> We draft the email. You read it, change it, and send it under your own name.</li>
+        <li><strong>Not every check runs on every estimate.</strong> A lump-sum quote with no line items switches off the arithmetic checks. Your report names each one that could not run and what was missing, and if fewer than 60% ran we refund you.</li>
+        <li><strong>Automated analysis, not legal or construction advice.</strong> Every finding shows its arithmetic or names its rule, so you can check it yourself and take it to your contractor, your building department, or an attorney.</li>
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Contractor Navigator provides an independent, AI-generated second opinion for informational purposes — it is not a licensed contractor, engineer, or legal service, and its assessment is not a guarantee of price, quality, or workmanship. Always verify licensing, insurance, and permits with your contractor and local authority.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col">
+      <details><summary>What if I only have one quote?</summary><div class="body">Twenty-four of the twenty-six general checks still run, plus the trade-specific ones. The two you lose are the comparison checks, and your report says so by name. If you can get a second quote before you sign, it is the single most useful thing you can do &mdash; more useful than this report.</div></details>
+      <details><summary>Why do you need my state?</summary><div class="body">Five states cap a home improvement deposit by statute and New York regulates where the money is held. The federal minimum efficiency for a split-system air conditioner is different in the north than in the south. And the licensing board you would look a contractor up at is different everywhere. None of that is on your estimate.</div></details>
+      <details><summary>Do you tell me whether the price is fair?</summary><div class="body">Not in those words, because we would be guessing. We divide your price by the thing it is priced per &mdash; tons of cooling, roofing squares, a window count &mdash; and say where that falls against published national ranges, with the source named and the caveats stated. Then we compare your quotes against each other, which is the comparison that actually means something.</div></details>
+      <details><summary>What if my estimate is just one number with no breakdown?</summary><div class="body">That is itself a finding, and one worth having: a lump sum cannot be compared, negotiated or disputed line by line. The arithmetic checks will be skipped and named as skipped. If enough of them are skipped that we fall under 60% coverage, you are refunded automatically.</div></details>
+      <details><summary>Will this work for a trade you do not list?</summary><div class="body">Pick &ldquo;something else&rdquo;. The twenty-six general checks run on any home improvement estimate &mdash; arithmetic, deposit, contract terms, sales practice. You will not get a trade-specific set, and the report will not pretend you did.</div></details>
+      <details><summary>I have already signed. Is it too late?</summary><div class="body">Not necessarily, and the report says which findings survive a signature. A deposit over a statutory cap is still over the cap. If the sale was made at your home and you were never given the three-day cancellation notice, the clock generally has not started. Change orders and warranty terms are the ones that get much harder after signing, which is why they are marked that way.</div></details>
+      <details><summary>How do I know you are not just an AI opinion?</summary><div class="body">Because the findings are not written by one. Reading your documents and judging them are two separate passes: the first copies the figures, the second runs a fixed list of checks over them in code. Every finding shows you the arithmetic or names the statute. Where a finding rests on a published range rather than a rule, it says so in those words. The only part written by a model is the opening summary, and it is given the findings, not your documents.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">Then you get that in writing, with every check named and the figure it was measured against. Most estimates are mostly fine, and knowing which twenty-nine things were checked before you hand over five figures is the thing you paid for. If fewer than 60% of the checks could run, that is a different result and you are refunded for it automatically.</div></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">Automated analysis for informational purposes only. Not legal, construction, engineering or financial advice, and not a determination of price, quality or workmanship. Findings are potential issues to raise, not legal conclusions, and nothing in a report asserts that any contractor acted improperly. Statutory and regulatory references are to the law as we understand it at the date of the report and may not reflect local ordinances or later amendments. Always verify licensing, insurance and permits with your contractor and your local building department before work begins.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
 <div class="toast" id="toast">
-  <span class="ico">✓</span> <span id="toast-text"></span>
+  <span class="ico">&#10003;</span> <span id="toast-text"></span>
 </div>
 <script src="/navigator-shared.js"></script>
 <script>
 (function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = "HVAC";
+  var STATES = [
+    ['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],
+    ['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['DC','District of Columbia'],
+    ['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],
+    ['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],
+    ['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],
+    ['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],
+    ['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],
+    ['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],
+    ['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],
+    ['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],
+    ['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming']
+  ];
 
-  document.querySelectorAll('.category-chip').forEach(function(chip){
-    chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
-      chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
+  var stateEl = document.getElementById('q-state');
+  STATES.forEach(function(s){
+    var o = document.createElement('option');
+    o.value = s[0];
+    o.textContent = s[1];
+    stateEl.appendChild(o);
+  });
+
+  // navigator-shared.js supplies wireUploadZone, submitNavigatorIntake,
+  // goToStripe and showToast. If it did not load — the page opened from disk, a
+  // preview window, a bad deploy — every line below throws on an undefined
+  // function and the page merely looks inert. Say what is wrong instead.
+  var errEl = document.getElementById('intake-error');
+  function fail(msg, focusEl) {
+    errEl.innerHTML = '<strong>Not sent</strong>' + msg;
+    errEl.style.display = 'block';
+    if (focusEl && focusEl.focus) focusEl.focus();
+    if (typeof showToast === 'function') showToast(msg);
+  }
+
+  if (typeof wireUploadZone !== 'function') {
+    fail('This page did not finish loading. Refresh, and if it happens again email hello@streamnavigator.ai.');
+    return;
+  }
+
+  var uploader = wireUploadZone(
+    document.getElementById('upload-zone'),
+    document.getElementById('upload-input'),
+    document.getElementById('upload-list')
+  );
+
+  // Nothing is selected by default. The old page pre-set HVAC in JavaScript
+  // while no button looked selected, so a roofer who never touched the row had
+  // their roof quote analysed as an HVAC job — silently, and after paying.
+  var selectedTrade = null;
+  var tradeButtons = document.querySelectorAll('#trade-seg button');
+  Array.prototype.forEach.call(tradeButtons, function(btn){
+    btn.addEventListener('click', function(){
+      Array.prototype.forEach.call(tradeButtons, function(b){ b.setAttribute('aria-pressed', 'false'); });
+      btn.setAttribute('aria-pressed', 'true');
+      selectedTrade = btn.dataset.value;
+      var counts = { HVAC: 32, Roofing: 29, Windows: 28, Plumbing: 26, Electrical: 26, Other: 26 };
+      var noun = {
+        HVAC: 'an HVAC', Roofing: 'a roofing', Windows: 'a window',
+        Plumbing: 'a plumbing', Electrical: 'an electrical', Other: 'a general'
+      };
+      document.getElementById('trade-hint').textContent =
+        'Up to ' + counts[selectedTrade] + ' checks run on ' + noun[selectedTrade] + ' estimate.';
     });
   });
 
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
-    const btn = e.currentTarget;
-    const errEl = document.getElementById('intake-error');
-    function fail(msg, focusEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-      showToast(msg);
-      if (focusEl) focusEl.focus();
-    }
+    var btn = e.currentTarget;
     errEl.style.display = 'none';
-    const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
-    const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-    const files = uploader.getFiles();
-    if (true && files.length === 0) { fail('Please attach at least one file to continue.'); return; }
-    const originalText = btn.textContent;
+
+    var emailEl = document.getElementById('intake-email');
+    var sqftEl = document.getElementById('intake-sqft');
+    var descEl = document.getElementById('intake-description');
+    var atHomeEl = document.getElementById('q-at-home');
+
+    if (!selectedTrade) { fail('Pick the trade this estimate is for. It decides which checks run.', tradeButtons[0]); return; }
+    if (!stateEl.value) { fail('Pick the state the property is in. Your deposit limit and the federal efficiency minimum both depend on it.', stateEl); return; }
+    if (!atHomeEl.value) { fail('Tell us whether you were quoted at home. It decides whether the federal three-day cancellation right applies at all.', atHomeEl); return; }
+
+    var email = emailEl.value.trim();
+    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can send your report.', emailEl); return; }
+
+    var files = uploader.getFiles();
+    if (!files.length) { fail('Attach at least one estimate. There is nothing to check without one.'); return; }
+
+    // Digits only, and only if it looks like a house. A stray "1850 sq ft"
+    // typed into the box would otherwise reach the audit as NaN and switch off
+    // the sizing check without saying so.
+    var sqft = parseInt(String(sqftEl.value).replace(/[^0-9]/g, ''), 10);
+    if (!Number.isFinite(sqft) || sqft < 100 || sqft > 25000) sqft = null;
+
+    var originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
     try {
-      const submission = await submitNavigatorIntake({
+      var submission = await submitNavigatorIntake({
         product: 'contractor',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: {
+          category: selectedTrade,
+          state: stateEl.value,
+          quoted_at_home: atHomeEl.value,
+          home_sqft: sqft,
+          description: descEl.value.trim()
+        },
         files: files,
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'contractor' }, email);

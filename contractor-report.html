@@ -1,222 +1,474 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Your Contractor Navigator report — StreamNavigator AI</title>
-<meta name="description" content="Your AI-generated contractor estimate report from StreamNavigator." />
-<meta name="robots" content="noindex" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your contractor estimate audit — StreamNavigator</title>
+<meta name="description" content="Your Contractor Estimate Audit from StreamNavigator.">
+<meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* /contractor-report only. The shared system is in navigator-editorial.css. */
+.status{padding:70px 0;border-bottom:1px solid var(--rule)}
+.status .col{max-width:66ch}
+.spinner{width:26px;height:26px;border:2px solid var(--rule);border-top-color:var(--ink);
+  border-radius:50%;animation:spin .9s linear infinite;margin-bottom:20px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
+
+.meter{display:flex;gap:0;border:1px solid var(--ink);margin:22px 0 0;max-width:780px}
+.meter div{padding:12px 16px;border-right:1px solid var(--rule);flex:1}
+.meter div:last-child{border-right:none}
+.meter .k{font-size:.76rem;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+.meter .v{font-family:"IBM Plex Mono",monospace;font-size:1.25rem;margin-top:3px}
+
+.refund-note{border:1px solid var(--ok);background:var(--ok-tint);padding:16px 18px;margin:24px 0 0;max-width:780px;font-size:.93rem}
+.refund-note b{color:var(--ok)}
+
+.group{margin-top:40px}
+.group > h3{font-family:"Newsreader",Georgia,serif;font-weight:500;font-size:1.35rem;margin:0 0 4px}
+.group > p.gsub{color:var(--ink-soft);font-size:.9rem;margin:0 0 6px;max-width:66ch}
+.finding .qtag{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--ink-soft);display:block;margin-bottom:3px}
+.finding .act{font-size:.79rem;border:1px solid var(--rule);border-radius:2px;padding:2px 7px;color:var(--ink-soft)}
+.passed{list-style:none;margin:0;padding:0}
+.passed li{border-top:1px solid var(--rule-soft);padding:11px 0;font-size:.92rem}
+.passed li:first-child{border-top:none}
+.passed .b{display:block;color:var(--ink-soft);font-size:.86rem;margin-top:3px}
+.mail{background:var(--panel);border:1px solid var(--ink);margin:0 0 26px}
+.mail-head{padding:12px 16px;border-bottom:1px solid var(--ink);display:flex;justify-content:space-between;
+  gap:14px;align-items:baseline;flex-wrap:wrap;font-size:.86rem}
+.mail-head b{font-weight:600}
+.mail-body{padding:18px 16px;white-space:pre-wrap;font-family:"IBM Plex Mono",monospace;font-size:.83rem;line-height:1.6}
+.mail-foot{padding:12px 16px;border-top:1px solid var(--rule-soft);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.mail-foot .btn-note{margin:0}
+.quotes{border:1px solid var(--rule);background:var(--panel);max-width:780px}
+.quotes .row:last-child{border-bottom:none}
+</style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Contractor Navigator</span>
-    </a>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm">← All Navigators</a>
-    </div>
-  </nav>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Contractor Estimate Audit</span></a>
+    <nav class="nav-links">
+      <a href="/contractor">Audit another estimate</a>
+      <a href="mailto:hello@streamnavigator.ai">Get help</a>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:0;">
+
+<main>
+
+<section class="status" id="waiting-view">
+  <div class="wrap col">
+    <div class="spinner" id="wait-spinner"></div>
+    <h2 id="wait-title">Reading your estimate</h2>
+    <p class="lede" id="wait-body">This usually takes a few minutes. You can close this page &mdash; your report is emailed to you either way, with a link that works on any device.</p>
+  </div>
+</section>
+
+<div id="report-view" hidden>
+  <div class="hero">
     <div class="wrap">
-
-      <div class="status-shell" id="waiting-view">
-        <div class="status-card in">
-          <div class="status-spinner" id="wait-spinner"></div>
-          <h2 id="wait-title">Reading your estimate…</h2>
-          <p id="wait-body">This usually takes under a minute. Feel free to leave this tab open — it'll update automatically.</p>
-        </div>
-      </div>
-
-      <div class="report-shell" id="report-view" hidden>
-        <div class="section-head in" style="text-align:left; margin-bottom:36px;">
-          <div class="eyebrow">Your report</div>
-          <h2 id="report-category-h2">Contractor Navigator Report</h2>
-          <p id="report-summary"></p>
-        </div>
-
-        <div id="quotes-block" class="report-block" hidden>
-          <h3>📄 Quotes analyzed</h3>
-          <div id="quotes-list"></div>
-        </div>
-
-        <div class="report-block">
-          <h3>💰 Is the price reasonable?</h3>
-          <span class="verdict-pill" id="price-verdict-pill"></span>
-          <p id="price-explanation"></p>
-        </div>
-
-        <div id="apples-block" class="report-block" hidden>
-          <h3>⚖️ Apples-to-apples comparison</h3>
-          <p id="apples-explanation"></p>
-        </div>
-
-        <div id="strongest-block" class="report-block" hidden>
-          <h3>🏆 Strongest quote</h3>
-          <p id="strongest-explanation"></p>
-        </div>
-
-        <div class="report-block">
-          <h3>🔍 What's missing or unclear</h3>
-          <ul id="missing-list"></ul>
-        </div>
-
-        <div class="report-block">
-          <h3>⚠️ Potential change orders</h3>
-          <ul id="changeorders-list"></ul>
-        </div>
-
-        <div class="report-block">
-          <h3>❓ Questions to ask</h3>
-          <ul id="questions-list"></ul>
-        </div>
-
-        <div class="report-block">
-          <h3>🤝 What to negotiate</h3>
-          <ul id="negotiate-list"></ul>
-        </div>
-
-        <div class="report-block">
-          <h3>✉️ Ready-to-send email</h3>
-          <div class="email-box" id="email-box"></div>
-          <button class="btn btn-ghost btn-sm copy-btn" id="copy-email-btn">Copy email</button>
-        </div>
-      </div>
-
-      <div class="status-shell" id="failed-view" hidden>
-        <div class="status-card in">
-          <h2>We hit a snag generating your report</h2>
-          <p id="failed-body">Our team has been notified — email hello@streamnavigator.ai and we'll sort it out personally, no charge lost.</p>
-        </div>
-      </div>
-
-      <div class="status-shell" id="missing-view" hidden>
-        <div class="status-card in">
-          <h2>We couldn't find that submission</h2>
-          <p>This can happen if you're on a different browser or device than the one you submitted from. Check your email, or reach out to hello@streamnavigator.ai.</p>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <section style="padding-top:50px; padding-bottom:90px;">
-    <div class="other-navs">
-      <h5>Explore the other Navigators</h5>
-      <div class="other-navs-grid">
-        <a href="/streaming">Streaming Navigator</a>
-        <a href="/property-tax">🏠 Property Tax Navigator</a>
-        <a href="/home-savings">💡 Home Savings Navigator</a>
-        <a href="/rental">🔑 Rental Navigator</a>
-        <a href="/subscriptions">📺 Subscription Navigator</a>
-        <a href="/government-money">🏛️ Government Money Finder</a>
-        <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-        <a href="/landlord">📋 Landlord Navigator</a>
-        <a href="/insurance">🛡️ Insurance Navigator</a>
-        <a href="/buying">🛒 Purchase Navigator</a>
-        <a href="/hoa">🏘️ HOA Navigator</a>
-        <a href="/closing">🔍 Closing Navigator</a>
-      </div>
-    </div>
-  </section>
-</main>
-
-<footer id="contact">
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul><li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li></ul>
+      <div class="notice" id="report-trade">Contractor estimate audit</div>
+      <h1 id="report-headline"></h1>
+      <p class="lede" id="report-summary"></p>
+      <div class="meter" id="report-meter"></div>
+      <div class="refund-note" id="refund-note" hidden></div>
     </div>
   </div>
-  <p class="footer-disclaimer">Contractor Navigator provides an independent, AI-generated second opinion for informational purposes — it is not a licensed contractor, engineer, or legal service, and its assessment is not a guarantee of price, quality, or workmanship.</p>
-  <div class="footer-bottom"><p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p><p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p></div>
+
+  <section id="sec-quotes" hidden>
+    <div class="wrap">
+      <h2>Estimates read</h2>
+      <div class="quotes" id="quotes-list"></div>
+    </div>
+  </section>
+
+  <section id="sec-first" hidden>
+    <div class="wrap">
+      <h2>Do these first</h2>
+      <p class="sec-intro">In order, highest value first. Every one traces to a finding below.</p>
+      <ol class="steps" id="first-list"></ol>
+    </div>
+  </section>
+
+  <section id="sec-findings">
+    <div class="wrap">
+      <h2>Findings</h2>
+      <p class="sec-intro">Ordered by how firmly each one is proved: the estimate&rsquo;s own arithmetic first, then statutes and federal standards, then what the contract leaves out, then comparisons against published ranges.</p>
+      <div class="sample" id="findings-list"></div>
+    </div>
+  </section>
+
+  <section id="sec-emails" hidden>
+    <div class="wrap">
+      <h2>Your drafted email<span id="emails-plural"></span></h2>
+      <p class="sec-intro">Written in your voice, asking rather than accusing, because you are the one sending it and you still have to work with this person. Read it, change anything you would rather not raise, and send it under your own name. We never contact your contractor.</p>
+      <div id="emails-list"></div>
+    </div>
+  </section>
+
+  <section id="sec-passed" hidden>
+    <div class="wrap">
+      <h2>Checks that ran and passed</h2>
+      <p class="sec-intro">Named individually, with the figure each was measured against. This is the part that makes a clean result worth having in writing.</p>
+      <ul class="passed" id="passed-list"></ul>
+    </div>
+  </section>
+
+  <section id="sec-skipped" hidden>
+    <div class="wrap">
+      <h2>Checks that could not run</h2>
+      <p class="sec-intro">These did not pass. They did not run, and each says what was missing &mdash; so you can see whether sending one more page would change the answer.</p>
+      <ul class="passed" id="skipped-list"></ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap col">
+      <h2>Before you act on this</h2>
+      <div class="limits">
+        <ul>
+          <li><strong>Check every figure against your own estimate.</strong> We read your documents carefully, but you are the one signing, and a figure we misread is a figure you would be quoting back to someone holding the original.</li>
+          <li><strong>A published national range is not a quote for your house.</strong> Where a finding rests on one, it says so. Treat it as a question to ask, and get a second bid on identical scope.</li>
+          <li><strong>Statutory references are to the law as we understand it today.</strong> Local ordinances can add to it. Your building department will answer a permit question for free.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<section class="status" id="failed-view" hidden>
+  <div class="wrap col">
+    <h2>We could not produce your report</h2>
+    <p class="lede" id="failed-body"></p>
+  </div>
+</section>
+
+<section class="status" id="missing-view" hidden>
+  <div class="wrap col">
+    <h2>We could not find that submission</h2>
+    <p class="lede">This report opens in the browser it was bought from. If you are on a different device, open the email we sent you &mdash; it carries a link that works anywhere. If you cannot find it, write to <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a> and we will send it again.</p>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">Automated analysis for informational purposes only. Not legal, construction, engineering or financial advice, and not a determination of price, quality or workmanship. Findings are potential issues to raise, not legal conclusions, and nothing here asserts that any contractor acted improperly. Statutory and regulatory references are to the law as we understand it at the date of this report and may not reflect local ordinances or later amendments. Always verify licensing, insurance and permits with your contractor and your local building department before work begins.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="/contractor">Audit another estimate</a>
+      <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
+  </div>
 </footer>
 
-<div class="toast" id="toast"><span class="ico">✓</span> <span id="toast-text"></span></div>
+<div class="toast" id="toast"><span class="ico">&#10003;</span> <span id="toast-text"></span></div>
 <script src="/navigator-shared.js"></script>
 <script>
 (function(){
+  // Kept in step with api/_lib/contractor-audit.js. The engine ranks the
+  // findings; this only decides the heading each one sits under and the
+  // sentence explaining what that group of findings rests on. A severity the
+  // page does not know about still renders — under its own raw name, which is
+  // ugly and visible, rather than being silently dropped.
+  var GROUPS = [
+    ['confirmed_arithmetic_error', 'Arithmetic errors on the estimate itself',
+      'The contractor’s own paper disagreeing with itself. These are not arguable and they are usually conceded on the first phone call.'],
+    ['exceeds_legal_limit', 'Above a legal limit, or below a legal minimum',
+      'Measured against a statute or a federal standard, with the citation. Not an accusation — a template nobody has revised is the commonest cause — but the number is the number.'],
+    ['missing_contract_protection', 'Protections missing from the contract',
+      'Terms that cost nothing to add before you sign and cannot be added afterwards.'],
+    ['outside_published_range', 'Price against published national ranges',
+      'A published national range is not a quote for your house. This is a question worth asking, not a verdict.'],
+    ['difference_between_your_quotes', 'Your quotes, side by side',
+      'The only price comparison here drawn from your own market rather than a national average.'],
+    ['change_order_risk', 'What could become a change order',
+      'Scope the estimate leaves open. These are the numbers that change once the crew is on site and your leverage is lowest.'],
+    ['sales_pressure_or_stale_claim', 'Sales practice and stale claims',
+      'Things said to close the sale that are worth testing before you sign.'],
+    ['verify_yourself', 'For you to verify',
+      'Two minutes each, and worth more done by you today than by us at the time your report was written.']
+  ];
+
+  var ACTION_LABEL = {
+    fix_before_you_sign: 'Fix before you sign',
+    fix_before_work_starts: 'Fix before work starts',
+    verify_this_yourself: 'Verify yourself',
+    remedy_if_you_have_already_signed: 'If you have already signed'
+  };
+
+  function el(id){ return document.getElementById(id); }
   function show(id){
     ['waiting-view','report-view','failed-view','missing-view'].forEach(function(v){
-      document.getElementById(v).hidden = (v !== id);
+      el(v).hidden = (v !== id);
     });
   }
-  function fillList(ulId, items){
-    var ul = document.getElementById(ulId);
-    ul.innerHTML = '';
-    (items || []).forEach(function(item){
-      var li = document.createElement('li');
-      li.textContent = item;
-      ul.appendChild(li);
+  function money(v){
+    var n = Number(v);
+    if (!isFinite(n) || v === null || v === undefined) return null;
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // Everything from the report is inserted as text, never as HTML. The strings
+  // come from a model and from documents a stranger uploaded, and neither is a
+  // place to trust angle brackets.
+  function node(tag, className, text){
+    var n = document.createElement(tag);
+    if (className) n.className = className;
+    if (text !== undefined && text !== null) n.textContent = text;
+    return n;
+  }
+
+  function renderMeter(report){
+    var meter = el('report-meter');
+    meter.innerHTML = '';
+    var cov = report.coverage || {};
+    function cell(k, v){
+      var d = node('div');
+      d.appendChild(node('div', 'k', k));
+      d.appendChild(node('div', 'v', v));
+      meter.appendChild(d);
+    }
+    cell('Checks run', cov.checks_run + ' of ' + cov.checks_total);
+    var flagged = (report.findings || []).filter(function(f){ return f.severity !== 'within_norms'; });
+    cell('Findings', String(flagged.length));
+
+    // Only the figures that are a discrepancy or a statutory overage. A
+    // published-range distance is not money anyone owes anyone and summing it
+    // into a headline would say it was.
+    var disputed = flagged.reduce(function(s, f){
+      if (f.impactKind === 'arithmetic_discrepancy' || f.impactKind === 'amount_above_a_statutory_cap') {
+        return s + (Number(f.dollarImpact) || 0);
+      }
+      return s;
+    }, 0);
+    if (disputed > 0) cell('In dispute', money(disputed));
+  }
+
+  function renderQuotes(report){
+    var quotes = report.quotes || [];
+    if (!quotes.length) return;
+    el('sec-quotes').hidden = false;
+    var list = el('quotes-list');
+    list.innerHTML = '';
+    quotes.forEach(function(q){
+      var row = node('div', 'row');
+      var left = [q.label, q.contractor_name].filter(Boolean).join(' — ');
+      row.appendChild(node('span', 'lbl', left + (q.license_number ? '  ·  licence ' + q.license_number : '')));
+      row.appendChild(node('span', 'amt', money(q.total_price) || 'no price read'));
+      list.appendChild(row);
+    });
+  }
+
+  function renderFinding(finding){
+    var wrap = node('div', 'finding');
+
+    if (finding.quote) wrap.appendChild(node('span', 'qtag', finding.quote));
+
+    var head = node('div', 'finding-h');
+    head.appendChild(node('h3', null, finding.title));
+    var amount = money(finding.dollarImpact);
+    if (amount) head.appendChild(node('span', 'amt', amount));
+    wrap.appendChild(head);
+
+    if (finding.basis) wrap.appendChild(node('p', null, finding.basis));
+    if (finding.recommendedAction) {
+      wrap.appendChild(node('div', 'basis', finding.recommendedAction));
+    }
+
+    if (finding.citation || finding.source) {
+      var cite = node('div', 'cite');
+      if (finding.citation) cite.appendChild(document.createTextNode(finding.citation));
+      // Clickable, because on the licence findings the whole point is that the
+      // customer goes and looks it up, and a URL they have to retype is a URL
+      // they do not visit. Only https, and only as its own element, so nothing
+      // from the report can inject markup around it.
+      if (finding.source && finding.source.indexOf('https://') === 0) {
+        if (finding.citation) cite.appendChild(document.createTextNode('  ·  '));
+        var link = node('a', null, finding.source.replace(/^https:\/\//, ''));
+        link.href = finding.source;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        cite.appendChild(link);
+      }
+      wrap.appendChild(cite);
+    }
+
+    var label = ACTION_LABEL[finding.actionability];
+    if (label) {
+      var p = node('p');
+      p.style.marginTop = '9px';
+      p.appendChild(node('span', 'act', label));
+      wrap.appendChild(p);
+    }
+    return wrap;
+  }
+
+  function renderFindings(report){
+    var findings = report.findings || [];
+    var container = el('findings-list');
+    container.innerHTML = '';
+
+    var seen = {};
+    GROUPS.forEach(function(g){
+      var mine = findings.filter(function(f){ return f.severity === g[0]; });
+      mine.forEach(function(f){ seen[f.checkId + '|' + (f.quote || '') + '|' + f.title] = true; });
+      if (!mine.length) return;
+      var group = node('div', 'group');
+      group.appendChild(node('h3', null, g[1]));
+      group.appendChild(node('p', 'gsub', g[2]));
+      mine.forEach(function(f){ group.appendChild(renderFinding(f)); });
+      container.appendChild(group);
+    });
+
+    // Anything ranked under a severity this page has no heading for. Rendered
+    // rather than dropped: a finding a customer paid for must not disappear
+    // because a deploy updated the engine and not the page.
+    var orphans = findings.filter(function(f){
+      return f.severity !== 'within_norms'
+        && !seen[f.checkId + '|' + (f.quote || '') + '|' + f.title];
+    });
+    if (orphans.length) {
+      var group = node('div', 'group');
+      group.appendChild(node('h3', null, 'Other findings'));
+      orphans.forEach(function(f){ group.appendChild(renderFinding(f)); });
+      container.appendChild(group);
+    }
+
+    if (!findings.filter(function(f){ return f.severity !== 'within_norms'; }).length) {
+      container.appendChild(node('p', null,
+        'Nothing was flagged. Every check that ran is listed below with the figure it was measured against.'));
+    }
+  }
+
+  function renderPassed(report){
+    var passed = (report.findings || []).filter(function(f){ return f.severity === 'within_norms'; });
+    if (!passed.length) return;
+    el('sec-passed').hidden = false;
+    var list = el('passed-list');
+    list.innerHTML = '';
+    passed.forEach(function(f){
+      var li = node('li');
+      li.appendChild(document.createTextNode((f.quote ? f.quote + ' — ' : '') + f.title));
+      if (f.basis) li.appendChild(node('span', 'b', f.basis));
+      list.appendChild(li);
+    });
+  }
+
+  function renderSkipped(report){
+    var skipped = (report.coverage && report.coverage.could_not_run) || [];
+    var unreadable = report.unreadable || [];
+    if (!skipped.length && !unreadable.length) return;
+    el('sec-skipped').hidden = false;
+    var list = el('skipped-list');
+    list.innerHTML = '';
+    unreadable.forEach(function(u){
+      var li = node('li');
+      li.appendChild(document.createTextNode('Could not be read'));
+      li.appendChild(node('span', 'b', u));
+      list.appendChild(li);
+    });
+    skipped.forEach(function(s){ list.appendChild(node('li', null, s)); });
+  }
+
+  function renderEmails(report){
+    var emails = report.emails || [];
+    if (!emails.length) return;
+    el('sec-emails').hidden = false;
+    if (emails.length > 1) el('emails-plural').textContent = 's';
+    var list = el('emails-list');
+    list.innerHTML = '';
+
+    emails.forEach(function(email, i){
+      var box = node('div', 'mail');
+
+      var head = node('div', 'mail-head');
+      head.appendChild(node('b', null, 'To ' + (email.to || email.quote)));
+      head.appendChild(node('span', null, email.pointCount + ' point' + (email.pointCount === 1 ? '' : 's')));
+      box.appendChild(head);
+
+      box.appendChild(node('div', 'src', 'Subject: ' + email.subject));
+
+      var body = node('div', 'mail-body', email.body);
+      box.appendChild(body);
+
+      var foot = node('div', 'mail-foot');
+      var btn = node('button', 'btn btn-ghost btn-sm', 'Copy this email');
+      btn.addEventListener('click', function(){
+        navigator.clipboard.writeText(email.body).then(function(){
+          showToast('Copied. Read it before you send it.');
+        }).catch(function(){
+          showToast('Could not copy automatically — select the text and copy it.');
+        });
+      });
+      foot.appendChild(btn);
+
+      // Said out loud rather than left to be noticed. A customer who counts
+      // fourteen findings and ten points in the draft should be told the four
+      // were held back on purpose, not left wondering which ones it dropped.
+      if (email.heldBack > 0) {
+        foot.appendChild(node('p', 'btn-note',
+          email.heldBack + ' further point' + (email.heldBack === 1 ? ' is' : 's are')
+          + ' in the findings above but left out of this draft — a list of twenty reads as an '
+          + 'indictment and gets answered like one. Add any of them you care about.'));
+      }
+      box.appendChild(foot);
+      list.appendChild(box);
     });
   }
 
   function renderReport(report){
-    document.getElementById('report-category-h2').textContent = (report.category || 'Contractor') + ' Estimate Report';
-    document.getElementById('report-summary').textContent = report.summary || '';
+    el('report-trade').textContent = (report.category || 'Contractor') + ' estimate audit';
+    el('report-headline').textContent = report.headline || 'Your report';
+    el('report-summary').textContent = report.summary || '';
+    document.title = (report.category || 'Contractor') + ' estimate audit — StreamNavigator';
 
-    if (report.quotes && report.quotes.length) {
-      document.getElementById('quotes-block').hidden = false;
-      var list = document.getElementById('quotes-list');
-      list.innerHTML = '';
-      report.quotes.forEach(function(q){
-        var card = document.createElement('div');
-        card.className = 'quote-card';
-        card.innerHTML = '<h5>' + (q.label || 'Quote') + (q.contractor_name ? ' — ' + q.contractor_name : '') + '</h5>' +
-          (q.total_price ? '<div class="qprice">' + q.total_price + '</div>' : '') +
-          (q.scope_summary ? '<p style="margin-top:6px; font-size:13px; color:var(--text-dim);">' + q.scope_summary + '</p>' : '');
-        list.appendChild(card);
+    renderMeter(report);
+
+    if (report.refund && report.refund.issued) {
+      var note = el('refund-note');
+      note.hidden = false;
+      note.innerHTML = '';
+      note.appendChild(node('b', null, 'Your $49 is being refunded. '));
+      note.appendChild(document.createTextNode(
+        (report.refund.reason || '') + ' You do not need to ask for it, and you keep this report. '
+        + 'If you can send a clearer copy of the estimate, reply to your confirmation email and we will run the '
+        + 'full audit again at no charge.'));
+    }
+
+    var first = report.do_first || [];
+    if (first.length) {
+      el('sec-first').hidden = false;
+      var ol = el('first-list');
+      ol.innerHTML = '';
+      first.forEach(function(s){
+        var li = node('li');
+        li.appendChild(node('h3', null, s));
+        ol.appendChild(li);
       });
     }
 
-    var pv = document.getElementById('price-verdict-pill');
-    var verdict = (report.price_assessment && report.price_assessment.verdict) || '';
-    pv.textContent = verdict;
-    pv.className = 'verdict-pill' + (/high|unclear/i.test(verdict) ? ' warn' : '');
-    document.getElementById('price-explanation').textContent = (report.price_assessment && report.price_assessment.explanation) || '';
-
-    if (report.apples_to_apples && report.apples_to_apples.explanation) {
-      document.getElementById('apples-block').hidden = false;
-      document.getElementById('apples-explanation').textContent =
-        (report.apples_to_apples.verdict ? report.apples_to_apples.verdict + ' — ' : '') + report.apples_to_apples.explanation;
-    }
-
-    if (report.strongest_quote && report.strongest_quote.why) {
-      document.getElementById('strongest-block').hidden = false;
-      document.getElementById('strongest-explanation').textContent =
-        (report.strongest_quote.which ? report.strongest_quote.which + ': ' : '') + report.strongest_quote.why;
-    }
-
-    fillList('missing-list', report.missing_or_unclear_items);
-    fillList('changeorders-list', report.potential_change_orders);
-    fillList('questions-list', report.questions_to_ask);
-    fillList('negotiate-list', report.negotiation_points);
-
-    document.getElementById('email-box').textContent = report.negotiation_email || '';
+    renderQuotes(report);
+    renderFindings(report);
+    renderEmails(report);
+    renderPassed(report);
+    renderSkipped(report);
     show('report-view');
   }
-
-  document.getElementById('copy-email-btn').addEventListener('click', function(){
-    var text = document.getElementById('email-box').textContent;
-    navigator.clipboard.writeText(text).then(function(){
-      showToast('Email copied to clipboard.');
-    }).catch(function(){
-      showToast('Could not copy automatically — select the text manually.');
-    });
-  });
 
   var stored = getStoredSubmission();
   if (!stored || !stored.id || !stored.token) {
@@ -226,21 +478,31 @@
 
   pollNavigatorSubmission(stored.id, stored.token, {
     intervalMs: 3000,
-    maxTries: 60,
+    maxTries: 90,
     onUpdate: function(data){
       if (!data.ok) { show('missing-view'); return; }
       if (data.status === 'complete' && data.report) {
         renderReport(data.report);
       } else if (data.status === 'failed') {
-        // Don't surface data.error verbatim here — it's an internal/API
-        // failure detail meant for us to debug from the database, not for
-        // a customer to read.
-        document.getElementById('failed-body').textContent =
-          "Our team has been notified and we're on it — no charge is lost. Email hello@streamnavigator.ai if you'd like us to follow up directly.";
+        // Never the raw error. It is an internal failure detail for us to
+        // debug from the database, not a sentence for a customer to read.
+        //
+        // The refund really is automatic for this product now — the engine
+        // queues it and api/process-refunds.js returns the money — so the copy
+        // no longer asks the customer to chase us for it.
+        el('failed-body').textContent =
+          'That is on us, not on your submission. Your refund has already been queued automatically and you do '
+          + 'not need to ask for it. If you would rather we ran it again instead, reply to your confirmation email '
+          + 'or write to hello@streamnavigator.ai and we will do that at no charge.';
         show('failed-view');
       } else {
-        document.getElementById('wait-title').textContent =
-          data.status === 'processing' ? 'Analyzing your estimate…' : 'Confirming your payment…';
+        el('wait-title').textContent = data.status === 'processing'
+          ? 'Checking your estimate'
+          : 'Confirming your payment';
+        el('wait-body').textContent = data.status === 'processing'
+          ? 'We have read your documents and are running the checks. You can close this page — your report is '
+            + 'emailed to you either way, with a link that works on any device.'
+          : 'This usually takes a few seconds once Stripe confirms.';
       }
     },
   });

@@ -35,18 +35,25 @@ const cronPaths = (vercel.crons || []).map((c) => c.path);
 const PRICED = Object.keys(JSON.parse(read('prices.config.json')).pages)
   .map((f) => path.basename(f, '.html'));
 
-// The one product with no background pickup, recorded rather than hidden.
+// Nothing is exempt any more.
 //
-// Contractor generates only when the customer's browser polls
-// api/get-navigator-submission.js, so paying and closing the tab leaves a row
-// nothing will ever look at again. It is listed here instead of fixed because
-// it has had zero submissions in the lifetime of the table, so the gap has
-// never cost anyone anything — and closing it means either teaching the sweep
-// a second engine or adding a cron, neither of which is worth doing blind.
+// This list held 'contractor' for as long as the product existed. Contractor
+// generated only when the customer's browser polled
+// api/get-navigator-submission.js, so paying and closing the tab left a row
+// nothing would ever look at again — no report, no email, and no refund either,
+// because api/process-refunds.js only considers rows that reached 'failed'.
 //
-// If contractor ever takes a payment, this is the line to delete, and the fix
-// is the same shape as the other nine.
-const KNOWN_UNSWEPT = ['contractor'];
+// The reason recorded here for leaving it open was that the product had taken
+// zero payments, so the gap had never cost anyone anything, and closing it
+// meant teaching the sweep a second engine. Both were true. Neither is a reason
+// to sell something with a known hole in the part that hands over what was
+// bought: "it has not hurt anyone yet" is a description of luck, and the first
+// customer to close the tab is the one who pays for it.
+//
+// The sweep now looks its generator up per product (api/generate-paid-navigator.js)
+// so a second engine costs one line. If this array ever grows an entry again,
+// the comment beside it has to say what the customer loses in the meantime.
+const KNOWN_UNSWEPT = [];
 
 test('a scheduled job exists for each way a paid submission is picked up', () => {
   for (const p of ['/api/generate-paid-navigator', '/api/retry-failed-buying', '/api/hoa-job']) {

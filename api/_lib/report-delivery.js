@@ -25,6 +25,17 @@
 // the two sending twice.
 
 const { buildReportPdfBuffer } = require('./pdf-report');
+const { toGenericReportShape } = require('./contractor-report-view');
+
+// Contractor Navigator writes to its own table and its own report shape, and
+// until now that meant it had no delivery at all: this module read
+// navigator_reports, found nothing, and returned 'no_report_row' — for a
+// product whose report was only ever reachable from localStorage in the one
+// browser the purchase was made from. Named here rather than branched inline
+// so the next product with its own table is one line, not a rediscovery.
+const OWN_TABLE = {
+  contractor: { table: 'contractor_reports', shape: toGenericReportShape },
+};
 
 const SITE = 'https://streamnavigator.ai';
 
@@ -77,8 +88,9 @@ async function deliverReportByEmail(admin, submissionId) {
   const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL;
   if (!RESEND_API_KEY || !RESEND_FROM_EMAIL) return 'email_not_configured';
 
+  const own = OWN_TABLE[submission.product];
   const { data: reportRow } = await admin
-    .from('navigator_reports')
+    .from(own ? own.table : 'navigator_reports')
     .select('report_json')
     .eq('submission_id', submissionId)
     .order('created_at', { ascending: false })
@@ -86,6 +98,8 @@ async function deliverReportByEmail(admin, submissionId) {
     .maybeSingle();
 
   if (!reportRow || !reportRow.report_json) return 'no_report_row';
+
+  const reportForPdf = own ? own.shape(reportRow.report_json) : reportRow.report_json;
 
   // Claimed BEFORE the send, not after.
   //
@@ -104,7 +118,7 @@ async function deliverReportByEmail(admin, submissionId) {
 
   let pdfBuffer;
   try {
-    pdfBuffer = await buildReportPdfBuffer(reportRow.report_json, {
+    pdfBuffer = await buildReportPdfBuffer(reportForPdf, {
       generatedAt: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     });
   } catch (err) {

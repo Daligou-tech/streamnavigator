@@ -14,9 +14,20 @@
 // nothing and is not refunded either, because api/process-refunds.js only
 // considers rows that reached "failed".
 //
-// buying, hoa and contractor are excluded because each already has a job of its
-// own — retry-failed-buying, hoa-job, and the contractor engine's own path — and
-// two sweeps racing the same row would pay for the same report twice.
+// buying and hoa are excluded because each already has a job of its own —
+// retry-failed-buying and hoa-job — and two sweeps racing the same row would
+// pay for the same report twice.
+//
+// Contractor used to be excluded on the same grounds, and the grounds were
+// wrong. Its "job of its own" was the customer's browser: generation ran inside
+// api/get-navigator-submission.js when the status page polled, and nowhere
+// else. Pay, see the Stripe receipt, close the tab, and the row sat at 'paid'
+// with nothing scheduled to look at it again — no report, no email, and no
+// refund either, because api/process-refunds.js only considers rows that
+// reached 'failed'. tests/no-orphaned-paid.test.js recorded the gap and left it
+// open on the grounds that the product had never taken a payment. That is an
+// argument for fixing it before it does, not after. It is swept now, through
+// its own engine, which is why the generator is looked up per product below.
 //
 // Two minutes of grace before this picks a row up, so the ordinary case (the
 // customer IS on the page, and generation is already running inside their poll)
@@ -28,14 +39,25 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { generateNavigatorReport } = require('./_lib/navigator-engine');
+const { generateContractorReport } = require('./_lib/contractor-engine');
 const { deliverReportByEmail } = require('./_lib/report-delivery');
 
-// Everything api/_lib/navigator-engine.js generates, minus the three products
-// that already have a job of their own.
+// Everything api/_lib/navigator-engine.js generates, plus contractor, minus the
+// two products that have a scheduled job of their own.
 const SWEPT_PRODUCTS = [
   'property-tax', 'home-savings', 'rental', 'subscriptions', 'government-money',
-  'home-maintenance', 'landlord', 'insurance', 'closing',
+  'home-maintenance', 'landlord', 'insurance', 'closing', 'contractor',
 ];
+
+// Which engine owns each product. A lookup rather than an if, because the
+// failure it prevents is silent: handing a contractor row to the generic engine
+// produces a report of the wrong shape, stored in the wrong table, and the
+// customer sees a blank page rather than an error.
+const ENGINE = { contractor: generateContractorReport };
+
+function generatorFor(product) {
+  return ENGINE[product] || generateNavigatorReport;
+}
 
 const GRACE_MINUTES = 2;
 const MAX_PER_SWEEP = 3;
@@ -86,7 +108,7 @@ module.exports = async function handler(req, res) {
   // report.
   const pending = await admin
     .from('navigator_submissions')
-    .select('id, status, updated_at')
+    .select('id, product, status, updated_at')
     .in('product', SWEPT_PRODUCTS)
     .eq('status', 'paid')
     .lt('updated_at', cutoff)
@@ -95,7 +117,7 @@ module.exports = async function handler(req, res) {
 
   const stalled = await admin
     .from('navigator_submissions')
-    .select('id, status, updated_at')
+    .select('id, product, status, updated_at')
     .in('product', SWEPT_PRODUCTS)
     .eq('status', 'processing')
     .lt('updated_at', abandoned)
@@ -115,7 +137,7 @@ module.exports = async function handler(req, res) {
   const results = [];
   for (const row of waiting || []) {
     try {
-      await generateNavigatorReport(row.id);
+      await generatorFor(row.product)(row.id);
 
       // And then actually give it to them.
       //

@@ -11,7 +11,8 @@
     "check-prices": "node scripts/check-prices.js",
     "harness": "node scripts/audit-harness.js",
     "check": "npm test && npm run harness",
-    "stripe-pricing": "node scripts/stripe-migrate-pricing.js"
+    "stripe-pricing": "node scripts/stripe-migrate-pricing.js",
+    "contractor-harness": "node scripts/contractor-harness.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

@@ -21,8 +21,12 @@
 // checked by the wiring test.
 //
 // Scoped to the closing product. The other Navigators write their own shapes
-// into the same `form_data` column — contractor uses `description`, `category`
-// and `zip` — and those keys do not belong here. `description` was declared
+// into the same `form_data` column — contractor uses `category`, `state`,
+// `quoted_at_home`, `home_sqft` and `description` — and those keys do not
+// belong here. (It used to be listed as writing `zip`; the engine read that key
+// and the intake form never collected it, so the one field that could have
+// placed a price regionally was dead on both sides. It is gone.)
+// `description` was declared
 // with a closing owner that never mentions it, which the wiring test caught
 // only in its third check; the "written somewhere" check passed because
 // closing-extract.js has `description:` on every JSON-schema property.

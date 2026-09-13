@@ -1008,11 +1008,17 @@
         // block now marks refund_state='due' and alerts us, the way the HOA
         // engine always has, so for these the refund really is automatic and
         // the copy can stop asking the customer to chase it. Kept as an
-        // explicit list rather than an else: buying and contractor run through
-        // their own engines, which do not queue a refund, and telling those
-        // customers one is on its way would be a promise nothing keeps.
+        // explicit list rather than an else: buying runs through its own engine,
+        // which does not queue a refund, and telling that customer one is on its
+        // way would be a promise nothing keeps.
+        //
+        // Contractor was on the same footing until its engine was rebuilt. It
+        // now queues a refund on failure exactly as these nine do, so it belongs
+        // in the list. A failed contractor submission reaches this branch
+        // because the redirect above only catches paid, processing and complete.
         var AUTO_REFUNDED = ['property-tax', 'home-savings', 'rental', 'subscriptions',
-          'government-money', 'home-maintenance', 'landlord', 'insurance', 'closing'];
+          'government-money', 'home-maintenance', 'landlord', 'insurance', 'closing',
+          'contractor'];
         if (AUTO_REFUNDED.indexOf(data.product) !== -1) {
           failMsg = "We couldn't produce your report this time, and that's on us — your submission was fine. Your refund has already been queued automatically; you don't need to ask for it. If you'd rather we ran it again instead, email hello@streamnavigator.ai and we'll do that at no charge.";
         }

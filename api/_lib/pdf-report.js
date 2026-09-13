@@ -38,16 +38,26 @@ function addWrappedText(doc, text, options) {
 function collectLetters(report) {
   const emails = report && report.emails;
   if (!emails) return [];
+  // Contractor Navigator writes one letter per contractor it has something to
+  // ask, so the count is not fixed and the recipients are not a known set. It
+  // arrives already in this function's own output shape — see
+  // api/_lib/contractor-report-view.js — and passes through rather than being
+  // squeezed into the named-key form the other products use.
+  if (Array.isArray(emails)) {
+    return emails
+      .filter((entry) => entry && entry.email && entry.email.body)
+      .map((entry) => ({ who: entry.who || 'contractor', label: entry.who || 'your contractor', email: entry.email }));
+  }
   const out = [];
   // Closing Disclosure Audit routes to two parties; Rental Navigator routes to
   // three. Both arrive here as report.emails, so the labels are listed rather
   // than derived — a key this function does not know about would otherwise be
   // silently dropped from the PDF while still rendering on the web page.
-  if (emails.lender) out.push({ who: 'Lender', email: emails.lender });
-  if (emails.settlement) out.push({ who: 'Settlement agent', email: emails.settlement });
-  if (emails.servicer) out.push({ who: 'Loan servicer', email: emails.servicer });
-  if (emails.manager) out.push({ who: 'Property manager', email: emails.manager });
-  if (emails.insurer) out.push({ who: 'Insurance agent', email: emails.insurer });
+  if (emails.lender) out.push({ who: 'Lender', label: 'your lender', email: emails.lender });
+  if (emails.settlement) out.push({ who: 'Settlement agent', label: 'your settlement agent', email: emails.settlement });
+  if (emails.servicer) out.push({ who: 'Loan servicer', label: 'your loan servicer', email: emails.servicer });
+  if (emails.manager) out.push({ who: 'Property manager', label: 'your property manager', email: emails.manager });
+  if (emails.insurer) out.push({ who: 'Insurance agent', label: 'your insurance agent', email: emails.insurer });
   return out;
 }
 
@@ -86,14 +96,17 @@ function buildReportPdfBuffer(report, meta) {
         doc.fillColor(COLORS.accent).fontSize(11).font('Helvetica-Bold').text(
           letters.length === 1
             ? 'A ready-to-send letter is at the back of this report.'
-            : 'Two ready-to-send letters are at the back of this report.',
+            : `${letters.length} ready-to-send letters are at the back of this report.`,
           { width: 500 }
         );
         doc.moveDown(0.25);
+        // Named from the letters themselves rather than assumed. This sentence
+        // used to read "one for your lender and one for your settlement agent"
+        // whenever there happened to be two, which was true for exactly one
+        // product and wrong for every other one that ever grew a second letter.
         doc.fillColor(COLORS.muted).fontSize(10).font('Helvetica').text(
-          letters.length === 1
-            ? `Addressed to your ${letters[0].who.toLowerCase()}, covering the findings below. Check every figure against your own documents before you send it.`
-            : 'One for your lender and one for your settlement agent, covering the findings below. Check every figure against your own documents before you send them.',
+          `Addressed to ${letters.map((l) => l.label || `your ${l.who.toLowerCase()}`).join(' and ')}, covering the findings `
+          + `below. Check every figure against your own documents before you send ${letters.length === 1 ? 'it' : 'them'}.`,
           { width: 500 }
         );
         doc.moveDown(1);
@@ -213,7 +226,7 @@ function buildReportPdfBuffer(report, meta) {
           if (index > 0 || doc.y > 560) doc.addPage();
 
           doc.fillColor(COLORS.heading).fontSize(13).font('Helvetica-Bold')
-            .text(`Letter ${index + 1} of ${letters.length} — to your ${entry.who.toLowerCase()}`, { width: 500 });
+            .text(`Letter ${index + 1} of ${letters.length} — to ${entry.label || `your ${entry.who.toLowerCase()}`}`, { width: 500 });
           doc.moveDown(0.5);
 
           // `to` is the party's name where the extraction captured one. It is
