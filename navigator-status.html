@@ -40,6 +40,8 @@
 .hoa-cite-more:hover{opacity:1;}
 .hoa-cite-full{margin-top:8px!important;max-height:320px;overflow:auto;white-space:pre-wrap;font-style:normal!important;font-size:12px;line-height:1.45;background:rgba(31,27,22,.04);border-radius:8px;padding:10px 12px;}
 .hoa-score-basis{font-size:13.5px;line-height:1.6;opacity:.78;margin:10px 0 0;max-width:62ch;}
+.hoa-finding-uncited{border-left-style:dashed;}
+.hoa-cite-none{font-style:italic;opacity:.72;}
 .hoa-restriction-card{border:1px solid rgba(31,27,22,.14);border-radius:14px;padding:16px 18px;margin-bottom:16px;}
 .hoa-restriction-card h4{margin:0 0 10px;font-family:'Sora',sans-serif;font-size:16px;}
 .hoa-restriction-card p{margin:10px 0 0;line-height:1.6;font-size:14px;}
@@ -475,10 +477,14 @@
           appendCitations(el, cites, f.pinpoint);
         } else {
           // Say so rather than letting an uncited finding read as though it
-          // were sourced.
+          // were sourced. The engine has already moved these below every cited
+          // finding, so the top of the list is what the page promised; this
+          // marks the tail plainly instead of leaving the reader to notice an
+          // absence of page numbers.
+          el.className += ' hoa-finding-uncited';
           var none = document.createElement('div');
-          none.className = 'hoa-cite';
-          none.textContent = 'No page citation available for this finding — verify it against the documents yourself.';
+          none.className = 'hoa-cite hoa-cite-none';
+          none.textContent = 'Drawn from the analysis rather than quoted from a page — check this one against the documents yourself before relying on it.';
           el.appendChild(none);
         }
 

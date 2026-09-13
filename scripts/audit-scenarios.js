@@ -219,6 +219,53 @@ scenario('the 10% basket exceeded its limit', 'TRID_TEN_PERCENT', () => ({
   loanEstimates: [LE()],
 }));
 
+// --- statutory transfer taxes ----------------------------------------------
+
+// $375,000 in Richmond, VA with a $300,000 loan. Statute:
+//   deed          375,000/100 x $0.25            = $937.50
+//   local         one third of that              = $312.50
+//   grantor       375,000/500 x $0.50            = $375.00
+//   deed of trust 300,000/100 x $0.25            = $750.00
+//   local on DoT  one third of that              = $250.00
+//                                          total = $2,625.00
+scenario('transfer taxes billed above the statutory total', 'TRANSFER_TAX_TOTAL', () => ({
+  extraction: baseline({
+    property_county: 'Richmond',
+    line_items: baseline().line_items.concat([
+      li('E', 'State Transfer Tax', 2000, 'transfer_tax'),
+      li('E', 'County Transfer Tax', 1400, 'transfer_tax'),
+    ]),
+  }),
+  answers: {},
+}));
+
+scenario('transfer taxes matching the statute are verified, not flagged', 'TRANSFER_TAX_TOTAL', () => ({
+  extraction: baseline({
+    property_county: 'Richmond',
+    line_items: baseline().line_items.concat([
+      li('E', 'State Transfer Tax', 1625, 'transfer_tax'),
+      li('E', 'Grantor Tax', 1000, 'transfer_tax'),
+    ]),
+  }),
+  answers: {},
+  expectSeverity: 'within_norms',
+}));
+
+scenario('an unknown county can reconcile but never accuse', 'TRANSFER_TAX_TOTAL', () => ({
+  // The two Northern Virginia regional fees are county-dependent. Without the
+  // county we cannot know whether they apply, and a total missing them would
+  // read as an overcharge of exactly their size.
+  extraction: baseline({
+    property_county: null,
+    line_items: baseline().line_items.concat([
+      li('E', 'State Transfer Tax', 2000, 'transfer_tax'),
+      li('E', 'County Transfer Tax', 1400, 'transfer_tax'),
+    ]),
+  }),
+  answers: {},
+  expectSeverity: 'informational_only',
+}));
+
 // --- contract -------------------------------------------------------------
 
 scenario('the seller credit is smaller than the contract provides', 'CONTRACT_RECON', () => ({

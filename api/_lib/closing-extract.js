@@ -71,7 +71,7 @@ const EXTRACTION_TOOL = {
         type: 'string',
         enum: [
           'closing_disclosure', 'alta_settlement_statement', 'loan_estimate',
-          'purchase_contract', 'other',
+          'purchase_contract', 'initial_escrow_account_statement', 'other',
         ],
         description:
           'What this document actually is. Customers mislabel uploads routinely — an ALTA ' +
@@ -474,7 +474,7 @@ const CLASSIFY_TOOL = {
               type: 'string',
               enum: [
                 'closing_disclosure', 'alta_settlement_statement', 'loan_estimate',
-                'purchase_contract', 'other',
+                'purchase_contract', 'initial_escrow_account_statement', 'other',
               ],
             },
             note: { type: 'string', description: 'A few words on what it appears to be.' },
@@ -938,7 +938,33 @@ function runClosingAudit(extraction, options = {}) {
         .map((c) => `${c.label} ${audit.toDollars(audit.toCents(c.amount))}`).join(' + ');
       const notes = stack.components.map((c) => c.note).filter(Boolean).join(' ');
 
-      if (variance > 1) {
+      // An entry that has not enumerated every component a jurisdiction can
+      // levy must never accuse. Missing a component understates the expected
+      // total by exactly its size, which makes a correctly collected tax look
+      // like an overcharge — see the note at the top of transfer-tax-rates.js.
+      // It can still reconcile, and reconciling is most of the value.
+      if (variance > 1 && stack.complete === false) {
+        findings.push(audit.finding({
+          checkId: 'TRANSFER_TAX_TOTAL',
+          title: 'Transfer taxes could not be fully reconciled for this jurisdiction',
+          severity: audit.Severity.INFORMATIONAL,
+          evidence: stack.evidence,
+          actionability: audit.Actionability.NEEDS_DOCS,
+          charged,
+          expected: stack.total,
+          variance,
+          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} on a sale price of `
+            + `${audit.toDollars(audit.toCents(e.sale_price))}; your statement shows `
+            + `${audit.toDollars(audit.toCents(charged))}. ${stack.incompleteReason || ''}`.trim(),
+          whyItMatters:
+            'The difference may be a local or regional component we could not establish applies, '
+            + 'rather than an overcharge. We do not treat it as one.',
+          recommendedAction:
+            'If you want this settled, ask the settlement agent which local and regional recordation '
+            + 'fees were charged and at what rate.',
+          detail: { components: stack.components, lines_counted: taxLines.length, complete: false },
+        }));
+      } else if (variance > 1) {
         findings.push(audit.finding({
           checkId: 'TRANSFER_TAX_TOTAL',
           title: 'Transfer taxes exceed the statutory amount for this jurisdiction',
@@ -1172,6 +1198,124 @@ const LE_EXTRACTION_TOOL = {
     required: ['is_loan_estimate', 'charges'],
   },
 };
+
+// ---------------------------------------------------------------------------
+// initial escrow account statement
+// ---------------------------------------------------------------------------
+//
+// Check 15 tests the escrow cushion against the RESPA cap of one sixth of
+// annual disbursements — two months. It almost never ran, and the reason is
+// structural rather than a bug: a Closing Disclosure does not state a cushion.
+// Section G is the WHOLE opening deposit, months of funding plus any cushion,
+// and applying the cap to it would flag a correctly funded account. The engine
+// declined, correctly, and said so.
+//
+// Meanwhile closing.html's sample report showed check 15 failing for $412 and
+// labelled it "ran on your Closing Disclosure alone", which taught every
+// prospective customer to expect a finding the engine had already decided it
+// could not honestly make.
+//
+// The initial escrow account statement is the document that DOES state it. It
+// is a separate RESPA disclosure, it is routinely handed over at closing
+// alongside the CD, and it prints both the cushion and the month-by-month
+// disbursement schedule the cap is computed from. So the honest fix is to ask
+// for it — the same way the Loan Estimate and the contract are asked for — and
+// then the check runs on evidence rather than on an assumption.
+const ESCROW_STATEMENT_TOOL = {
+  name: 'submit_escrow_statement',
+  description: 'Report what is printed on an initial escrow account statement.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      is_escrow_account_statement: {
+        type: 'boolean',
+        description: 'False if this document is something else. Everything below is ignored when false.',
+      },
+      cushion_amount: {
+        type: 'number',
+        description: 'The cushion, reserve, or required minimum balance the statement states. '
+          + 'This is the amount held ON TOP of the scheduled disbursements. If the statement does '
+          + 'not state one separately, omit this field — never substitute the opening balance or a '
+          + 'monthly payment.',
+      },
+      monthly_escrow_payment: {
+        type: 'number',
+        description: 'The monthly escrow payment, or omit.',
+      },
+      annual_disbursements: {
+        type: 'array',
+        description: 'Each escrowed item and its ANNUAL total from the disbursement schedule. '
+          + 'Where the statement lists payments month by month, total them per item.',
+        items: {
+          type: 'object',
+          properties: {
+            item: { type: 'string' },
+            annual_amount: { type: 'number' },
+            confidence: { type: 'number', description: CONFIDENCE_DESC },
+          },
+          required: ['item', 'annual_amount', 'confidence'],
+        },
+      },
+      confidence: { type: 'number', description: CONFIDENCE_DESC },
+    },
+    required: ['is_escrow_account_statement'],
+  },
+};
+
+async function extractEscrowStatement(apiKey, contentBlock) {
+  const raw = await callAnthropic({
+    apiKey,
+    system: EXTRACTION_SYSTEM,
+    tools: [ESCROW_STATEMENT_TOOL],
+    contentBlocks: [
+      contentBlock,
+      {
+        type: 'text',
+        text: 'Report what is printed on this initial escrow account statement. Report only '
+          + 'figures physically printed on it — never compute a cushion that is not stated, and '
+          + 'never carry one across from another document.',
+      },
+    ],
+  });
+  return unwrapToolInput(raw, ['is_escrow_account_statement', 'cushion_amount', 'annual_disbursements']);
+}
+
+// Folds an escrow statement into the Closing Disclosure's own escrow block.
+//
+// The CD stays authoritative for anything it actually printed: this only fills
+// what was missing. A customer who uploads both is not asking us to prefer one
+// over the other, and a cushion read from the statement sitting beside
+// disbursements read from the CD is the normal, correct combination.
+function mergeEscrowStatement(extraction, statement) {
+  if (!extraction || !statement || statement.is_escrow_account_statement === false) return false;
+
+  const conf = typeof statement.confidence === 'number' ? statement.confidence : 0.9;
+  if (conf < CONF_THRESHOLD) return false;
+
+  const esc = extraction.escrow || (extraction.escrow = {});
+  let used = false;
+
+  if (typeof statement.cushion_amount === 'number' && typeof esc.cushion_amount !== 'number') {
+    esc.cushion_amount = statement.cushion_amount;
+    esc.cushion_confidence = conf;
+    esc.cushion_source = 'initial escrow account statement';
+    used = true;
+  }
+
+  const existing = (esc.annual_disbursements || []).filter((d) => d && d.confidence >= CONF_THRESHOLD);
+  if (!existing.length && Array.isArray(statement.annual_disbursements) && statement.annual_disbursements.length) {
+    esc.annual_disbursements = statement.annual_disbursements;
+    used = true;
+  }
+
+  if (typeof statement.monthly_escrow_payment === 'number'
+      && !(esc.monthly_escrow_payment && typeof esc.monthly_escrow_payment.value === 'number')) {
+    esc.monthly_escrow_payment = { value: statement.monthly_escrow_payment, confidence: conf, page: 1 };
+    used = true;
+  }
+
+  return used;
+}
 
 async function extractLoanEstimate(apiKey, contentBlock) {
   const raw = await callAnthropic({
@@ -1793,6 +1937,8 @@ module.exports = {
   unwrapToolInput,
   LE_EXTRACTION_TOOL,
   extractLoanEstimate,
+  extractEscrowStatement,
+  mergeEscrowStatement,
   toLoanEstimateRecord,
   isSubtotalLine,
   classifyDocuments,

@@ -25,6 +25,8 @@
 
 'use strict';
 
+const { statutoryBenchmarks } = require('./transfer-tax-rates');
+
 const audit = require('./closing-audit');
 const { runClosingAudit, buildScorecard } = require('./closing-extract');
 const loanMath = require('./closing-math');
@@ -41,18 +43,28 @@ const { buildEmails } = require('./closing-emails');
 //
 // NO_BENCHMARKS remains exported for tests and for running the audit with
 // benchmarking deliberately absent.
-// Benchmarking is retired -- see the note in closing-extract.js. Both suppliers
-// now return null, so the audit runs with benchmarking structurally absent
-// rather than merely unavailable. The scorecard has always run this way; this
-// makes the paid report match it.
+//
+// MARKET benchmarking is retired and stays retired: nobody publishes what an
+// underwriting or a settlement fee should cost, closing.html says so, and a
+// per-line comparison against invented data would make the page a lie. The
+// per-line supplier therefore still returns null for every charge.
+//
+// STATUTORY benchmarking is a different thing and was retired with it by
+// accident. A transfer tax is not a market rate — it is a published schedule,
+// exact, and on a $375,000 purchase it is the largest figure on the settlement
+// statement that has a provably correct value. api/_lib/transfer-tax-rates.js
+// supplies those, refuses every jurisdiction it has not done the work for, and
+// refuses to accuse where it cannot prove it enumerated every component.
 function defaultGetBenchmark() {
-  return NO_BENCHMARKS;
+  return statutoryBenchmarks();
 }
 
 const NO_BENCHMARKS = () => null;
 NO_BENCHMARKS.stacked = () => ({ total: null, components: [] });
 
-const BENCHMARK_CHECK_IDS = new Set(['BENCHMARK', 'TRANSFER_TAX_TOTAL']);
+// TRANSFER_TAX_TOTAL is no longer filtered out. BENCHMARK still is: those are
+// the per-line market comparisons, and the corpus behind them does not exist.
+const BENCHMARK_CHECK_IDS = new Set(['BENCHMARK']);
 
 // ---------------------------------------------------------------------------
 // the catalog
@@ -103,8 +115,13 @@ const CATALOG = [
     label: 'No charge appears twice under different names' },
   { id: 'LENDER_FEE_STACKING', needs: Needs.CD, group: 'charges',
     label: 'Lender fees are not stacked into overlapping charges' },
-  { id: 'ESCROW_CUSHION', needs: Needs.CD, group: 'charges',
+  { id: 'ESCROW_CUSHION', needs: Needs.OTHER_DOC, group: 'charges',
     label: 'Escrow cushion is within the RESPA limit' },
+  // Only runs where transfer-tax-rates.js holds the jurisdiction. Everywhere
+  // else it is silent rather than apologetic — a "we have no data for your
+  // state" row is a fact about our corpus, not a finding about their closing.
+  { id: 'TRANSFER_TAX_TOTAL', needs: Needs.CD, group: 'charges',
+    label: 'Transfer and recordation taxes match the statutory rate' },
 
   // --- document integrity ---------------------------------------------------
   { id: 'EXTRACTION_CONFIDENCE', needs: Needs.CD, group: 'document',

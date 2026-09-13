@@ -235,7 +235,12 @@
             + 'Paying shows what each one measured and what it found.</p>'
             + '<ul class="sc-list">'
             + '<li><b>Loan Calculations box</b> &mdash; APR, finance charge, TIP, recomputed</li>'
-            + '<li><b>Escrow cushion</b> &mdash; against the RESPA legal maximum</li>'
+            // Not "escrow cushion". A Closing Disclosure states the whole
+            // opening escrow deposit, not the cushion inside it, so that check
+            // needs the initial escrow account statement and this panel is
+            // about what already ran on the document uploaded. Promising it
+            // here is what made the marketing sample overclaim for months.
+            + '<li><b>Monthly escrow</b> &mdash; against the annual costs disclosed</li>'
             + '<li><b>Per-diem interest and prorations</b> &mdash; from your closing date</li>'
             + '<li><b>Duplicate and stacked fees</b> &mdash; named</li>'
             + '<li><b>Cash to Close</b> &mdash; reconciled</li>'

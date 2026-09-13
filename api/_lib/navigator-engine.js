@@ -25,6 +25,7 @@
 const { getSupabaseAdmin } = require('./supabaseAdmin');
 const {
   extractLoanEstimate, toLoanEstimateRecord,
+  extractEscrowStatement, mergeEscrowStatement,
 } = require('./closing-extract');
 const { runDocumentAudit } = require('./closing-service');
 const { buildEmails } = require('./closing-emails');
@@ -694,6 +695,31 @@ async function generateNavigatorReport(submissionId) {
         // than declining to test tolerances.
         const dated = records.filter((r) => r.dateIssued);
         if (dated.length) loanEstimates = dated;
+      }
+
+      // The initial escrow account statement, if the customer sent one.
+      //
+      // Check 15 — the RESPA cushion cap — almost never ran, because a Closing
+      // Disclosure does not state a cushion. Section G is the whole opening
+      // deposit, and applying a two-month cap to it would flag a correctly
+      // funded account, so the engine declined and said so. This is the
+      // document that does state it, and asking for it is what turns the check
+      // from an apology into a result. Read at report time from the file the
+      // classifier already identified, exactly as the Loan Estimates are.
+      const escrowIndexes = (stored.documents || [])
+        .filter((d) => d.document_type === 'initial_escrow_account_statement')
+        .map((d) => d.index)
+        .filter((i) => typeof i === 'number' && contentBlocks[i]);
+
+      for (const i of escrowIndexes) {
+        try {
+          const statement = await extractEscrowStatement(ANTHROPIC_API_KEY, contentBlocks[i]);
+          if (mergeEscrowStatement(stored.extraction, statement)) break;
+        } catch (err) {
+          // An unreadable escrow statement costs one optional check, not the
+          // report. The cushion check reports honestly that it could not run.
+          console.error('[closing] escrow statement extraction failed:', err.message);
+        }
       }
 
       // runDocumentAudit, NOT runClosingAudit — the same entry point the free

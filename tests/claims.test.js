@@ -49,9 +49,17 @@ test('the page does not sell rate data while the service runs without a corpus',
 test('the $29 panel names checks the catalog can actually run', () => {
   // Each promise below must correspond to a real CD-only check. A bullet with
   // no check behind it is the same failure in a new sentence.
+  // The escrow CUSHION used to be on this list and is deliberately not any
+  // more. A Closing Disclosure states Section G, the whole opening escrow
+  // deposit — months of funding plus any cushion — and the RESPA cap applies to
+  // the cushion alone. The engine has always declined to test it from the CD,
+  // correctly, while this panel and the marketing sample both promised it. The
+  // check now needs the initial escrow account statement, so what this panel
+  // may claim is the monthly escrow collection, which genuinely does run on the
+  // document alone.
   const promised = [
     [/Loan Calculations box/, 'LOAN_MATH_APR'],
-    [/[Ee]scrow cushion/, 'ESCROW_CUSHION'],
+    [/[Mm]onthly escrow/, 'LOAN_MATH_ESCROW_MONTHLY'],
     [/[Pp]er-diem interest/, 'PREPAID_INTEREST'],
     [/prorations/, 'PRORATION'],
     [/[Dd]uplicate and stacked fees/, 'DUPLICATE_CANDIDATE'],

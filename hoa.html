@@ -82,6 +82,47 @@ h3,h4{ font-weight:600; }
 
 /* A violet-and-teal wash belongs to the old palette, not to newsprint. */
 .bg-noise{ display:none; }
+
+/* ---------------------------------------------------------------------------
+   The four things that make /closing credible, ported here.
+   ---------------------------------------------------------------------------
+   The 12 Sep audit scored this page below closing's on every trust axis while
+   asking 34% more money. closing names every check before you pay, shows a
+   sample of real output, states plainly what it will not do, and lets you see
+   the free step's shape first. None of that existed here. These are the
+   component rules those four blocks need; the palette above is unchanged.
+   ------------------------------------------------------------------------ */
+.sec-intro{ max-width:62ch; margin:0 auto 28px; text-align:center; color:var(--ink-soft); }
+.group-h{ font-size:19px; margin:26px 0 4px; }
+.group-sub{ font-size:15px; color:var(--ink-soft); margin:0 0 14px; max-width:60ch; }
+.checks{ display:grid; gap:0; border:1px solid var(--rule); background:var(--panel); }
+.chk{ display:grid; grid-template-columns:44px 1fr; align-items:baseline; gap:10px;
+      padding:9px 14px; border-top:1px solid var(--rule-soft); font-size:15.5px; }
+.chk:first-child{ border-top:0; }
+.chk .n{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px;
+         color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+
+.sample-grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+.finding-card{ border:1px solid var(--rule); background:var(--panel); padding:16px 18px; }
+.finding-card .finding-h{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.finding-card h3{ font-size:17px; margin:0 0 2px; }
+.finding-card .amt{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-weight:500;
+                    font-variant-numeric:tabular-nums; white-space:nowrap; }
+.finding-card p{ font-size:15px; margin:8px 0 0; color:var(--ink-soft); }
+.finding-card .basis{ font-size:14px; margin-top:9px; padding-left:12px;
+                      border-left:2px solid var(--rule); color:var(--ink-soft); }
+.finding-card .cite{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px;
+                     margin-top:10px; color:var(--ink-soft); }
+.sev-pill{ display:inline-block; font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+           padding:3px 8px; border:1px solid currentColor; margin-top:10px; }
+.sev-pill.crit{ color:var(--flag); background:var(--flag-tint); }
+.sev-pill.mod{ color:var(--hold); background:var(--hold-tint); }
+.sev-pill.ok{ color:var(--ok); background:var(--ok-tint); }
+
+.limits{ list-style:none; padding:0; margin:0; display:grid; gap:14px; max-width:70ch; }
+.limits li{ padding-left:18px; position:relative; color:var(--ink-soft); font-size:15.5px; line-height:1.6; }
+.limits li::before{ content:"—"; position:absolute; left:0; color:var(--rule); }
+.limits strong{ color:var(--ink); }
 </style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -99,7 +140,8 @@ h3,h4{ font-weight:600; }
     </a>
     <div class="nav-links">
       <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
+      <a href="#what-we-check">Every check</a>
+      <a href="#sample">Sample</a>
       <a href="#pricing">Pricing</a>
       <a href="#faq">FAQ</a>
     </div>
@@ -174,6 +216,125 @@ h3,h4{ font-weight:600; }
       </div>
     </div>
   </section>
+  <section id="what-we-check">
+    <div class="section-head">
+      <div class="eyebrow">Every check, named</div>
+      <h2>What we look for, document by document.</h2>
+    </div>
+    <p class="sec-intro">Each document unlocks different checks. Send what you have — anything you cannot get is named in the report as a gap, not quietly skipped.</p>
+
+    <h3 class="group-h">From the reserve study</h3>
+    <p class="group-sub">The single most useful document, and the one the risk score leans on hardest.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">01</span><span>Percent funded, recomputed from the balance and the fully funded balance rather than taken as printed</span></div>
+      <div class="chk"><span class="n">02</span><span>What the study says the association should contribute each year</span></div>
+      <div class="chk"><span class="n">03</span><span>Every major component, its remaining life, and its replacement cost</span></div>
+      <div class="chk"><span class="n">04</span><span>The reserve balance projected to the year the next big component is due</span></div>
+      <div class="chk"><span class="n">05</span><span>How old the study is — one more than about three years weakens every figure in it</span></div>
+    </div>
+
+    <h3 class="group-h">From the budget and financial statements</h3>
+    <p class="group-sub">What the association actually does, as against what its study recommends.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">06</span><span>Actual annual reserve contribution against the recommended one</span></div>
+      <div class="chk"><span class="n">07</span><span>Operating surplus or deficit</span></div>
+      <div class="chk"><span class="n">08</span><span>Owner delinquency rate</span></div>
+      <div class="chk"><span class="n">09</span><span>Bank loans, lines of credit, or reserves lent to the operating fund</span></div>
+      <div class="chk"><span class="n">10</span><span>Regular assessment per unit, and what a shortfall would mean against it</span></div>
+    </div>
+
+    <h3 class="group-h">From the meeting minutes</h3>
+    <p class="group-sub">The earliest warning available, and usually months ahead of anything a seller must disclose.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">11</span><span>A special assessment levied, voted, or formally announced</span></div>
+      <div class="chk"><span class="n">12</span><span>A board discussing funding options, borrowing, or deferring work</span></div>
+      <div class="chk"><span class="n">13</span><span>Engineer's reports, emergency repairs, and deferred maintenance</span></div>
+      <div class="chk"><span class="n">14</span><span>Litigation, construction-defect claims, or a settlement</span></div>
+    </div>
+
+    <h3 class="group-h">From the insurance summary</h3>
+    <p class="group-sub">An uninsured loss is assessed to owners, which makes this a financial check.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">15</span><span>Deductible size, including percentage-based and named-storm deductibles</span></div>
+      <div class="chk"><span class="n">16</span><span>Non-renewal, lapse, or a coverage gap</span></div>
+    </div>
+
+    <h3 class="group-h">From the bylaws, declaration, or resale certificate</h3>
+    <p class="group-sub">What you are allowed to do with the unit. Not about money the association will ask you for — about whether the purchase works at all.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">17</span><span>Leasing cap, how much of it is used, and any waitlist</span></div>
+      <div class="chk"><span class="n">18</span><span>Minimum lease term, owner-occupancy requirement, short-term rental ban</span></div>
+      <div class="chk"><span class="n">19</span><span>Capital contribution, transfer and move-in fees due at closing</span></div>
+      <div class="chk"><span class="n">20</span><span>Pets, parking, architectural approval, age restriction</span></div>
+      <div class="chk"><span class="n">21</span><span>Anything bearing on financing or resale — investor concentration, warrantability</span></div>
+    </div>
+
+    <h3 class="group-h">Across every document together</h3>
+    <p class="group-sub">No single document answers whether you are facing a special assessment. The comparison between them does, and this is the part that is worth paying for.</p>
+    <div class="checks">
+      <div class="chk"><span class="n">22</span><span>The study's recommendation against what the budget funds, compounded to the replacement year</span></div>
+      <div class="chk"><span class="n">23</span><span>Per-unit exposure if the gap were assessed, and what collection loss does to it</span></div>
+      <div class="chk"><span class="n">24</span><span>A risk score computed from the figures above, with every rule that decided it shown</span></div>
+    </div>
+  </section>
+
+  <section id="sample" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
+    <div class="section-head">
+      <div class="eyebrow">A sample report</div>
+      <h2>What a finding actually looks like.</h2>
+    </div>
+    <p class="sec-intro">An invented association, with figures that reconcile. Every finding in a real report carries the page it came from.</p>
+
+    <div class="sample-grid">
+      <div class="finding-card">
+        <div class="finding-h"><h3>Reserves are 30% funded</h3><span class="amt">$1,134,000 short</span></div>
+        <p>Against a fully funded balance of $1,620,000, the association holds $486,000.</p>
+        <div class="basis">Reserve Study, p.4: “Percent funded: 30.0%. Fully funded balance $1,620,000; current reserve balance $486,000.”</div>
+        <div class="cite">From the reserve study &middot; check 01</div>
+        <p><span class="sev-pill mod">Moderate</span></p>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-h"><h3>The budget funds less than a third of the recommendation</h3><span class="amt">$150,000/yr</span></div>
+        <p>The study recommends $210,000 a year. The budget contributes $60,000.</p>
+        <div class="basis">Reserve Study p.9 and Budget p.2. Compounded to the 2029 roof, reserves reach $666,000 against an $840,000 job — a gap of $174,000, or $2,071 per unit across 84 units (our calculation).</div>
+        <div class="cite">Across every document &middot; checks 06 and 22</div>
+        <p><span class="sev-pill mod">Moderate</span></p>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-h"><h3>The board has opened a line of credit</h3><span class="amt">Risk score: High</span></div>
+        <p>Associations frequently borrow immediately before, or instead of, assessing.</p>
+        <div class="basis">Minutes, 14 March, p.3: “Motion carried to establish a $250,000 line of credit against future assessments.”</div>
+        <div class="cite">From the minutes &middot; check 09 &middot; this is the rule that moved the score from Moderate to High</div>
+        <p><span class="sev-pill crit">High</span></p>
+      </div>
+
+      <div class="finding-card">
+        <div class="finding-h"><h3>Leasing is capped and the cap is full</h3><span class="amt">4-year waitlist</span></div>
+        <p>You could not rent this unit out on purchase, and the wait is long enough to matter if your plans change.</p>
+        <div class="basis">Bylaws, Article XI, p.14: “No more than 20% of units may be leased at any time.” Resale certificate: 17 of 17 permitted leases in use, 9 owners on the waitlist.</div>
+        <div class="cite">From the bylaws &middot; checks 17 and 18</div>
+        <p><span class="sev-pill crit">Deal-relevant</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="limits">
+    <div class="section-head">
+      <div class="eyebrow">What this does not do</div>
+      <h2>Read this before you upload.</h2>
+    </div>
+    <ul class="limits">
+      <li><strong>We read the documents you send, and nothing else.</strong> We have no access to the association's records, no live database, and no way to look it up. Anything the HOA never put in writing is invisible to us — and to you.</li>
+      <li><strong>We do not tell you whether to buy.</strong> You get a risk read on the finances and the rules, plus the questions to ask. The decision is yours, and it depends on things no document shows.</li>
+      <li><strong>A healthy association is reported as healthy.</strong> The report does not manufacture concerns to justify its price. If nothing is wrong, you have bought the confirmation — which is what you came for.</li>
+      <li><strong>Estimates are labelled as estimates.</strong> A per-unit exposure figure is arithmetic on the association's own numbers, not a bill anyone has sent. We show the working so you can check it.</li>
+      <li><strong>Missing documents are named, not guessed around.</strong> If the bylaws were not provided, the report says leasing could not be checked. It does not infer what they probably say.</li>
+      <li><strong>Automated analysis, not legal or real-estate advice.</strong> Every finding cites the page it came from, so you can verify it and take it to an attorney or your agent.</li>
+    </ul>
+  </section>
+
   <!--
     ============================================================================
     PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
@@ -199,6 +360,17 @@ h3,h4{ font-weight:600; }
       <h2>One flat price per HOA package.</h2>
       <p>Upload what you have, pay once, know what you're buying into.</p>
       <p style="font-size:15.5px;"><strong>Not sure yet?</strong> <a href="/hoa-scorecard">Run the free reserve check first</a> — it reads your reserve study and budget and shows you a real number before you pay anything.</p>
+    </div>
+
+    <!-- What the free step actually returns. A visitor deciding whether to
+         upload financial documents to a brand they have never heard of should
+         not have to guess at the shape of what comes back. -->
+    <div class="finding-card" style="max-width:620px;margin:0 auto 34px;">
+      <div class="eyebrow" style="margin-bottom:10px;">The free check returns this</div>
+      <div class="finding-h"><h3>Reserves are 30% funded</h3><span class="amt">Free</span></div>
+      <p>Computed from the reserve study's own balance and fully funded balance.</p>
+      <div class="basis">The biggest bill ahead: a roof replacement in 2029, estimated $840,000. At the budget's current contribution the fund reaches $666,000 by then — a gap of $174,000, or $2,071 per unit (our calculation).</div>
+      <div class="cite">Plus a count of the further concerns the full report would examine &middot; no card, no account</div>
     </div>
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">

@@ -596,6 +596,43 @@ const REPORT_TOOL = {
 };
 
 // ---------------------------------------------------------------------------
+// the citation promise
+// ---------------------------------------------------------------------------
+//
+// hoa.html promises "Your top 5 concerns, each backed by a page-level
+// citation". attachCitations() resolves evidence ids, drops the ones that do
+// not resolve, and counts them — and then the report shipped regardless, so a
+// finding whose ids all failed landed beside four cited ones with nothing to
+// tell them apart.
+//
+// Citation is this product's main differentiator and the thing a buyer is
+// actually paying for: a page reference they can turn to and check. Shipping an
+// uncited finding as though it were sourced is the honesty defect the
+// consistency audit calls research advertised but not performed.
+//
+// Findings are reordered rather than deleted. An uncited concern can still be
+// real and worth reading — what it must not do is occupy one of the top five
+// the page sold as cited. A stable partition keeps the engine's severity order
+// inside each group.
+function demoteUncitedFindings(report) {
+  const findings = Array.isArray(report && report.findings) ? report.findings : null;
+  if (!findings || !findings.length) return { cited: 0, uncited: 0 };
+
+  const hasCitation = (f) => Array.isArray(f && f.citations) && f.citations.filter(Boolean).length > 0;
+
+  const cited = findings.filter(hasCitation);
+  const uncited = findings.filter((f) => !hasCitation(f));
+
+  // Marked as well as moved, so the renderer can say so rather than leaving the
+  // reader to notice an absence.
+  uncited.forEach((f) => { if (f) f.uncited = true; });
+  cited.forEach((f) => { if (f) delete f.uncited; });
+
+  report.findings = cited.concat(uncited);
+  return { cited: cited.length, uncited: uncited.length };
+}
+
+// ---------------------------------------------------------------------------
 // the risk score
 // ---------------------------------------------------------------------------
 //
@@ -617,6 +654,7 @@ const REPORT_TOOL = {
 // fire rather than being assumed either way.
 
 const { figuresIn } = require('./money-text');
+const { deriveHoaReserveFigures, checkHoaConsistency } = require('./report-consistency');
 
 const KNOWN = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 
@@ -1196,17 +1234,36 @@ async function runSynthesis(client, job) {
 
   const { report, droppedCitationRefs, unverifiedPinpoints } = attachCitations(toolInput, evidence);
 
-  // The score is computed here rather than asked for. Run AFTER citations
-  // attach so nothing downstream sees a report in two different states, and
-  // before the report is stored so the stored row is the published one.
+  // Order matters through the next four lines, and each one is a repair rather
+  // than a check: the report is corrected here, not merely graded.
+  //
+  // 1. Percent funded is recomputed from the two balances it is made of. The
+  //    model runs that division on a real calculator, which is why a hand audit
+  //    of a shipped report found all twenty-one figures reconciling — but the
+  //    result still arrives as a STRING it typed, and a string typed out of a
+  //    correct calculation is one keystroke from a wrong one. Derived first so
+  //    everything below sees the corrected figure.
+  const derived = deriveHoaReserveFigures(report);
+
+  // 2. A finding with no surviving citation drops below the ones that have
+  //    them, so the concerns the customer reads first are the cited ones the
+  //    page promises.
+  const citationOrder = demoteUncitedFindings(report);
+
+  // 3. The score is computed rather than asked for.
   const scoring = applyComputedRiskScore(report);
+
+  // 4. And what is left is graded, so a contradiction that survived all of the
+  //    above is visible in the stored row instead of only on the customer's
+  //    screen.
+  const { problems } = checkHoaConsistency({ report });
 
   report.evidence = evidence;
   report.documents_analysed = job.parts.map((p) => p.title);
   report.generated_at = new Date().toISOString();
   report.disclaimer = 'This is an analysis of the documents provided, not legal, financial, or investment advice, and not a substitute for review by an attorney, accountant, or licensed inspector. Dollar figures are estimates unless quoted directly from a document. Verify anything you intend to rely on before waiving a contingency.';
 
-  return { report, droppedCitationRefs, unverifiedPinpoints, scoring };
+  return { report, droppedCitationRefs, unverifiedPinpoints, scoring, derived, citationOrder, problems };
 }
 
 // Advances one submission by exactly one stage, then returns. This is the unit
@@ -1268,7 +1325,10 @@ async function advanceHoaJob(submissionId) {
       };
     }
 
-    const { report, droppedCitationRefs, unverifiedPinpoints, scoring } = await runSynthesis(client, job);
+    const {
+      report, droppedCitationRefs, unverifiedPinpoints, scoring,
+      derived, citationOrder, problems,
+    } = await runSynthesis(client, job);
 
     await admin.from('navigator_reports').insert({
       submission_id: submissionId,
@@ -1303,6 +1363,19 @@ async function advanceHoaJob(submissionId) {
     if (scoring && !scoring.computed) {
       console.warn(`[hoa-engine] submission ${submissionId}: risk score could not be computed from the documents; using the analytical read`);
     }
+    // A figure we had to correct is worth seeing. If this fires often, the
+    // model is mis-transcribing its own calculator and the prompt needs work.
+    (derived || []).forEach((c) => {
+      console.warn(`[hoa-engine] submission ${submissionId}: corrected ${c.field} from "${c.from}" to "${c.to}"${c.basis ? ` (${c.basis})` : ''}`);
+    });
+    if (citationOrder && citationOrder.uncited > 0) {
+      console.warn(`[hoa-engine] submission ${submissionId}: ${citationOrder.uncited} finding(s) carried no citation and were moved below the ${citationOrder.cited} that did`);
+    }
+    // These survived every repair above, so they are either a real
+    // contradiction or a gap in the repairs. Either way somebody should look.
+    (problems || []).forEach((p) => {
+      console.warn(`[hoa-engine] submission ${submissionId}: ${p.class} — ${p.message}`);
+    });
 
     return { done: true, stage: 'complete', report };
   } catch (err) {
@@ -1409,6 +1482,11 @@ module.exports = {
   // Exported for tests.
   scoreRisk,
   applyComputedRiskScore,
+  demoteUncitedFindings,
+  // Re-exported from report-consistency so the tests exercise these at the
+  // engine boundary, which is where they actually run.
+  deriveHoaReserveFigures,
+  checkHoaConsistency,
   harvestCitations,
   attachCitations,
   formatEvidenceTable,
