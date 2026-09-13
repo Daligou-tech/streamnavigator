@@ -147,3 +147,73 @@ test('no engine marks a paid submission failed without considering a refund', ()
     'a customer who paid and received nothing is owed the money back without having to ask '
     + `for it:\n  ${offenders.join('\n  ')}`);
 });
+
+// --- when the outage stops being an outage -----------------------------------
+//
+// Withholding the refund is only fair while "the customer is still going to get
+// the report" is true. Added 2026-09-12, when the credit balance was not going
+// to be restored: left unbounded, the classifier becomes a way to hold money
+// indefinitely for work that will never happen — worse than the silent failure
+// it replaced.
+
+const { OUTAGE_PATIENCE_HOURS } = require('../api/_lib/provider-outage');
+
+const hoursAgo = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+
+test('a fresh outage still waits, and refunds nobody', () => {
+  const { outage, exhausted, patch } = failurePatch(new Error(REAL_CREDIT_ERROR),
+    { paidForReal: true, waitingSince: hoursAgo(1) });
+  assert.equal(outage, true);
+  assert.ok(!exhausted);
+  assert.equal(patch.status, 'paid');
+  assert.equal(patch.refund_state, undefined);
+});
+
+test('an outage past the patience window gives the money back', () => {
+  const { outage, exhausted, patch } = failurePatch(new Error(REAL_CREDIT_ERROR),
+    { paidForReal: true, waitingSince: hoursAgo(OUTAGE_PATIENCE_HOURS + 1) });
+  assert.equal(outage, true, 'the cause is still an outage, and the alert wording depends on saying so');
+  assert.equal(exhausted, true);
+  assert.equal(patch.status, 'failed', 'process-refunds only ever looks at failed rows');
+  assert.equal(patch.refund_state, 'due');
+  assert.match(patch.error, new RegExp(`over ${OUTAGE_PATIENCE_HOURS}h`),
+    'the row has to record why it was given up on, not just that it was');
+});
+
+test('an exhausted outage on an unpaid row still refunds nothing', () => {
+  const { patch } = failurePatch(new Error(REAL_CREDIT_ERROR),
+    { paidForReal: false, waitingSince: hoursAgo(OUTAGE_PATIENCE_HOURS + 1) });
+  assert.equal(patch.status, 'failed');
+  assert.equal(patch.refund_state, undefined);
+});
+
+test('with no waiting-since the old behaviour stands, rather than guessing', () => {
+  // A caller that does not know how long the customer has waited must not have
+  // that read as "forever" — that would refund every outage immediately.
+  const { patch } = failurePatch(new Error(REAL_CREDIT_ERROR), { paidForReal: true });
+  assert.equal(patch.status, 'paid');
+  assert.equal(patch.refund_state, undefined);
+});
+
+test('every engine tells the classifier how long the customer has been waiting', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const LIB = path.join(__dirname, '..', 'api', '_lib');
+  const missing = [];
+  for (const file of ['navigator-engine.js', 'contractor-engine.js', 'purchase-engine.js']) {
+    const src = fs.readFileSync(path.join(LIB, file), 'utf8');
+    if (!/waitingSince:/.test(src)) missing.push(file);
+  }
+  assert.deepEqual(missing, [],
+    'an engine that omits waitingSince can never give up, so its customers wait forever:\n  '
+    + missing.join('\n  '));
+});
+
+test('the buying engine does not re-arm a row it has just given up on', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'api', '_lib', 'purchase-engine.js'), 'utf8');
+  assert.ok(/if \(outage && !exhausted\)/.test(src),
+    'putting an exhausted row back on the retry queue undoes the refund decision that '
+    + 'was just made about it');
+});

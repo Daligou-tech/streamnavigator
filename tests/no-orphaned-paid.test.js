@@ -154,9 +154,40 @@ test('an outage parks a buying row where its own job will find it', () => {
   // retry-failed-buying's query, so the outage branch has to leave the row in a
   // shape that query matches.
   const src = read('api/_lib/purchase-engine.js');
-  const branch = src.slice(src.indexOf('if (outage) {'), src.indexOf('await admin.from', src.indexOf('if (outage) {')));
+  const branch = src.slice(src.indexOf('if (outage && !exhausted) {'), src.indexOf('await admin.from', src.indexOf('if (outage && !exhausted) {')));
   assert.ok(/auto_recovery_attempted\s*=\s*true/.test(branch),
     'an outage row left with auto_recovery_attempted false matched neither shape of the old query');
   assert.ok(/generation_attempts/.test(branch),
     'an outage must not spend the retry budget — the attempt was incremented before it began');
+});
+
+test('the buying job reclaims a row abandoned mid-generation too', () => {
+  // Third state, same orphan. The widened filter picked the two stuck customers
+  // up on 2026-09-12, generation set 'processing', the credit outage killed it,
+  // and they landed in the one state nothing looked at: this job read 'failed'
+  // and 'paid', and generate-paid-navigator's reclaim excludes buying.
+  const src = read('api/retry-failed-buying.js');
+  assert.ok(/status',\s*'processing'/.test(src),
+    'a buying row killed mid-generation is claimed by nothing and waits forever');
+
+  const m = src.match(/ABANDONED_MINUTES\s*=\s*(\d+)/);
+  assert.ok(m, 'the wait before reclaiming an abandoned row is not named');
+  const longestOwnerMinutes = Math.max(
+    ...Object.values(JSON.parse(read('vercel.json')).functions || {})
+      .map((f) => (f.maxDuration || 0) / 60)
+  );
+  assert.ok(Number(m[1]) > longestOwnerMinutes,
+    `reclaiming after ${m[1]} minutes can race a function that runs for up to `
+    + `${longestOwnerMinutes.toFixed(1)} — the same report would generate and bill twice`);
+});
+
+test('an outage cannot hold a paid submission forever', () => {
+  // The patience window. Withholding the refund is only fair while "the customer
+  // is still going to get the report" is true; unbounded, it becomes a way to
+  // keep money for work that will never happen.
+  const src = read('api/_lib/provider-outage.js');
+  assert.ok(/OUTAGE_PATIENCE_HOURS/.test(src), 'the outage hold has no bound');
+  const { OUTAGE_PATIENCE_HOURS } = require('../api/_lib/provider-outage');
+  assert.ok(OUTAGE_PATIENCE_HOURS > 0 && OUTAGE_PATIENCE_HOURS <= 72,
+    `${OUTAGE_PATIENCE_HOURS}h is not a window a paying customer would call reasonable`);
 });

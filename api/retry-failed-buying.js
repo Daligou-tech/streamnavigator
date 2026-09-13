@@ -56,12 +56,41 @@ module.exports = async function handler(req, res) {
   const GRACE_MINUTES = 5;
   const cutoff = new Date(Date.now() - GRACE_MINUTES * 60 * 1000).toISOString();
 
-  const { data: eligible, error: fetchError } = await admin
+  // A row abandoned mid-generation belongs here too.
+  //
+  // 'processing' is written as the first act of generation, so a row in that
+  // state was claimed by some process; when that process is killed, nothing
+  // writes 'failed' and it says 'processing' forever. api/generate-paid-
+  // navigator.js reclaims those for the nine products it sweeps — buying is not
+  // one of them, and this job read only 'failed' and 'paid'.
+  //
+  // Found on 2026-09-12 with the two customers from 30 August sitting in it:
+  // the widened filter picked them up, generation set 'processing', the credit
+  // outage killed it, and they landed in the one state nothing looked at. Third
+  // state, same orphan.
+  //
+  // Twenty minutes is past every function that could still hold the row — the
+  // longest is 800s — so anything older is certainly abandoned.
+  const ABANDONED_MINUTES = 20;
+  const abandoned = new Date(Date.now() - ABANDONED_MINUTES * 60 * 1000).toISOString();
+
+  const waiting = await admin
     .from('navigator_submissions')
     .select('id, status, auto_recovery_attempted')
     .eq('product', 'buying')
     .lt('updated_at', cutoff)
     .or('and(status.eq.failed,auto_recovery_attempted.eq.false),status.eq.paid');
+
+  const stalled = await admin
+    .from('navigator_submissions')
+    .select('id, status, auto_recovery_attempted')
+    .eq('product', 'buying')
+    .eq('status', 'processing')
+    .lt('updated_at', abandoned);
+
+  const eligible = (stalled.data || []).concat(waiting.data || []);
+  const fetchError = waiting.error || stalled.error;
+
 
   if (fetchError) {
     res.status(500).json({ ok: false, error: fetchError.message });

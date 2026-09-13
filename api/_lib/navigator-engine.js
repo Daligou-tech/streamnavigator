@@ -1362,7 +1362,7 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // so the row goes back to 'paid' for the five-minute sweep to retry rather
     // than to 'failed' with the customer's money on its way back out.
     const paidForReal = !!submission.stripe_checkout_session_id;
-    const { outage, patch } = failurePatch(err, { paidForReal });
+    const { outage, patch } = failurePatch(err, { paidForReal, waitingSince: submission.created_at });
 
     await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
 

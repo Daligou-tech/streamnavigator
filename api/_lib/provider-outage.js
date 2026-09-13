@@ -64,16 +64,49 @@ function isProviderOutage(err) {
 // a submission abandoned at checkout can never queue money it never took.
 // process-refunds re-checks that and three other conditions before a cent
 // moves, including that no report was ever delivered.
-function failurePatch(err, { paidForReal }) {
+// How long a submission may be held as "the provider is briefly unavailable"
+// before that stops being a fair description of what happened.
+//
+// The whole argument for withholding the refund is that an outage is short and
+// the customer is still going to get the report. A balance that is topped up in
+// two minutes fits that. Twenty-four hours does not: at that point the customer
+// has paid, has nothing, and is being kept waiting by a decision of ours rather
+// than by anything about their submission. They get their money back, and we
+// get told.
+//
+// Added 2026-09-12, when the credit balance was not going to be restored. The
+// classifier was written for a transient outage and was correct for one; left
+// unbounded it becomes a way to hold money indefinitely for work that is never
+// going to happen, which is worse than the silent failure it replaced.
+const OUTAGE_PATIENCE_HOURS = 24;
+
+function failurePatch(err, { paidForReal, waitingSince } = {}) {
   const error = String((err && err.message) || err || 'Unknown error').slice(0, 500);
   const now = new Date().toISOString();
 
   if (isProviderOutage(err)) {
-    return {
-      outage: true,
-      // Back to the queue, not to the grave.
-      patch: { status: 'paid', error, updated_at: now },
+    const since = waitingSince ? new Date(waitingSince).getTime() : NaN;
+    const heldTooLong = Number.isFinite(since)
+      && (Date.now() - since) > OUTAGE_PATIENCE_HOURS * 3600 * 1000;
+
+    if (!heldTooLong) {
+      return {
+        outage: true,
+        // Back to the queue, not to the grave.
+        patch: { status: 'paid', error, updated_at: now },
+      };
+    }
+
+    // Out of patience. Reported as an outage still — it is the truth about the
+    // cause, and the alert wording depends on it — but written to the row as a
+    // failure, so process-refunds can see it and return the money.
+    const givenUp = {
+      status: 'failed',
+      error: `Unavailable for over ${OUTAGE_PATIENCE_HOURS}h: ${error}`.slice(0, 500),
+      updated_at: now,
     };
+    if (paidForReal) givenUp.refund_state = 'due';
+    return { outage: true, exhausted: true, patch: givenUp };
   }
 
   const patch = { status: 'failed', error, updated_at: now };
@@ -81,4 +114,4 @@ function failurePatch(err, { paidForReal }) {
   return { outage: false, patch };
 }
 
-module.exports = { isProviderOutage, failurePatch, OUTAGE_PATTERNS };
+module.exports = { isProviderOutage, failurePatch, OUTAGE_PATTERNS, OUTAGE_PATIENCE_HOURS };

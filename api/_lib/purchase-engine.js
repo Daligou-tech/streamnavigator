@@ -3395,9 +3395,12 @@ async function generatePurchaseReport(submissionId) {
     // a Stripe session exists, and process-refunds re-checks three more
     // conditions before a cent moves.
     const paidForReal = !!submission.stripe_checkout_session_id;
-    const { outage, patch } = failurePatch(err, { paidForReal });
+    const { outage, exhausted, patch } = failurePatch(err, { paidForReal, waitingSince: submission.created_at });
 
-    if (outage) {
+    // `exhausted` means the outage has run past the patience window and the row
+    // has just been marked failed with a refund due. Re-arming it for the retry
+    // job would put it straight back on the queue it was taken off.
+    if (outage && !exhausted) {
       // Buying is excluded from api/generate-paid-navigator.js — it has its own
       // retry job — so 'paid' alone is not a queue here the way it is for the
       // other nine products. api/retry-failed-buying.js looks for exactly two

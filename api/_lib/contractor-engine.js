@@ -282,7 +282,7 @@ async function generateContractorReport(submissionId) {
     // that says nothing about the submission and refunding it would return
     // money for a report the customer is still going to get.
     const paidForReal = !!submission.stripe_checkout_session_id;
-    const { outage, patch } = failurePatch(err, { paidForReal });
+    const { outage, patch } = failurePatch(err, { paidForReal, waitingSince: submission.created_at });
 
     await admin.from('navigator_submissions').update(patch).eq('id', submissionId);
 
