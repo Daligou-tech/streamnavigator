@@ -3298,11 +3298,23 @@ test('a failed verification is bought once, never twice', async (t) => {
   const report = await generateUntilReport('sub-1');
   assert.ok(report, 'the customer still stops polling with a report');
   assert.equal(reportInserts.length, 1);
-  assert.equal(verifyCalls, 1, 'the second attempt skips it rather than paying for it again');
+  // One batch call, then one pass of per-requirement calls over the three
+  // requirements fridgeSubmission names, and then never again. The bound is
+  // 1 + fragments, not "1" — a failed batch now earns one attempt at grading
+  // them individually, because that is what rescues the requirements a slow
+  // sibling used to take down with it.
+  assert.ok(verifyCalls <= 1 + fridgeSubmission().form_data.must_have_features.split(',').length,
+    'bounded by one batch plus one pass, not retried indefinitely: ' + verifyCalls);
   assert.equal(
     submission.job_state.must_have_verification_abandoned, true,
-    'and the row records why, so any later attempt skips it too'
+    'and the row records that no further progress was available, so later attempts skip it'
   );
+
+  // The part that actually matters: whatever the count, it stops.
+  const settled = verifyCalls;
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  await generatePurchaseReport('sub-1');
+  assert.equal(verifyCalls, settled, 'a later attempt buys nothing further');
 });
 
 test('a verification that overruns its budget is abandoned, not waited on', async (t) => {
@@ -3676,11 +3688,13 @@ test('the graded count matches what the buyer actually asked for', async (t) => 
   installFakes({ submission });
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
-  let asked = null;
+  const asked = [];
   global.fetch = async (url, opts) => {
     const body = JSON.parse(opts.body);
     if (isVerifyCall(opts)) {
-      asked = body.messages[0].content;
+      // Several now: a failed batch is followed by one call per requirement,
+      // so the figure under test may not be in the LAST of them.
+      asked.push(body.messages[0].content);
       return { ok: false, status: 500, text: async () => 'no verification for this test' };
     }
     return searchedToolUseResponse(completeReportInput(), 3);
@@ -3689,10 +3703,11 @@ test('the graded count matches what the buyer actually asked for', async (t) => 
 
   const report = await generateUntilReport('sub-1');
   assert.ok(report);
-  assert.match(asked, /7,000 lbs/, 'the model is asked about the requirement as written');
+  const allAsked = asked.join('\n');
+  assert.match(allAsked, /7,000 lbs/, 'the model is asked about the requirement as written');
   // Checked as a whole bullet, not a substring: \b000 matches inside
   // "7,000" too, which is the correct text rather than the broken one.
-  assert.doesNotMatch(asked, /^\s*-\s*000\b/m, 'and no bullet is the tail of a split number');
+  assert.doesNotMatch(allAsked, /^\s*-\s*000\b/m, 'and no bullet is the tail of a split number');
   assert.equal(
     report.key_numbers.find((n) => /must-haves/i.test(n.label)).value,
     '0 of 2 confirmed',
@@ -3771,4 +3786,123 @@ test('a request that reaches fetch after the deadline still settles', async (t) 
   });
   assert.equal(result, null, 'an overrun verification comes back as no verification');
   assert.ok(Date.now() - started < 5000, 'it settles rather than hanging the suite');
+});
+
+// --- a graded requirement is never thrown away again ------------------------
+//
+// The verification used to be all-or-nothing: one call graded every
+// requirement at once and a call that overran its deadline discarded every
+// grade it had already reached. That is why the audit's F-150 swung between
+// "2 of 2 confirmed" with sources and "0 of 2 confirmed" for the same truck on
+// the next run. Nothing was wrong with the grading; the batch was discarded.
+
+test('a requirement graded once is not bought again', () => {
+  const { __internal } = require('../api/_lib/purchase-engine');
+  const fragments = ['internal ice maker', 'must fit a 36-inch opening'];
+
+  assert.deepEqual(__internal.pendingFragments(fragments, null), fragments,
+    'nothing cached means everything is outstanding');
+
+  // The model echoes the buyer's wording but not always to the character, so
+  // matching is fuzzy — an exact-string check here would re-buy the lookup.
+  const cached = { checks: [{ requirement: 'fits a 36 inch opening', verdict: 'confirmed' }], searchRounds: 1 };
+  assert.deepEqual(__internal.pendingFragments(fragments, cached), ['internal ice maker']);
+
+  const merged = __internal.mergeVerification(cached, {
+    checks: [{ requirement: 'internal ice maker', verdict: 'contradicted' }],
+    searchRounds: 2,
+  });
+  assert.equal(merged.checks.length, 2, 'the new grade joins the old one');
+  assert.equal(merged.searchRounds, 3, 'and the search rounds accumulate');
+  assert.equal(merged.checks[0].verdict, 'confirmed', 'the earlier grade is kept as-is');
+});
+
+test('a batch verification that overruns falls back to one at a time, banking each', async (t) => {
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+
+  // fridgeSubmission has three requirements. The batch call fails outright;
+  // then each single-requirement call succeeds for the first two and fails for
+  // the third, which is the case that used to lose everything.
+  let verifyCalls = 0;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) {
+      verifyCalls++;
+      const body = JSON.parse(opts.body);
+      const asked = body.messages[0].content;
+      const single = (asked.match(/^\s*-\s/gm) || []).length === 1;
+      if (!single) return { ok: false, status: 500, text: async () => 'batch too slow' };
+      if (/ice maker/.test(asked)) {
+        return mustHaveResponse([{ requirement: 'internal ice maker', verdict: 'confirmed', finding: 'Spec sheet lists an internal ice maker.', published_value: 'Internal Ice Maker', source: 'manufacturer spec sheet' }], 1);
+      }
+      if (/external door dispenser/.test(asked)) {
+        return mustHaveResponse([{ requirement: 'no external door dispenser', verdict: 'confirmed', finding: 'The spec sheet lists no through-the-door dispenser.', published_value: 'Ice Maker: Internal', source: 'manufacturer spec sheet' }], 1);
+      }
+      return { ok: false, status: 500, text: async () => 'this one never finishes' };
+    }
+    return searchedToolUseResponse(completeReportInput(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const report = await generateUntilReport('sub-1', 10);
+
+  assert.ok(report, 'the customer still gets a report');
+  assert.equal(reportInserts.length, 1);
+  assert.ok(verifyCalls >= 2, 'the batch failure is followed by per-requirement calls');
+
+  const cached = submission.job_state && submission.job_state.must_have_verification;
+  assert.ok(cached, 'what was graded is banked on the row');
+  assert.equal(cached.checks.length, 2,
+    'two requirements graded and kept, even though the third never finished');
+
+  assert.ok(cached.checks.every((c) => c.verdict === 'confirmed' && nonEmptyString(c.published_value)),
+    'and they are real grades with published figures, not placeholders');
+
+  // The point of the whole change, stated as the customer sees it.
+  const line = report.key_numbers.find((n) => /must-haves/i.test(n.label)).value;
+  assert.doesNotMatch(line, /^0 of/, 'the customer is not told 0 of 3 when 2 were graded');
+});
+
+test('a verification that grades nothing new still terminates', async (t) => {
+  // Progress is what bounds the loop. Without it, handing back after every
+  // failed attempt is the poll-forever bug the marker exists to prevent.
+  const submission = fridgeSubmission();
+  const { reportInserts } = installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  let verifyCalls = 0;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) {
+      verifyCalls++;
+      return { ok: false, status: 500, text: async () => 'nothing ever grades' };
+    }
+    return searchedToolUseResponse(completeReportInput(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const report = await generateUntilReport('sub-1', 10);
+  assert.ok(report, 'the customer still stops polling with a report');
+  assert.equal(reportInserts.length, 1);
+  assert.equal(submission.job_state.must_have_verification_abandoned, true,
+    'and the row records that no further progress was available');
+  assert.ok(verifyCalls < 12, 'bounded rather than retried forever: ' + verifyCalls);
+});
+
+test('every report call is counted, so the leak rate has a denominator', async (t) => {
+  // "No leak in eleven runs" could not be turned into a rate, because nothing
+  // counted how many report calls there were to leak out of — an unknown
+  // number of those runs never reached the report call at all.
+  const submission = fakeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async () => searchedToolUseResponse(completeReportInput(), 3);
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  const report = await generateUntilReport('sub-1');
+  assert.ok(report);
+  assert.equal(submission.job_state.report_calls, 1,
+    'one submit_purchase_report response, counted on the row');
 });

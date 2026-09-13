@@ -1635,6 +1635,72 @@ function readCachedVerification(submission) {
   return { checks: cached.checks, searchRounds: Number(cached.searchRounds) || 0 };
 }
 
+// Which of the customer's requirements a cached verification has actually
+// graded, and which are still outstanding.
+//
+// The verification used to be all-or-nothing: one call graded every
+// requirement at once, sharing one search budget, and a call that overran its
+// deadline threw away every grade it had reached along with the ones it had
+// not. That is why the F-150 in the audit swung between "2 of 2 confirmed"
+// with sources and "0 of 2 confirmed" on the next run for the same truck --
+// nothing was wrong with the grading, the whole batch was simply discarded.
+//
+// Matching is done with fragmentCovered rather than string equality on
+// purpose. The model is asked to echo the buyer's own wording and usually
+// does, but "must fit a 36-inch opening" coming back as "fits a 36 inch
+// opening" is the same requirement and must not be re-bought.
+function pendingFragments(fragments, cached) {
+  const checks = (cached && Array.isArray(cached.checks)) ? cached.checks : [];
+  if (!checks.length) return fragments.slice();
+  return fragments.filter((f) => !fragmentCovered(f, checks));
+}
+
+// Adds freshly graded checks to whatever was already cached, keeping the
+// first grade for a requirement rather than the newest: a later pass only
+// runs for requirements that were still outstanding, so a duplicate here
+// means the matcher disagreed with itself and the earlier answer is the one
+// the customer may already have seen.
+function mergeVerification(cached, fresh) {
+  const base = (cached && Array.isArray(cached.checks)) ? cached.checks : [];
+  const add = (fresh && Array.isArray(fresh.checks)) ? fresh.checks : [];
+  const checks = base.slice();
+  for (const check of add) {
+    if (!check || !nonEmpty(check.requirement)) continue;
+    if (checks.some((c) => fragmentCovered(check.requirement, [c]))) continue;
+    checks.push(check);
+  }
+  return {
+    checks,
+    searchRounds: (Number(cached && cached.searchRounds) || 0) + (Number(fresh && fresh.searchRounds) || 0),
+  };
+}
+
+// The batch call is still the fast path and still runs first: one request
+// that establishes the product once and grades everything against it is both
+// cheaper and better-informed than N requests that each rediscover the same
+// specification. This marker only records that it did NOT fit in the budget
+// for this submission, so the next attempt grades one requirement at a time
+// instead -- slower per requirement, but each one is banked as it lands.
+function batchVerificationFailed(submission) {
+  return !!(((submission && submission.job_state) || {}).must_have_batch_failed);
+}
+
+async function markBatchVerificationFailed(admin, submission) {
+  try {
+    const jobState = { ...(submission.job_state || {}), must_have_batch_failed: true };
+    const { error } = await admin
+      .from('navigator_submissions')
+      .update({ job_state: jobState, updated_at: new Date().toISOString() })
+      .eq('id', submission.id);
+    if (error) throw new Error(error.message || String(error));
+    submission.job_state = jobState;
+    return true;
+  } catch (err) {
+    console.warn(`[purchase-engine] Could not record the failed batch verification for submission ${submission.id}: ${String((err && err.message) || err)}`);
+    return false;
+  }
+}
+
 // A verification that ran out of budget, recorded so the next attempt does
 // not buy the same failure again.
 //
@@ -2160,8 +2226,8 @@ const VERIFICATION_BUDGET_MS = 240000;
 // deadlineAt is an absolute timestamp rather than a duration so that the
 // step-down retries below (search variant, then no search at all) share one
 // budget instead of each starting a fresh one.
-async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, deadlineAt }) {
-  const fragments = mustHaveFragments(submission);
+async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, deadlineAt, fragments: only }) {
+  const fragments = Array.isArray(only) ? only : mustHaveFragments(submission);
   if (!fragments.length) return { checks: [], searchRounds: 0 };
 
   const deadline = isNum(deadlineAt) ? deadlineAt : Date.now() + VERIFICATION_BUDGET_MS;
@@ -2181,7 +2247,7 @@ async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, 
   // it surfaced as a suite that died mid-run on CI and passed everywhere else.
   const abortTimer = setTimeout(() => controller.abort(), remaining);
   try {
-    return await runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal: controller.signal });
+    return await runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal: controller.signal, fragments });
   } catch (err) {
     if (controller.signal.aborted) {
       console.warn(
@@ -2195,8 +2261,8 @@ async function verifyMustHaves({ apiKey, submission, submissionId, allowSearch, 
   }
 }
 
-async function runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal }) {
-  const fragments = mustHaveFragments(submission);
+async function runVerification({ apiKey, submission, submissionId, allowSearch, deadline, signal, fragments: only }) {
+  const fragments = Array.isArray(only) ? only : mustHaveFragments(submission);
 
   const formData = submission.form_data || {};
   const system = `You check whether one specific product meets a buyer's stated requirements, for StreamNavigator AI. You do one thing: look up what the product actually is, and grade each requirement against it.
@@ -2233,7 +2299,7 @@ Give exactly one entry per line above, using the buyer's own wording for the req
     });
   } catch (err) {
     if (allowSearch && looksLikeUnsupportedToolError(err)) {
-      return runVerification({ apiKey, submission, submissionId, allowSearch: false, deadline, signal });
+      return runVerification({ apiKey, submission, submissionId, allowSearch: false, deadline, signal, fragments });
     }
     // A failed verification must not cost the customer their report. The
     // caller falls back to unverified entries, which is honest and still
@@ -2883,40 +2949,127 @@ async function generatePurchaseReport(submissionId) {
     // an attempt that only exists because the previous one ran out of time.
     let verificationIsFresh = false;
     let verificationJustAbandoned = false;
+    let handBackForAnotherPass = false;
+    const allFragments = mustHaveFragments(submission);
     let verification = readCachedVerification(submission);
-    if (verification) {
+    let pending = pendingFragments(allFragments, verification);
+    const gradedBefore = verification ? verification.checks.length : 0;
+
+    if (verification && !pending.length) {
       console.warn(
         `[purchase-engine] Reusing the must-have verification stored on submission ${submissionId} (${verification.checks.length} check(s), ${verification.searchRounds} search round(s)) rather than running it again.`
       );
     } else if (verificationWasAbandoned(submission)) {
-      // An earlier attempt already established that this one cannot finish in
-      // its budget. Running it again would spend this attempt's time
-      // rediscovering that, which is how the submission got here.
+      // An earlier attempt already established that no further progress is
+      // available inside a budget. Running it again would spend this attempt's
+      // time rediscovering that, which is how the submission got here.
       console.warn(
-        `[purchase-engine] Skipping the must-have verification for submission ${submissionId} — an earlier attempt abandoned it, so the report runs now with the requirements marked unchecked.`
+        `[purchase-engine] Skipping the must-have verification for submission ${submissionId} — an earlier attempt abandoned it, so the report runs now with ${pending.length} requirement(s) marked unchecked.`
       );
-    } else {
+    } else if (allFragments.length) {
+      // Set when this attempt switched the submission from batch grading to
+      // one-at-a-time. That is progress in mode rather than in grades, and it
+      // earns a hand-back without earning the abandoned marker.
+      // eslint-disable-next-line no-var
+      var switchedToPerRequirement = false;
+      // One call for everything is still the fast path, and on the evidence it
+      // is the better one: it establishes the product once and grades every
+      // requirement against that, where N separate calls each pay for the same
+      // lookup again. It only stops being used for a submission that has
+      // already shown it cannot finish that way.
       try {
-        verification = await verifyMustHaves({
-          apiKey: ANTHROPIC_API_KEY,
-          submission,
-          submissionId,
-          allowSearch: ENABLE_WEB_SEARCH,
-        });
+        if (!batchVerificationFailed(submission)) {
+          const fresh = await verifyMustHaves({
+            apiKey: ANTHROPIC_API_KEY,
+            submission,
+            submissionId,
+            allowSearch: ENABLE_WEB_SEARCH,
+            fragments: pending,
+          });
+          if (fresh) {
+            verification = mergeVerification(verification, fresh);
+          } else if (await markBatchVerificationFailed(admin, submission)) {
+            // Not a dead end — the next attempt grades one requirement at a
+            // time. Hand back so it gets a full invocation to do that in.
+            switchedToPerRequirement = true;
+            console.warn(
+              `[purchase-engine] The batch must-have verification for submission ${submissionId} did not fit its budget; the next attempt will grade one requirement at a time so a slow one cannot discard the rest.`
+            );
+          }
+        } else {
+          // One requirement at a time, banked as each lands. This is the whole
+          // point of the change: a requirement that HAS been graded is never
+          // thrown away again because a later one ran long. The customer gets
+          // "1 of 2 confirmed" where they used to get "0 of 2".
+          const deadline = Date.now() + VERIFICATION_BUDGET_MS;
+          for (const fragment of pending) {
+            if (Date.now() >= deadline) break;
+            const fresh = await verifyMustHaves({
+              apiKey: ANTHROPIC_API_KEY,
+              submission,
+              submissionId,
+              allowSearch: ENABLE_WEB_SEARCH,
+              fragments: [fragment],
+              deadlineAt: deadline,
+            });
+            // Carry on rather than stop. A requirement whose specification
+            // simply cannot be found must not take the ones after it down
+            // with it — that is the all-or-nothing behaviour in miniature.
+            // The deadline check at the top of the loop is what ends this.
+            if (!fresh) continue;
+            verification = mergeVerification(verification, fresh);
+            await cacheVerification(admin, submission, verification);
+          }
+        }
       } catch (err) {
         console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
       }
-      if (verification) {
+
+      const gradedAfter = verification ? verification.checks.length : 0;
+      if (gradedAfter > gradedBefore) {
+        // Progress. Bank it and hand back — the next attempt either finishes
+        // the remaining requirements or writes the report with what is here.
         await cacheVerification(admin, submission, verification);
         // Set HERE, not by re-reading the cache afterwards — cacheVerification
         // has just written it, so a later read always says it was already
         // there and the hand-back below never fires.
         verificationIsFresh = true;
-      } else if (mustHaveFragments(submission).length) {
+        pending = pendingFragments(allFragments, verification);
+        if (pending.length) {
+          console.warn(
+            `[purchase-engine] Graded ${gradedAfter - gradedBefore} of ${allFragments.length} must-have(s) for submission ${submissionId}; ${pending.length} still outstanding and kept for the next attempt.`
+          );
+        }
+      } else if (switchedToPerRequirement) {
+        // Nothing graded, but the next attempt will try a different way.
+        handBackForAnotherPass = true;
+      } else {
+        // No progress, and no new way to make any. Handing back again would
+        // repeat exactly this, so the marker goes down and the report runs
+        // with the requirements honestly unchecked. Progress bounds the loop.
         verificationJustAbandoned = await markVerificationAbandoned(admin, submission);
       }
     }
-    const mustHaveChecks = (verification && verification.checks) || unverifiedChecks(submission);
+    // Graded requirements plus honest placeholders for any still outstanding.
+    //
+    // It used to be one or the other, which was right while verification was
+    // all-or-nothing. Now that a slow requirement no longer discards the ones
+    // already graded, a partial result has to reach the report as exactly what
+    // it is: the grades that were established, and the rest marked unchecked.
+    // Without this the completeness check rejects the report outright for a
+    // must-have it was never given -- the customer loses the whole report over
+    // the one requirement that could not be looked up.
+    const mustHaveChecks = (() => {
+      const graded = (verification && Array.isArray(verification.checks)) ? verification.checks : [];
+      if (!graded.length) return unverifiedChecks(submission);
+      const outstanding = pendingFragments(allFragments, verification);
+      if (!outstanding.length) return graded;
+      const placeholders = unverifiedChecks(submission).filter((c) => outstanding.includes(c.requirement));
+      console.warn(
+        `[purchase-engine] Submission ${submissionId} reports ${graded.length} graded must-have(s) and ${placeholders.length} left unchecked.`
+      );
+      return graded.concat(placeholders);
+    })();
 
     // A spec verdict is only as good as the lookup behind it. With no
     // searches on the verification call there was no lookup — whatever the
@@ -2962,11 +3115,13 @@ async function generatePurchaseReport(submissionId) {
     // The budget above makes the failure cheap and bounded; the marker makes
     // handing back safe, because the next attempt skips the verification
     // rather than repeating it. Neither is enough alone.
-    if ((verificationIsFresh || verificationJustAbandoned) && mustHaveFragments(submission).length) {
+    if ((verificationIsFresh || verificationJustAbandoned || handBackForAnotherPass) && allFragments.length) {
       console.warn(
         verificationIsFresh
           ? `[purchase-engine] Verified ${mustHaveChecks.length} must-have(s) for submission ${submissionId}; handing back so the report gets an invocation of its own.`
-          : `[purchase-engine] Abandoned the must-have verification for submission ${submissionId}; handing back so the report gets a full invocation with the requirements marked unchecked.`
+          : handBackForAnotherPass
+            ? `[purchase-engine] Handing submission ${submissionId} back to grade its must-have(s) one at a time.`
+            : `[purchase-engine] Abandoned the must-have verification for submission ${submissionId}; handing back so the report gets a full invocation with the requirements marked unchecked.`
       );
       await admin
         .from('navigator_submissions')
@@ -3005,6 +3160,7 @@ async function generatePurchaseReport(submissionId) {
 
     let candidate;
     let searchRounds = 0;
+    let reportCalls = 0;
     let flatLeakedSections = [];
     let recoverableError = null;
     try {
@@ -3017,6 +3173,24 @@ async function generatePurchaseReport(submissionId) {
       candidate = attempt.report;
       searchRounds = attempt.searchRounds;
       flatLeakedSections = attempt.leakedSections || [];
+      // The denominator for the leak rate.
+      //
+      // job_state.malformed_responses has always counted whole-response leaks,
+      // but nothing counted how many report calls there were to leak OUT of —
+      // so "no leak in eleven runs" could not be turned into a rate. An
+      // unknown number of those runs never reached this line at all, because
+      // the verification had consumed the invocation first. This is the one
+      // place a submit_purchase_report response is known to have arrived, so
+      // it is the honest place to count one.
+      reportCalls = ((submission.job_state || {}).report_calls || 0) + 1;
+      await admin
+        .from('navigator_submissions')
+        .update({
+          job_state: { ...(submission.job_state || {}), report_calls: reportCalls },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', submissionId);
+      submission.job_state = { ...(submission.job_state || {}), report_calls: reportCalls };
     } catch (err) {
       recoverableError = err;
     }
@@ -3446,6 +3620,10 @@ module.exports = {
   // Exported for unit testing without hitting the network or Supabase.
   __internal: {
     VERIFICATION_BUDGET_MS,
+    pendingFragments,
+    mergeVerification,
+    batchVerificationFailed,
+    verificationWasAbandoned,
     nestReportInput,
     leakedFlatSections,
     FLAT_TO_NESTED,
