@@ -24,14 +24,13 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 
-// streaming.html is the one page that keeps this pattern deliberately. It
-// carries its own rule AND its own observer in the same file, does not load
-// navigator-shared.js, and is a different product from the Navigators.
-const SELF_CONTAINED = 'streaming.html';
-
+// streaming.html used to be exempt here: it carried its own rule and its own
+// observer in the same file, so the site-wide removal on 2026-09-10 left it
+// alone. It was restyled to match /closing on 2026-09-13 and the reveal went
+// with the rest of the old look — for the reason in the comment above, not
+// for the look. The exemption is gone: every page is held to the same rule.
 const SOURCES = fs.readdirSync(ROOT)
   .filter((f) => /\.(html|css)$/.test(f))
-  .filter((f) => f !== SELF_CONTAINED)
   .map((f) => ({ file: f, src: fs.readFileSync(path.join(ROOT, f), 'utf8') }));
 
 // Deliberately narrow. An element hidden until you hover it, open an

@@ -8,76 +8,86 @@
 <link rel="canonical" href="https://streamnavigator.ai/streaming" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    /* Palette swapped to a Canva-inspired violet/mint/pink scheme — kept
-       the site's existing bold black-outline, hard-shadow card style
-       intact, only the color values changed. Status colors (active/paused/
-       danger) are left untouched since they carry meaning, not branding. */
-    --bg:#F3F0FC;
-    --bg-alt:#EAE3F8;
-    --bg-gradient: linear-gradient(135deg, #E3F8F4 0%, #ECE5FB 55%, #F1E9FB 100%);
+    /* Typography and palette matched to /closing: Newsreader over IBM Plex
+       Sans on warm paper, with a navy ink and the ledger's three signal
+       colours. The structure of this page is unchanged — only the type and
+       the colour values move, so the hard-outline cards become quiet ruled
+       panels rather than a different layout.
+
+       The three signals carry meaning, not branding, and keep the same jobs
+       they have on /closing: flag = money at risk, ok = money kept,
+       hold = something to act on later. */
+    --bg:#FBFAF7;
+    --bg-alt:#F4F2ED;
+    --bg-gradient:#FBFAF7;
     --surface:#FFFFFF;
-    --surface-2:#FFF1DD;
-    --ink:#1F1B16;
-    --border:rgba(31,27,22,0.12);
-    --border-strong:rgba(31,27,22,0.22);
-    --text:#201A14;
-    --text-dim:#5B5347;
-    --text-dimmer:#7A7163;
+    --surface-2:#F4F2ED;
+    --ink:#1B2A3A;
+    --border:#D8DAD5;
+    --border-strong:#B9BCB5;
+    --text:#1B2A3A;
+    --text-dim:#5B6570;
+    --text-dimmer:#7C8590;
     --accent:#FFFFFF;
-    --accent-deep:#6D28D9;
-    --accent-2:#4ADE9E;
-    --accent-2-deep:#146B4A;
-    --accent-3:#2EC4B6;
-    --accent-3-deep:#0F8A7D;
-    --yellow:#FF8FB3;
-    --status-active:#1E9E64;
-    --status-active-deep:#157A4E;
-    --status-paused:#9C9282;
-    --gradient: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
-    --gradient-text: linear-gradient(135deg, #6D28D9 0%, #BE185D 100%);
-    --gradient-warm: linear-gradient(135deg, #4ADE9E 0%, #FF8FB3 100%);
-    --radius: 20px;
-    --radius-sm: 12px;
-    --shadow-hard: 6px 6px 0 var(--ink);
-    --shadow-hard-sm: 4px 4px 0 var(--ink);
-    --shadow-hard-xs: 3px 3px 0 var(--ink);
-    --shadow-soft: 0 24px 60px -32px rgba(31,27,22,0.16);
-    --shadow-glow: 0 0 0 1px rgba(31,27,22,0.15), 0 20px 50px -20px rgba(31,27,22,0.32);
+    --accent-deep:#1B2A3A;
+    --accent-2:#EDF3F0;
+    --accent-2-deep:#2C6A57;
+    --accent-3:#2C6A57;
+    --accent-3-deep:#2C6A57;
+    --yellow:#8A6A16;
+    --status-active:#2C6A57;
+    --status-active-deep:#2C6A57;
+    --status-paused:#8A6A16;
+    --danger-deep:#B01F12;
+    --flag-tint:#FBEEEC;
+    --ok-tint:#EDF3F0;
+    --hold-tint:#FAF3E2;
+    /* /closing has no gradients. These stay as single-stop gradients so the
+       background-clip rules that use them keep working and read as flat ink. */
+    --gradient: linear-gradient(135deg, #1B2A3A 0%, #1B2A3A 100%);
+    --gradient-text: linear-gradient(135deg, #1B2A3A 0%, #1B2A3A 100%);
+    --gradient-warm: linear-gradient(135deg, #2C6A57 0%, #2C6A57 100%);
+    --radius: 3px;
+    --radius-sm: 2px;
+    --shadow-hard: 5px 5px 0 rgba(27,42,58,.08);
+    --shadow-hard-sm: 4px 4px 0 rgba(27,42,58,.07);
+    --shadow-hard-xs: 3px 3px 0 rgba(27,42,58,.06);
+    --shadow-soft: 0 18px 44px -30px rgba(27,42,58,.22);
+    --shadow-glow: 0 0 0 1px rgba(27,42,58,.10), 0 16px 40px -22px rgba(27,42,58,.22);
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html{scroll-behavior:smooth;}
   body{
     background:var(--bg-gradient);
     color:var(--text);
-    font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    line-height:1.55;
+    font-family:"IBM Plex Sans", system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-size:17px;
+    line-height:1.6;
     -webkit-font-smoothing:antialiased;
     overflow-x:hidden;
   }
-  h1,h2,h3,h4{ font-family:'Sora','Inter',sans-serif; letter-spacing:-0.02em; font-weight:700; color:var(--text); }
+  h1,h2,h3,h4{ font-family:"Newsreader", Georgia, serif; letter-spacing:-0.01em; font-weight:500; color:var(--text); }
+  h3,h4{ font-weight:600; }
   a{ color:inherit; text-decoration:none; }
   img{ max-width:100%; display:block; }
   .wrap{ max-width:1180px; margin:0 auto; padding:0 24px; }
-  .bg-noise{
-    position:fixed; inset:0; pointer-events:none; z-index:0;
-    background-image:radial-gradient(circle at 15% 8%, rgba(255,255,255,0.65), transparent 42%),
-                      radial-gradient(circle at 88% 14%, rgba(46,196,182,0.12), transparent 42%),
-                      radial-gradient(circle at 50% 95%, rgba(74,222,158,0.10), transparent 46%),
-                      radial-gradient(circle at 10% 70%, rgba(255,143,179,0.12), transparent 40%);
-  }
+  /* /closing has no decorative layer behind the page — the paper is the
+     background and the rules do the dividing. The four coloured washes that
+     used to sit here were the last of the old palette still showing. */
+  .bg-noise{ display:none; }
 
   /* ---------- Nav ---------- */
   header{
     position:sticky; top:0; z-index:100;
     backdrop-filter: blur(14px) saturate(140%);
-    background:rgba(251,244,233,0.78);
+    background:rgba(251,250,247,0.86);
     border-bottom:2px solid var(--ink);
   }
   nav{ display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:1180px; margin:0 auto; }
-  .logo{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; font-family:'Sora',sans-serif; color:var(--text); }
+  .logo{ display:flex; align-items:center; gap:10px; font-weight:800; font-size:18px; font-family:"Newsreader", Georgia, serif; color:var(--text); }
   .logo-mark{
     width:30px; height:30px; border-radius:9px; background:var(--gradient);
     display:flex; align-items:center; justify-content:center; position:relative;
@@ -86,7 +96,7 @@
   .logo-mark svg{ width:16px; height:16px; }
   .nav-subbrand{
     display:inline-flex; align-items:center; font-size:11.5px; font-weight:800; letter-spacing:0.02em;
-    color:var(--accent-3-deep); background:rgba(46,196,182,0.14); border:1.5px solid var(--accent-3-deep);
+    color:var(--accent-3-deep); background:var(--ok-tint); border:1.5px solid var(--accent-3-deep);
     border-radius:999px; padding:3px 10px; margin-left:8px;
   }
   .nav-links a.back-home{ display:inline-flex; align-items:center; gap:5px; }
@@ -123,7 +133,7 @@
   }
   .pill span.dot{ width:20px;height:20px;border-radius:999px; background:var(--gradient); display:inline-flex; align-items:center; justify-content:center; font-size:11px; color:var(--ink); }
   .hero h1{
-    font-size:clamp(2.4rem, 5.6vw, 4.4rem); line-height:1.06; max-width:900px; margin:0 auto 22px;
+    font-size:clamp(2.2rem, 5vw, 3.3rem); line-height:1.09; max-width:900px; margin:0 auto 22px;
   }
   .hero h1 .grad{
     background:var(--gradient-text); -webkit-background-clip:text; background-clip:text; color:transparent;
@@ -152,8 +162,8 @@
   .browser-bar .dots{ display:flex; gap:6px; }
   .browser-bar .dots span{ width:10px; height:10px; border-radius:50%; background:var(--border-strong); }
   .browser-bar .dots span:nth-child(1){ background:#FFFFFF; border:1.5px solid var(--ink); }
-  .browser-bar .dots span:nth-child(2){ background:#FF8FB3; }
-  .browser-bar .dots span:nth-child(3){ background:#2EC4B6; }
+  .browser-bar .dots span:nth-child(2){ background:var(--yellow); }
+  .browser-bar .dots span:nth-child(3){ background:var(--accent-3); }
   .browser-bar .url{
     margin:0 auto; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:8px; padding:5px 14px;
     font-size:12px; color:var(--text-dimmer); display:flex; align-items:center; gap:6px;
@@ -264,7 +274,7 @@
     color:var(--text-dim); font-size:13px; font-weight:600; cursor:pointer; transition:all .15s ease; font-family:inherit;
   }
   .chip-toggle:hover{ border-color:var(--accent-3-deep); color:var(--text); }
-  .chip-toggle.active{ background:rgba(46,196,182,0.18); border-color:var(--accent-3-deep); color:var(--accent-3-deep); }
+  .chip-toggle.active{ background:var(--ok-tint); border-color:var(--accent-3-deep); color:var(--accent-3-deep); }
   .check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--text-dim); margin-bottom:12px; cursor:pointer; }
   .check-row input{ width:16px; height:16px; accent-color:var(--ink); flex-shrink:0; }
   .budget-field{ display:flex; align-items:center; gap:6px; background:var(--bg); border:1.5px solid var(--border-strong); border-radius:8px; padding:9px 12px; }
@@ -277,11 +287,12 @@
   .money-grid{ display:flex; flex-direction:column; gap:8px; }
   .money-row{ display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:baseline; font-size:14px; }
   .money-row .mk{ color:var(--text-dim); }
+  .money-row .mv, .money-row .ms, .mh-value, .dc-money, .dc-dates span{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
   .money-row .mv{ font-weight:800; font-variant-numeric:tabular-nums; }
   .money-row .ms{ font-size:12.5px; color:var(--text-dimmer); font-variant-numeric:tabular-nums; min-width:92px; text-align:right; }
   .money-headline{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:16px; padding-top:16px; border-top:2px solid var(--ink); }
   .mh-label{ font-size:12px; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-dimmer); }
-  .mh-value{ font-family:'Sora',sans-serif; font-weight:800; font-size:2.1rem; line-height:1; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .mh-value{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:800; font-size:2.1rem; line-height:1; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
   .mh-unit{ font-size:13px; color:var(--text-dim); }
   .money-headline.none .mh-label{ font-size:14px; text-transform:none; letter-spacing:0; color:var(--text-dim); font-weight:700; }
   .money-net{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; font-size:13.5px; color:var(--text-dim); }
@@ -293,18 +304,18 @@
   .actions-list{ display:flex; flex-direction:column; gap:12px; }
   .decision-card{ background:var(--surface); border:1.5px solid var(--border); border-left-width:4px; border-radius:12px; padding:15px 17px; }
   .decision-card.act-suspend{ border-left-color:var(--status-active-deep); }
-  .decision-card.act-restart{ border-left-color:#1D5FA8; }
-  .decision-card.act-watch{ border-left-color:#0B6F84; }
+  .decision-card.act-restart{ border-left-color:var(--ink); }
+  .decision-card.act-watch{ border-left-color:var(--text-dim); }
   .decision-card.act-keep{ border-left-color:var(--border-strong); }
-  .decision-card.act-untracked{ border-left-color:#B54708; }
+  .decision-card.act-untracked{ border-left-color:var(--yellow); }
   .decision-card.overridden{ opacity:0.62; }
   .dc-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
   .dc-badge{ flex-shrink:0; width:26px; height:26px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center;
     font-size:13px; font-weight:800; background:rgba(31,27,22,0.06); color:var(--text-dim); }
-  .act-suspend .dc-badge{ background:rgba(15,138,125,0.15); color:var(--status-active-deep); }
-  .act-restart .dc-badge{ background:rgba(29,95,168,0.14); color:#1D5FA8; }
+  .act-suspend .dc-badge{ background:var(--ok-tint); color:var(--status-active-deep); }
+  .act-restart .dc-badge{ background:var(--surface-2); color:var(--ink); }
   .dc-title{ font-size:15px; font-weight:800; flex:1; min-width:180px; }
-  .dc-money{ font-family:'Sora',sans-serif; font-weight:800; font-size:16px; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
+  .dc-money{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:800; font-size:16px; color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
   .dc-why{ font-size:13.5px; color:var(--text-dim); margin:8px 0 0; line-height:1.55; }
   .dc-dates{ display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:11px; }
   .dc-dates span{ font-size:12.5px; color:var(--text-dim); font-variant-numeric:tabular-nums; }
@@ -319,19 +330,19 @@
     text-decoration:underline; cursor:pointer; }
   .dc-override:hover{ color:var(--text-dim); }
   .dc-conf{ margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; font-weight:700; padding:3px 8px; border-radius:20px; }
-  .conf-high{ background:rgba(15,138,125,0.13); color:var(--status-active-deep); }
-  .conf-medium{ background:rgba(181,71,7,0.12); color:#B54708; }
-  .dc-cautions{ list-style:none; margin:11px 0 0; padding:10px 12px; background:rgba(181,71,7,0.08);
-    border-left:3px solid #B54708; border-radius:0 8px 8px 0; display:flex; flex-direction:column; gap:7px; }
+  .conf-high{ background:var(--ok-tint); color:var(--status-active-deep); }
+  .conf-medium{ background:var(--hold-tint); color:var(--yellow); }
+  .dc-cautions{ list-style:none; margin:11px 0 0; padding:10px 12px; background:var(--hold-tint);
+    border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; display:flex; flex-direction:column; gap:7px; }
   .dc-cautions li{ font-size:12.5px; color:var(--text-dim); line-height:1.55; }
-  .decision-card.is-urgent{ border-left-color:var(--danger-deep); box-shadow:0 0 0 1px rgba(168,41,29,0.16); }
+  .decision-card.is-urgent{ border-left-color:var(--danger-deep); box-shadow:0 0 0 1px rgba(176,31,18,0.18); }
   .decision-card.act-snoozed{ border-left-color:var(--text-dimmer); }
   .promo-row{ grid-column:1 / -1; font-size:12px; color:var(--text-dim); margin-top:2px; }
   .tag-viewer{ font-family:inherit; font-size:11.5px; border:1px solid var(--border-strong); border-radius:6px;
     background:var(--bg); color:var(--text-dim); padding:2px 5px; margin:0 4px; width:74px; }
   .dc-floor{ margin:8px 0 0; font-size:12.5px; color:var(--text-dim); line-height:1.55; }
   .dc-floor strong{ color:var(--status-active-deep); font-variant-numeric:tabular-nums; }
-  .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:rgba(29,95,168,0.07); border-radius:8px;
+  .dc-nudge{ margin:11px 0 0; padding:9px 11px; background:var(--surface-2); border-radius:8px;
     font-size:12px; color:var(--text-dim); line-height:1.55; }
   .a-hint{ font-size:12px; color:var(--text-dimmer); margin-top:8px; line-height:1.55; }
   .tag-show{ align-items:center; }
@@ -353,22 +364,22 @@
   .thumb::after{ content:''; position:absolute; inset:0; background:linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%); }
   .result-meta h4{ font-size:14px; margin-bottom:4px; }
   .result-meta p{ font-size:12.5px; color:var(--text-dimmer); }
-  .timestamp-chip{ display:inline-flex; align-items:center; gap:4px; background:rgba(15,138,125,0.12); color:#0F7E73; border:1px solid rgba(15,138,125,0.28); font-size:11px; padding:2px 8px; border-radius:999px; margin-top:6px; }
-  .chip-save{ background:rgba(27,122,61,0.12); color:#1B7A3D; border-color:rgba(27,122,61,0.28); }
-  .chip-alert{ background:rgba(11,111,132,0.12); color:#0B6F84; border-color:rgba(11,111,132,0.3); }
-  .chip-danger{ background:rgba(29,95,168,0.12); color:#1D5FA8; border-color:rgba(29,95,168,0.3); }
+  .timestamp-chip{ display:inline-flex; align-items:center; gap:4px; background:var(--ok-tint); color:var(--status-active-deep); border:1px solid rgba(44,106,87,0.30); font-size:11px; padding:2px 8px; border-radius:999px; margin-top:6px; }
+  .chip-save{ background:var(--ok-tint); color:var(--status-active-deep); border-color:rgba(44,106,87,0.30); }
+  .chip-alert{ background:var(--surface-2); color:var(--text-dim); border-color:var(--border-strong); }
+  .chip-danger{ background:var(--surface-2); color:var(--ink); border-color:var(--border-strong); }
 
   /* ---------- Trust bar ---------- */
   .trust{ padding:10px 24px 70px; text-align:center; position:relative; z-index:1; }
   .trust p{ font-size:12.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:22px; font-weight:600; }
   .trust-logos{ display:flex; flex-wrap:wrap; gap:36px; justify-content:center; align-items:center; opacity:0.75; }
-  .trust-logos span{ font-family:'Sora',sans-serif; font-weight:700; font-size:16px; color:var(--text-dim); }
+  .trust-logos span{ font-family:"Newsreader", Georgia, serif; font-weight:700; font-size:16px; color:var(--text-dim); }
 
   /* ---------- Section shared ---------- */
   section{ position:relative; z-index:1; padding:110px 24px; }
   .section-head{ max-width:640px; margin:0 auto 64px; text-align:center; }
   .eyebrow{ font-size:12.5px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent-3-deep); margin-bottom:14px; }
-  .section-head h2{ font-size:clamp(1.9rem, 3.4vw, 2.7rem); margin-bottom:16px; }
+  .section-head h2{ font-size:clamp(1.55rem, 3.1vw, 2.05rem); line-height:1.18; margin-bottom:14px; }
   .section-head p{ color:var(--text-dim); font-size:19px; line-height:1.55; }
 
   /* ---------- Product explanation ---------- */
@@ -402,7 +413,7 @@
     box-shadow:var(--shadow-hard-xs);
   }
   .chat-bubble.you{
-    background:var(--accent); color:#0E2233; border-color:var(--ink); font-weight:600;
+    background:var(--accent); color:var(--ink); border-color:var(--ink); font-weight:600;
     border-radius:16px 16px 4px 16px;
   }
   .chat-action{
@@ -437,7 +448,7 @@
     display:flex; align-items:center; justify-content:center;
     text-align:center; z-index:2; padding:8px;
   }
-  .radial-hub span{ font-family:'Sora',sans-serif; font-weight:800; font-size:17px; line-height:1.25; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
+  .radial-hub span{ font-family:"Newsreader", Georgia, serif; font-weight:800; font-size:17px; line-height:1.25; color:#FFFFFF; overflow-wrap:break-word; word-break:break-word; }
   .radial-node{
     position:absolute; transform:translate(-50%,-50%); width:29%; min-width:150px; max-width:205px; text-align:center; z-index:2;
   }
@@ -448,12 +459,12 @@
   .feature-icon svg{ width:28px; height:28px; color:var(--accent-deep); }
   .feature-icon.c-blue{ background:rgba(31,27,22,0.06); border:1px solid var(--border-strong); }
   .feature-icon.c-blue svg{ color:var(--accent-deep); }
-  .feature-icon.c-green{ background:rgba(74,222,158,0.20); }
+  .feature-icon.c-green{ background:var(--ok-tint); }
   .feature-icon.c-green svg{ color:var(--accent-2-deep); }
-  .feature-icon.c-teal{ background:rgba(46,196,182,0.18); }
+  .feature-icon.c-teal{ background:var(--ok-tint); }
   .feature-icon.c-teal svg{ color:var(--accent-3-deep); }
-  .feature-icon.c-yellow{ background:rgba(255,143,179,0.28); }
-  .feature-icon.c-yellow svg{ color:#B01560; }
+  .feature-icon.c-yellow{ background:var(--border); }
+  .feature-icon.c-yellow svg{ color:var(--danger-deep); }
   .radial-node h4{ font-size:17px; margin-bottom:6px; line-height:1.3; }
   .pro-flag{
     display:inline-block; margin-left:6px; font-size:9.5px; font-weight:800; letter-spacing:0.04em;
@@ -473,14 +484,14 @@
   .screen-card .shot-bar{ display:flex; gap:6px; padding:10px 14px; border-bottom:2px solid var(--ink); background:var(--surface-2); }
   .screen-card .shot-bar span{ width:8px;height:8px;border-radius:50%; background:var(--border-strong); }
   .screen-card .shot-bar span:nth-child(1){ background:#FFFFFF; border:1.5px solid var(--ink); }
-  .screen-card .shot-bar span:nth-child(2){ background:#FF8FB3; }
-  .screen-card .shot-bar span:nth-child(3){ background:#2EC4B6; }
+  .screen-card .shot-bar span:nth-child(2){ background:var(--yellow); }
+  .screen-card .shot-bar span:nth-child(3){ background:var(--accent-3); }
   .screen-card .shot-body{ padding:20px; }
   .screen-card figcaption{ padding:14px 18px 18px; font-size:13px; color:var(--text-dim); border-top:1px solid var(--border); }
   .bar-chart{ display:flex; align-items:flex-end; gap:6px; height:110px; }
   .bar-chart div{ flex:1; border-radius:4px 4px 0 0; background:var(--gradient); opacity:0.9; }
   .grid-thumbs{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(255,255,255,0.85), rgba(46,196,182,0.30)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
+  .grid-thumbs .g{ aspect-ratio:16/10; border-radius:8px; background:linear-gradient(135deg, rgba(255,255,255,0.85), var(--border)); display:flex; align-items:center; justify-content:center; text-align:center; padding:4px; font-size:11px; font-weight:800; color:var(--ink); }
   .summary-lines{ display:flex; flex-direction:column; gap:8px; }
   .summary-lines .ln{ height:9px; border-radius:5px; background:rgba(31,27,22,0.08); }
 
@@ -497,8 +508,8 @@
   .price-badge{ position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:var(--yellow); color:var(--ink); font-size:11.5px; font-weight:800; padding:5px 14px; border-radius:999px; border:2px solid var(--ink); }
   .price-card h3{ font-size:19px; margin-bottom:6px; }
   .price-card .desc{ font-size:13.5px; color:var(--text-dimmer); margin-bottom:20px; }
-  .price-amount{ font-size:2.5rem; font-family:'Sora',sans-serif; font-weight:800; margin-bottom:4px; }
-  .price-amount span{ font-size:15px; color:var(--text-dimmer); font-weight:500; font-family:'Inter',sans-serif; }
+  .price-amount{ font-size:2.5rem; font-family:"Newsreader", Georgia, serif; font-weight:800; margin-bottom:4px; }
+  .price-amount span{ font-size:15px; color:var(--text-dimmer); font-weight:500; font-family:"IBM Plex Sans",sans-serif; }
   .price-period{ font-size:13px; color:var(--text-dimmer); margin-bottom:24px; }
   .price-feats{ list-style:none; display:flex; flex-direction:column; gap:12px; margin-bottom:28px; flex:1; }
   .price-feats li{ font-size:14px; color:var(--text-dim); display:flex; gap:10px; align-items:flex-start; }
@@ -529,7 +540,7 @@
     background:radial-gradient(120% 140% at 50% 0%, rgba(255,255,255,0.7), transparent 60%), var(--surface);
     border:2px solid var(--ink); box-shadow:var(--shadow-hard); max-width:1180px; margin-left:auto; margin-right:auto;
   }
-  .cta-final h2{ font-size:clamp(1.8rem, 3.6vw, 2.6rem); margin-bottom:16px; }
+  .cta-final h2{ font-size:clamp(1.55rem, 3.1vw, 2.05rem); line-height:1.18; margin-bottom:16px; }
   .cta-final p{ color:var(--text-dim); font-size:16px; max-width:480px; margin:0 auto 32px; }
 
   /* ---------- Footer ---------- */
@@ -558,9 +569,11 @@
   .toast.show{ transform:translateX(-50%) translateY(0); opacity:1; pointer-events:auto; }
   .toast .ico{ color:var(--status-active-deep); }
 
-  /* reveal animation */
-  .reveal{ opacity:0; transform:translateY(24px); transition:opacity .7s ease, transform .7s ease; }
-  .reveal.in{ opacity:1; transform:translateY(0); }
+  /* The scroll-reveal is gone, the same way it went from every other page on
+     2026-09-10 and from /closing before that. It left bands of the page blank
+     while a reader scrolled past them, and anyone whose JavaScript did not run
+     saw nothing at all. The class is removed from the markup too, so nothing
+     is left referring to an animation that no longer exists. */
 
   /* ---------- Responsive ---------- */
   @media (max-width: 900px){
@@ -634,7 +647,7 @@
   <!-- PRODUCT EXPLANATION -->
   <section class="product" id="product">
     <div class="product-grid">
-      <div class="product-visual reveal">
+      <div class="product-visual">
         <div class="chat-thread">
           <div class="chat-row you">
             <div class="chat-avatar you">
@@ -660,7 +673,7 @@
           </div>
         </div>
       </div>
-      <div class="product-copy reveal">
+      <div class="product-copy">
         <div class="eyebrow">What is StreamNavigator</div>
         <h3>We tell you exactly what to do. You make the change.</h3>
         <p class="product-lead">Most people are quietly paying for three or four streaming services they forgot about or only need part of the year.</p>
@@ -680,12 +693,12 @@
 
   <!-- FEATURES -->
   <section id="features">
-    <div class="section-head reveal">
+    <div class="section-head">
       <div class="eyebrow">Features</div>
       <h2>Everything you need to stop overpaying.</h2>
       <p>Built for people juggling too many streaming subscriptions &mdash; and tired of playing detective on their own bank statement.</p>
     </div>
-    <div class="features-radial reveal">
+    <div class="features-radial">
       <svg class="radial-lines" viewBox="0 0 100 100" aria-hidden="true">
         <line x1="50" y1="50" x2="50" y2="17"/>
         <line x1="50" y1="50" x2="81.4" y2="39.8"/>
@@ -736,7 +749,7 @@
     </div>
     <p class="hero-note"><strong>The analyzer below is free and needs no account.</strong> It uses your real prices and your real renewal dates.</p>
 
-    <div class="program-guide reveal" id="program-guide">
+    <div class="program-guide" id="program-guide">
       <div class="pg-head">
         <div class="pg-head-copy">
           <h3>We tell you when to pause. You tap the link.<span class="pro-flag">PRO</span></h3>
@@ -752,7 +765,7 @@
       <p class="pg-savings" id="pg-savings"></p>
     </div>
 
-    <div class="browser-mock reveal">
+    <div class="browser-mock">
       <div class="browser-bar">
         <div class="dots"><span></span><span></span><span></span></div>
         <div class="url">🔒 app.streamnavigator.ai</div>
@@ -829,14 +842,14 @@
 
   <!-- SCREENSHOTS -->
   <section class="screens" id="screenshots">
-    <div class="section-head reveal">
+    <div class="section-head">
       <div class="eyebrow">Screenshots &middot; Example account</div>
       <h2>A closer look inside StreamNavigator.</h2>
       <p>Clean, clear, and built to show you exactly where your money is going. The numbers below are a sample account for illustration &mdash; sign up to see your own.</p>
     </div>
     <div class="screens-grid">
 
-      <figure class="screen-card tall reveal">
+      <figure class="screen-card tall">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
           <div class="search-row" style="margin-bottom:16px;">
@@ -852,14 +865,14 @@
             <div class="result-meta"><h4>HBO Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Active</p><span class="timestamp-chip chip-alert">⚠ Downgrade to save $7/mo</span></div>
           </div>
           <div class="result-card">
-            <div class="thumb" style="background:linear-gradient(135deg,#2EC4B6,#FF8FB3)"></div>
+            <div class="thumb" style="background:var(--surface-2)"></div>
             <div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Active</p><span class="timestamp-chip chip-save">✓ Optimized</span></div>
           </div>
         </div>
         <figcaption>Every subscription, its real cost, and what to do about it — in one view.</figcaption>
       </figure>
 
-      <figure class="screen-card reveal">
+      <figure class="screen-card">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
           <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Money saved — last 7 months</p>
@@ -871,7 +884,7 @@
         <figcaption>Track how much you've saved, month over month.</figcaption>
       </figure>
 
-      <figure class="screen-card reveal">
+      <figure class="screen-card">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
           <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">This Month's Report</p>
@@ -885,12 +898,12 @@
         <figcaption>A plain-English summary of what changed, and why, every month.</figcaption>
       </figure>
 
-      <figure class="screen-card reveal">
+      <figure class="screen-card">
         <div class="shot-bar"><span></span><span></span><span></span></div>
         <div class="shot-body">
           <p style="font-size:12.5px; color:var(--text-dimmer); margin-bottom:10px;">Tracked services</p>
           <div class="grid-thumbs">
-            <div class="g">Netflix</div><div class="g" style="background:linear-gradient(135deg,#4ADE9E,#FF8FB3)">HBO Max</div><div class="g" style="background:linear-gradient(135deg,#2EC4B6,#FFFFFF)">Hulu</div>
+            <div class="g">Netflix</div><div class="g" style="background:var(--ok-tint)">HBO Max</div><div class="g" style="background:var(--hold-tint)">Hulu</div>
           </div>
         </div>
         <figcaption>See every subscription you're tracking at a glance.</figcaption>
@@ -936,14 +949,14 @@
   -->
   <!-- PRICING -->
   <section id="pricing" style="padding-bottom:32px;">
-    <div class="section-head reveal">
+    <div class="section-head">
       <div class="eyebrow">Pricing</div>
       <h2>$19.99 a year. That's the whole product.</h2>
       <p>The analyzer on this page is free forever and always will be. The paid part is the watching — every day, for every show you follow, so the restart date finds you instead of you going looking for it.</p>
     </div>
     <div class="pricing-grid pricing-single">
 
-      <div class="price-card reveal">
+      <div class="price-card">
         <h3>Free</h3>
         <p class="desc">The analyzer on this page. No account, no card, no limit on how often you use it.</p>
         <div class="price-amount">$0</div>
@@ -956,7 +969,7 @@
         <a href="#analyzer" class="btn btn-ghost">Use it now</a>
       </div>
 
-      <div class="price-card featured reveal">
+      <div class="price-card featured">
         <h3>StreamNavigator</h3>
         <p class="desc">For the half of the job this page can't do: noticing, months later, that your show has a date.</p>
         <div class="price-amount">$19.99<span>/yr</span></div>
@@ -978,59 +991,59 @@
 
   <!-- FAQ -->
   <section id="faq" style="padding-top:32px;">
-    <div class="section-head reveal">
+    <div class="section-head">
       <div class="eyebrow">FAQ</div>
       <h2>Questions, answered.</h2>
       <p>Can't find what you're looking for? Reach out — we read every email.</p>
     </div>
     <div class="faq-list">
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How does StreamNavigator find my subscriptions? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">You type them in — the service, what you pay, and the date it renews. That renewal date is the important one: it's the difference between "you could cancel Netflix" and "cancel Netflix by Tuesday or you'll pay for another month you don't want". Then you name the shows and sports you actually watch, and we check the public TV schedule for when they're on.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">Is my financial data safe? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">Yes — because there isn't any to connect. We never link to your bank or card statements, and we never ask for a streaming login. Every subscription in your list is one you typed in yourself. Your password is hashed by Supabase and never stored in plain text, and if you subscribe, your card goes straight to Stripe and never touches our servers.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How does pausing and resuming work? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">Two rules, and they're the whole product. We only tell you to switch something off if it skips a real charge — if your show is back before your next renewal, we tell you to keep it, because cancelling would cost you a resubscribe to save nothing. And we only tell you to switch it back on against a date we can actually point at: an episode with an announced air date, or the start of a season. If nothing is scheduled, we say so and stay quiet. We will never tell you to start paying again because a month has passed.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How do you access and monitor my streaming data? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">We never log into Netflix, Hulu, Disney+ or anything else — there is no connection to them, and we cannot see what you watch or what you were charged. Everything you track, you typed in. The one automated piece is a daily check of <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a>, a free public TV schedule, for the shows you named. That's it. No passwords, no bank link, nothing else running.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">Can it actually cancel subscriptions for me? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">No — and be sceptical of any subscription app that says it can. Almost no streaming service offers a way to cancel or pause on someone else's behalf, so we can't, and we won't pretend otherwise. What we do is tell you exactly which day to do it and what it saves, and hand you a direct link to that service's own account page. We also tell you which services genuinely offer a pause and which only offer cancel — on the cancel-only ones you keep access until the end of the period you've already paid for, so the timing matters even more.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How do I cancel my StreamNavigator subscription? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">Click "Manage billing" in the footer, log in, and select Cancel Plan — no phone calls, no retention pitch. You keep access to the end of the year you've paid for and won't be charged again. (That cancels StreamNavigator itself — the next question is about cancelling a streaming service like Netflix.)</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How does StreamNavigator handle my payment? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">Stripe processes your card, not StreamNavigator — your card number never touches our servers. When you pay, the funds first land in Stripe's own merchant balance, the same way it works for any business using Stripe. From there, Stripe pays that balance out to StreamNavigator's verified bank account on a regular schedule, typically within a few days. StreamNavigator never holds or stores your money directly at any point — Stripe sits in the middle of every transaction, start to finish.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">Which streaming services does it support? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">Nineteen services come with current published pricing and plan tiers built in — Netflix, Prime Video, HBO Max, Disney+, Paramount+, Hulu, Peacock, Apple TV, ESPN, YouTube TV, Fubo, Sling, Starz, AMC+, Discovery+, Crunchyroll, MLB.TV, NBA League Pass and NFL+. Anything else, type the name and what you pay. We can still tell you when it's idle; we just can't check its plan tiers, because we don't hold pricing for it.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">How much can I expect to save? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">It depends entirely on how much you currently pay for things nobody in your house is watching, so use the analyzer above — it uses your real prices and your real renewal dates and gives you your own number in under a minute. As a rough guide from the households we've modelled: one or two services and not much idle time, $0&ndash;60 a year. Three or four services, $90&ndash;200. A big household with sports and a lot of between-season gaps, $240&ndash;360. If your number comes out under about $60, we'd honestly rather you didn't subscribe.</div></div>
       </div>
 
-      <div class="faq-item reveal">
+      <div class="faq-item">
         <button class="faq-q">Does it cost anything? <span class="plus">+</span></button>
         <div class="faq-a"><div class="faq-a-inner">The analyzer on this page is free, needs no account, and always will be. One paid tier at $19.99 a year covers your whole household, and buys the one thing the free page can't do: checking the schedule every day so the restart date finds you.</div></div>
       </div>
@@ -1040,7 +1053,7 @@
 
   <!-- FINAL CTA -->
   <section id="get-started" style="padding-top:20px; padding-bottom:24px;">
-    <div class="cta-final reveal">
+    <div class="cta-final">
       <h2>Stop paying for what you don't watch.</h2>
       <p>Join the users who let StreamNavigator tell them exactly when to pause, resume, and cancel the subscriptions quietly draining their bank account — with a direct link every time, so they can act in one tap.</p>
       <div class="hero-form">
@@ -1089,16 +1102,7 @@
 
 <script>
   // Reveal on scroll
-  const revealEls = document.querySelectorAll('.reveal');
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.classList.add('in');
-        io.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.12 });
-  revealEls.forEach(el => io.observe(el));
+
 
   // FAQ accordion
   document.querySelectorAll('.faq-item').forEach(item => {
