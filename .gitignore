@@ -7,3 +7,4 @@ node_modules/
 
 # Claude Code local permission grants — machine-specific, not source.
 .claude/settings.local.json
+tmp-test-docs/
