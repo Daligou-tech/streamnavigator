@@ -31,11 +31,37 @@ test('a rate that rose is reported, with both figures and the difference', () =>
   const f = check(6.875, 6.5);
   assert.equal(f.checkId, 'RATE_VS_ESTIMATE');
   assert.equal(f.severity, Severity.REQUIRES_DOCUMENTATION);
-  assert.equal(f.charged, 6.875);
-  assert.equal(f.expected, 6.5);
-  assert.equal(f.variance, 0.375);
   assert.match(f.basis, /6\.5%/);
   assert.match(f.basis, /6\.875%/);
+  assert.equal(f.detail.delta_pct, 0.375);
+});
+
+test('a rate never occupies the money fields', () => {
+  // charged / expected / variance are dollars to every consumer of a finding:
+  // closing-emails.js renders them through money(), the scorecard totals them,
+  // the PDF prints them. Putting 6.875 in `charged` produced this, in a letter
+  // the customer signs and sends their lender:
+  //
+  //   Charged $6.88; the figure I get is $6.50 — a difference of $0.38.
+  //
+  // A customer asking about a $0.38 discrepancy on their mortgage rate
+  // discredits every real finding in the same letter.
+  for (const f of [check(6.875, 6.5), check(6.25, 6.5), check(6.5, 6.5)]) {
+    assert.equal(f.charged, null, 'a rate is not a charge');
+    assert.equal(f.expected, null);
+    assert.equal(f.variance, null);
+    assert.equal(f.dollarImpact, null);
+    assert.equal(typeof f.detail.cd_rate_pct, 'number', 'the rate belongs in detail');
+  }
+});
+
+test('no title says "your", because the letter is written by the customer', () => {
+  // The title is printed in the report AND used as the numbered heading in the
+  // letter, where "your interest rate" stops meaning the customer's and starts
+  // meaning the lender's. reconcileContract documents the same rule.
+  for (const f of [check(6.875, 6.5), check(6.25, 6.5), check(6.5, 6.5)]) {
+    assert.ok(!/\byour\b/i.test(f.title), `"${f.title}" reads wrong in a letter to the lender`);
+  }
 });
 
 test('a rate that rose carries no dollar impact', () => {
@@ -57,7 +83,7 @@ test('a rate that rose is never called a violation', () => {
 test('a rate that fell is informational, not a finding against anyone', () => {
   const f = check(6.25, 6.5);
   assert.equal(f.severity, Severity.INFORMATIONAL);
-  assert.equal(f.variance, -0.25);
+  assert.equal(f.detail.delta_pct, -0.25);
 });
 
 test('an identical rate passes rather than going unmentioned', () => {
@@ -133,7 +159,7 @@ test('the check reaches the audit when a Loan Estimate was supplied', () => {
   const hit = findings.find((f) => f.checkId === 'RATE_VS_ESTIMATE');
   assert.ok(hit, 'the rate check must actually run through the service path');
   assert.equal(hit.severity, Severity.REQUIRES_DOCUMENTATION);
-  assert.equal(hit.expected, 6.5);
+  assert.equal(hit.detail.le_rate_pct, 6.5);
 });
 
 test('without a Loan Estimate the check simply does not appear', () => {

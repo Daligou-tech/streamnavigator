@@ -1324,39 +1324,52 @@ function checkRateAgainstEstimate(opts) {
   // An eighth of a point is the smallest increment rates are normally quoted
   // in. Below that is a rounding difference between two documents rather than
   // a change worth a phone call on closing day.
+  // charged / expected / variance are MONEY fields. Every consumer of a finding
+  // treats them as dollars: closing-emails.js renders them through money(), the
+  // scorecard totals them, the PDF prints them. Putting a rate in them produced
+  // this, in a letter the customer signs and sends their lender:
+  //
+  //   3. Your interest rate is higher than the Loan Estimate
+  //      Charged $6.88; the figure I get is $6.50 — a difference of $0.38.
+  //
+  // A customer asking their lender about a $0.38 discrepancy on their mortgage
+  // rate discredits the two real findings above it in the same letter. The rate
+  // lives in detail, and the basis says it in words.
+  //
+  // The titles avoid "your" for the reason reconcileContract documents: they
+  // are printed in the report AND used as the numbered heading in the letter,
+  // where "your" stops meaning the customer and starts meaning the recipient.
+  const rateDetail = { cd_rate_pct: cdRatePct, le_rate_pct: leRatePct, delta_pct: delta };
+
   if (Math.abs(delta) < 0.125) {
     return finding({
       checkId: 'RATE_VS_ESTIMATE',
-      title: 'Your interest rate matches the Loan Estimate',
+      title: 'The interest rate matches the Loan Estimate',
       severity: Severity.WITHIN_NORMS,
       evidence: EvidenceKind.INTERNAL_ARITHMETIC,
       actionability: Actionability.LIKELY_LOCKED,
-      charged: cdRatePct,
-      expected: leRatePct,
-      variance: delta,
       basis: `${source} shows ${from}; the Closing Disclosure shows ${to}.`,
+      detail: rateDetail,
     });
   }
 
   if (delta < 0) {
     return finding({
       checkId: 'RATE_VS_ESTIMATE',
-      title: 'Your interest rate is lower than the Loan Estimate',
+      title: 'The interest rate is lower than the Loan Estimate',
       severity: Severity.INFORMATIONAL,
       evidence: EvidenceKind.INTERNAL_ARITHMETIC,
       actionability: Actionability.LIKELY_LOCKED,
-      charged: cdRatePct,
-      expected: leRatePct,
-      variance: delta,
       basis: `${source} shows ${from}; the Closing Disclosure shows ${to}.`,
       whyItMatters: 'A rate that moved in your favour is worth knowing about, and worth checking '
         + 'is really what you are signing.',
+      detail: rateDetail,
     });
   }
 
   return finding({
     checkId: 'RATE_VS_ESTIMATE',
-    title: 'Your interest rate is higher than the Loan Estimate',
+    title: 'The interest rate is higher than the Loan Estimate',
     severity: Severity.REQUIRES_DOCUMENTATION,
     evidence: EvidenceKind.INTERNAL_ARITHMETIC,
     actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
@@ -1365,9 +1378,6 @@ function checkRateAgainstEstimate(opts) {
     // number far larger than any real finding here, on an assumption the
     // customer never made.
     dollarImpact: null,
-    charged: cdRatePct,
-    expected: leRatePct,
-    variance: delta,
     basis: `${source} shows ${from}; the Closing Disclosure shows ${to}, `
       + `a rise of ${delta} percentage points.`,
     whyItMatters:
