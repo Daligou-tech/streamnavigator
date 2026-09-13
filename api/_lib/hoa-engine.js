@@ -596,6 +596,78 @@ const REPORT_TOOL = {
 };
 
 // ---------------------------------------------------------------------------
+// caveats the engine knows and the write-up may not have said
+// ---------------------------------------------------------------------------
+//
+// missing_or_uncertain is required by the schema and its description says to
+// use an empty array only when there is genuinely nothing to flag. On /buying
+// the identical instruction produced `assumptions: []` under a seven-year total
+// whose every input was assumed. An instruction is not a mechanism.
+//
+// These are the caveats the ENGINE can establish from the signals it already
+// collected, in its own words rather than the model's. Each one is a real limit
+// on what the report can support, and each is the kind of thing a write-up
+// drops when it is busy being reassuring.
+//
+// The reserve study's age is the one worth naming first. Every figure in this
+// report — percent funded, the gap, the per-unit exposure — is drawn from it,
+// and a study more than about three years old is describing an association that
+// has since collected three more years of dues, deferred or completed work, and
+// watched construction costs move. The figures are not wrong; they are just
+// older than they look, and nothing else in the report says so.
+const STALE_STUDY_YEARS = 3;
+
+function hoaCaveats(report, now = new Date()) {
+  const out = [];
+  const sig = (report && report.risk_signals) || {};
+  const rx = (report && report.restrictions) || {};
+
+  const year = sig.reserve_study_year;
+  if (typeof year === 'number' && year > 1900) {
+    const age = now.getUTCFullYear() - year;
+    if (age > STALE_STUDY_YEARS) {
+      out.push(
+        `The reserve study is from ${year}, which makes it about ${age} years old. Every reserve `
+        + 'figure in this report is drawn from it — percent funded, the funding gap, the per-unit '
+        + 'exposure — so all of them describe the association as it was then. Replacement costs in '
+        + 'particular move quickly. Ask whether a more recent study exists before relying on these '
+        + 'numbers.'
+      );
+    }
+  }
+
+  // A leasing answer of "not addressed" means no rules document was provided.
+  // That is a gap in the package rather than a finding about the association,
+  // and it is precisely the gap an investor cannot afford to discover later.
+  const leasing = rx.leasing || {};
+  if (String(leasing.restricted || '').startsWith('Not addressed')) {
+    out.push(
+      'No document covering the rules was provided, so leasing restrictions could not be checked. '
+      + 'A cap on how many units may be rented, a waitlist, or a requirement to live in the unit '
+      + 'first would all appear in the declaration, the bylaws or the resale certificate. If you '
+      + 'may ever want to rent this unit out, request them before your contingency expires.'
+    );
+  }
+
+  if (!(rx.fees_at_closing || []).length) {
+    out.push(
+      'No capital contribution, transfer fee or move-in fee was found in the documents provided. '
+      + 'These are frequently set out in the bylaws rather than the budget, and they are due on the '
+      + 'day you close, so an absence here is not the same as an assurance there are none.'
+    );
+  }
+
+  if (typeof sig.unit_count !== 'number' || sig.unit_count <= 0) {
+    out.push(
+      'The unit count could not be established from these documents, so any per-unit figure in '
+      + 'this report rests on a count we could not confirm.'
+    );
+  }
+
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // the citation promise
 // ---------------------------------------------------------------------------
 //
@@ -654,7 +726,7 @@ function demoteUncitedFindings(report) {
 // fire rather than being assumed either way.
 
 const { figuresIn } = require('./money-text');
-const { deriveHoaReserveFigures, checkHoaConsistency } = require('./report-consistency');
+const { deriveHoaReserveFigures, checkHoaConsistency, seedMissingOrUncertain } = require('./report-consistency');
 
 const KNOWN = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
 
@@ -1253,7 +1325,12 @@ async function runSynthesis(client, job) {
   // 3. The score is computed rather than asked for.
   const scoring = applyComputedRiskScore(report);
 
-  // 4. And what is left is graded, so a contradiction that survived all of the
+  // 4. The caveats the engine can establish itself are added to
+  //    missing_or_uncertain, which the schema requires and which a reassuring
+  //    write-up is exactly the kind of thing to leave empty.
+  const caveats = seedMissingOrUncertain(report, hoaCaveats(report));
+
+  // 5. And what is left is graded, so a contradiction that survived all of the
   //    above is visible in the stored row instead of only on the customer's
   //    screen.
   const { problems } = checkHoaConsistency({ report });
@@ -1263,7 +1340,7 @@ async function runSynthesis(client, job) {
   report.generated_at = new Date().toISOString();
   report.disclaimer = 'This is an analysis of the documents provided, not legal, financial, or investment advice, and not a substitute for review by an attorney, accountant, or licensed inspector. Dollar figures are estimates unless quoted directly from a document. Verify anything you intend to rely on before waiving a contingency.';
 
-  return { report, droppedCitationRefs, unverifiedPinpoints, scoring, derived, citationOrder, problems };
+  return { report, droppedCitationRefs, unverifiedPinpoints, scoring, derived, citationOrder, problems, caveats };
 }
 
 // Advances one submission by exactly one stage, then returns. This is the unit
@@ -1483,6 +1560,7 @@ module.exports = {
   scoreRisk,
   applyComputedRiskScore,
   demoteUncitedFindings,
+  hoaCaveats,
   // Re-exported from report-consistency so the tests exercise these at the
   // engine boundary, which is where they actually run.
   deriveHoaReserveFigures,

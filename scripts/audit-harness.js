@@ -50,6 +50,13 @@ function loadFixtures() {
   return fs.readdirSync(FIXTURE_DIR)
     .filter((f) => f.endsWith('.json'))
     .map((f) => ({ file: f, ...JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, f), 'utf8')) }))
+    // tests/fixtures/ is shared with the other products, so this directory
+    // holds rent rolls as well as closing documents. A rental fixture ran
+    // through the closing audit produced "ATTENTION: zero flags on zero line
+    // items — nothing was tested" on every single run, which trained whoever
+    // read the output to skim past that warning — and that warning is the one
+    // thing this harness exists to raise.
+    .filter((f) => f.extraction && typeof f.extraction === 'object')
     .filter((f) => !filter || (f.name || f.file).includes(filter));
 }
 

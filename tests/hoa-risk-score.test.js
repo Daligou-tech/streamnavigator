@@ -226,3 +226,71 @@ test('when nothing can be computed the badge is not rewritten', () => {
   assert.equal(report.risk_score, 'Moderate');
   assert.equal(report.risk_score_computed, false);
 });
+
+// --- caveats the engine knows and the write-up may not have said ------------
+//
+// missing_or_uncertain is required by the schema, and a reassuring write-up is
+// exactly the kind of thing to leave it empty. These are limits the engine can
+// establish from signals it already collected.
+
+const { hoaCaveats } = require('../api/_lib/hoa-engine');
+const NOW = new Date(Date.UTC(2026, 8, 13));
+
+const withRestrictions = (rx, signals = {}) => ({
+  risk_signals: { ...NO_SIGNALS, unit_count: 84, reserve_study_year: 2025, ...signals },
+  restrictions: Object.assign({
+    leasing: { restricted: 'No restriction found' },
+    fees_at_closing: [{ label: 'Capital contribution', amount: '$1,200' }],
+    use_restrictions: [],
+    financeability: {},
+  }, rx),
+});
+
+test('a reserve study older than three years is called out by name and age', () => {
+  const caveats = hoaCaveats(withRestrictions({}, { reserve_study_year: 2019 }), NOW);
+  const stale = caveats.find((c) => /reserve study is from/.test(c));
+  assert.ok(stale, 'a stale study must be flagged — every reserve figure is drawn from it');
+  assert.match(stale, /2019/);
+  assert.match(stale, /about 7 years old/);
+  assert.match(stale, /Replacement costs/);
+});
+
+test('a recent reserve study raises no caveat', () => {
+  const caveats = hoaCaveats(withRestrictions({}, { reserve_study_year: 2025 }), NOW);
+  assert.ok(!caveats.some((c) => /reserve study is from/.test(c)));
+});
+
+test('three years old is not yet stale', () => {
+  // The boundary matters: flagging a study that is still current would train
+  // the reader to discount the caveat when it is real.
+  assert.ok(!hoaCaveats(withRestrictions({}, { reserve_study_year: 2023 }), NOW)
+    .some((c) => /reserve study is from/.test(c)));
+  assert.ok(hoaCaveats(withRestrictions({}, { reserve_study_year: 2022 }), NOW)
+    .some((c) => /reserve study is from/.test(c)));
+});
+
+test('leasing that could not be checked is a gap in the package, stated as one', () => {
+  const caveats = hoaCaveats(withRestrictions({
+    leasing: { restricted: 'Not addressed in the documents provided' },
+  }), NOW);
+  const leasing = caveats.find((c) => /leasing restrictions could not be checked/.test(c));
+  assert.ok(leasing);
+  assert.match(leasing, /declaration, the bylaws or the resale certificate/);
+});
+
+test('no fees found is not reported as an assurance there are none', () => {
+  const caveats = hoaCaveats(withRestrictions({ fees_at_closing: [] }), NOW);
+  const fees = caveats.find((c) => /capital contribution, transfer fee/i.test(c));
+  assert.ok(fees);
+  assert.match(fees, /not the same as an assurance/);
+});
+
+test('an unknown unit count undermines every per-unit figure, and says so', () => {
+  const caveats = hoaCaveats(withRestrictions({}, { unit_count: -1 }), NOW);
+  assert.ok(caveats.some((c) => /unit count could not be established/.test(c)));
+});
+
+test('a complete package with a current study raises only the fee caveat', () => {
+  const caveats = hoaCaveats(withRestrictions({}), NOW);
+  assert.deepEqual(caveats, [], 'nothing to flag when every signal is present and current');
+});

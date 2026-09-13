@@ -1272,6 +1272,99 @@ function analyzeTolerances(baseline, cdCharges, lenderProvidedWrittenList) {
 // 1026.19(f)(2)(v) is the CREDITOR's deadline to refund and reissue — not a
 // limitations period on the borrower. Stating it the other way around would
 // understate the customer's position.
+// ---------------------------------------------------------------------------
+// the note rate against the Loan Estimate
+// ---------------------------------------------------------------------------
+//
+// Every tolerance check in this file is about CHARGES. None of them looks at
+// the number those charges are attached to, and the interest rate is worth
+// vastly more than any of them: a quarter point on $300,000 over thirty years
+// is roughly $16,000, which is larger than every finding this product has ever
+// produced put together.
+//
+// checkTransactionMatch compares lender, address, borrower and loan amount to
+// decide whether two documents describe the same loan. It deliberately does not
+// compare the rate, because a rate that moved is still the same loan — and that
+// is exactly why nothing was looking at it.
+//
+// This is NOT an accusation and must never become one. An unlocked rate is
+// free to move, a float-down can move it in the customer's favour, and a lock
+// that expired and was re-locked at a higher rate is lawful. What the customer
+// needs is to be told it moved, with both figures, and what to ask. Almost
+// nobody re-reads their Loan Estimate on closing day.
+function checkRateAgainstEstimate(opts) {
+  const { cdRatePct, leRatePct, leDocId, leDateIssued } = opts;
+  if (typeof cdRatePct !== 'number' || typeof leRatePct !== 'number') return null;
+  if (!Number.isFinite(cdRatePct) || !Number.isFinite(leRatePct)) return null;
+
+  const delta = Math.round((cdRatePct - leRatePct) * 1000) / 1000;
+  const from = `${leRatePct}%`;
+  const to = `${cdRatePct}%`;
+  const when = leDateIssued ? ` dated ${isoDate(leDateIssued)}` : '';
+  const source = `${leDocId || 'your Loan Estimate'}${when}`;
+
+  // An eighth of a point is the smallest increment rates are normally quoted
+  // in. Below that is a rounding difference between two documents rather than
+  // a change worth a phone call on closing day.
+  if (Math.abs(delta) < 0.125) {
+    return finding({
+      checkId: 'RATE_VS_ESTIMATE',
+      title: 'Your interest rate matches the Loan Estimate',
+      severity: Severity.WITHIN_NORMS,
+      evidence: EvidenceKind.INTERNAL_ARITHMETIC,
+      actionability: Actionability.LIKELY_LOCKED,
+      charged: cdRatePct,
+      expected: leRatePct,
+      variance: delta,
+      basis: `${source} shows ${from}; the Closing Disclosure shows ${to}.`,
+    });
+  }
+
+  if (delta < 0) {
+    return finding({
+      checkId: 'RATE_VS_ESTIMATE',
+      title: 'Your interest rate is lower than the Loan Estimate',
+      severity: Severity.INFORMATIONAL,
+      evidence: EvidenceKind.INTERNAL_ARITHMETIC,
+      actionability: Actionability.LIKELY_LOCKED,
+      charged: cdRatePct,
+      expected: leRatePct,
+      variance: delta,
+      basis: `${source} shows ${from}; the Closing Disclosure shows ${to}.`,
+      whyItMatters: 'A rate that moved in your favour is worth knowing about, and worth checking '
+        + 'is really what you are signing.',
+    });
+  }
+
+  return finding({
+    checkId: 'RATE_VS_ESTIMATE',
+    title: 'Your interest rate is higher than the Loan Estimate',
+    severity: Severity.REQUIRES_DOCUMENTATION,
+    evidence: EvidenceKind.INTERNAL_ARITHMETIC,
+    actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
+    // No dollar impact. The cost of a rate change depends on how long the loan
+    // is actually held, and putting a thirty-year figure on it would state a
+    // number far larger than any real finding here, on an assumption the
+    // customer never made.
+    dollarImpact: null,
+    charged: cdRatePct,
+    expected: leRatePct,
+    variance: delta,
+    basis: `${source} shows ${from}; the Closing Disclosure shows ${to}, `
+      + `a rise of ${delta} percentage points.`,
+    whyItMatters:
+      'A rate is only held if it was locked and the lock had not expired. An unlocked rate is free '
+      + 'to move, so this is not necessarily an error — but it is the single most expensive '
+      + 'difference between these two documents, and it is worth more than every fee on the page.',
+    recommendedAction:
+      'Ask the lender whether your rate was locked, when the lock expired, and why the rate on the '
+      + 'Closing Disclosure differs. If it was locked and unexpired, ask them to honour the locked '
+      + 'rate before you sign.',
+    askLender: true,
+    detail: { cd_rate_pct: cdRatePct, le_rate_pct: leRatePct, delta_pct: delta },
+  });
+}
+
 function cureDeadlineNote(consummationDate) {
   const deadline = isoDate(addDays(consummationDate, 60));
   return (
@@ -1397,5 +1490,6 @@ module.exports = {
   checkSectionArithmetic, checkCashToClose,
   detectDuplicates, compareToBenchmark,
   assignBucket, businessDaysBetween, selectBaseline, analyzeTolerances, cureDeadlineNote,
+  checkRateAgainstEstimate,
   reconcileContract, gateExtraction,
 };

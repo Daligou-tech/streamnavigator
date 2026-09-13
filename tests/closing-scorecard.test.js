@@ -952,12 +952,12 @@ test('a contract with no credits is not offered again as an upload', () => {
 });
 
 test('a contract with no credits leaves the denominator, it does not block it', () => {
-  // "20 of 28" read identically whether the customer uploaded a contract or
+  // "20 of 29" read identically whether the customer uploaded a contract or
   // not, so supplying one appeared to accomplish nothing.
   const alone = coverageRun({});
   const withContract = coverageRun({ emptyDocuments: ['purchase_contract'] });
-  assert.equal(alone.checks_in_scope, 28);
-  assert.equal(withContract.checks_in_scope, 27,
+  assert.equal(alone.checks_in_scope, 29);
+  assert.equal(withContract.checks_in_scope, 28,
     'the contract check should leave the denominator, not sit in it as blocked');
   assert.ok(withContract.checks_blocked < alone.checks_blocked,
     'uploading the contract did not reduce the blocked count');

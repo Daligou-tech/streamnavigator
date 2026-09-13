@@ -1096,6 +1096,19 @@ function runClosingAudit(extraction, options = {}) {
       findings.push(...audit.analyzeTolerances(
         baseline, cdCharges, normalizeProviderListAnswer(answers.provider_list)
       ));
+
+      // The rate, which every tolerance check above ignores because tolerances
+      // are about charges. A quarter point on $300,000 over thirty years is
+      // worth more than every fee on the document combined, and nothing was
+      // comparing the two figures.
+      const rateFinding = audit.checkRateAgainstEstimate({
+        cdRatePct: e.interest_rate_pct,
+        leRatePct: baseline.interestRatePct,
+        leDocId: baseline.docId,
+        leDateIssued: baseline.dateIssued,
+      });
+      if (rateFinding) findings.push(rateFinding);
+
       cureNote = audit.cureDeadlineNote(e.closing_date);
     }
   }

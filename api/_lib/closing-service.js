@@ -148,6 +148,8 @@ const CATALOG = [
     label: 'The correct Loan Estimate was used as the baseline' },
   { id: 'TRID_BASELINE_CIRCUMSTANCE', needs: Needs.LE, group: 'tolerance',
     label: 'Any revised Loan Estimate had a valid changed circumstance' },
+  { id: 'RATE_VS_ESTIMATE', needs: Needs.LE, group: 'tolerance',
+    label: 'The interest rate matches your Loan Estimate' },
   { id: 'TRID_UNMATCHED_CHARGE', needs: Needs.LE, group: 'tolerance',
     label: 'Every charge on the CD traces back to the Loan Estimate' },
 
