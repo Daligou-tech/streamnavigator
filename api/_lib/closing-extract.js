@@ -1040,6 +1040,26 @@ function runClosingAudit(extraction, options = {}) {
       const cdCharges = {};
     for (const li of lines) {
       cdCharges[chargeKey(li)] = {
+        // The section is the FIRST thing assignBucket() looks at, and it decides
+        // whether a charge carries zero tolerance, sits in the 10% aggregate
+        // basket, or carries no tolerance at all. It was missing here, and the
+        // consequence was not a missing finding — it was the wrong kind of
+        // finding. Without it, assignBucket skipped its whole section block and
+        // most charges fell through to the closing default, zero tolerance:
+        //
+        //   Section C survey, written list given   10% basket -> zero tolerance
+        //   Section H owner's title policy         no tolerance -> zero
+        //   Section H home warranty                no tolerance -> zero
+        //
+        // A zero-tolerance finding says the lender owes the money back, carries
+        // a dollar impact and a cure deadline, and is written into the letter
+        // the customer signs their own name to and sends their lender. Section H
+        // charges are not subject to any tolerance under 1026.19(e)(3)(iii);
+        // shoppable Section C charges with a written provider list are tested in
+        // a 10% aggregate, not per charge. So the omission did not merely lose
+        // accuracy, it manufactured accusations — and it also made check 23, the
+        // 10% basket, unreachable, because nothing ever landed in the basket.
+        section: li.section,
         label: li.label,
         amount: li.amount,
         category: li.category || 'other',

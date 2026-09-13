@@ -39,6 +39,16 @@
 .hoa-cite-more{display:inline-block;margin-top:6px;padding:0;border:0;background:none;font:inherit;font-size:12px;color:inherit;opacity:.7;text-decoration:underline;cursor:pointer;}
 .hoa-cite-more:hover{opacity:1;}
 .hoa-cite-full{margin-top:8px!important;max-height:320px;overflow:auto;white-space:pre-wrap;font-style:normal!important;font-size:12px;line-height:1.45;background:rgba(31,27,22,.04);border-radius:8px;padding:10px 12px;}
+.hoa-score-basis{font-size:13.5px;line-height:1.6;opacity:.78;margin:10px 0 0;max-width:62ch;}
+.hoa-restriction-card{border:1px solid rgba(31,27,22,.14);border-radius:14px;padding:16px 18px;margin-bottom:16px;}
+.hoa-restriction-card h4{margin:0 0 10px;font-family:'Sora',sans-serif;font-size:16px;}
+.hoa-restriction-card p{margin:10px 0 0;line-height:1.6;font-size:14px;}
+.hoa-restriction-card ul{margin:0 0 4px;padding-left:18px;font-size:14px;line-height:1.6;}
+.hoa-restriction-headline{margin:0 0 8px!important;font-weight:600;}
+.hoa-restriction-row{display:grid;grid-template-columns:minmax(120px,auto) 1fr;gap:4px 14px;padding:5px 0;border-top:1px solid rgba(31,27,22,.08);font-size:14px;line-height:1.5;}
+.hoa-restriction-row:first-of-type{border-top:0;}
+.hoa-restriction-key{font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.62;padding-top:2px;}
+@media (max-width:520px){.hoa-restriction-row{grid-template-columns:1fr;}}
 .hoa-disclaimer{font-size:12.5px;line-height:1.6;opacity:.7;margin-top:28px;}
 .hoa-bar{height:6px;border-radius:999px;background:rgba(31,27,22,.10);overflow:hidden;margin:18px auto 10px;max-width:340px;}
 .hoa-bar-fill{height:100%;width:0;border-radius:999px;background:var(--ink,#1F1B16);transition:width .6s ease;}
@@ -101,6 +111,15 @@
         <div id="hoa-findings-block" class="report-block" hidden>
           <h3>🔍 Top concerns, with the pages they came from</h3>
           <div id="hoa-findings"></div>
+        </div>
+
+        <!-- What the buyer may DO with the unit. Everything above this is
+             about whether the association will send them a bill; this is the
+             half a buyer's attorney reads the bylaws for, and the engine did
+             not look for it at all until 2026-09-13. -->
+        <div id="hoa-restrictions-block" class="report-block" hidden>
+          <h3>📋 What you can and cannot do with the unit</h3>
+          <div id="hoa-restrictions"></div>
         </div>
 
         <div id="report-sections"></div>
@@ -467,6 +486,150 @@
       });
       findingsBlock.hidden = false;
     }
+
+    renderHoaRestrictions(report);
+    renderScoreBasis(report);
+  }
+
+  // A labelled row inside the restrictions block. Values that are empty are
+  // skipped entirely rather than rendered as a blank — a row reading "Cap: —"
+  // tells the reader nothing and costs them a line.
+  function restrictionRow(label, value){
+    if (!value || !String(value).trim()) return null;
+    var row = document.createElement('div');
+    row.className = 'hoa-restriction-row';
+    var k = document.createElement('span');
+    k.className = 'hoa-restriction-key';
+    k.textContent = label;
+    var v = document.createElement('span');
+    v.textContent = value;
+    row.appendChild(k);
+    row.appendChild(v);
+    return row;
+  }
+
+  function restrictionCard(title, body){
+    var card = document.createElement('div');
+    card.className = 'hoa-restriction-card';
+    var h = document.createElement('h4');
+    h.textContent = title;
+    card.appendChild(h);
+    if (body) card.appendChild(body);
+    return card;
+  }
+
+  function renderHoaRestrictions(report){
+    var rx = report.restrictions;
+    if (!rx) return;
+
+    var host = document.getElementById('hoa-restrictions');
+    host.innerHTML = '';
+
+    // --- leasing, which is the one most buyers came for ---------------------
+    var leasing = rx.leasing || {};
+    if (leasing.restricted) {
+      var body = document.createElement('div');
+      var status = document.createElement('p');
+      status.className = 'hoa-restriction-headline';
+      status.textContent = leasing.restricted;
+      body.appendChild(status);
+
+      [['Cap', leasing.cap],
+       ['Currently', leasing.current_status],
+       ['Minimum lease', leasing.minimum_lease_term],
+       ['Must occupy first', leasing.owner_occupancy_requirement],
+       ['Short-term rentals', leasing.short_term_rentals]].forEach(function(pair){
+        var row = restrictionRow(pair[0], pair[1]);
+        if (row) body.appendChild(row);
+      });
+
+      if (leasing.detail) {
+        var d = document.createElement('p');
+        d.textContent = leasing.detail;
+        body.appendChild(d);
+      }
+      var card = restrictionCard('Renting the unit out', body);
+      appendCitations(card, leasing.citations, null);
+      host.appendChild(card);
+    }
+
+    // --- money due on closing day -------------------------------------------
+    var fees = rx.fees_at_closing || [];
+    if (fees.length) {
+      var feeBody = document.createElement('div');
+      fees.forEach(function(fee){
+        var row = restrictionRow(
+          fee.label || 'Fee',
+          [fee.amount, fee.payer ? '(' + fee.payer + ')' : ''].filter(Boolean).join(' ')
+        );
+        if (row) feeBody.appendChild(row);
+      });
+      var feeCard = restrictionCard('Due at closing, on top of the purchase price', feeBody);
+      fees.forEach(function(fee){ appendCitations(feeCard, fee.citations, null); });
+      host.appendChild(feeCard);
+    }
+
+    // --- everything else the rules say --------------------------------------
+    var uses = rx.use_restrictions || [];
+    if (uses.length) {
+      var useBody = document.createElement('div');
+      uses.forEach(function(u){
+        var row = restrictionRow(u.topic || 'Rule', u.rule);
+        if (row) useBody.appendChild(row);
+      });
+      var useCard = restrictionCard('House rules worth knowing before you sign', useBody);
+      uses.forEach(function(u){ appendCitations(useCard, u.citations, null); });
+      host.appendChild(useCard);
+    }
+
+    // --- whether a bank will lend here --------------------------------------
+    var fin = rx.financeability || {};
+    var concerns = fin.concerns || [];
+    if (concerns.length || fin.fha_va_status || fin.detail) {
+      var finBody = document.createElement('div');
+      if (concerns.length) {
+        var ul = document.createElement('ul');
+        concerns.forEach(function(c){
+          var liEl = document.createElement('li');
+          liEl.textContent = c;
+          ul.appendChild(liEl);
+        });
+        finBody.appendChild(ul);
+      }
+      var fhaRow = restrictionRow('FHA / VA', fin.fha_va_status);
+      if (fhaRow) finBody.appendChild(fhaRow);
+      if (fin.detail) {
+        var fd = document.createElement('p');
+        fd.textContent = fin.detail;
+        finBody.appendChild(fd);
+      }
+      var finCard = restrictionCard('Financing and resale', finBody);
+      appendCitations(finCard, fin.citations, null);
+      host.appendChild(finCard);
+    }
+
+    if (host.children.length) {
+      document.getElementById('hoa-restrictions-block').hidden = false;
+    }
+  }
+
+  // The risk score is computed from the association's own figures, so the
+  // reader can check it. Saying which rules fired is the difference between a
+  // score they trust and a score they take on faith.
+  function renderScoreBasis(report){
+    if (!report.risk_score_basis) return;
+    var summaryEl = document.getElementById('report-summary');
+    if (!summaryEl || !summaryEl.parentNode) return;
+    // Rendered once, even if the report view is re-rendered on a poll.
+    var existing = document.getElementById('hoa-score-basis');
+    if (existing) existing.remove();
+    var note = document.createElement('p');
+    note.id = 'hoa-score-basis';
+    note.className = 'hoa-score-basis';
+    note.textContent = (report.risk_score_computed === false)
+      ? report.risk_score_basis
+      : 'How this score was reached: ' + report.risk_score_basis;
+    summaryEl.parentNode.insertBefore(note, summaryEl.nextSibling);
   }
 
   // api/_lib/navigator-engine.js now normalises every list field before it

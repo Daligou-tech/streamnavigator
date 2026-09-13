@@ -140,6 +140,41 @@ and predates any formal notice the seller would have to disclose.
 Short-term means the next 12 months. Mid-term means one to five years.
 Assess these separately — they frequently differ, and a buyer waiving a
 contingency cares most about the short-term window.
+
+WHAT THE BUYER MAY DO WITH THE UNIT
+
+Everything above is about whether the association will send this owner a
+bill. It is not the whole question, and for some buyers it is not even the
+main one. Read the bylaws, the declaration, the rules and regulations, and
+the resale certificate for these, and report them as carefully as the
+finances:
+
+- LEASING. The single most consequential non-financial term. Look for a cap
+  (a percentage of units or a fixed number), how much of it is currently
+  used, a waitlist and its length, a minimum lease term, a requirement to
+  occupy the unit for a period before leasing, and any ban on short-term or
+  transient rentals. A cap that is already full is a deal breaker for an
+  investor and a serious constraint on an owner-occupant who may need to
+  move without selling. Grandfathering matters: rights that do not transfer
+  to a new owner are worth nothing to this buyer.
+- MONEY DUE AT CLOSING. A capital contribution, working-capital assessment,
+  transfer or move-in fee, or resale certificate fee. These are real money
+  on closing day, frequently several months of dues, and they are routinely
+  missed because they appear in the bylaws rather than the budget.
+- USE RESTRICTIONS. Pets (number, weight, breed), parking and vehicles,
+  architectural approval, age restriction (55+ communities), home business,
+  flooring, satellite dishes. Report the ones a buyer would actually want to
+  know before waiving a contingency, not an inventory of every rule.
+- FINANCEABILITY. Anything bearing on whether a lender will lend here, which
+  also decides who can buy from this owner later: investor concentration, a
+  single owner holding a large share of units, litigation affecting
+  warrantability, commercial space above conventional limits, inadequate
+  master insurance. Report FHA or VA approval status ONLY if a document
+  states it — never infer it.
+
+If no document covering rules was provided, say that plainly. "The bylaws
+were not provided, so leasing restrictions could not be checked" is a useful
+answer and belongs in the missing-documents list. A guess does not.
 `.trim();
 
 const HONESTY_RULES = `
@@ -203,11 +238,15 @@ Write a thorough analytical narrative of this document covering whatever it
 actually contains: reserve adequacy with every number computed; capital
 projects ahead and how they are funded; anything bearing on short-term (12
 month) or mid-term (1-5 year) special-assessment risk; insurance;
-governance, litigation, and anything in minutes. Pull out every figure that
-a later cross-check against another document would need — a balance, a
-recommended contribution, a project cost, a unit count, a date — and quote
-it, because the synthesis step works from what you write here, not from the
-document itself.
+governance, litigation, and anything in minutes. If this document carries
+rules — a declaration, bylaws, rules and regulations, a resale certificate —
+cover leasing restrictions, money due at closing, use restrictions and
+anything bearing on financeability, quoting the operative sentence in each
+case. Pull out every figure that a later cross-check against another
+document would need — a balance, a recommended contribution, a project cost,
+a unit count, an annual assessment per unit, a delinquency rate, a leasing
+cap, a date — and quote it, because the synthesis step works from what you
+write here, not from the document itself.
 
 End with what this document alone cannot answer.
 
@@ -256,11 +295,80 @@ const REPORT_TOOL = {
       risk_score: {
         type: 'string',
         enum: RISK_LEVELS,
-        description: 'The overall HOA Risk Score.',
+        // Asked for, and then OVERWRITTEN by scoreRisk() below wherever the
+        // signals support computing it. Kept in the schema for two reasons:
+        // it makes the model commit to a read before writing the rationale,
+        // which measurably improves the rationale, and it is the fallback when
+        // the documents do not carry enough to compute anything.
+        //
+        // It is not the published score. See scoreRisk().
+        description: 'Your own read of the overall HOA Risk Score. Note that the published score is '
+          + 'computed from risk_signals below; this is used only when those signals are too sparse to '
+          + 'compute one, so answer it honestly rather than working backwards from what you want the '
+          + 'score to be.',
       },
       risk_rationale: {
         type: 'string',
-        description: 'Two to four sentences on why this score and not the one above or below it.',
+        description: 'Two to four sentences on why this score and not the one above or below it. '
+          + 'Write about the association, not about the scoring method.',
+      },
+      // --- H-1: the inputs the score is actually computed from ---------------
+      //
+      // The Risk Score is the first thing on the page and the first thing the
+      // customer reads, and it was a schema enum the model filled in: no
+      // scoring function existed anywhere in this file. Two runs on the same
+      // package could disagree and nothing would notice.
+      //
+      // These are the signals the rubric already names, asked for as data
+      // instead of as a judgment. Numbers use -1 for "not determinable from
+      // these documents" rather than being omitted, because strict:true
+      // requires every property to be present.
+      risk_signals: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'The raw signals the risk score is computed from. Report what the documents say. '
+          + 'Use -1 for any number the documents do not establish — never guess, and never put a '
+          + 'plausible-looking figure here to make the score come out a particular way.',
+        properties: {
+          unit_count: { type: 'number', description: 'Total units in the association, or -1.' },
+          delinquency_rate_pct: { type: 'number', description: 'Owner delinquency rate as a percentage, or -1.' },
+          annual_dues_per_unit: { type: 'number', description: 'Annual regular assessment per unit in dollars (monthly dues x 12), or -1.' },
+          special_assessment_announced: {
+            type: 'boolean',
+            description: 'True only if a special assessment has actually been levied, voted, or formally announced in these documents. A board DISCUSSING one is not this — put that in the minutes findings.',
+          },
+          association_borrowing: {
+            type: 'boolean',
+            description: 'True if the association has a bank loan, a line of credit, or has borrowed from reserves to fund operations.',
+          },
+          material_litigation: {
+            type: 'boolean',
+            description: 'True for construction-defect claims, litigation against the association, or a settlement with a financial obligation. Routine collections actions against delinquent owners are NOT this.',
+          },
+          insurance_red_flag: {
+            type: 'boolean',
+            description: 'True for a non-renewal, a coverage gap, or a deductible large enough that a claim would be assessed to owners (commonly a percentage-based or named-storm deductible).',
+          },
+          largest_component_due_months: {
+            type: 'number',
+            description: 'Months until the nearest major component replacement the documents identify (roof, elevators, siding, risers, balconies, paving, boilers), or -1.',
+          },
+          largest_component_cost: {
+            type: 'number',
+            description: 'Replacement cost of that component in dollars, or -1.',
+          },
+          reserve_study_year: {
+            type: 'number',
+            description: 'Year the reserve study was performed, or -1. A study more than about three years old weakens every figure drawn from it.',
+          },
+          evidence_ids: { type: 'array', items: { type: 'integer' } },
+        },
+        required: [
+          'unit_count', 'delinquency_rate_pct', 'annual_dues_per_unit',
+          'special_assessment_announced', 'association_borrowing', 'material_litigation',
+          'insurance_red_flag', 'largest_component_due_months', 'largest_component_cost',
+          'reserve_study_year', 'evidence_ids',
+        ],
       },
       headline: {
         type: 'string',
@@ -316,6 +424,98 @@ const REPORT_TOOL = {
           evidence_ids: { type: 'array', items: { type: 'integer' } },
         },
         required: ['percent_funded', 'reserve_balance', 'fully_funded_balance', 'annual_contribution', 'recommended_contribution', 'assessment', 'evidence_ids'],
+      },
+      // --- H-2: what the buyer is allowed to DO with the unit ----------------
+      //
+      // Everything above this point is about whether the association will send
+      // the owner a bill. None of it answers the questions a buyer's attorney
+      // reads the bylaws for: can I rent it out, can I keep the dog, what do I
+      // owe at the closing table, and will a bank lend on this building.
+      //
+      // A leasing cap decides whether an owner-occupant can ever move without
+      // selling, and for an investor it decides whether the purchase works at
+      // all — a cap that is already full with a four-year waitlist is a deal
+      // breaker that appears nowhere in the association's finances. A
+      // non-warrantable or FHA-unapproved association narrows the buyer pool at
+      // resale and can break the buyer's own financing. A capital contribution
+      // is money due on the day of closing.
+      //
+      // These documents are already uploaded and already read. The engine
+      // simply was not looking.
+      restrictions: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'Restrictions on what an owner may do with the unit, and what is owed at closing. '
+          + 'Read the bylaws, declaration, rules and resale certificate for these. Where a document that '
+          + 'would settle a point was not provided, say so in that field rather than inferring — "the '
+          + 'bylaws were not provided" is a useful answer and a guess is not.',
+        properties: {
+          leasing: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              restricted: {
+                type: 'string',
+                enum: ['No restriction found', 'Restricted', 'Prohibited', 'Not addressed in the documents provided'],
+                description: 'Use "Not addressed" when no document covering rules was provided — it is different from a document saying there is no cap.',
+              },
+              cap: { type: 'string', description: 'The cap as written, e.g. "25% of units" or "30 units", or empty string.' },
+              current_status: { type: 'string', description: 'How much of the cap is used, and any waitlist and its length, if stated. Empty string if not stated.' },
+              minimum_lease_term: { type: 'string', description: 'e.g. "12 months", or empty string.' },
+              owner_occupancy_requirement: { type: 'string', description: 'Any requirement to occupy before leasing, e.g. "one year after purchase", or empty string.' },
+              short_term_rentals: { type: 'string', description: 'Anything on short-term or transient rentals, or empty string.' },
+              detail: { type: 'string', description: 'What this means for this buyer in plain English, including what it means if they ever want to rent the unit out.' },
+              evidence_ids: { type: 'array', items: { type: 'integer' } },
+            },
+            required: ['restricted', 'cap', 'current_status', 'minimum_lease_term', 'owner_occupancy_requirement', 'short_term_rentals', 'detail', 'evidence_ids'],
+          },
+          fees_at_closing: {
+            type: 'array',
+            description: 'One-off amounts due at or shortly after closing — capital contribution, working-capital assessment, transfer or move-in fee, resale certificate or document fee. These are real money on closing day and are frequently missed. Empty array if none are stated.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                label: { type: 'string' },
+                amount: { type: 'string', description: 'As written, e.g. "$1,200" or "two months of assessments".' },
+                payer: { type: 'string', description: 'Who the documents say pays it, or empty string if unstated.' },
+                evidence_ids: { type: 'array', items: { type: 'integer' } },
+              },
+              required: ['label', 'amount', 'payer', 'evidence_ids'],
+            },
+          },
+          use_restrictions: {
+            type: 'array',
+            description: 'Restrictions on use that a buyer would want to know before waiving a contingency — pets, vehicles and parking, architectural approval, age restriction (55+), home business, satellite dishes, flooring. Only what the documents actually say. Empty array if no rules document was provided.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                topic: { type: 'string', description: 'e.g. "Pets", "Parking", "Age restriction".' },
+                rule: { type: 'string', description: 'The restriction in one line.' },
+                evidence_ids: { type: 'array', items: { type: 'integer' } },
+              },
+              required: ['topic', 'rule', 'evidence_ids'],
+            },
+          },
+          financeability: {
+            type: 'object',
+            additionalProperties: false,
+            description: 'Anything bearing on whether a lender will lend on a unit here, which also affects who can buy it from this buyer later.',
+            properties: {
+              concerns: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'e.g. high investor concentration, a single owner holding many units, litigation affecting warrantability, commercial space above the conventional limit, inadequate insurance. Empty array if none appear.',
+              },
+              fha_va_status: { type: 'string', description: 'Only if the documents state it. Empty string otherwise — do not infer approval status.' },
+              detail: { type: 'string', description: 'Plain-English read, or a plain statement that the documents provided do not establish this.' },
+              evidence_ids: { type: 'array', items: { type: 'integer' } },
+            },
+            required: ['concerns', 'fha_va_status', 'detail', 'evidence_ids'],
+          },
+        },
+        required: ['leasing', 'fees_at_closing', 'use_restrictions', 'financeability'],
       },
       findings: {
         type: 'array',
@@ -387,13 +587,186 @@ const REPORT_TOOL = {
       closing_body: { type: 'string', description: 'The pre-contingency-expiration checklist as plain text with line breaks.' },
     },
     required: [
-      'risk_score', 'risk_rationale', 'headline', 'headline_tag', 'summary',
-      'short_term_risk', 'mid_term_risk', 'reserve_health', 'findings',
+      'risk_score', 'risk_rationale', 'risk_signals', 'headline', 'headline_tag', 'summary',
+      'short_term_risk', 'mid_term_risk', 'reserve_health', 'restrictions', 'findings',
       'key_numbers', 'sections', 'documents_reviewed', 'documents_missing',
       'questions_for_hoa', 'missing_or_uncertain', 'closing_title', 'closing_body',
     ],
   },
 };
+
+// ---------------------------------------------------------------------------
+// the risk score
+// ---------------------------------------------------------------------------
+//
+// The score was a schema enum the model filled in. No code computed it, nothing
+// checked it, and two runs on the same package could disagree without anything
+// noticing — on the field the page sells first and the customer reads first,
+// and on which somebody may waive a contingency.
+//
+// This is the same failure the Closing and buying products already learned:
+// a quantity that is ASKED FOR rather than COMPUTED will eventually contradict
+// itself, and checking after the fact never fully fixes it. So the score is now
+// derived from the signals the rubric already named, and the model writes the
+// rationale rather than choosing the verdict.
+//
+// Two rules govern what went in here. Every threshold is one the rubric already
+// stated to the model, so this is not a new opinion about HOAs — it is the
+// existing opinion, made executable. And every rule needs a signal the
+// documents actually establish: where they do not, the rule simply does not
+// fire rather than being assumed either way.
+
+const { figuresIn } = require('./money-text');
+
+const KNOWN = (n) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+
+function firstAmount(value) {
+  const found = figuresIn(String(value == null ? '' : value), { signed: true });
+  return found.length ? found[0].value.low : null;
+}
+
+// percent funded, preferring the two balances over the model's own percentage —
+// the balances are read from a document, the percentage is arithmetic on them.
+function percentFunded(report) {
+  const rh = (report && report.reserve_health) || {};
+  const balance = firstAmount(rh.reserve_balance);
+  const fully = firstAmount(rh.fully_funded_balance);
+  if (balance !== null && fully !== null && fully > 0) return (balance / fully) * 100;
+  const m = /(\d+(?:\.\d+)?)\s*%/.exec(String(rh.percent_funded || ''));
+  return m ? Number(m[1]) : null;
+}
+
+const RANK = { Low: 0, Moderate: 1, High: 2, Critical: 3 };
+
+// Returns { score, basis, computed }. `basis` names every rule that fired, in
+// the association's own figures, so the score can be checked by the customer
+// rather than taken on faith — which is also what makes it worth putting on the
+// marketing page.
+function scoreRisk(report) {
+  const sig = (report && report.risk_signals) || {};
+  const pf = percentFunded(report);
+  const reasons = [];
+  let level = 'Low';
+
+  const raise = (to, why) => {
+    reasons.push(why);
+    if (RANK[to] > RANK[level]) level = to;
+  };
+
+  // --- Critical ------------------------------------------------------------
+  if (sig.special_assessment_announced === true) {
+    raise('Critical', 'a special assessment has already been levied or formally announced');
+  }
+  if (pf !== null && pf < 15) {
+    raise('Critical', `reserves are ${pf.toFixed(0)}% funded, below the 15% mark where an assessment is close to arithmetic`);
+  }
+  if (KNOWN(sig.largest_component_due_months) && sig.largest_component_due_months <= 12
+      && KNOWN(sig.largest_component_cost)) {
+    const balance = firstAmount((report.reserve_health || {}).reserve_balance);
+    if (balance !== null && sig.largest_component_cost > balance) {
+      raise('Critical', `a major component is due within ${sig.largest_component_due_months} months at a cost above the entire reserve balance`);
+    }
+  }
+
+  // --- High ----------------------------------------------------------------
+  if (pf !== null && pf >= 15 && pf < 30) {
+    raise('High', `reserves are ${pf.toFixed(0)}% funded, in the band widely treated as weak`);
+  }
+  if (sig.association_borrowing === true) {
+    raise('High', 'the association is borrowing, which frequently precedes or substitutes for an assessment');
+  }
+  if (sig.material_litigation === true) {
+    raise('High', 'there is material litigation or a construction-defect claim');
+  }
+  if (String((report.short_term_risk || {}).likelihood) === 'Already announced') {
+    raise('Critical', 'the 12-month read is that an assessment has already been announced');
+  } else if (String((report.short_term_risk || {}).likelihood) === 'Likely') {
+    raise('High', 'an assessment is assessed as likely within 12 months');
+  }
+
+  // --- Moderate ------------------------------------------------------------
+  if (pf !== null && pf >= 30 && pf <= 70) {
+    raise('Moderate', `reserves are ${pf.toFixed(0)}% funded, which is fair rather than strong`);
+  }
+  const contributed = firstAmount((report.reserve_health || {}).annual_contribution);
+  const recommended = firstAmount((report.reserve_health || {}).recommended_contribution);
+  if (contributed !== null && recommended !== null && recommended > 0 && contributed < recommended) {
+    const short = recommended - contributed;
+    raise('Moderate', `the budget funds reserves $${Math.round(short).toLocaleString('en-US')} a year below what the association's own study recommends`);
+  }
+  if (KNOWN(sig.delinquency_rate_pct) && sig.delinquency_rate_pct > 10) {
+    raise('Moderate', `owner delinquency runs at ${sig.delinquency_rate_pct}%, above the level at which collections strain`);
+  }
+  if (sig.insurance_red_flag === true) {
+    raise('Moderate', 'there is an insurance concern an uninsured loss would pass to owners');
+  }
+  if (String((report.mid_term_risk || {}).likelihood) === 'Likely') {
+    raise('Moderate', 'an assessment is assessed as likely within one to five years');
+  }
+
+  // --- could anything be computed at all? ----------------------------------
+  //
+  // A package with no reserve study and no budget establishes none of the above.
+  // Publishing "Low" on that basis would be the worst outcome available — a
+  // clean score earned by an absence of documents. Fall back to the model's own
+  // read, and say so.
+  const decidable = pf !== null
+    || typeof sig.special_assessment_announced === 'boolean'
+    || typeof sig.association_borrowing === 'boolean'
+    || typeof sig.material_litigation === 'boolean';
+
+  if (!decidable) {
+    const fallback = RISK_LEVELS.includes(report.risk_score) ? report.risk_score : 'Cannot assess';
+    return {
+      score: fallback,
+      computed: false,
+      basis: 'The documents provided do not establish the reserve position or the governance signals '
+        + 'this score is normally computed from, so this is an analytical read rather than a computed '
+        + 'score. The documents worth requesting are listed below.',
+    };
+  }
+
+  if (!reasons.length) {
+    // Worth stating positively rather than as an absence. A buyer who paid to
+    // find out that the association is well run has bought exactly what they
+    // came for, and the report should say so plainly rather than sounding
+    // like it found nothing to say.
+    const parts = ['No risk signal fired'];
+    if (pf !== null) parts.push(`reserves are ${pf.toFixed(0)}% funded`);
+    if (contributed !== null && recommended !== null && contributed >= recommended) {
+      parts.push("the budget funds the reserve study's own recommendation in full");
+    }
+    parts.push('and nothing in the documents points to an assessment ahead');
+    return { score: 'Low', computed: true, basis: parts.join(', ') + '.' };
+  }
+
+  return {
+    score: level,
+    computed: true,
+    basis: `Scored ${level} because ` + reasons.join('; ') + '.',
+  };
+}
+
+// Overwrites the model's score with the computed one and records both, so a
+// divergence is visible in the stored row rather than silently resolved.
+function applyComputedRiskScore(report) {
+  if (!report) return null;
+  const stated = report.risk_score;
+  const { score, basis, computed } = scoreRisk(report);
+
+  report.risk_score = score;
+  report.risk_score_basis = basis;
+  report.risk_score_computed = computed;
+
+  // headline_tag normally repeats the score. Two places holding the same
+  // quantity is how a report contradicts itself on screen.
+  if (computed && typeof report.headline_tag === 'string'
+      && RISK_LEVELS.some((l) => report.headline_tag.includes(l))) {
+    report.headline_tag = `${score} risk`;
+  }
+
+  return { stated, score, diverged: computed && stated !== score };
+}
 
 function guessMediaType(filename) {
   const ext = String(filename).toLowerCase().split('.').pop();
@@ -823,12 +1196,17 @@ async function runSynthesis(client, job) {
 
   const { report, droppedCitationRefs, unverifiedPinpoints } = attachCitations(toolInput, evidence);
 
+  // The score is computed here rather than asked for. Run AFTER citations
+  // attach so nothing downstream sees a report in two different states, and
+  // before the report is stored so the stored row is the published one.
+  const scoring = applyComputedRiskScore(report);
+
   report.evidence = evidence;
   report.documents_analysed = job.parts.map((p) => p.title);
   report.generated_at = new Date().toISOString();
   report.disclaimer = 'This is an analysis of the documents provided, not legal, financial, or investment advice, and not a substitute for review by an attorney, accountant, or licensed inspector. Dollar figures are estimates unless quoted directly from a document. Verify anything you intend to rely on before waiving a contingency.';
 
-  return { report, droppedCitationRefs, unverifiedPinpoints };
+  return { report, droppedCitationRefs, unverifiedPinpoints, scoring };
 }
 
 // Advances one submission by exactly one stage, then returns. This is the unit
@@ -890,7 +1268,7 @@ async function advanceHoaJob(submissionId) {
       };
     }
 
-    const { report, droppedCitationRefs, unverifiedPinpoints } = await runSynthesis(client, job);
+    const { report, droppedCitationRefs, unverifiedPinpoints, scoring } = await runSynthesis(client, job);
 
     await admin.from('navigator_reports').insert({
       submission_id: submissionId,
@@ -915,6 +1293,15 @@ async function advanceHoaJob(submissionId) {
     }
     if (unverifiedPinpoints > 0) {
       console.warn(`[hoa-engine] submission ${submissionId}: discarded ${unverifiedPinpoints} pinpoint quote(s) that did not appear in the cited evidence`);
+    }
+    // Logged rather than merely applied. A model read that disagrees with the
+    // computed score is the signal that either a threshold or the rubric needs
+    // revisiting, and it is invisible once the score is overwritten.
+    if (scoring && scoring.diverged) {
+      console.warn(`[hoa-engine] submission ${submissionId}: model read the risk as ${scoring.stated}, computed ${scoring.score}`);
+    }
+    if (scoring && !scoring.computed) {
+      console.warn(`[hoa-engine] submission ${submissionId}: risk score could not be computed from the documents; using the analytical read`);
     }
 
     return { done: true, stage: 'complete', report };
@@ -1020,6 +1407,8 @@ module.exports = {
   HONESTY_RULES,
   EFFORT,
   // Exported for tests.
+  scoreRisk,
+  applyComputedRiskScore,
   harvestCitations,
   attachCitations,
   formatEvidenceTable,
