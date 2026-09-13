@@ -1912,6 +1912,15 @@ const MUST_HAVES = 'internal ice maker, no external door dispenser, must fit a 3
 
 // The must-haves are graded in their own request now (see verifyMustHaves),
 // so a fake has to answer two different calls.
+function unusableVerifyResponse() {
+  return {
+    ok: true,
+    json: async () => ({
+      content: [{ type: 'tool_use', name: 'submit_must_have_checks', input: { not_the_field: [] } }],
+    }),
+  };
+}
+
 function isVerifyCall(opts) {
   const body = JSON.parse((opts && opts.body) || '{}');
   return (body.tools || []).some((t) => t.name === 'submit_must_have_checks');
@@ -2281,7 +2290,7 @@ test('a verification that fails leaves the requirements marked unchecked, not an
   process.env.ANTHROPIC_API_KEY = 'test-key';
   const originalFetch = global.fetch;
   global.fetch = async (url, opts) => {
-    if (isVerifyCall(opts)) return { ok: false, status: 500, text: async () => 'upstream exploded' };
+    if (isVerifyCall(opts)) return unusableVerifyResponse();
     return searchedToolUseResponse(completeReportInput(), 4);
   };
   t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
@@ -3289,7 +3298,7 @@ test('a failed verification is bought once, never twice', async (t) => {
   global.fetch = async (url, opts) => {
     if (isVerifyCall(opts)) {
       verifyCalls++;
-      return { ok: false, status: 500, text: async () => 'upstream exploded' };
+      return unusableVerifyResponse();
     }
     return searchedToolUseResponse(completeReportInput(), 3);
   };
@@ -3695,7 +3704,7 @@ test('the graded count matches what the buyer actually asked for', async (t) => 
       // Several now: a failed batch is followed by one call per requirement,
       // so the figure under test may not be in the LAST of them.
       asked.push(body.messages[0].content);
-      return { ok: false, status: 500, text: async () => 'no verification for this test' };
+      return unusableVerifyResponse();
     }
     return searchedToolUseResponse(completeReportInput(), 3);
   };
@@ -3833,14 +3842,14 @@ test('a batch verification that overruns falls back to one at a time, banking ea
       const body = JSON.parse(opts.body);
       const asked = body.messages[0].content;
       const single = (asked.match(/^\s*-\s/gm) || []).length === 1;
-      if (!single) return { ok: false, status: 500, text: async () => 'batch too slow' };
+      if (!single) return unusableVerifyResponse();
       if (/ice maker/.test(asked)) {
         return mustHaveResponse([{ requirement: 'internal ice maker', verdict: 'confirmed', finding: 'Spec sheet lists an internal ice maker.', published_value: 'Internal Ice Maker', source: 'manufacturer spec sheet' }], 1);
       }
       if (/external door dispenser/.test(asked)) {
         return mustHaveResponse([{ requirement: 'no external door dispenser', verdict: 'confirmed', finding: 'The spec sheet lists no through-the-door dispenser.', published_value: 'Ice Maker: Internal', source: 'manufacturer spec sheet' }], 1);
       }
-      return { ok: false, status: 500, text: async () => 'this one never finishes' };
+      return unusableVerifyResponse();
     }
     return searchedToolUseResponse(completeReportInput(), 3);
   };
@@ -3876,7 +3885,7 @@ test('a verification that grades nothing new still terminates', async (t) => {
   global.fetch = async (url, opts) => {
     if (isVerifyCall(opts)) {
       verifyCalls++;
-      return { ok: false, status: 500, text: async () => 'nothing ever grades' };
+      return unusableVerifyResponse();
     }
     return searchedToolUseResponse(completeReportInput(), 3);
   };
@@ -3905,4 +3914,43 @@ test('every report call is counted, so the leak rate has a denominator', async (
   assert.ok(report);
   assert.equal(submission.job_state.report_calls, 1,
     'one submit_purchase_report response, counted on the row');
+});
+
+test('a provider outage is not recorded as an abandoned verification', async (t) => {
+  // Found by a live run that never reached the model: the account was out of
+  // credit, and the row came back with BOTH must_have_batch_failed and
+  // must_have_verification_abandoned set. Nothing had been attempted. When
+  // credit returned, that submission would have skipped verification entirely
+  // and shipped "0 of 2 confirmed" — a two-minute billing lapse permanently
+  // downgrading a report, which is the same trap 99f03b5 closed in the refund
+  // path.
+  const submission = fridgeSubmission();
+  installFakes({ submission });
+  process.env.ANTHROPIC_API_KEY = 'test-key';
+  const originalFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if (isVerifyCall(opts)) {
+      return {
+        ok: false,
+        status: 400,
+        text: async () => '{"error":{"message":"Your credit balance is too low to access the Anthropic API."}}',
+      };
+    }
+    return searchedToolUseResponse(completeReportInput(), 3);
+  };
+  t.after(() => { global.fetch = originalFetch; uninstallFakes(); });
+
+  // The engine patches the row and rethrows on an outage — that is the
+  // established contract (see the catch in generatePurchaseReport), so the
+  // throw is expected and the row is what this test is about.
+  const { generatePurchaseReport } = require('../api/_lib/purchase-engine');
+  await assert.rejects(() => generatePurchaseReport('sub-1'), /credit balance is too low/);
+
+  const state = submission.job_state || {};
+  assert.notEqual(state.must_have_verification_abandoned, true,
+    'an outage is not this submission failing to be verifiable');
+  assert.notEqual(state.must_have_batch_failed, true,
+    'and it is not evidence the batch call is too slow for it either');
+  assert.equal(submission.status, 'paid',
+    'the row goes back to paid so it is retried once the provider is back');
 });

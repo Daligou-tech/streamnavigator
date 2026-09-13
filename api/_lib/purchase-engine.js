@@ -2301,8 +2301,15 @@ Give exactly one entry per line above, using the buyer's own wording for the req
     if (allowSearch && looksLikeUnsupportedToolError(err)) {
       return runVerification({ apiKey, submission, submissionId, allowSearch: false, deadline, signal, fragments });
     }
-    // A failed verification must not cost the customer their report. The
-    // caller falls back to unverified entries, which is honest and still
+    // An outage is not this submission's fault and must not be recorded as
+    // one. Returning null here makes a dead API indistinguishable from a
+    // specification that cannot be found, and the caller writes markers on
+    // that basis — so a billing lapse would permanently downgrade a report
+    // that was never actually attempted. Rethrow and let the caller classify,
+    // the same way the attempt budget already does.
+    if (isProviderOutage(err)) throw err;
+    // A genuinely failed verification must not cost the customer their report.
+    // The caller falls back to unverified entries, which is honest and still
     // tells them what to go and check.
     console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} failed: ${String((err && err.message) || err)}`);
     return null;
@@ -3022,6 +3029,19 @@ async function generatePurchaseReport(submissionId) {
           }
         }
       } catch (err) {
+        if (isProviderOutage(err)) {
+          // Leave the row exactly as it was. No markers, no abandonment: the
+          // verification never got to run, so there is nothing to record about
+          // it, and the outage path below puts the submission back to 'paid'
+          // without spending an attempt. Marking here is how a two-minute
+          // billing fix turns into every affected customer permanently losing
+          // their must-have checks — the same trap 99f03b5 found in the refund
+          // path, in a different place.
+          console.warn(
+            `[purchase-engine] The must-have verification for submission ${submissionId} could not run: the provider is unavailable. Leaving the row unmarked so it is retried properly, not written off.`
+          );
+          throw err;
+        }
         console.warn(`[purchase-engine] Must-have verification for submission ${submissionId} threw: ${String((err && err.message) || err)}`);
       }
 
