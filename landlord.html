@@ -518,6 +518,7 @@ footer{ padding:44px 24px 32px; }
         <div class="price-amount">$149</div>
         <div class="price-period">charged once &middot; not a subscription &middot; every property included &middot; twelve months of reminders</div>
 
+        <div id="entitlement-note" hidden style="margin:0 0 20px; padding:14px 16px; border:1px solid var(--ink); background:var(--bg-alt); font-size:.95rem; line-height:1.55;"></div>
         <div class="field-block">
           <label>Your properties</label>
           <p class="field-hint" style="margin-top:0;margin-bottom:14px;">City, state and year built are what the checks need. Everything else is optional — and each optional answer switches on another check, which the form tells you as you go.</p>
@@ -841,6 +842,11 @@ footer{ padding:44px 24px 32px; }
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
     try {
+      // A landlord inside their year does not go to Stripe. The intake says so —
+      // it creates the submission already paid at zero and answers `covered` — and
+      // sending them to a payment link anyway would charge a second time for the
+      // re-runs this page tells them are included.
+      const entitlementSource = getRentalEntitlementSource();
       const submission = await submitNavigatorIntake({
         product: 'landlord',
         email: email,
@@ -850,14 +856,54 @@ footer{ padding:44px 24px 32px; }
           description: describe(properties, extra),
         },
         files: files,
+        entitlement: entitlementSource ? { id: entitlementSource.id, token: entitlementSource.token } : undefined,
       });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'landlord' }, email);
+      const handle = { id: submission.id, token: submission.token, product: 'landlord' };
+      if (submission.covered) {
+        goToStatusPage(handle, email);
+      } else {
+        rememberRentalEntitlementSource(handle, email);
+        goToStripe(btn.getAttribute('href'), handle, email);
+      }
     } catch (err) {
       fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;
       btn.style.pointerEvents = 'auto';
     }
   });
+
+  // Tell a customer inside their year that the next review is already paid for,
+  // before they look at a price they do not owe.
+  (async function offerRemainingRuns(){
+    var source = getRentalEntitlementSource();
+    if (!source || !source.id || !source.token) return;
+    var status;
+    try {
+      var resp = await fetch('/api/rental-entitlement', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: source.id, token: source.token }),
+      });
+      status = await resp.json();
+    } catch (err) { return; }   // the ordinary paid flow is the safe default
+    if (!status || !status.ok || !status.active) return;
+
+    var note = document.getElementById('entitlement-note');
+    if (!note) return;
+    var until = new Date(status.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    note.innerHTML = '<strong>You already have reviews left this year.</strong><br>'
+      + status.runsLeft + (status.runsLeft === 1 ? ' review remains' : ' reviews remain')
+      + ' until ' + until + ', included in what you paid. Enter your properties below '
+      + 'with anything that has changed — we will run them again and say what you closed since last time.';
+    note.hidden = false;
+
+    var btn = document.getElementById('pay-btn');
+    if (btn) btn.textContent = 'Run My Next Review →';
+    var period = document.querySelector('.price-period');
+    if (period) period.textContent = 'already covered — no further charge';
+    var amount = document.querySelector('.price-amount');
+    if (amount) amount.style.textDecoration = 'line-through';
+  })();
 })();
 </script>
 </body>

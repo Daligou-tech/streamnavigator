@@ -13,11 +13,23 @@
 'use strict';
 
 const test = require('node:test');
+
+
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
+
+// Source-matching tests compare against literal text that spans lines, and
+// this repo checks out CRLF on Windows — so a matcher written with a bare
+// newline finds nothing, and the assertion fails for a reason that has
+// nothing to do with the code. Normalising here keeps the suite honest on
+// both checkouts.
+const CRLF = String.fromCharCode(13) + String.fromCharCode(10);
+function readSource(name) {
+  return fs.readFileSync(path.join(ROOT, 'api', name), 'utf8').split(CRLF).join('\n');
+}
 const { __internal: I } = require('../api/landlord-reminders.js');
 const { ENTITLED_PRODUCTS } = require('../api/_lib/rental-entitlement');
 
@@ -133,13 +145,13 @@ test('landlord is entitled, and the job is actually scheduled', () => {
 });
 
 test('the job refuses to run unauthenticated', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'api', 'landlord-reminders.js'), 'utf8');
+  const src = readSource('landlord-reminders.js');
   assert.ok(/CRON_SECRET/.test(src) && /401/.test(src),
     'a public endpoint that sends mail on demand is a spam relay');
 });
 
 test('the claim is taken before the send, and released only on a rejection', () => {
-  const src = fs.readFileSync(path.join(ROOT, 'api', 'landlord-reminders.js'), 'utf8');
+  const src = readSource('landlord-reminders.js');
   const claimAt = src.indexOf("from('rental_reminders')\n          .insert(");
   const sendAt = src.indexOf('api.resend.com');
   assert.ok(claimAt !== -1 && claimAt < sendAt,
@@ -153,7 +165,7 @@ test('the claim is taken before the send, and released only on a rejection', () 
 test('a rental entitlement is not mailed by the landlord job', () => {
   // Both products share rental_entitlements. Reading a rental row here would
   // mail a landlord reminder to somebody who bought a cash-flow audit.
-  const src = fs.readFileSync(path.join(ROOT, 'api', 'landlord-reminders.js'), 'utf8');
+  const src = readSource('landlord-reminders.js');
   assert.ok(/submission\.product !== 'landlord'/.test(src),
     'the job must check the product before mailing a row from a shared table');
 });

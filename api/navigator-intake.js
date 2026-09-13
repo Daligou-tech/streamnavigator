@@ -20,7 +20,7 @@
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
-const { checkEntitlement, consumeEntitlement } = require('./_lib/rental-entitlement');
+const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_lib/rental-entitlement');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -188,8 +188,15 @@ module.exports = async function handler(req, res) {
   //
   // price_cents 0 is also what stops the year extending itself: grantEntitlement
   // declines to hand a new twelve months to a submission that cost nothing.
+  //
+  // Gated on ENTITLED_PRODUCTS rather than on 'rental' by name. Landlord joined
+  // that list on 2026-09-12 and its page began advertising three re-runs, while
+  // this line still refused to spend one — the page selling something nothing
+  // could redeem, which is the exact defect the whole landlord audit was about.
+  // Keying on the list means the next product to be granted a year cannot
+  // repeat it.
   let spentEntitlement = null;
-  if (product === 'rental' && body.entitlement && body.entitlement.id && body.entitlement.token) {
+  if (ENTITLED_PRODUCTS.includes(product) && body.entitlement && body.entitlement.id && body.entitlement.token) {
     const status = await checkEntitlement(admin, String(body.entitlement.id), String(body.entitlement.token));
     if (status.active) spentEntitlement = status;
   }

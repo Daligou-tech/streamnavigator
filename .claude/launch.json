@@ -4,8 +4,11 @@
     {
       "name": "static",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["scripts/static-server.js"],
-      "port": 4321
+      "runtimeArgs": [
+        "scripts/static-server.js"
+      ],
+      "port": 4321,
+      "autoPort": true
     }
   ]
 }

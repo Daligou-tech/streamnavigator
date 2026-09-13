@@ -150,6 +150,42 @@ function buildReportPdfBuffer(report, meta) {
         );
       }
 
+      // The closing block, where there is one and it is not the letters.
+      //
+      // This renderer handled report.emails and nothing else, so a closing
+      // block that is a checklist rather than a set of drafted letters never
+      // reached the PDF at all — it showed on the status page and vanished from
+      // the copy the customer keeps and forwards. Landlord Navigator's action
+      // pack made that visible, because the pack IS the deliverable there and a
+      // 29,000-character document was arriving as a 2KB file. Every product
+      // whose closing block is a checklist rather than letters had the same
+      // hole: property tax's appeal checklist, the subscriptions keep/cancel
+      // list, and the rest.
+      //
+      // Rendered before the letters so that a product with both keeps the
+      // letters last, which is where the letters' own comment says they belong.
+      const closingBody = typeof report.closing_body === 'string' ? report.closing_body.trim() : '';
+      const lettersCarryIt = letters.length > 0;
+      if (closingBody && !lettersCarryIt) {
+        doc.addPage();
+        doc.fillColor(COLORS.accent).fontSize(10).font('Helvetica-Bold').text(
+          String(report.closing_title || 'Next steps').toUpperCase(),
+          { characterSpacing: 1.5 }
+        );
+        doc.moveDown(0.6);
+        // Courier, because the pack is laid out with its own indentation and
+        // hard wrapping. A proportional face turns an aligned checklist into a
+        // ragged paragraph.
+        doc.fillColor(COLORS.body).fontSize(9).font('Courier');
+        closingBody.split('\n').forEach((line) => {
+          if (doc.y > 720) doc.addPage();
+          // An empty string renders as no line at all rather than a blank one,
+          // which would collapse the spacing the document was written with.
+          doc.text(line || ' ', { width: 520, lineGap: 1 });
+        });
+        doc.font('Helvetica');
+      }
+
       // The letters. Last, on their own page, because this is the part the
       // customer acts on and has to be able to find without hunting — and
       // because a letter split across a page break by a stray heading reads
