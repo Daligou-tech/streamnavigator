@@ -166,6 +166,82 @@ function virginia({ county, salePrice, loanAmount }) {
 }
 
 // ---------------------------------------------------------------------------
+// District of Columbia
+// ---------------------------------------------------------------------------
+//
+// Read from the D.C. Code on 2026-09-13. DC is the easiest jurisdiction in the
+// country to model completely, and worth doing early for that reason: it is a
+// single jurisdiction with no county layer, so there is nothing county-
+// dependent to be uncertain about and the entry can honestly be complete.
+//
+// Two taxes of the same shape land on an ordinary residential purchase:
+//
+//   § 42-1103  recordation tax on the deed      1.1%, or 1.45% from $400,000
+//   § 47-903   transfer tax                     1.1%, or 1.45% from $400,000
+//
+// Both are a flat percentage of consideration — no "or fraction thereof"
+// rounding, unlike Virginia — and the step at $400,000 applies to the WHOLE
+// consideration rather than only the part above it. Customarily the buyer pays
+// the recordation and the seller the transfer, but the contract decides and the
+// audit tests the total, so the split is not modelled.
+//
+// THE DEED OF TRUST IS THE PART WORTH GETTING RIGHT. DC's definition of "deed"
+// at § 42-1101 expressly includes a security interest instrument, so a deed of
+// trust is taxable here where in many states it is not — except that
+// § 42-1102(5) exempts "a purchase money mortgage or purchase money deed of
+// trust that is recorded simultaneously with the deed conveying the real
+// property", which is every ordinary purchase. So a purchase carries no tax on
+// the financing, and a REFINANCE does, at the same rates.
+//
+// That asymmetry is why this function refuses anything without a sale price:
+// no sale price means it is not the purchase this model describes, and guessing
+// would be exactly the kind of near-miss the completeness rule exists to stop.
+//
+// Not modelled, and safe not to be: the reduced 0.725% first-time DC homebuyer
+// recordation rate. A transaction claiming it pays LESS than computed here,
+// which reads as a likely exemption — the harmless direction.
+
+const DC_SOURCE = 'D.C. Code § 42-1103 and § 47-903';
+const DC_READ_ON = '2026-09-13';
+const DC_STEP = 400000;
+
+function districtOfColumbia({ salePrice }) {
+  // § 47-903: the additional 0.35% applies to everything except residential
+  // consideration under $400,000. Closing Navigator audits residential
+  // purchases and refuses anything over $1m, so the rule reduces to the step.
+  const rate = salePrice >= DC_STEP ? 0.0145 : 0.011;
+  const band = salePrice >= DC_STEP ? 'from $400,000' : 'under $400,000';
+  const amount = round2(salePrice * rate);
+
+  const components = [
+    {
+      label: 'Recordation tax on the deed',
+      amount,
+      source: `${DC_SOURCE} (§ 42-1103)`,
+      note: `${(rate * 100).toFixed(2)}% of consideration, the rate ${band}.`,
+    },
+    {
+      label: 'Transfer tax',
+      amount,
+      source: `${DC_SOURCE} (§ 47-903)`,
+      note: 'Customarily the seller\'s, though the contract may reallocate it.',
+    },
+  ];
+
+  return {
+    total: round2(components.reduce((a, c) => a + c.amount, 0)),
+    components,
+    evidence: 'hard_rule:statute_or_regulation',
+    // No county layer, and the purchase money deed of trust is exempt, so
+    // there is nothing further that can apply to an ordinary purchase here.
+    complete: true,
+    incompleteReason: null,
+    jurisdiction: 'Washington, DC',
+    readOn: DC_READ_ON,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // the corpus
 // ---------------------------------------------------------------------------
 //
@@ -173,8 +249,15 @@ function virginia({ county, salePrice, loanAmount }) {
 // behaves exactly as it did before this file existed — no finding, no mention,
 // no "we could not benchmark" row. A jurisdiction we have not done the work for
 // is silent rather than apologetic.
+// Maryland is the obvious third and is deliberately absent. Both its county
+// transfer tax and its recordation tax vary across twenty-four jurisdictions,
+// and a statewide entry carrying only the 0.5% state transfer tax would
+// understate every total by the county's share — the direction that accuses
+// someone of overcharging for a tax they collected correctly. It is worth
+// doing properly, county by county, or not at all.
 const STATES = {
   VA: virginia,
+  DC: districtOfColumbia,
 };
 
 // Sale prices above this are refused outright. Several states step their rates

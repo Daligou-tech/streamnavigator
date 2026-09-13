@@ -109,6 +109,66 @@ test('a known county is complete', () => {
   assert.equal(VA({ county: 'Richmond' }).complete, true);
 });
 
+// --- District of Columbia ---------------------------------------------------
+
+const DC = (salePrice, loanAmount = 300000) =>
+  lookupTransferTax({ state: 'DC', salePrice, loanAmount });
+
+test('DC is 2.2% of consideration below $400,000', () => {
+  // § 42-1103 recordation at 1.1% plus § 47-903 transfer at 1.1%.
+  const r = DC(350000);
+  assert.equal(r.total, 7700);
+  assert.equal(r.components.length, 2);
+});
+
+test('DC steps to 2.9% at $400,000, on the whole consideration', () => {
+  // The additional 0.35% applies to the entire amount, not only the part above
+  // the threshold. Applying it marginally would understate the total by
+  // thousands — the direction that accuses someone of overcharging.
+  assert.equal(DC(400000).total, 11600);
+  assert.equal(DC(850000).total, 24650);
+});
+
+test('the DC step is a cliff, and it lands on exactly $400,000', () => {
+  // A dollar either side of the threshold is a $1,400 difference on a $400,000
+  // purchase. Getting the boundary wrong by one dollar is the whole error.
+  assert.equal(DC(399999).total, 8799.98);
+  assert.equal(DC(400000).total, 11600);
+  assert.ok(DC(400000).total - DC(399999).total > 2500);
+});
+
+test('a DC purchase carries no tax on the deed of trust', () => {
+  // DC's definition of "deed" at § 42-1101 expressly includes a security
+  // interest instrument, so a deed of trust IS taxable here — except that
+  // § 42-1102(5) exempts a purchase money deed of trust recorded
+  // simultaneously with the deed, which is every ordinary purchase. Including
+  // it would overstate the total by 1.1% of the loan.
+  const withLoan = DC(500000, 400000);
+  const cash = DC(500000, null);
+  assert.equal(withLoan.total, cash.total);
+  assert.ok(!withLoan.components.some((c) => /deed of trust/i.test(c.label)));
+});
+
+test('DC is complete, because there is no county layer to be unsure about', () => {
+  const r = DC(500000);
+  assert.equal(r.complete, true);
+  assert.equal(r.incompleteReason, null);
+  assert.equal(r.jurisdiction, 'Washington, DC');
+});
+
+test('every DC component cites its section', () => {
+  for (const c of DC(500000).components) {
+    assert.match(c.source, /D\.C\. Code/, `${c.label} has no citation`);
+  }
+});
+
+test('DC refuses a transaction with no sale price', () => {
+  // A refinance is not the purchase this entry models: there is no deed to tax,
+  // and the deed of trust stops being exempt. Guessing would be the near-miss
+  // the completeness rule exists to stop.
+  assert.equal(lookupTransferTax({ state: 'DC', loanAmount: 400000 }), null);
+});
+
 // --- refusing everything the corpus has not done the work for ---------------
 
 test('a state not in the corpus returns null, not a guess', () => {
@@ -116,6 +176,15 @@ test('a state not in the corpus returns null, not a guess', () => {
   assert.equal(lookupTransferTax({ state: 'TX', salePrice: 375000 }), null);
   assert.equal(lookupTransferTax({ state: '', salePrice: 375000 }), null);
   assert.equal(lookupTransferTax({ salePrice: 375000 }), null);
+});
+
+test('Maryland is absent on purpose, not by oversight', () => {
+  // Both its county transfer tax and its recordation tax vary across
+  // twenty-four jurisdictions. A statewide entry carrying only the 0.5% state
+  // transfer tax would understate every total by the county's share, which is
+  // the direction that accuses someone of overcharging for a tax they
+  // collected correctly. Pinned so adding a partial entry has to be a decision.
+  assert.equal(lookupTransferTax({ state: 'MD', county: 'Montgomery', salePrice: 375000 }), null);
 });
 
 test('a sale price above the modelled ceiling is refused', () => {
