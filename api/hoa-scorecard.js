@@ -70,9 +70,15 @@ const SCORECARD_EFFORT = 'medium';
 const MAX_TOKENS = 16000;
 const MAX_DOCS = 2;
 
-// What a resale package is required to contain in Virginia, and largely in
-// Maryland and DC. Returned to the customer as a checklist of what to make
-// sure they have, which is useful to them whether or not they ever pay.
+// The documents a complete HOA package normally contains. Returned to the
+// customer as a checklist of what to make sure they have, which is useful to
+// them whether or not they ever pay.
+//
+// Deliberately NOT framed as a legal entitlement. This list used to say it was
+// "what a resale package is required to contain in Virginia, and largely in
+// Maryland and DC" — a statement about three jurisdictions' law, made by a
+// product that reads documents and knows nothing about where the property is.
+// What the buyer is owed, and when, is their agent's or attorney's answer.
 const RESALE_PACKAGE_ITEMS = [
   'Reserve study',
   'Current budget',

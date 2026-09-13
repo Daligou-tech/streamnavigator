@@ -136,7 +136,10 @@
 
       html += '<div class="scorecard-head"><strong>Your free scorecard</strong>'
         + (sc.document_label ? ' &middot; read from your ' + sc.document_label : '')
-        + (sc.property_county ? ' &middot; ' + sc.property_county + (sc.property_state ? ', ' + sc.property_state : '') : '')
+        // No county or state. Nothing in this product varies by jurisdiction —
+        // the checks are the document's own arithmetic and federal rules — so
+        // printing a location here implied a locality-aware analysis that does
+        // not exist.
         + '</div><ul class="scorecard-rows">'
         + rows.map(r => '<li><span>' + r[0] + '</span><b>' + r[1] + '</b></li>').join('')
         + '</ul>';

@@ -89,8 +89,6 @@ const EXTRACTION_TOOL = {
         type: 'array', items: { type: 'string' },
         description: 'Borrower name(s) exactly as printed.',
       },
-      property_state: { type: 'string', description: 'Two-letter state code from the property address.' },
-      property_county: { type: 'string' },
       transaction_type: { type: 'string', enum: ['purchase', 'refinance', 'other'] },
       closing_date: { type: 'string', description: 'Closing/disbursement date as YYYY-MM-DD.' },
       loan_amount: { type: 'number' },
@@ -1776,8 +1774,6 @@ function buildScorecard(extraction, findings, skipped = []) {
     flag_severity: severityCounts,
     is_closing_disclosure: e.document_type === 'closing_disclosure',
     checks_unavailable: isAlta ? CD_ONLY_CHECKS : [],
-    property_state: e.property_state || null,
-    property_county: e.property_county || null,
     total_closing_costs: totalClosingCosts,
     loan_amount: loanAmount,
     closing_costs_pct_of_loan:

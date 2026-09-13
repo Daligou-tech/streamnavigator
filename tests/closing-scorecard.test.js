@@ -192,7 +192,11 @@ test('the scorecard reports headline figures and counts', () => {
   assert.equal(sc.total_closing_costs, 5797.26);
   assert.equal(sc.loan_amount, 400000);
   assert.equal(sc.closing_costs_pct_of_loan, 1.4); // 5797.26 / 400000 = 1.449% -> 1.4
-  assert.equal(sc.property_county, 'Fairfax County');
+  // No county and no state. Nothing in this product varies by jurisdiction, so
+  // the scorecard stopped echoing a location back: printing one implied a
+  // locality-aware analysis that has never existed.
+  assert.equal(sc.property_county, undefined);
+  assert.equal(sc.property_state, undefined);
   // Nothing here needs a document the customer can supply, and nothing is
   // compared against an outside figure any more, so both counts are zero.
   assert.equal(sc.needs_more_documents_count, 0);

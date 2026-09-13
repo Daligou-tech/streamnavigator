@@ -125,11 +125,13 @@ Then the budget and governance signals:
   named-storm or earthquake deductible, or a coverage gap. An uninsured
   loss is assessed to owners.
 - Litigation, construction-defect claims, or a settlement.
-- Statutory drivers where the documents show the property is subject to
-  them — e.g. Florida structural integrity reserve study and reserve-
-  funding requirements post-Surfside, California balcony/exterior element
-  inspections. Only raise these when the documents indicate the property
-  is actually in that jurisdiction.
+- A legal or regulatory obligation the DOCUMENTS THEMSELVES describe — an
+  inspection the association says it is required to complete, a reserve
+  study it says it is required to fund, a deadline it says it is working
+  to. Report what the documents state about it and what it will cost.
+  Never introduce a requirement the documents do not mention, and never
+  reason from where the property appears to be: this analysis reads the
+  package it was given and knows nothing about the law of any state.
 
 Meeting minutes are the highest-signal document for imminent action.
 Language such as "special assessment", "reserve study update", "loan",
