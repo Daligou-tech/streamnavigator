@@ -2,11 +2,14 @@
 //
 // The page makes promises; this asserts the code keeps them.
 //
-// closing-service.js runs the audit with NO_BENCHMARKS — it consults no rate
-// table at all. While that is true, any sentence on closing.html offering
-// published rates for the customer's county is a claim the product does not
-// deliver, and it is the first claim a sceptical customer checks. This suite
-// exists because that sentence shipped and sat there.
+// This product does not compare a charge against any outside figure. It never
+// consulted a market range, and as of 2026-09-13 it does not consult a statutory
+// rate table either — benchmarking was removed in full, machinery included.
+//
+// So any sentence on the customer-facing surface offering published rates for
+// their county is a claim the product does not deliver, and it is the first
+// claim a sceptical customer checks. This suite exists because that sentence
+// shipped once and sat there.
 'use strict';
 
 const assert = require('assert');
@@ -30,19 +33,33 @@ const page = SURFACE.map((f) => fs.readFileSync(path.join(root, f), 'utf8')).joi
 const service = fs.readFileSync(path.join(root, 'api', '_lib', 'closing-service.js'), 'utf8');
 const { CATALOG, PRICES } = require('../api/_lib/closing-service');
 
-// Does the shipped service actually consult a corpus?
-const benchmarksDisabled = /getBenchmark:\s*NO_BENCHMARKS|NO_BENCHMARKS\s*\)/.test(service);
+// There is no corpus and no way to wire one in. Benchmarking was removed in
+// full on 2026-09-13 — market rates and statutory rates alike.
+test('the engine has no benchmark supplier at all', () => {
+  // Comments explaining the removal are allowed to name the thing removed;
+  // code is not. Strip line comments before looking.
+  const code = (src) => src.split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert.ok(!/getBenchmark/.test(code(service)),
+    'closing-service.js accepts a benchmark supplier again');
+  const extract = fs.readFileSync(path.join(root, 'api', '_lib', 'closing-extract.js'), 'utf8');
+  assert.ok(!/getBenchmark|compareToBenchmark/.test(code(extract)),
+    'the engine consults a benchmark again');
+});
 
-test('the page does not sell rate data while the service runs without a corpus', () => {
-  if (!benchmarksDisabled) return; // corpus wired in: the claim becomes fair game
+test('the page never sells rate data', () => {
+  // This used to run only when a corpus was detected as absent, so wiring one
+  // in would have quietly made the claim fair game again. That escape hatch is
+  // gone: the product does not compare charges against outside figures, so the
+  // page may not say it does, unconditionally.
   const claim = /published (tax )?rates?|rate table|statutes for your county/i;
   const offenders = page.split('\n')
     .map((line, i) => [i + 1, line])
     .filter(([, line]) => claim.test(line));
   assert.strictEqual(
     offenders.length, 0,
-    `closing.html promises published rates on line(s) ${offenders.map(([i]) => i).join(', ')} `
-    + 'but closing-service.js runs with NO_BENCHMARKS',
+    `the customer-facing surface promises published rates on line(s) `
+    + `${offenders.map(([i]) => i).join(', ')} of the joined files, and this product `
+    + 'does not compare a charge against any outside figure',
   );
 });
 

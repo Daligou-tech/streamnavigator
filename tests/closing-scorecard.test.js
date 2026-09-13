@@ -112,27 +112,30 @@ test('document problems reported by the extractor become findings', () => {
   assert.match(f.basis, /Page 3/);
 });
 
-test('benchmarkable fees come back cannot-benchmark while the corpus is empty', () => {
-  const { findings } = runClosingAudit(cleanExtraction());
-  const cb = bySeverity(findings, Severity.CANNOT_BENCHMARK);
-  assert.ok(cb.length >= 3); // appraisal, settlement, recording
-  assert.ok(cb.every((f) => /insufficient reliable market data/.test(f.basis)));
-});
-
-test('an injected benchmark is used, and a hard rate table outranks a market range', () => {
+test('no charge is compared against anything outside the customer’s own documents', () => {
+  // Two tests stood here: one asserting benchmarkable fees came back
+  // "cannot benchmark" while the corpus was empty, and one injecting a rate
+  // table and asserting a $500 overcharge fell out of it. Both passed.
+  //
+  // Benchmarking was removed in full on 2026-09-13, market and statutory alike,
+  // so neither behaviour exists to test. What replaces them is the guarantee
+  // the page actually makes: every finding rests on the customer's own
+  // documents or on a federal rule, and nothing on an outside figure.
   const e = cleanExtraction();
   e.line_items.push({
     section: 'C', label: "Owner's Title Policy", amount: 2905,
     category: 'title_insurance_owners', confidence: HI, page: 2,
   });
-  const { findings } = runClosingAudit(e, {
-    getBenchmark: ({ category }) => category === 'title_insurance_owners'
-      ? { exact: 2405, evidence: 'hard_rule:promulgated_or_filed_rate', source: 'State filed rate', jurisdiction: 'VA' }
-      : null,
-  });
-  const f = findings.find((x) => x.title && x.title.includes("Owner's Title Policy"));
-  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
-  assert.equal(f.dollarImpact, 500);
+  const { findings } = runClosingAudit(e);
+
+  const aboutTitle = findings.filter((f) => f.title && f.title.includes("Owner's Title Policy"));
+  assert.deepEqual(aboutTitle, [],
+    'a title premium has no arithmetic to check and no rule to test, so it must produce nothing');
+
+  const outside = findings.filter((f) => /benchmark|market (rate|data)|typical range/i.test(
+    [f.title, f.basis, f.severity].join(' ')
+  ));
+  assert.deepEqual(outside, [], `an outside comparison leaked: ${outside.map((f) => f.title).join(', ')}`);
 });
 
 // --- the provider-list answer -----------------------------------------------
@@ -190,9 +193,8 @@ test('the scorecard reports headline figures and counts', () => {
   assert.equal(sc.loan_amount, 400000);
   assert.equal(sc.closing_costs_pct_of_loan, 1.4); // 5797.26 / 400000 = 1.449% -> 1.4
   assert.equal(sc.property_county, 'Fairfax County');
-  // These three were CANNOT_BENCHMARK, which is our missing rate data, not a
-  // document the customer can supply. They are counted separately now.
-  assert.ok(sc.cannot_benchmark_count >= 3);
+  // Nothing here needs a document the customer can supply, and nothing is
+  // compared against an outside figure any more, so both counts are zero.
   assert.equal(sc.needs_more_documents_count, 0);
 });
 
@@ -360,13 +362,16 @@ test('a genuine same-payee duplicate is still caught', () => {
   assert.equal(dupes[0].dollarImpact, 450);
 });
 
-test('missing rate data is not reported as a missing document', () => {
-  // The customer cannot upload anything that fixes an empty benchmark corpus.
+test('a settlement statement reports no missing-rate-data count at all', () => {
+  // This asserted that missing rate data was counted separately from missing
+  // documents, so the customer was never told to upload something that would
+  // fix our corpus. With benchmarking gone there is no such count to keep
+  // apart, which is a simpler promise than the one it replaced.
   const e = realAlta();
   const { findings, skipped } = runClosingAudit(e);
   const sc = buildScorecard(e, findings, skipped);
-  assert.ok(sc.cannot_benchmark_count > 0);
-  assert.equal(sc.needs_more_documents_count < sc.cannot_benchmark_count, true);
+  assert.ok(!sc.cannot_benchmark_count, 'a cannot-benchmark count is back');
+  assert.ok(!sc.benchmarkable_count, 'a benchmarkable count is back');
 });
 
 test('a settlement statement gets a total added up from its charge lines', () => {
@@ -772,7 +777,12 @@ test('real charges are never mistaken for subtotals', () => {
   assert.equal(isSubtotalLine({ label: 'Total Loan Amount Adjustment Fee' }), true);
 });
 
-test('a section subtotal is never benchmarked as a fee', () => {
+test('a section subtotal is never treated as a charge', () => {
+  // This used to prove the point through benchmarking: the subtotal must not be
+  // benchmarked as if it were a fee, while the real line beside it was. With
+  // benchmarking gone the distinction still matters — a subtotal counted as a
+  // charge inflates the total, gets duplicate-checked against its own members,
+  // and shows up in the charge count the customer reads.
   const e = cleanExtraction({
     property_state: 'MD',
     line_items: [
@@ -780,10 +790,15 @@ test('a section subtotal is never benchmarked as a fee', () => {
       { section: 'E', label: 'Taxes and Other Government Fees', amount: 1320, category: 'recording_fee', confidence: HI, page: 2 },
     ],
   });
-  const { findings } = runClosingAudit(e);
-  const benchmarked = findings.filter((f) => f.checkId === 'BENCHMARK').map((f) => f.title);
-  assert.equal(benchmarked.some((t) => /Taxes and Other Government Fees/.test(t)), false);
-  assert.equal(benchmarked.some((t) => /Recording Fees/.test(t)), true);
+  const { findings, skipped } = runClosingAudit(e);
+  const sc = buildScorecard(e, findings, skipped);
+
+  assert.equal(sc.charge_lines_counted, 1,
+    'the subtotal must not be counted alongside the line it totals');
+  assert.equal(sc.total_borrower_charges, 165,
+    'and it must not be added into the total either — $1,485 would double-count');
+  assert.ok(!findings.some((f) => /Taxes and Other Government Fees/.test(f.title || '')),
+    'no finding may be raised about a subtotal');
 });
 
 test('subtotals and payoffs are excluded from the derived charges total', () => {
@@ -952,12 +967,12 @@ test('a contract with no credits is not offered again as an upload', () => {
 });
 
 test('a contract with no credits leaves the denominator, it does not block it', () => {
-  // "20 of 29" read identically whether the customer uploaded a contract or
+  // "20 of 28" read identically whether the customer uploaded a contract or
   // not, so supplying one appeared to accomplish nothing.
   const alone = coverageRun({});
   const withContract = coverageRun({ emptyDocuments: ['purchase_contract'] });
-  assert.equal(alone.checks_in_scope, 29);
-  assert.equal(withContract.checks_in_scope, 28,
+  assert.equal(alone.checks_in_scope, 28);
+  assert.equal(withContract.checks_in_scope, 27,
     'the contract check should leave the denominator, not sit in it as blocked');
   assert.ok(withContract.checks_blocked < alone.checks_blocked,
     'uploading the contract did not reduce the blocked count');

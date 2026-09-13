@@ -172,16 +172,25 @@ test('the suppressed-finding list still names findings the engine emits', () => 
   // they MUST still be ids the engine actually produces. If someone renames a
   // checkId in closing-audit.js, this filter silently stops matching and
   // "cannot benchmark" findings leak back into the customer's issue count.
-  const suppressed = [...(service.BENCHMARK_CHECK_IDS || [])];
-  assert.ok(suppressed.length > 0, 'the suppression list is empty');
-
-  const inCatalog = suppressed.filter((id) => new Set(catalogIds).has(id));
-  assert.deepEqual(inCatalog, [],
-    `suppressed ids must not also be catalog checks: ${inCatalog.join(', ')}`);
+  // There is no suppression list any more, and that is the point.
+  //
+  // It existed because the engine emitted benchmark findings the customer must
+  // never see — "we have no rate data for your appraisal fee" is a fact about
+  // our corpus, not about her loan — so the service stripped them on the way
+  // out. Filtering output is a weaker guarantee than not producing it: rename a
+  // checkId and the filter silently stops matching.
+  //
+  // Benchmarking was removed in full on 2026-09-13, so nothing needs stripping.
+  // This now asserts the stronger thing: every finding the engine can emit is a
+  // catalog check, with no second class of finding that has to be hidden.
+  assert.equal(service.BENCHMARK_CHECK_IDS, undefined,
+    'a suppression list is back, which means something is being produced and hidden');
 
   const engineSrc = ['closing-audit.js', 'closing-extract.js']
     .map((f) => fs.readFileSync(path.join(ROOT, 'api/_lib', f), 'utf8')).join('\n');
-  const orphans = suppressed.filter((id) => !engineSrc.includes(`checkId: '${id}'`));
+  const emitted = [...engineSrc.matchAll(/checkId: '([A-Z_]+)'/g)].map((m) => m[1]);
+  const known = new Set(catalogIds);
+  const orphans = [...new Set(emitted)].filter((id) => !known.has(id));
   assert.deepEqual(orphans, [],
-    `suppression list names findings no engine emits, so it suppresses nothing: ${orphans.join(', ')}`);
+    `the engine emits findings no catalog check names: ${orphans.join(', ')}`);
 });

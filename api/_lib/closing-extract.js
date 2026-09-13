@@ -648,9 +648,6 @@ const CONF_THRESHOLD = 0.85;
 const confident = (o) => o && typeof o.confidence === 'number' && o.confidence >= CONF_THRESHOLD;
 const val = (o) => (confident(o) ? o.value : null);
 
-// getBenchmark is injected. Until a benchmark corpus exists it returns null for
-// everything, and every benchmarkable fee comes back "cannot benchmark" — which
-// is the honest answer, not a gap to paper over.
 // The property-type answer was collected and never used. It earns its place
 // here or not at all: HOA, condo-questionnaire and capital-contribution charges
 // are expected on attached housing and unexplained on a detached single-family
@@ -714,7 +711,6 @@ function runClosingAudit(extraction, options = {}) {
     answers = {},
     loanEstimates = null,
     contractTerms = null,
-    getBenchmark = defaultGetBenchmark,
   } = options;
 
   const e = extraction || {};
@@ -888,129 +884,10 @@ function runClosingAudit(extraction, options = {}) {
     paidBy: li.paid_by || 'borrower',
   }))));
 
-  // --- benchmarks -----------------------------------------------------------
-  // transfer_tax is deliberately absent: it is tested in aggregate below,
-  // because a single line is one party's contractual share of the tax.
-  const BENCHMARKABLE = new Set([
-    'title_insurance_owners', 'title_insurance_lenders', 'recording_fee',
-    'appraisal', 'survey', 'attorney', 'settlement_service',
-  ]);
-  for (const li of lines) {
-    if (!BENCHMARKABLE.has(li.category)) continue;
-    if (!li.amount) continue;
-    const bmFinding = audit.compareToBenchmark(li.label, li.amount, getBenchmark({
-      category: li.category,
-      state: e.property_state,
-      county: e.property_county,
-      loanAmount: e.loan_amount,
-      salePrice: e.sale_price || null,
-    }));
-    findings.push(isCustomer(li) ? audit.markCustomerSourced(bmFinding) : bmFinding);
-  }
-
-  // --- transfer taxes: tested in aggregate, never line by line ---------------
-  //
-  // A settlement statement shows each party's SHARE. Buyer and seller commonly
-  // split these 50/50 by contract, so comparing one line against the statutory
-  // rate would report a correctly-paid half as a shortfall. Allocation is
-  // contractual; the tax is not. We test the total and say so.
-  //
-  // And we only ever flag a total that EXCEEDS the unexempted statutory figure.
-  // Maryland alone has first-time-buyer and owner-occupied reductions, so a
-  // total coming in low is far more likely to be a correctly applied exemption
-  // than an error, and calling it one would be a false accusation.
-  if (typeof getBenchmark.stacked === 'function' && e.sale_price) {
-    const taxLines = (e.line_items || []).filter(
-      (li) => li.category === 'transfer_tax' && typeof li.amount === 'number'
-    );
-    const stack = getBenchmark.stacked({
-      category: 'transfer_tax',
-      state: e.property_state,
-      county: e.property_county,
-      salePrice: e.sale_price,
-      loanAmount: e.loan_amount,
-    });
-
-    if (taxLines.length && stack.total !== null && e.sale_price <= 1000000) {
-      const charged = Math.round(taxLines.reduce((a, li) => a + li.amount, 0) * 100) / 100;
-      const variance = Math.round((charged - stack.total) * 100) / 100;
-      const breakdown = stack.components
-        .map((c) => `${c.label} ${audit.toDollars(audit.toCents(c.amount))}`).join(' + ');
-      const notes = stack.components.map((c) => c.note).filter(Boolean).join(' ');
-
-      // An entry that has not enumerated every component a jurisdiction can
-      // levy must never accuse. Missing a component understates the expected
-      // total by exactly its size, which makes a correctly collected tax look
-      // like an overcharge — see the note at the top of transfer-tax-rates.js.
-      // It can still reconcile, and reconciling is most of the value.
-      if (variance > 1 && stack.complete === false) {
-        findings.push(audit.finding({
-          checkId: 'TRANSFER_TAX_TOTAL',
-          title: 'Transfer taxes could not be fully reconciled for this jurisdiction',
-          severity: audit.Severity.INFORMATIONAL,
-          evidence: stack.evidence,
-          actionability: audit.Actionability.NEEDS_DOCS,
-          charged,
-          expected: stack.total,
-          variance,
-          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} on a sale price of `
-            + `${audit.toDollars(audit.toCents(e.sale_price))}; your statement shows `
-            + `${audit.toDollars(audit.toCents(charged))}. ${stack.incompleteReason || ''}`.trim(),
-          whyItMatters:
-            'The difference may be a local or regional component we could not establish applies, '
-            + 'rather than an overcharge. We do not treat it as one.',
-          recommendedAction:
-            'If you want this settled, ask the settlement agent which local and regional recordation '
-            + 'fees were charged and at what rate.',
-          detail: { components: stack.components, lines_counted: taxLines.length, complete: false },
-        }));
-      } else if (variance > 1) {
-        findings.push(audit.finding({
-          checkId: 'TRANSFER_TAX_TOTAL',
-          title: 'Transfer taxes exceed the statutory amount for this jurisdiction',
-          severity: audit.Severity.POTENTIAL_OVERCHARGE,
-          evidence: stack.evidence,
-          actionability: audit.Actionability.CHANGEABLE_BEFORE_CLOSING,
-          dollarImpact: variance,
-          charged,
-          expected: stack.total,
-          variance,
-          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} on a sale price of `
-            + `${audit.toDollars(audit.toCents(e.sale_price))}. Source: ${stack.components[0].source}.`,
-          whyItMatters:
-            'These are statutory rates, not negotiable service charges. Buyer and seller may split them '
-            + 'however the contract says, but the total owed to the state and county is fixed.',
-          recommendedAction:
-            'Ask the settlement agent to show the transfer tax calculation against the sale price.',
-          askSettlement: true,
-          detail: { components: stack.components, lines_counted: taxLines.length },
-        }));
-      } else {
-        findings.push(audit.finding({
-          checkId: 'TRANSFER_TAX_TOTAL',
-          title: variance < -1
-            ? 'Transfer taxes are below the standard statutory amount'
-            : 'Transfer taxes match the statutory amount',
-          severity: variance < -1 ? audit.Severity.INFORMATIONAL : audit.Severity.WITHIN_NORMS,
-          evidence: stack.evidence,
-          actionability: audit.Actionability.LIKELY_LOCKED,
-          charged,
-          expected: stack.total,
-          variance,
-          basis: `${breakdown} = ${audit.toDollars(audit.toCents(stack.total))} before exemptions, on a `
-            + `sale price of ${audit.toDollars(audit.toCents(e.sale_price))}. Your statement shows `
-            + `${audit.toDollars(audit.toCents(charged))} across ${taxLines.length} line`
-            + `${taxLines.length === 1 ? '' : 's'}; the remainder is normally the other party's share, `
-            + `which the contract decides. Source: ${stack.components[0].source}.`
-            + (variance < -1 && notes ? ' ' + notes : ''),
-          whyItMatters: variance < -1
-            ? 'A total below the standard rate usually means an exemption was applied, not that '
-              + 'something is missing. We do not treat it as an error.'
-            : '',
-        }));
-      }
-    }
-  }
+  // Benchmarking was removed on 2026-09-13 — see the note at the top of
+  // closing-service.js. Nothing here compares a charge against any external
+  // figure, market or statutory. Every finding this engine produces is
+  // arithmetic on the customer's own documents or a rule applied to them.
 
   // --- TRID tolerances, only if Loan Estimates were supplied ----------------
   let cureNote = null;
@@ -1808,13 +1685,11 @@ const FLAG_SEVERITIES = new Set([
   audit.Severity.POTENTIAL_TRID_VIOLATION,
   audit.Severity.POTENTIAL_OVERCHARGE,
   audit.Severity.POTENTIAL_DUPLICATE,
-  audit.Severity.ABOVE_BENCHMARK,
 ]);
 
-// Deliberately does NOT include CANNOT_BENCHMARK. "We have no rate data for
-// your county" is our gap, not a missing document, and telling a customer they
-// need to supply 23 more documents when no document would help is a lie by
-// category error.
+// Nothing benchmark-shaped appears here any more. The severities this set once
+// had to reason about — above a benchmark, cannot benchmark — no longer exist,
+// because no check compares a charge against an outside figure.
 const NEEDS_DOCS_SEVERITIES = new Set([
   audit.Severity.REQUIRES_DOCUMENTATION,
 ]);
@@ -1836,7 +1711,6 @@ function buildScorecard(extraction, findings, skipped = []) {
 
   const flags = findings.filter((f) => FLAG_SEVERITIES.has(f.severity));
   const needsDocs = findings.filter((f) => NEEDS_DOCS_SEVERITIES.has(f.severity));
-  const cannotBenchmark = findings.filter((f) => f.severity === audit.Severity.CANNOT_BENCHMARK);
 
   // A settlement statement prints no "Total Closing Costs (J)". Rather than
   // showing a blank where the headline number should be, total the borrower-paid
@@ -1881,12 +1755,6 @@ function buildScorecard(extraction, findings, skipped = []) {
     source: 'Published industry guidance places purchase closing costs at about 2-5% of the loan amount.',
   };
 
-  // Cannot-benchmark without a denominator is unreadable: 10 of 12 is a broken
-  // product, 10 of 40 is an ordinary corpus gap.
-  const benchmarkableCount = (e.line_items || []).filter(
-    (li) => li.category && !NOT_A_CHARGE.has(li.category) && !isSubtotalLine(li)
-  ).length;
-
   // Three flags could be $50 or $5,000. Without magnitude the $29 decision is
   // a coin flip, so total whatever dollar impact the findings established.
   const flagDollars = flags.reduce(
@@ -1903,7 +1771,6 @@ function buildScorecard(extraction, findings, skipped = []) {
     document_type: e.document_type || 'other',
     document_label: DOCUMENT_LABELS[e.document_type] || 'document',
     cost_context: costContext,
-    benchmarkable_count: benchmarkableCount,
     flag_dollars: flagDollars > 0 ? Math.round(flagDollars) : null,
     flags_with_dollars: flagsWithDollars,
     flag_severity: severityCounts,
@@ -1919,7 +1786,6 @@ function buildScorecard(extraction, findings, skipped = []) {
         : null,
     flag_count: flags.length,
     needs_more_documents_count: needsDocs.length,
-    cannot_benchmark_count: cannotBenchmark.length,
     total_is_derived: totalClosingCosts === null && chargeLines.length > 0,
     total_borrower_charges: chargeLines.length ? Math.round(derivedTotal * 100) / 100 : null,
     charge_lines_counted: chargeLines.length,

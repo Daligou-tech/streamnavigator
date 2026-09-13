@@ -7,8 +7,8 @@
 // table lookup, and every finding carries the basis it was decided on.
 //
 // Rules this module enforces structurally, not by instruction:
-//   * No check invents a benchmark. compareToBenchmark() takes the benchmark as
-//     an argument and returns CANNOT_BENCHMARK when it is null.
+//   * No check compares a charge against an external figure at all. There is no
+//     benchmark corpus, market or statutory, and no code path that wants one.
 //   * Hard rules (statutes, filed rate tables, government fee schedules,
 //     internal arithmetic) are never presented as market norms, or vice versa.
 //   * Nothing here reaches a legal conclusion. The strongest severity available
@@ -46,10 +46,8 @@ const Severity = {
   CONFIRMED_MATH_ERROR: 'confirmed_mathematical_error',
   POTENTIAL_TRID_VIOLATION: 'potential_trid_violation',
   POTENTIAL_OVERCHARGE: 'potential_overcharge',
-  ABOVE_BENCHMARK: 'above_available_benchmark',
   POTENTIAL_DUPLICATE: 'potential_duplicate',
   REQUIRES_DOCUMENTATION: 'requires_documentation',
-  CANNOT_BENCHMARK: 'cannot_benchmark',
   INFORMATIONAL: 'informational_only',
   WITHIN_NORMS: 'within_norms',
 };
@@ -77,9 +75,7 @@ const SEVERITY_ORDER = {
   [Severity.POTENTIAL_TRID_VIOLATION]: 1,
   [Severity.POTENTIAL_OVERCHARGE]: 2,
   [Severity.POTENTIAL_DUPLICATE]: 3,
-  [Severity.ABOVE_BENCHMARK]: 4,
   [Severity.REQUIRES_DOCUMENTATION]: 5,
-  [Severity.CANNOT_BENCHMARK]: 6,
   [Severity.INFORMATIONAL]: 7,
   [Severity.WITHIN_NORMS]: 8,
 };
@@ -751,100 +747,20 @@ function detectDuplicates(items) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. benchmark comparison — structurally cannot invent data
+// 6. (removed) benchmark comparison
 // ---------------------------------------------------------------------------
+//
+// Benchmarking was removed entirely on 2026-09-13. This product does not
+// compare a charge against any external figure — not a market range, and not
+// a statutory rate table either. Every finding it produces is arithmetic on
+// the customer's own documents, or a federal rule applied to them.
+//
+// What stood here was compareToBenchmark(), which took a benchmark as an
+// argument and returned CANNOT_BENCHMARK when it was null. It was structurally
+// incapable of inventing data, which was the right design for a thing that
+// should not exist: a corpus has to be maintained, and a rate that quietly goes
+// stale produces a confident accusation with a dollar figure on it.
 
-function compareToBenchmark(label, charged, bm) {
-  const chargedC = toCents(charged);
-
-  const cannot = () =>
-    finding({
-      checkId: 'BENCHMARK',
-      title: `${label}: cannot benchmark`,
-      severity: Severity.CANNOT_BENCHMARK,
-      evidence: EvidenceKind.NONE,
-      actionability: Actionability.NEEDS_DOCS,
-      charged: toDollars(chargedC),
-      basis: 'Cannot benchmark — insufficient reliable market data available for this fee.',
-    });
-
-  if (!bm) return cannot();
-
-  const hard = [
-    EvidenceKind.HARD_RATE_TABLE,
-    EvidenceKind.HARD_FEE_SCHEDULE,
-    EvidenceKind.HARD_STATUTE,
-  ].includes(bm.evidence);
-
-  if (bm.exact !== undefined && bm.exact !== null) {
-    const exact = toCents(bm.exact);
-    const variance = chargedC - exact;
-    let severity;
-    if (Math.abs(variance) <= 1) severity = Severity.WITHIN_NORMS;
-    else if (hard && variance > 0) severity = Severity.POTENTIAL_OVERCHARGE;
-    else severity = Severity.ABOVE_BENCHMARK;
-
-    return finding({
-      checkId: 'BENCHMARK',
-      title: `${label}: ${severity === Severity.WITHIN_NORMS ? 'matches' : 'differs from'} the published rate`,
-      severity,
-      evidence: bm.evidence,
-      actionability:
-        severity === Severity.WITHIN_NORMS
-          ? Actionability.LIKELY_LOCKED
-          : Actionability.CHANGEABLE_BEFORE_CLOSING,
-      dollarImpact: variance > 0 ? toDollars(variance) : null,
-      charged: toDollars(chargedC),
-      expected: toDollars(exact),
-      variance: toDollars(variance),
-      basis: bm.source + (bm.effectiveDate ? ` (effective ${bm.effectiveDate})` : ''),
-      whyItMatters: hard
-        ? 'This is a published, filed rate — not an average. A variance is a pricing error, not a negotiation.'
-        : '',
-      askSettlement: hard,
-    });
-  }
-
-  if (bm.high === undefined || bm.high === null) return cannot();
-
-  const high = toCents(bm.high);
-  const low = toCents(bm.low || 0);
-  const range = `${bm.source}: ${toDollars(low)}–${toDollars(high)} in ${bm.jurisdiction || 'this market'}`;
-
-  if (chargedC <= high) {
-    return finding({
-      checkId: 'BENCHMARK',
-      title: `${label}: within the observed range`,
-      severity: Severity.WITHIN_NORMS,
-      evidence: bm.evidence,
-      actionability: Actionability.LIKELY_LOCKED,
-      charged: toDollars(chargedC),
-      expected: toDollars(high),
-      basis: range,
-    });
-  }
-
-  const variance = chargedC - high;
-  return finding({
-    checkId: 'BENCHMARK',
-    title: `${label}: above the observed market range`,
-    severity: chargedC / high >= 1.5 ? Severity.POTENTIAL_OVERCHARGE : Severity.ABOVE_BENCHMARK,
-    evidence: bm.evidence,
-    actionability: Actionability.CHANGEABLE_BEFORE_CLOSING,
-    dollarImpact: toDollars(variance),
-    charged: toDollars(chargedC),
-    expected: toDollars(high),
-    variance: toDollars(variance),
-    basis: range,
-    whyItMatters:
-      'This is a market range, not a legal limit. Being above it is a reason to ask, not proof of a violation.',
-    recommendedAction: `Ask what justifies ${toDollars(chargedC)} against a typical range topping out near ${toDollars(high)}.`,
-    askSettlement: true,
-  });
-}
-
-// ---------------------------------------------------------------------------
-// 7. TRID tolerance engine
 // ---------------------------------------------------------------------------
 
 const Bucket = {
@@ -1516,7 +1432,7 @@ module.exports = {
   daysToMonthEndInclusive, perDiem, checkPrepaidInterest,
   checkEscrowCushion, checkProration,
   checkSectionArithmetic, checkCashToClose,
-  detectDuplicates, compareToBenchmark,
+  detectDuplicates,
   assignBucket, businessDaysBetween, selectBaseline, analyzeTolerances, cureDeadlineNote,
   checkRateAgainstEstimate,
   reconcileContract, gateExtraction,

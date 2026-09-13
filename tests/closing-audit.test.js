@@ -4,11 +4,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   Severity, EvidenceKind, Actionability, Bucket,
   rankFindings, daysToMonthEndInclusive, perDiem, checkPrepaidInterest,
   checkEscrowCushion, checkProration, checkSectionArithmetic, checkCashToClose,
-  detectDuplicates, compareToBenchmark, assignBucket, businessDaysBetween,
+  detectDuplicates, assignBucket, businessDaysBetween,
   selectBaseline, analyzeTolerances, cureDeadlineNote, reconcileContract,
   gateExtraction, matchCharges, nameSimilarity,
 } = require('../api/_lib/closing-audit');
@@ -248,41 +250,31 @@ test('three or more Section A lender charges surface as stacking', () => {
   assert.equal(out[0].severity, Severity.REQUIRES_DOCUMENTATION);
 });
 
-// --- benchmarks -------------------------------------------------------------
+// --- benchmarking, and the absence of it ------------------------------------
 
-test('a missing benchmark never becomes a guess', () => {
-  const f = compareToBenchmark('Attorney fee', 1200, null);
-  assert.equal(f.severity, Severity.CANNOT_BENCHMARK);
-  assert.match(f.basis, /Cannot benchmark/);
-  assert.equal(f.expected, null);
-});
+test('the audit module offers no way to compare a charge against an outside figure', () => {
+  // Four tests stood here, all passing: a missing benchmark becoming
+  // CANNOT_BENCHMARK, a promulgated rate mismatch, a market range labelled as a
+  // norm rather than a limit, and an escalation far above that range. None of
+  // them should exist, because the function they exercised should not.
+  //
+  // Benchmarking was removed in full on 2026-09-13 — market rates and statutory
+  // rates alike. A rate corpus has to be maintained, every jurisdiction moves at
+  // its own pace, and a rate that goes quietly stale produces a confident
+  // accusation with a dollar figure on it, aimed at the settlement agent the
+  // customer still has to close with.
+  //
+  // So this asserts the absence, which is the actual product promise. The page
+  // says the product does not judge whether a fee is too expensive; the way to
+  // keep that true is for the engine to have no mechanism for saying it.
+  const auditModule = require('../api/_lib/closing-audit');
+  assert.equal(typeof auditModule.compareToBenchmark, 'undefined',
+    'compareToBenchmark is back, and the page promises the opposite');
 
-test('a promulgated rate mismatch is a hard finding', () => {
-  const f = compareToBenchmark("Owner's title policy", 2905, {
-    exact: 2405, evidence: EvidenceKind.HARD_RATE_TABLE,
-    source: 'TX Basic Manual of Title Insurance, Rate Rule R-1', jurisdiction: 'TX',
-  });
-  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
-  assert.equal(f.dollarImpact, 500);
-  assert.equal(f.evidence, EvidenceKind.HARD_RATE_TABLE);
-});
-
-test('a market range is labelled as a norm, not a limit', () => {
-  const f = compareToBenchmark('Appraisal fee', 760, {
-    low: 400, high: 700, evidence: EvidenceKind.MARKET_RANGE,
-    source: 'Observed range', jurisdiction: 'Fairfax County, VA',
-  });
-  assert.equal(f.severity, Severity.ABOVE_BENCHMARK);
-  assert.equal(f.dollarImpact, 60);
-  assert.match(f.whyItMatters, /not a legal limit/);
-});
-
-test('far above the range escalates severity', () => {
-  const f = compareToBenchmark('Appraisal fee', 1400, {
-    low: 400, high: 700, evidence: EvidenceKind.MARKET_RANGE,
-    source: 'Observed range', jurisdiction: 'VA',
-  });
-  assert.equal(f.severity, Severity.POTENTIAL_OVERCHARGE);
+  const engineSrc = fs.readFileSync(
+    path.join(__dirname, '..', 'api', '_lib', 'closing-extract.js'), 'utf8');
+  assert.ok(!/getBenchmark/.test(engineSrc),
+    'the engine accepts a benchmark supplier again');
 });
 
 // --- tolerance buckets ------------------------------------------------------

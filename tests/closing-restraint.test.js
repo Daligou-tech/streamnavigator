@@ -151,13 +151,7 @@ test('Section E taxes are not each reported as missing from the Loan Estimate', 
 
   const unmatched = find(findings, 'TRID_UNMATCHED_CHARGE');
   assert.deepEqual(unmatched.map((f) => f.title), [],
-    'Section E is tested in aggregate — recording fees in the 10% basket, taxes against statute');
-
-  // And the aggregate test still happens, so nothing was lost by skipping them.
-  const tax = find(findings, 'TRANSFER_TAX_TOTAL');
-  assert.equal(tax.length, 1);
-  assert.equal(tax[0].severity, audit.Severity.WITHIN_NORMS,
-    '$1,687.50 + $375 + $562.50 is exactly the Virginia statutory total for this sale');
+    'Section E recording fees are tested in the 10% aggregate, not line by line');
 });
 
 test('a charge outside Section E is still reported when it cannot be matched', () => {
@@ -201,39 +195,52 @@ test('Section G is never tested against the RESPA cap', () => {
   assert.equal(cushion[0].dollarImpact, null);
 });
 
-// --- 4. a transfer tax total in a jurisdiction we cannot fully model ---------
+// --- 4. a tax the product declines to have an opinion about ------------------
 
-test('an incomplete transfer-tax jurisdiction reconciles but never accuses', () => {
-  // Virginia's two regional fees are county-dependent. Without the county, a
-  // total missing them reads as an overcharge of exactly their size.
-  const { findings } = runDocumentAudit({
-    extraction: base({
-      property_county: null,
-      line_items: base().line_items.concat([li('E', 'State Transfer Tax', 3400, 'transfer_tax')]),
-      section_totals: { A: amt(1095), E: amt(3400), J: amt(4495) },
-    }),
-    answers: {},
-  });
-
-  const tax = find(findings, 'TRANSFER_TAX_TOTAL');
-  assert.equal(tax.length, 1);
-  assert.equal(tax[0].severity, audit.Severity.INFORMATIONAL);
-  assert.notEqual(tax[0].severity, audit.Severity.POTENTIAL_OVERCHARGE);
+test('a transfer tax produces no finding at all, in any jurisdiction', () => {
+  // Two tests stood here, from the day statutory benchmarking briefly existed:
+  // one asserting an incomplete jurisdiction could reconcile but never accuse,
+  // and one asserting a modelled county still flagged an overcharge. Both
+  // passed, and the design behind them was careful.
+  //
+  // Benchmarking was removed entirely on 2026-09-13 — statutory as well as
+  // market. The argument for keeping statutory rates was that a transfer tax is
+  // published law rather than an opinion. The argument that won is that a rate
+  // corpus has to be maintained, jurisdictions move at their own pace, and a
+  // stale rate produces a confident accusation with a dollar figure on it,
+  // aimed at the settlement agent the customer still has to close with.
+  //
+  // So the restraint is now total, which is a simpler thing to keep true.
+  for (const county of ['Richmond', 'Fairfax', null]) {
+    const { findings } = runDocumentAudit({
+      extraction: base({
+        property_county: county,
+        line_items: base().line_items.concat([li('E', 'State Transfer Tax', 3400, 'transfer_tax')]),
+        section_totals: { A: amt(1095), E: amt(3400), J: amt(4495) },
+      }),
+      answers: {},
+    });
+    assert.deepEqual(find(findings, 'TRANSFER_TAX_TOTAL'), [],
+      `a transfer-tax finding came back for ${county || 'an unknown county'}`);
+  }
 });
 
-test('the same charge in a county we can model is still flagged', () => {
-  // The restraint above must not be bought by never flagging anything.
+test('no finding anywhere rests on an outside figure', () => {
+  // The general form. Every finding must trace to the customer's own documents
+  // or to a federal rule — never to a rate table, a market range, or a corpus.
   const { findings } = runDocumentAudit({
     extraction: base({
-      property_county: 'Richmond',
-      line_items: base().line_items.concat([li('E', 'State Transfer Tax', 3400, 'transfer_tax')]),
-      section_totals: { A: amt(1095), E: amt(3400), J: amt(4495) },
+      property_state: 'DC',
+      line_items: base().line_items.concat([
+        li('E', 'Recordation Tax', 5500, 'transfer_tax'),
+        li('C', 'Title - Owner’s Policy', 2905, 'title_insurance_owners'),
+      ]),
+      section_totals: { A: amt(1095), C: amt(2905), E: amt(5500), J: amt(9500) },
     }),
     answers: {},
   });
 
-  const tax = find(findings, 'TRANSFER_TAX_TOTAL');
-  assert.equal(tax.length, 1);
-  assert.equal(tax[0].severity, audit.Severity.POTENTIAL_OVERCHARGE);
-  assert.ok(tax[0].dollarImpact > 0);
+  const outside = findings.filter((f) => /benchmark|market rate|market data|typical range|statutory rate/i
+    .test([f.title, f.basis, f.severity, f.evidence].join(' ')));
+  assert.deepEqual(outside.map((f) => f.title), []);
 });

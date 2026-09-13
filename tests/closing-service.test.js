@@ -86,7 +86,9 @@ test('the catalog names every checkId the engine can emit', () => {
   let m;
   while ((m = re.exec(sources)) !== null) emitted.add(m[1]);
 
-  const known = new Set([...svc.CATALOG_BY_ID.keys(), ...svc.BENCHMARK_CHECK_IDS]);
+  // No suppression list to union in any more: every finding the engine can
+  // emit is a catalog check, because nothing is produced that has to be hidden.
+  const known = new Set(svc.CATALOG_BY_ID.keys());
   const missing = [...emitted].filter((id) => !known.has(id));
   assert.deepStrictEqual(missing, [],
     `checkIds the engine emits but the catalog does not list: ${missing.join(', ')}. `
@@ -113,15 +115,25 @@ test('every catalog entry has a customer-readable label and a group', () => {
 // benchmarks are absent, not merely disabled
 // ---------------------------------------------------------------------------
 
-test('no benchmark finding reaches the customer', () => {
+test('no benchmark finding can be produced at all', () => {
+  // This used to check that benchmark findings were filtered out on the way to
+  // the customer. Filtering output is weaker than not producing it — rename a
+  // checkId and the filter silently stops matching. Benchmarking was removed in
+  // full on 2026-09-13, so the assertion is now about the engine, not the sieve.
   const r = svc.runDocumentAudit({ extraction: CD() });
   for (const f of r.findings) {
-    assert.ok(!svc.BENCHMARK_CHECK_IDS.has(f.checkId), `benchmark finding leaked: ${f.checkId}`);
-    assert.notStrictEqual(f.severity, Severity.CANNOT_BENCHMARK);
+    assert.notStrictEqual(f.checkId, 'BENCHMARK');
+    assert.notStrictEqual(f.checkId, 'TRANSFER_TAX_TOTAL');
+    assert.ok(!/benchmark|market rate|market data/i.test([f.title, f.basis].join(' ')),
+      `a finding still speaks in benchmark terms: ${f.title}`);
   }
 });
 
-test('the disclosure uses no vague quantifiers', () => {
+test('the scorecard carries no benchmark coverage field to be vague in', () => {
+  // This asserted that the coverage disclosure never said "several fees" or "a
+  // number of charges" where it could name them. There is no disclosure now:
+  // it existed to explain which fees had no rate data, and no fee has rate
+  // data because no rate data exists.
   const cd = CD();
   cd.line_items = [
     { category: 'title_insurance_owners', amount: 1800 },
@@ -130,16 +142,20 @@ test('the disclosure uses no vague quantifiers', () => {
     { category: 'survey', amount: 400 },
   ];
   const { scorecard } = svc.runDocumentAudit({ extraction: cd });
-  const text = JSON.stringify(scorecard.benchmark_coverage).toLowerCase();
-  for (const re of [/\ba few\b/, /\bseveral\b/, /\bsome of your\b/, /\bvarious\b/,
-    /\ba number of\b/, /\bnumerous\b/, /\bmany of\b/]) {
-    assert.ok(!re.test(text), `coverage disclosure contains a vague quantifier: ${re}`);
-  }
+  assert.equal(scorecard.benchmark_coverage, undefined);
+  assert.equal(scorecard.benchmarkable_count, undefined);
+  assert.equal(scorecard.cannot_benchmark_count, undefined);
 });
 
-test('the null benchmark never returns a value', () => {
-  assert.strictEqual(svc.NO_BENCHMARKS({ category: 'appraisal', state: 'MD' }), null);
-  assert.strictEqual(svc.NO_BENCHMARKS.stacked({ category: 'transfer_tax' }).total, null);
+test('there is no benchmark supplier to inject', () => {
+  // NO_BENCHMARKS was a null supplier the audit could be run with, and proving
+  // it returned null for everything was worth a test while a real supplier also
+  // existed. Neither exists now, so the engine cannot be handed one.
+  assert.equal(svc.NO_BENCHMARKS, undefined);
+
+  const engineSrc = fs.readFileSync(
+    path.join(__dirname, '..', 'api', '_lib', 'closing-extract.js'), 'utf8');
+  assert.ok(!/getBenchmark/.test(engineSrc));
 });
 
 // ---------------------------------------------------------------------------

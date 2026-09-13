@@ -19,52 +19,36 @@
 //      computed from checks that produced a result -- not from files that
 //      arrived. An unreadable Loan Estimate does not become $59.
 //
-//   3. Benchmark findings are suppressed structurally, not by configuration.
-//      Passing a null getBenchmark still emits a CANNOT_BENCHMARK finding per
-//      fee, which would fill the report with a promise we are not making.
+//   3. There is no benchmarking, of any kind. This service compares charges
+//      against the customer's own documents and against federal rules, and
+//      against nothing else. Removed in full on 2026-09-13.
 
 'use strict';
-
-const { statutoryBenchmarks } = require('./transfer-tax-rates');
 
 const audit = require('./closing-audit');
 const { runClosingAudit, buildScorecard } = require('./closing-extract');
 const loanMath = require('./closing-math');
 const { buildEmails } = require('./closing-emails');
 
-// Benchmarking is ON, but its gaps are disclosed by NAME rather than by count.
+// There is no benchmarking here, and no supplier to inject one through.
 //
-// The corpus is loaded where we hold data and returns null where we do not.
-// CANNOT_BENCHMARK findings are still dropped from the customer's finding list,
-// because "we have no rate data for your appraisal fee" is not a finding about
-// her loan -- it is a fact about our corpus. That fact belongs in the coverage
-// disclosure she reads BEFORE paying, naming the exact categories, not buried
-// in the report she paid for.
+// Removed in full on 2026-09-13. What stood here was a getBenchmark function
+// the engine called for every charge it could compare, wired to a supplier
+// that returned null for market rates and, briefly, to a statutory corpus for
+// transfer taxes. Both are gone, along with the suppression list that existed
+// to keep their output away from the customer.
 //
-// NO_BENCHMARKS remains exported for tests and for running the audit with
-// benchmarking deliberately absent.
+// The argument for statutory rates was that a transfer tax is published law
+// rather than a market opinion, and on a 75,000 purchase it is the largest
+// figure on the settlement statement with a provably correct value. The
+// argument against it is the one that decided it: a rate corpus has to be
+// maintained, every jurisdiction moves at its own pace, and a rate that goes
+// quietly stale produces a confident accusation with a dollar figure attached
+// — aimed at the settlement agent the customer still has to close with.
 //
-// MARKET benchmarking is retired and stays retired: nobody publishes what an
-// underwriting or a settlement fee should cost, closing.html says so, and a
-// per-line comparison against invented data would make the page a lie. The
-// per-line supplier therefore still returns null for every charge.
-//
-// STATUTORY benchmarking is a different thing and was retired with it by
-// accident. A transfer tax is not a market rate — it is a published schedule,
-// exact, and on a $375,000 purchase it is the largest figure on the settlement
-// statement that has a provably correct value. api/_lib/transfer-tax-rates.js
-// supplies those, refuses every jurisdiction it has not done the work for, and
-// refuses to accuse where it cannot prove it enumerated every component.
-function defaultGetBenchmark() {
-  return statutoryBenchmarks();
-}
-
-const NO_BENCHMARKS = () => null;
-NO_BENCHMARKS.stacked = () => ({ total: null, components: [] });
-
-// TRANSFER_TAX_TOTAL is no longer filtered out. BENCHMARK still is: those are
-// the per-line market comparisons, and the corpus behind them does not exist.
-const BENCHMARK_CHECK_IDS = new Set(['BENCHMARK']);
+// This product compares the customer's documents against each other and
+// against federal rules. That is the whole promise, and closing.html makes it
+// in those words.
 
 // ---------------------------------------------------------------------------
 // the catalog
@@ -117,11 +101,6 @@ const CATALOG = [
     label: 'Lender fees are not stacked into overlapping charges' },
   { id: 'ESCROW_CUSHION', needs: Needs.OTHER_DOC, group: 'charges',
     label: 'Escrow cushion is within the RESPA limit' },
-  // Only runs where transfer-tax-rates.js holds the jurisdiction. Everywhere
-  // else it is silent rather than apologetic — a "we have no data for your
-  // state" row is a fact about our corpus, not a finding about their closing.
-  { id: 'TRANSFER_TAX_TOTAL', needs: Needs.CD, group: 'charges',
-    label: 'Transfer and recordation taxes match the statutory rate' },
 
   // --- document integrity ---------------------------------------------------
   { id: 'EXTRACTION_CONFIDENCE', needs: Needs.CD, group: 'document',
@@ -210,19 +189,18 @@ function runDocumentAudit(input = {}) {
     // is the ordinary case. Distinct from unusable: there is nothing to fix and
     // nothing to re-upload, so the checks are out of scope rather than blocked.
     emptyDocuments = [],
-    getBenchmark = defaultGetBenchmark(),
   } = input;
 
   if (!extraction) throw new Error('runDocumentAudit requires an extraction');
 
-  // --- run the engine, benchmarks absent ------------------------------------
+  // --- run the engine -------------------------------------------------------
   const engine = runClosingAudit(extraction, {
-    answers, loanEstimates, contractTerms, getBenchmark,
+    answers, loanEstimates, contractTerms,
   });
 
-  const engineFindings = (engine.findings || engine || [])
-    .filter((f) => !BENCHMARK_CHECK_IDS.has(f.checkId))
-    .filter((f) => f.severity !== audit.Severity.CANNOT_BENCHMARK);
+  // No filtering. The engine no longer emits a benchmark finding of any kind,
+  // so there is nothing to strip before the customer sees it.
+  const engineFindings = (engine.findings || engine || []);
   const engineSkipped = engine.skipped || [];
 
   // --- document-intrinsic loan math ----------------------------------------
@@ -263,7 +241,6 @@ function runDocumentAudit(input = {}) {
   // nothing priced anywhere, the honest answer is none, and a panel that says
   // "Not priced: everything" on every report is worse than no panel. The
   // scorecard's check count already tells the customer what ran.
-  const benchmarkCoverage = null;
 
   // --- what documents do we actually have, usably? -------------------------
   const have = {
@@ -374,8 +351,6 @@ function runDocumentAudit(input = {}) {
   // Strip the benchmark vocabulary. These fields describe a corpus this service
   // does not use, and leaving them at zero reads as a failure rather than an
   // absence.
-  delete base.benchmarkable_count;
-  delete base.cannot_benchmark_count;
 
   const scorecard = {
     ...base,
@@ -442,7 +417,6 @@ function runDocumentAudit(input = {}) {
     // was sent and could not be used is handled by the replace prompt, not by
     // an upsell telling them to do the thing they just did.
     unlocks: buildUnlocks(blocked.filter((c) => !c.alreadySupplied)),
-    benchmark_coverage: benchmarkCoverage,
     // Removed: a four-line justification in small grey type, sitting directly
     // beneath a panel that had already made the same point in bullets. It was
     // read by nobody and pushed the unlock actions below the fold.
@@ -564,6 +538,4 @@ module.exports = {
   CATALOG_BY_ID,
   Needs,
   PRICES,
-  BENCHMARK_CHECK_IDS,
-  NO_BENCHMARKS,
 };

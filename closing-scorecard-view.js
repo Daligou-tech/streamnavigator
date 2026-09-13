@@ -433,35 +433,11 @@
           .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;');
       }
+      // A "what we measured against" panel stood here, disclosing which charges
+      // had an external figure behind them and which did not. Benchmarking was
+      // removed in full on 2026-09-13, so there is nothing to measure against
+      // and nothing to disclose about it.
 
-      // What we could and could not price, as a short bulleted list rather than
-      // three paragraphs of small grey prose.
-      if (sc.benchmark_coverage) {
-        var bc = sc.benchmark_coverage;
-        var covItems = '';
-        if (bc.priced_sentence) {
-          covItems += '<li><b>Priced against a published rate or statute:</b> '
-            + escH(stripLead(bc.priced_sentence)) + '</li>';
-        }
-        if (bc.distribution_sentence) {
-          covItems += '<li><b>Compared with what similar loans paid:</b> '
-            + escH(stripLead(bc.distribution_sentence)) + '</li>';
-        }
-        if (bc.not_priced_sentence) {
-          covItems += '<li><b>Not priced'
-            + (bc.jurisdiction ? ' in ' + escH(bc.jurisdiction) : '') + ':</b> '
-            + escH(stripLead(bc.not_priced_sentence)) + '</li>';
-        }
-        if (covItems) {
-          html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
-            + '<ul class="sc-list">' + covItems + '</ul>'
-            + (sc.evidence_basis ? '<p class="sc-sub">' + escH(sc.evidence_basis) + '</p>' : '')
-            + '</div>';
-        }
-      } else if (sc.evidence_basis) {
-        html += '<div class="sc-panel"><p class="sc-h">What we measured against</p>'
-          + '<p class="sc-lead">' + escH(sc.evidence_basis) + '</p></div>';
-      }
 
       // (rendered above, inside the "What we measured against" panel)
 
