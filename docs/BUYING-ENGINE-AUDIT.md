@@ -7,6 +7,8 @@ leak aside as a generation failure; this is where it is tracked.
 
 Covers the five generation defects found and fixed on 2026-09-09, and eleven
 live production runs across all three categories. Written up on 2026-09-12.
+Extended on 2026-09-13 with defect 6, which closes the open weakness the first
+pass named but did not fix.
 
 If you are an AI assistant picking this up: the last section is the one that
 matters. Three of these five defects produced clean-looking, fully-passing
@@ -32,9 +34,15 @@ two by something failing. The metric is not completion.
 | 3 | Verification budget set too low | Must-have checks silently downgraded on 2 of 3 categories | `3201f96` |
 | 4 | Thousands separator split a requirement | "at least 7,000 lbs" graded as "at least 7" | `5029983` |
 | 5 | `unref`'d abort timer | Abort never fired if nothing else held the event loop | `3201f96` |
+| 6 | All-or-nothing verification | A slow requirement discarded the ones already graded | `3e1e271` |
 
 Defects 3 and 5 were introduced by the fix for defect 2. That is worth stating
 plainly: two of the five were self-inflicted, and both shipped.
+
+Defect 6 was added on 2026-09-13. It is not a new discovery — the first pass
+named it, under "what this does not cover", as the open question of whether the
+vehicle category was reliable enough. It turned out to be a defect rather than a
+characteristic, which is why it is in the table now.
 
 ## 1. The whole-response tag leak
 
@@ -211,6 +219,56 @@ Isolated before fixing: an otherwise-idle process running one verification
 against a stubbed fetch exits without the call ever settling; with `unref`
 removed it settles in 3ms and returns `null`.
 
+## 6. The all-or-nothing verification
+
+The first pass left this as an open question: *"whether the vehicle category is
+reliable enough. It is the one whose spec lookup runs long enough to lose its
+verification."* The observation was right and the framing was wrong. It is not
+that vehicles are slow; it is that the verification had no way to keep what it
+had already established.
+
+One call graded every requirement at once, sharing one search budget. A call
+that overran its deadline threw away the grades it had reached along with the
+ones it had not. That is the whole explanation for the F-150 swinging between
+"2 of 2 confirmed" with sources and "0 of 2 confirmed" for the same truck on
+consecutive runs. Nothing was wrong with the grading. The batch was discarded.
+
+Raising the budget — which is what defect 3 did — only moves where that cliff
+sits. It cannot stop a result being all-or-nothing.
+
+**The batch call is still the fast path and still runs first.** Establishing the
+product once and grading everything against that is cheaper and better informed
+than N calls that each rediscover the same specification. It stops being used
+only for a submission that has already shown it cannot finish that way: the row
+is marked, and the next attempt grades one requirement at a time, banking each
+as it lands.
+
+Three things that are easy to get wrong and were:
+
+- **The loop carries on past a requirement it cannot settle.** Stopping at the
+  first failure is the original bug in miniature — one unfindable specification
+  taking its siblings down with it.
+- **Partial results have to reach the report as what they are**: the grades
+  established, plus honest "unchecked" placeholders for the rest. Without that
+  the completeness check rejects the report outright for a must-have it was
+  never given, and the customer loses a whole report over the one requirement
+  that could not be looked up. That was a real bug in the first draft of this
+  fix, caught by a test rather than by reading the diff.
+- **Matching a graded requirement back to the buyer's wording is fuzzy**
+  (`fragmentCovered`, not string equality), so "fits a 36 inch opening" is not
+  re-bought as "must fit a 36-inch opening".
+
+Termination is by progress: an attempt that grades nothing new writes the
+abandoned marker instead of handing back, which is the poll-forever guard the
+marker has always been. The bound is one batch call plus one pass over the
+requirements.
+
+The first draft of this also marked a failed batch *abandoned* as well as
+batch-failed, so the per-requirement path it had just switched to could never
+run. Two self-inflicted bugs in one fix, both caught before shipping this time
+— which is the difference between this entry and defects 3 and 5, not any
+greater care in writing it.
+
 ## Method, and how much to trust it
 
 Eleven live production runs across the three categories, producing ten reports.
@@ -226,7 +284,9 @@ How much that is worth: less than it looks, and the reason is not sample size
 alone. **An unknown number of those eleven runs never reached the report call**,
 because the verification consumed the invocation first — so the count of actual
 `submit_purchase_report` responses behind "no leak in eleven" is smaller than
-eleven and was not instrumented. Against a baseline where the failure was the
+eleven and was not instrumented at the time. `job_state.report_calls` now
+records it (`3e1e271`), so the next batch has a denominator; this one never
+will. Against a baseline where the failure was the
 dominant mode, a clean sweep is real evidence; it is not the same as having
 measured the new rate. **If the leak recurs, this sample is why you should not
 be very surprised.**
@@ -240,18 +300,38 @@ Each fix was mutation-checked rather than trusted because the suite was green:
 - remove the abort → the suite hangs outright (`timeout` exit 124)
 - restore the naive comma split → all three parser tests fail
 
-142 tests in `purchase-engine.test.js`, 27 suites green, CI green.
+Defect 6 was mutation-checked the same way: making `mergeVerification` discard
+what had been banked fails the partial-banking test, and making
+`pendingFragments` forget what was graded fails five tests, three of which
+predate the change.
+
+146 tests in `purchase-engine.test.js`, 71 suites green, CI green.
+
+`tests/buying-journey.test.js` (`e082eb4`) now walks the customer path end to
+end — sufficiency gate, requirement parsing, arithmetic, partial verification,
+rendered output — against fixtures rather than the live API, since live runs
+spend real credits and are closed. Its totals are re-derived by hand in the
+comments and asserted against what the customer reads. That independence is the
+point: a check that asks the engine to confirm its own arithmetic would have
+passed on every defect in this document.
 
 ## What this does not cover
 
 - **Report quality.** The arithmetic gates catch internal contradiction, which
   is a real guarantee, and every figure spot-checked during these runs
-  reconciled to the dollar. They cannot catch a plausible wrong figure.
+  reconciled to the dollar. They cannot catch a plausible wrong figure, and no
+  gate in this engine can: a fuel price that is simply out of date is
+  internally consistent with everything derived from it. This is a property of
+  the design, not an outstanding defect.
 - **Later work on this engine.** `99f03b5`, `1d6bfcd` and `d204f4c` changed
   delivery, the paid-submission queue and outage handling after this audit.
   Those are about getting a finished report to a customer, not about generating
   one, and are not assessed here.
-- **Whether the vehicle category is reliable enough.** It is the one whose spec
-  lookup runs long enough to lose its verification, and it produced the only
-  no-report run in the set.
+- **Whether defect 6 holds in production.** It is verified offline only. Live
+  runs are closed, so nothing since `3201f96` has been confirmed against the
+  real API. The signal to look for on the next live vehicle run is
+  `job_state.must_have_verification` accumulating checks across attempts
+  rather than the row arriving at "0 of N". Given that three defects in this
+  document passed every green signal available and were caught by reading real
+  output, treat defect 6 as provisionally fixed until that run happens.
 - **The other Navigator products.** Only `buying` is covered.
