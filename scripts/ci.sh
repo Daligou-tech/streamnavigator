@@ -52,8 +52,18 @@ node scripts/check-prices.js
 # running them here is safe and answers a question that otherwise gets asked by
 # hand: has this one actually been run? add-loan-calculations-schema.js sat
 # unapplied for three iterations while seven checks stayed dark.
+# fix-overpromises is gone with benchmarking, for the same reason the corpus
+# freshness step above went with the corpus — and it cancelled a deployment on
+# the way out, exactly as that comment warns.
+#
+# Its six edits each narrowed a benchmarking claim in the customer-facing copy,
+# and its seventh inserted the pre-payment coverage disclosure. It decided
+# whether it had already run by looking for "benchmark_coverage" in
+# closing-scorecard-view.js. Deleting that panel meant it could no longer find
+# its own marker, so it tried to re-apply — and a patch that succeeded would
+# have put benchmarking back into the page.
 step "patch scripts are all applied"
-for s in add-loan-calculations-schema fix-overpromises wire-document-service; do
+for s in add-loan-calculations-schema wire-document-service; do
   node "scripts/$s.js"
 done
 

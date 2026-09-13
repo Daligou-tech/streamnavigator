@@ -1,10 +1,13 @@
 // What the page sells must be what the catalog runs.
 //
-// scripts/fix-overpromises.js exists because this drifted once already: the
-// page described work the engine did not do. A patch script fixes it once; a
-// test keeps it fixed. The customer decides to pay based on the words on the
-// pricing card, so a promise the catalog cannot honour is not a copy bug, it is
-// the thing they paid for missing from the report.
+// This drifted once already: the page described work the engine did not do. It
+// was corrected by a patch script, scripts/fix-overpromises.js, which was
+// retired on 2026-09-14 along with the benchmarking claims it existed to
+// narrow. A patch script fixes copy once; this file is what keeps it fixed.
+//
+// The customer decides to pay based on the words on the pricing card, so a
+// promise the catalog cannot honour is not a copy bug, it is the thing they
+// paid for missing from the report.
 //
 // These checks are deliberately mechanical and few. This file is a contract,
 // not a style guide, and a test that fails on ordinary copy edits gets deleted.
