@@ -1,0 +1,1025 @@
+<!--
+  The /closing and /hoa product audit — THE SOURCE, not a build output.
+
+  Audited 12 Sep 2026, closed 13 Sep, revised 14 Sep. Published as an Artifact at
+    https://claude.ai/code/artifact/63e4a9b7-47b3-4d5e-a474-661c200d2c78
+
+  Edit THIS file and republish from it. There is deliberately no Markdown source
+  and no generator: a converter would have to learn every block type this page
+  uses — finding records, severity chips, score deltas — and would then be one
+  more thing that has to be maintained to stay correct. This audit argued against
+  exactly that shape of dependency, so it does not get to have one.
+
+  It lives in the repo rather than only as an Artifact so it can be diffed, and so
+  a finding that turns out to be wrong leaves a record of what it said. Artifacts
+  keep versions, but you cannot read a diff of one.
+
+  There is only ever ONE copy. If you find yourself editing a second, stop: that
+  is the defect this document opens with, where a customer got two different
+  versions of the same letter.
+-->
+<title>Closing and HOA Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Spectral:ital,wght@0,400;0,600;0,700;1,400&display=swap">
+
+<style>
+  :root {
+    --ground:     #F1F3F1;
+    --surface:    #FFFFFF;
+    --sunk:       #E6EAE7;
+    --ink:        #131C18;
+    --ink-soft:   #46554E;
+    --ink-faint:  #76847D;
+    --rule:       #D3DAD5;
+    --rule-soft:  #E4E9E5;
+    --accent:     #16594A;
+    --accent-dim: #DCEAE5;
+
+    --crit:       #9C2F22;
+    --crit-dim:   #F6E3DF;
+    --high:       #A85E16;
+    --high-dim:   #F8EADB;
+    --med:        #6E6320;
+    --med-dim:    #F1EEDC;
+    --low:        #47606C;
+    --low-dim:    #E4EBEF;
+    --unverified: #6A5A7A;
+    --unverified-dim: #ECE6F1;
+
+    --shadow: 0 1px 2px rgba(19,28,24,.05), 0 10px 28px -20px rgba(19,28,24,.35);
+
+    --measure: 68ch;
+    --s--1: .82rem;
+    --s-0:  1rem;
+    --s-1:  1.15rem;
+    --s-2:  1.4rem;
+    --s-3:  1.85rem;
+    --s-4:  2.5rem;
+
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:     #0F1613;
+      --surface:    #161F1B;
+      --sunk:       #0B110E;
+      --ink:        #E5ECE8;
+      --ink-soft:   #A6B4AD;
+      --ink-faint:  #74847C;
+      --rule:       #28352F;
+      --rule-soft:  #1F2B26;
+      --accent:     #67BFA6;
+      --accent-dim: #123229;
+
+      --crit:       #E28273;
+      --crit-dim:   #351915;
+      --high:       #DFA45E;
+      --high-dim:   #33240F;
+      --med:        #C6B863;
+      --med-dim:    #2C2810;
+      --low:        #93AEBC;
+      --low-dim:    #17242A;
+      --unverified: #B7A4C9;
+      --unverified-dim: #241C2C;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -20px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:     #0F1613;
+    --surface:    #161F1B;
+    --sunk:       #0B110E;
+    --ink:        #E5ECE8;
+    --ink-soft:   #A6B4AD;
+    --ink-faint:  #74847C;
+    --rule:       #28352F;
+    --rule-soft:  #1F2B26;
+    --accent:     #67BFA6;
+    --accent-dim: #123229;
+
+    --crit:       #E28273;
+    --crit-dim:   #351915;
+    --high:       #DFA45E;
+    --high-dim:   #33240F;
+    --med:        #C6B863;
+    --med-dim:    #2C2810;
+    --low:        #93AEBC;
+    --low-dim:    #17242A;
+    --unverified: #B7A4C9;
+    --unverified-dim: #241C2C;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -20px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-size: var(--s-0);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 78rem;
+    margin: 0 auto;
+    padding: clamp(1.75rem, 4vw, 3.5rem) clamp(1rem, 4vw, 3rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  /* masthead */
+  .mast { display: flex; flex-direction: column; gap: 1rem; }
+  .kicker {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--s--1);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex; flex-wrap: wrap; gap: .4rem 1.25rem;
+  }
+  .kicker b { color: var(--accent); font-weight: 700; }
+  h1 {
+    font-family: Spectral, ui-serif, Georgia, serif;
+    font-size: clamp(var(--s-3), 5.5vw, var(--s-4));
+    font-weight: 700; line-height: 1.08; letter-spacing: -.02em;
+    margin: 0; text-wrap: balance;
+  }
+  .standfirst {
+    font-family: Spectral, ui-serif, Georgia, serif;
+    font-size: var(--s-1); line-height: 1.55; color: var(--ink-soft);
+    max-width: var(--measure); margin: 0;
+  }
+
+  /* verdict pair */
+  .verdicts { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .verdict { background: var(--surface); padding: 1.4rem 1.5rem; display: flex; flex-direction: column; gap: .7rem; }
+  .verdict .who { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--s--1); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-faint); }
+  .verdict .score { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-size: var(--s-4); font-weight: 700; line-height: 1; letter-spacing: -.03em; }
+  .verdict .score span { font-size: var(--s-1); color: var(--ink-faint); font-weight: 400; }
+  .verdict .call { font-weight: 600; }
+  .verdict p { margin: 0; font-size: .95rem; color: var(--ink-soft); }
+
+  /* sections */
+  section { display: flex; flex-direction: column; gap: 1.2rem; }
+  h2 {
+    font-family: Spectral, ui-serif, Georgia, serif;
+    font-size: var(--s-3); font-weight: 700; letter-spacing: -.015em;
+    margin: 0; padding-bottom: .5rem; border-bottom: 2px solid var(--ink);
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: Spectral, ui-serif, Georgia, serif;
+    font-size: var(--s-2); font-weight: 600; margin: 0; letter-spacing: -.01em;
+  }
+  h4 { font-size: var(--s-0); font-weight: 700; margin: 0; letter-spacing: .01em; }
+  p { margin: 0; max-width: var(--measure); }
+  .prose { display: flex; flex-direction: column; gap: .8rem; }
+  .lede { font-family: Spectral, ui-serif, Georgia, serif; font-size: var(--s-1); line-height: 1.5; color: var(--ink-soft); max-width: var(--measure); }
+
+  code, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  code { font-size: .85em; background: var(--sunk); padding: .1em .35em; border-radius: 2px; overflow-wrap: anywhere; }
+
+  /* severity chips */
+  .sev {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    padding: .2em .55em; border-radius: 2px; white-space: nowrap;
+  }
+  .sev-critical   { background: var(--crit-dim);   color: var(--crit); }
+  .sev-high       { background: var(--high-dim);   color: var(--high); }
+  .sev-medium     { background: var(--med-dim);    color: var(--med); }
+  .sev-low        { background: var(--low-dim);    color: var(--low); }
+  .sev-unverified { background: var(--unverified-dim); color: var(--unverified); }
+
+  /* finding record */
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--rule);
+    display: flex; flex-direction: column;
+  }
+  .finding.is-critical { border-left-color: var(--crit); }
+  .finding.is-high     { border-left-color: var(--high); }
+  .finding.is-medium   { border-left-color: var(--med); }
+  .finding.is-low      { border-left-color: var(--low); }
+
+  .finding > header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--rule-soft);
+    display: flex; flex-direction: column; gap: .5rem;
+  }
+  .finding .tags { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .finding .ref {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--s--1); font-weight: 700; color: var(--accent); letter-spacing: .04em;
+  }
+  .finding h4 { font-size: var(--s-1); font-family: Spectral, ui-serif, Georgia, serif; font-weight: 600; letter-spacing: -.01em; }
+
+  .fields { display: grid; grid-template-columns: minmax(7.5rem, max-content) 1fr; }
+  .fields > dt {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .68rem; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-faint);
+    padding: .7rem .75rem .7rem 1.25rem;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .fields > dd {
+    margin: 0; padding: .7rem 1.25rem .7rem .25rem;
+    border-top: 1px solid var(--rule-soft);
+    min-width: 0;
+  }
+  .fields > dd > * { max-width: var(--measure); }
+  .fields pre {
+    margin: .4rem 0 0; padding: .6rem .75rem; background: var(--sunk);
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .78rem;
+    line-height: 1.5; overflow-x: auto; border-radius: 2px;
+  }
+  @media (max-width: 40rem) {
+    .fields { grid-template-columns: 1fr; }
+    .fields > dt { padding: .7rem 1rem .1rem; border-top: 1px solid var(--rule-soft); }
+    .fields > dd { padding: 0 1rem .7rem; border-top: none; }
+  }
+  .meta { display: flex; flex-wrap: wrap; gap: .35rem 1.1rem; font-size: var(--s--1); color: var(--ink-soft); }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  .stack { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  /* tables */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 36rem; }
+  caption {
+    caption-side: top; text-align: left;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--s--1); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-faint); padding: .9rem 1rem .5rem;
+  }
+  th, td { text-align: left; padding: .6rem 1rem; border-top: 1px solid var(--rule-soft); vertical-align: top; }
+  thead th { font-size: var(--s--1); font-weight: 700; color: var(--ink-soft); letter-spacing: .03em; border-top: none; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--sunk) 45%, transparent); }
+  td.num { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* score bars */
+  .bar { display: flex; align-items: center; gap: .6rem; }
+  .bar .track { flex: 1; min-width: 4rem; height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; }
+  .bar .fill { display: block; height: 100%; background: var(--accent); }
+  .bar .fill.is-weak { background: var(--high); }
+  .bar .fill.is-bad  { background: var(--crit); }
+  .bar .n { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 2.2rem; text-align: right; }
+
+  /* ranked list */
+  ol.ranked { list-style: none; counter-reset: r; margin: 0; padding: 0; display: flex; flex-direction: column; }
+  ol.ranked li {
+    counter-increment: r;
+    display: grid; grid-template-columns: 2.2rem 1fr auto; gap: .3rem .8rem;
+    padding: .65rem 0; border-top: 1px solid var(--rule-soft); align-items: baseline;
+  }
+  ol.ranked li:first-child { border-top: none; }
+  ol.ranked li::before {
+    content: counter(r, decimal-leading-zero);
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--s--1); font-weight: 700; color: var(--ink-faint);
+  }
+  ol.ranked .what { min-width: 0; }
+  ol.ranked .note { grid-column: 2; font-size: var(--s--1); color: var(--ink-soft); }
+
+  /* phases */
+  .phase { background: var(--surface); border: 1px solid var(--rule); padding: 1.1rem 1.25rem; display: flex; flex-direction: column; gap: .7rem; }
+  .phase > .head { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: baseline; }
+  .phase .n { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--s--1); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .phase ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .35rem; }
+  .phase li { max-width: var(--measure); }
+
+  /* Q&A */
+  .qa { display: flex; flex-direction: column; gap: 1.1rem; }
+  .qa .q { font-family: Spectral, ui-serif, Georgia, serif; font-size: var(--s-1); font-weight: 600; letter-spacing: -.01em; }
+  .qa .a { color: var(--ink-soft); max-width: var(--measure); }
+  .qa .a b { color: var(--ink); }
+
+  .callout {
+    border: 1px solid var(--accent);
+    background: var(--accent-dim);
+    padding: 1rem 1.25rem;
+    display: flex; flex-direction: column; gap: .6rem;
+  }
+  .callout p { max-width: var(--measure); }
+  .callout .label { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--s--1); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .6rem; }
+  ul.plain li { padding-left: 1.1rem; position: relative; max-width: var(--measure); color: var(--ink-soft); }
+  ul.plain li::before { content: "—"; position: absolute; left: 0; color: var(--ink-faint); }
+
+  footer { border-top: 1px solid var(--rule); padding-top: 1.2rem; font-size: var(--s--1); color: var(--ink-faint); display: flex; flex-wrap: wrap; gap: .4rem 1.5rem; }
+
+  a { color: var(--accent); text-underline-offset: .18em; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+<style>
+  /* Closure additions to the audit's own system. */
+  .sev-fixed     { background: var(--accent-dim); color: var(--accent); }
+  .sev-partial   { background: var(--med-dim); color: var(--med); }
+  .finding.is-fixed { border-left-color: var(--accent); }
+  .finding .commit {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: var(--s--1); color: var(--ink-faint);
+  }
+  .delta { display: flex; align-items: center; gap: .5rem; }
+  .delta .was { color: var(--ink-faint); text-decoration: line-through; }
+  .delta .now { font-weight: 700; }
+  .delta .arrow { color: var(--ink-faint); }
+  .up { color: var(--accent); font-weight: 700; }
+  .ledger { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+  .ledger div { background: var(--surface); padding: 1rem 1.1rem; display: flex; flex-direction: column; gap: .3rem; }
+  .ledger .n { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: var(--s-2); font-weight: 700; letter-spacing: -.02em; }
+  .ledger .k { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .68rem; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-faint); }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="kicker">
+      <span>Engineering notes</span>
+      <span>Audited <b>12 Sep 2026</b></span>
+      <span>Closed <b>13 Sep</b></span>
+      <span>Revised <b>14 Sep 2026</b></span>
+      <span>streamnavigator.ai/closing · /hoa</span>
+    </div>
+    <h1>Every finding is closed. Seven more turned up on the way, and one recommendation was wrong.</h1>
+    <p class="standfirst">
+      The audit found eighteen things across two products. Seventeen are fixed and live; the
+      eighteenth was built, shipped, and then removed on the owner's instruction — correctly, for a
+      reason this document had underweighted. The more useful half is the second one: implementing
+      the fixes exposed seven further defects the audit had not caught, five of them in code it had
+      examined and not faulted.
+    </p>
+  </header>
+
+  <div class="ledger">
+    <div><span class="k">Findings closed</span><span class="n up">18 / 18</span><span class="meta">17 fixed, 1 withdrawn by decision</span></div>
+    <div><span class="k">Found while fixing</span><span class="n">7</span><span class="meta">none were in the audit</span></div>
+    <div><span class="k">Test suites</span><span class="n delta"><span class="was">54</span><span class="arrow">→</span><span class="now">70</span></span><span class="meta">all gate-run</span></div>
+    <div><span class="k">Closing checks</span><span class="n delta"><span class="was">27</span><span class="arrow">→</span><span class="now">28</span></span><span class="meta">check 23 now reachable; the rate check added</span></div>
+    <div><span class="k">Offline harnesses</span><span class="n delta"><span class="was">1</span><span class="arrow">→</span><span class="now">4</span></span><span class="meta">all green</span></div>
+  </div>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <span class="who">Closing Disclosure Audit · $59</span>
+      <span class="score">85<span>/100</span></span>
+      <span class="call">Was 74. Market it.</span>
+      <p>
+        The critical defect is gone, two checks were added, and the letters the customer signs
+        are now verified figure by figure against a document with known answers.
+      </p>
+    </div>
+    <div class="verdict">
+      <span class="who">HOA Navigator · $79</span>
+      <span class="score">81<span>/100</span></span>
+      <span class="call">Was 63. Market it, watch the first report.</span>
+      <p>
+        The score is computed, the covenants are read, and the page now shows what the engine
+        does. One assumption is untested: that the model fills the new fields well.
+      </p>
+    </div>
+  </div>
+
+  <section>
+    <h2>What actually happened</h2>
+    <div class="prose">
+      <p class="lede">
+        Eighteen findings, eight commits, one day. The pattern worth carrying forward is not that
+        the list got done — it is which things turned out to be wrong, and how they were found.
+        Every one of the five extra defects was invisible to the layer it was written at, and
+        visible the moment something rendered it the way a customer would see it.
+      </p>
+      <p>
+        The single most dangerous finding, <code>C-1</code>, was one line: the object handed to the
+        tolerance engine did not carry the Closing Disclosure section, so charges that carry no
+        tolerance under federal law were being tested at zero tolerance. That produced demands for
+        refunds the customer was not owed, in a letter to the institution funding their mortgage.
+        <code>assignBucket()</code> had been correct the whole time.
+      </p>
+      <p>
+        The same shape recurred four more times. A check correct in isolation, wrong where it was
+        consumed. It is worth naming as a class, because three of the five were found only after
+        deciding to look at rendered output rather than at return values.
+      </p>
+    </div>
+
+    <div class="callout">
+      <span class="label">The one thing that could not be done</span>
+      <p>
+        <strong>No live paid run happened.</strong> The Anthropic account ran out of credits mid-test
+        and was deliberately not topped up. So document extraction, and how well the model populates
+        the new <code>risk_signals</code> and <code>restrictions</code> fields, are
+        <span class="sev sev-unverified">Unable to verify</span> and remain so. Everything
+        downstream of the model is verified against documents whose answers are known in advance.
+        That is most of the value and not all of it, and the gap is specific rather than general.
+      </p>
+      <p>
+        The failure did verify one thing by accident: the customer-facing behaviour when the model
+        is unavailable. The free scorecard returned <em>"this is on our side, not your document"</em>,
+        charged nothing, and left the row clean.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== CRITICAL ===================== -->
+
+  <section>
+    <h2>Critical — all three closed</h2>
+    <div class="stack">
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags">
+            <span class="ref">C-1</span>
+            <span class="sev sev-fixed">Fixed</span>
+            <span class="commit">e9996a9</span>
+          </div>
+          <h4>Tolerance bucketing lost the document section, turning untolerated charges into demands for money back</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd>
+            <p>One line — <code>section: li.section</code> in the <code>cdCharges</code> object — plus a
+            comment explaining why it matters. A Section H owner's title policy goes back to
+            <code>no_tolerance</code>, where 1026.19(e)(3)(iii) puts it; a Section C charge with a
+            written provider list goes back to the 10% aggregate.</p>
+            <p>It also un-broke <strong>check 23</strong>, which could not fire at all because nothing
+            ever landed in the basket to overflow it. The planted-defect suite went from 11 of 12 to
+            12 of 12.</p>
+          </dd>
+          <dt>How it is held</dt>
+          <dd><p><code>tests/closing-tolerance-buckets.test.js</code> asserts the bucket for one charge
+          per section, and three end-to-end tests through <code>runDocumentAudit</code> — because the
+          rule was always right and only the plumbing broke. One asserts a $600 increase in an optional
+          owner's policy produces no accusation; a companion asserts a real $300 Section A increase
+          still does, so the guard cannot be bought by suppressing findings.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags">
+            <span class="ref">H-1</span>
+            <span class="sev sev-fixed">Fixed</span>
+            <span class="commit">e9996a9</span>
+          </div>
+          <h4>The HOA Risk Score is now computed, not chosen</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd>
+            <p><code>scoreRisk()</code> derives the level from the signals the rubric already named,
+            asked for as data in a new required <code>risk_signals</code> block rather than as a
+            judgment. Every threshold is one the rubric already stated in prose — this makes the
+            existing opinion executable, it does not invent a new one.</p>
+            <p>The model still commits to a read, which measurably improves the rationale, but the
+            read is overwritten and a divergence is logged. <code>risk_score_basis</code> names every
+            rule that fired and renders on the report, so a buyer can check the score rather than
+            trust it.</p>
+            <pre>0-14% funded   Critical
+15-29%         High
+30-70%         Moderate
+71-100%        Low</pre>
+          </dd>
+          <dt>The decision worth keeping</dt>
+          <dd><p>A package establishing nothing falls back to the model's read and says so. A
+          <strong>Low earned by an absence of documents</strong> would be the worst output this
+          product could produce, and a property test asserts it cannot happen.</p></dd>
+          <dt>How it is held</dt>
+          <dd><p>19 unit tests, plus <code>scripts/hoa-score-harness.js</code>, which sweeps every
+          funding level and asserts determinism, monotonicity, no-silent-Low, and that every computed
+          score names its rules. Reproducibility previously needed repeat paid runs to test; computing
+          the score made it free.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags">
+            <span class="ref">H-2</span>
+            <span class="sev sev-fixed">Fixed</span>
+            <span class="commit">e9996a9</span>
+          </div>
+          <h4>The engine reads the covenants now, not only the money</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd>
+            <p>A <code>restrictions</code> block covering leasing (cap, current status, waitlist,
+            minimum term, owner-occupancy, short-term rentals), money due at closing, use
+            restrictions, and financeability — each cited like every other finding, and each able to
+            say "not addressed in the documents provided" rather than inferring.</p>
+            <p>The rubric and the evidence pass were extended too. Without that the fields come back
+            empty, which is the difference between a schema and a capability.</p>
+          </dd>
+          <dt>Why it was the biggest gap</dt>
+          <dd><p>A search of the whole engine for <code>leasing</code>, <code>owner-occup</code>,
+          <code>FHA</code>, <code>transfer fee</code> and <code>capital contribution</code> had
+          returned <strong>zero matches across 1,032 lines</strong>, while the page invited bylaws in
+          the upload list.</p></dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== HIGH ===================== -->
+
+  <section>
+    <h2>High — all six closed</h2>
+    <div class="stack">
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags"><span class="ref">C-2</span><span class="sev sev-fixed">Fixed</span><span class="commit">2f3d361</span></div>
+          <h4>The escrow sample was honest, so the product caught up to it</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd>
+            <p>Rather than soften the copy, the <strong>initial escrow account statement</strong> is now
+            a real document type: classified, extracted, and merged into the CD's escrow block without
+            overwriting anything the CD actually printed. Check 15 moved into its own group, the upload
+            box asks for it, and the sample card uses figures that reconcile — $5,650 of annual escrowed
+            costs caps the cushion at $941.67 against $1,354.00 held, so $412.33.</p>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="finding is-critical">
+        <header>
+          <div class="tags"><span class="ref">C-3</span><span class="sev sev-critical">Withdrawn</span><span class="commit">6568f32 · 3f7e1d9</span></div>
+          <h4>Statutory benchmarking shipped, then was removed on the owner's decision — and the decision was right</h4>
+        </header>
+        <dl class="fields">
+          <dt>What happened</dt>
+          <dd>
+            <p>This audit recommended building a statutory rate corpus. It was built: Virginia on
+            13 Sep, the District of Columbia the same day, every component citing its statute, with a
+            completeness gate so an entry that could not prove it had enumerated every component was
+            allowed to reconcile but never to accuse. It worked end to end.</p>
+            <p>The owner's instruction on 14 Sep was to remove all benchmarking. It is gone —
+            machinery included, not merely switched off: the corpus file, <code>compareToBenchmark()</code>,
+            the supplier and its injection point, the suppression list, two severities nothing can
+            emit, three scorecard fields, and the coverage panel.</p>
+          </dd>
+          <dt>Why the reversal is the better call</dt>
+          <dd>
+            <p>The argument in this document was that a transfer tax is published law rather than a
+            market opinion, and on a $375,000 purchase it is the largest figure on the settlement
+            statement with a provably correct value. That is true and it is not the deciding fact.</p>
+            <p><strong>A rate corpus is a maintenance obligation, and its failure mode is a false
+            accusation.</strong> Jurisdictions move at their own pace, nothing in the product notices
+            when one does, and a rate that has gone quietly stale produces a confident finding with a
+            dollar figure attached — aimed at the settlement agent the customer still has to close
+            with. Deleting a corpus costs an afternoon. Discovering through a customer that it is a
+            year out of date costs the thing the product sells.</p>
+            <p>The audit weighed the capability and underweighted the obligation. Worth recording as
+            a correction to the audit, not just to the code.</p>
+          </dd>
+          <dt>What the product says now</dt>
+          <dd><p>Every finding rests on the customer's own documents or on a federal rule, and
+            nothing on an outside figure. That is a narrower claim than the one this document
+            recommended, and it is one the product can keep without anybody maintaining anything.
+            The catalog went back to 28 checks. Check 29, the note rate against the Loan Estimate,
+            stayed — it compares two of the customer's own documents, which is what the TRID checks
+            do and the opposite of consulting a corpus.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags"><span class="ref">H-3</span><span class="sev sev-fixed">Fixed</span><span class="commit">2f3d361</span></div>
+          <h4>An uncited finding no longer sits among the cited ones</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd><p>Findings are partitioned — cited first, stable within each group so severity order
+          survives — and marked, and the report page labels them. Nothing is deleted: an uncited
+          concern can still be real, it just may not occupy one of the five the page sold as cited.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags"><span class="ref">H-4</span><span class="sev sev-fixed">Fixed</span><span class="commit">2f3d361</span></div>
+          <h4>Percent funded is derived from the balances it is made of</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd><p>Recomputed and overwritten, along with any key number labelled "funded" so the header
+          and the body cannot disagree. Corrections are logged — if that fires often, the model is
+          mis-transcribing its own calculator. Verified against ground truth: a model-typed
+          <code>45%</code> was corrected to <code>30%</code> from $486,000 / $1,620,000, and the header
+          followed.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-fixed">
+        <header>
+          <div class="tags"><span class="ref">H-5</span><span class="sev sev-fixed">Fixed</span><span class="commit">2f3d361</span></div>
+          <h4>The HOA page carries Closing's four credibility devices</h4>
+        </header>
+        <dl class="fields">
+          <dt>What shipped</dt>
+          <dd><p>24 named checks grouped by the document that unlocks them, four sample finding cards,
+          a "What this does not do" block, and a preview of what the free check actually returns. The
+          sample is an invented association whose figures reconcile — 30% funded, $174,000 gap, $2,071
+          per unit across 84 units — rather than a real customer's.</p></dd>
+          <dt>A judgment call</dt>
+          <dd><p>Deliberately <strong>no headline count</strong> on that list. Closing's "28 checks" is
+          backed by a catalog in code and enforced by a test; HOA has no such catalog, and an
+          advertised number nothing enforces is the exact defect this audit was about. The list is
+          there to be counted.</p></dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== MEDIUM / LOW ===================== -->
+
+  <section>
+    <h2>Medium and Low — all nine closed</h2>
+    <div class="scroll">
+      <table>
+        <caption>Seven medium, two low, plus two checks the audit had left for later</caption>
+        <thead><tr><th>Ref</th><th>Finding</th><th>What shipped</th><th>Commit</th></tr></thead>
+        <tbody>
+          <tr><td class="num">C-4</td><td>The clean result had no pitch</td><td>The scorecard shows two checks that <em>passed</em>, by name, with the arithmetic; the pricing block states what a clean report buys. Across every real closing document in the repo the audit flags nothing, so this is the modal customer's entire experience.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">C-5</td><td>The scorecard died with the tab</td><td>A resume endpoint rebuilds it from the customer's own row, reached by a link carrying the access token — private rather than guessable. Nothing new is stored. A wrong token and a missing row answer identically.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">C-6</td><td>No trust signals</td><td>The refund promise, which was real and buried in an FAQ, is now on the pricing block. <strong>No volume figure and no testimonials</strong> — there are none to state honestly.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">H-6</td><td>The free check ended the conversation</td><td><code>open_questions</code>: two to four things those two documents raise and cannot settle, each naming the document that would settle it, grounded in what was seen. Return none rather than write a generic one.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">H-7</td><td>Deletion copy overstated</td><td>Both products now state both halves — copies deleted immediately, uploads kept 90 days, and Closing names why the window is 90 days.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">H-8</td><td>No delivery fallback stated</td><td>The page and a new FAQ say what <code>process-refunds.js</code> has been doing silently: a long run still lands in the inbox, a failure is refunded without asking.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">X-2</td><td>Prose never checked against computed figures</td><td><code>checkClosingConsistency</code> runs after generation and records what it finds. Deliberately a recorder, not a rewriter — a figure matching nothing is likelier to be the model quoting the document than a hallucination.</td><td class="num">a4fc1ba</td></tr>
+          <tr><td class="num">C-7</td><td>Four restraints looked like oversights</td><td>Pinned rather than changed, each with a companion asserting the real finding still fires. A restraint with no test is indistinguishable from a bug, and the obvious way to raise a findings count is to undo all four.</td><td class="num">3385c83</td></tr>
+          <tr><td class="num">X-3</td><td>The harness cried wolf every run</td><td>A rental fixture was printing "nothing was tested" on every run, training readers to skim past the one warning the harness exists to raise.</td><td class="num">3385c83</td></tr>
+          <tr><td class="num">new</td><td>Reserve study age</td><td>Named as a caveat with the study's year and age, via <code>seedMissingOrUncertain</code> — the class-5 repair that had been written and left unwired.</td><td class="num">3385c83</td></tr>
+          <tr><td class="num">new</td><td>Check 29, the rate</td><td>Every tolerance check is about charges; nothing looked at the number they attach to. A quarter point on $300,000 over thirty years is ~$16,000, more than every finding this engine has produced combined. Reports and asks; never accuses.</td><td class="num">3385c83</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Three of the four checks the audit left for later are deliberately absent, each for a reason
+      rather than for lack of time. <strong>Simultaneous-issue title rates</strong> need a promulgated
+      corpus across a dozen states, where a wrong rate is a false accusation with a dollar figure.
+      <strong>Seller-paid allocation</strong> needs a contract allocation table the extractor does not
+      capture, and accuses a party the customer still has to close with. <strong>Refinance per-diem
+      past the first payment</strong> is already covered by check 11 — a second check on the same
+      quantity is two homes for one number, which is the thing this audit was about.
+    </p>
+  </section>
+
+  <!-- ===================== WHAT THE AUDIT MISSED ===================== -->
+
+  <section>
+    <h2>What the audit missed</h2>
+    <div class="prose">
+      <p class="lede">
+        Five defects surfaced while implementing the fixes. None was in the audit. Four were in code
+        the audit had examined and not faulted, and one was introduced by the fixes themselves. They
+        share a shape worth naming.
+      </p>
+      <p>
+        <strong>Each was correct at the layer it was written at and wrong at the layer the customer
+        meets.</strong> Every unit test passed in all five cases. Three were found only after deciding
+        to stop asserting on return values and start rendering output the way a customer would receive
+        it — building the letters, running the harness, walking the pipeline end to end.
+      </p>
+    </div>
+
+    <div class="stack">
+
+      <article class="finding is-critical">
+        <header>
+          <div class="tags"><span class="ref">M-1</span><span class="sev sev-critical">Was live</span><span class="commit">fe2c816</span></div>
+          <h4>Check 29 priced a percentage in the letter the customer signs</h4>
+        </header>
+        <dl class="fields">
+          <dt>What it produced</dt>
+          <dd>
+            <pre>3. Your interest rate is higher than the Loan Estimate
+   Charged $6.88; the figure I get is $6.50 — a difference of $0.38.</pre>
+            <p><code>charged</code>, <code>expected</code> and <code>variance</code> are money fields to
+            every consumer of a finding — the letters render them through <code>money()</code>, the
+            scorecard totals them, the PDF prints them — and the rate went into them.</p>
+          </dd>
+          <dt>Why it mattered</dt>
+          <dd><p>A buyer asking their lender to explain a <strong>$0.38</strong> discrepancy on their
+          mortgage rate does not get a second letter. The two genuine findings above it in the same
+          message — $300 on a zero-tolerance charge, $339.04 of over-billed prepaid interest — go down
+          with it. Shipped the previous day; every unit test on the check passed, because they asserted
+          on the finding object and nothing rendered it.</p></dd>
+          <dt>Fixed</dt>
+          <dd><p>The rate lives in <code>detail</code>; the basis says it in words. Titles also lost
+          "your", for the reason <code>reconcileContract</code> already documented: a title is printed
+          in the report <em>and</em> used as the letter's numbered heading, where "your interest rate"
+          flips to meaning the lender's. Two new guards are written against the class rather than the
+          instance — no letter item may quote a figure under a dollar, and no heading may say "your".</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-high">
+        <header>
+          <div class="tags"><span class="ref">M-2</span><span class="sev sev-high">Was live</span><span class="commit">1253413</span></div>
+          <h4>The offline harness was auditing a different engine than customers get</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd>
+            <p><code>scripts/audit-harness.js</code> called <code>runClosingAudit</code> — the raw
+            engine — while the free scorecard and the paid report both call
+            <code>runDocumentAudit</code>. That is precisely the defect
+            <code>closing-report-parity.test.js</code> exists for, written after the <em>paid report</em>
+            was caught doing the same thing. The tool whose stated job is catching features wired to
+            nothing had the same bug.</p>
+            <p>It showed six "cannot benchmark" rows no customer sees, ran none of the loan maths —
+            eight of the checks the page names — and never exercised the transfer-tax check.
+            <strong>Every clean result it had ever reported was clean on a smaller audit than the one
+            that ships.</strong></p>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="finding is-medium">
+        <header>
+          <div class="tags"><span class="ref">M-3</span><span class="sev sev-medium">Was live</span><span class="commit">1253413</span></div>
+          <h4>Section E put four spurious findings on an ordinary document</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd><p>A Loan Estimate carries one "Recording Fees and Other Taxes" line; a Closing Disclosure
+          breaks it into four. Line-by-line matching never succeeds, so <em>every</em> customer who
+          supplied an LE got four "does not appear on the Loan Estimate" rows. No dollar impact, so
+          nothing was claimed — but a customer gets one letter's worth of their lender's attention, and
+          four rows of noise is how a real finding stops being read. Recording fees are already tested
+          in the 10% aggregate and the taxes against statute, so nothing was lost by skipping them.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-medium">
+        <header>
+          <div class="tags"><span class="ref">M-4</span><span class="sev sev-medium">Was live</span><span class="commit">2f3d361</span></div>
+          <h4>The free scorecard promised the escrow cushion check on a CD-only run</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd><p>The upgrade panel advertised "Escrow cushion — against the RESPA legal maximum" among
+          the checks that had already run on the uploaded document. The engine had always declined to
+          test the cushion from a Closing Disclosure, correctly. <code>claims.test.js</code> caught it
+          the instant the catalog changed — a test the audit had credited and which turned out to be
+          protecting a claim that was already false.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-low">
+        <header>
+          <div class="tags"><span class="ref">M-5</span><span class="sev sev-low">Self-inflicted</span><span class="commit">7b3e60c</span></div>
+          <h4>The consistency grader kept reporting a finding the repairs had already handled</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd><p><code>checkHoaConsistency</code> flagged uncited findings that
+          <code>demoteUncitedFindings</code> had already moved, marked and labelled — putting a
+          permanent warning in the logs of every report that has one. A warning that always fires is
+          one nobody reads, which is <em>exactly</em> the failure fixed as <code>X-3</code> that same
+          morning, reintroduced in a different place hours later. Worth recording: the lesson did not
+          transfer on its own.</p></dd>
+        </dl>
+      </article>
+
+      <article class="finding is-high">
+        <header>
+          <div class="tags"><span class="ref">M-6</span><span class="sev sev-high">Was live</span><span class="commit">3f7e1d9</span></div>
+          <h4>Both products claimed knowledge of state law that neither engine has</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd>
+            <p>This audit checked both products for overclaiming and did not catch any of it.</p>
+            <p>Closing's meta description promised <em>"the fees your state and county set by law"</em>,
+            and its lede offered <em>"Any state."</em> — coverage framed as something the product has,
+            when what it has is checks that do not depend on where you are. The scorecard echoed the
+            county and state back, which reads as a locality-aware analysis.</p>
+            <p>HOA's was worse, because it was an instruction rather than a sentence. The rubric told
+            the model to raise <em>"Florida structural integrity reserve study … post-Surfside,
+            California balcony/exterior element inspections"</em>, guarded by "only raise these when
+            the documents indicate the property is actually in that jurisdiction". <strong>That guard
+            asks the model to infer a location and then apply remembered law to it</strong> — the
+            "fact asserted from memory" class this document names as contradiction class 4, with a
+            statute in place of a specification. The free check's page also stated three
+            jurisdictions' review periods and package entitlements as fact.</p>
+            <p>None of it is left. HOA now reports a legal obligation only where the documents
+            themselves describe one, and what a buyer is owed points at their agent or attorney.</p>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="finding is-high">
+        <header>
+          <div class="tags"><span class="ref">M-7</span><span class="sev sev-high">Latent</span><span class="commit">fdc837d</span></div>
+          <h4>A retired feature left behind a script armed to restore it</h4>
+        </header>
+        <dl class="fields">
+          <dt>Detail</dt>
+          <dd>
+            <p>Removing benchmarking cancelled the next deployment. Vercel reported CANCELED and the
+            log said <code>BUILD BLOCKED</code>, which reads like a failing test suite and was not —
+            all 70 suites passed. <code>scripts/fix-overpromises.js</code> exited 1 in the
+            patch-script step, and <code>ci.sh</code> is the ignored-build-step gate, so its exit
+            code cancels the deploy.</p>
+            <p>That script existed to make benchmarking copy honest: six edits narrowing claims, and
+            a seventh inserting the pre-payment coverage disclosure. It decided whether it had
+            already run by looking for <code>benchmark_coverage</code> in the scorecard renderer.
+            Deleting that panel removed its marker, so it concluded it had never run and tried to
+            apply itself.</p>
+            <p><strong>Had it succeeded it would have put benchmarking back into the page.</strong>
+            That is the part worth carrying forward: a migration script that outlives the feature it
+            migrates is not idle, it is armed. <code>ci.sh</code> already carried a warning about
+            this exact trap, written when the rate-corpus freshness step was removed with the
+            corpus — same shape, one step along, and it caught nobody.</p>
+          </dd>
+        </dl>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== VERIFICATION ===================== -->
+
+  <section>
+    <h2>How it was verified without a live run</h2>
+    <p class="lede">
+      Credits ran out, so the usual end-to-end test was closed off. What replaced it turned out to
+      find more than the live run would have — because a live run tells you what happened, and a
+      document with known answers tells you whether it was right.
+    </p>
+    <div class="scroll">
+      <table>
+        <caption>Four harnesses plus the suite, all gate-run or one command</caption>
+        <thead><tr><th>Instrument</th><th>What it establishes</th><th>Result</th></tr></thead>
+        <tbody>
+          <tr><td><code>tests/run-all.js</code></td><td>70 suites, run inside the Vercel build before any deploy</td><td class="num">70 / 70</td></tr>
+          <tr><td><code>audit-scenarios.js</code></td><td>One planted defect at a time; does the owning check fire with the right figure</td><td class="num">12 / 12</td></tr>
+          <tr><td><code>audit-harness.js</code></td><td>Real documents end to end, now on the engine customers actually get</td><td class="num">5 fixtures</td></tr>
+          <tr><td><code>hoa-pipeline-harness.js</code></td><td>The whole HOA post-model pipeline against a package whose answers are known</td><td class="num">17 / 17</td></tr>
+          <tr><td><code>hoa-score-harness.js</code></td><td>Determinism, monotonicity, no-silent-Low, explained — swept across every funding level</td><td class="num">4 properties</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>
+        The repository had <strong>no documents in it at all</strong>, which is why none of this had
+        ever been tested end to end. <code>scripts/make-test-documents.js</code> now generates a
+        Closing Disclosure, a Loan Estimate and a four-document HOA package as real PDFs, with four
+        defects planted on purpose and the loan maths reconciling to the cent so the planted ones are
+        the only things that fire.
+      </p>
+      <p>
+        <code>tests/fixtures/planted-purchase-va.json</code> is the extraction a correct reader would
+        produce from that Closing Disclosure — the repository's <strong>first non-clean fixture</strong>.
+        The other four are real documents and all four are correct, which is why the harness had never
+        once shown a finding. It found three defects on its first run.
+      </p>
+      <p>
+        Two corrections went the other way, and both are worth recording. The survey rising $475 → $700
+        does <em>not</em> trip the 10% basket, because settlement and lender's title sit in the same
+        basket unchanged and absorb it — the cumulative rule working as written, against an expectation
+        that was wrong. And a $67,500 "confirmed" Cash to Close error turned out to be the fixture
+        omitting two fields, caught by the harness's own five-figure warning.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== SCORES ===================== -->
+
+  <section>
+    <h2>Scores, before and after</h2>
+    <div class="scroll">
+      <table>
+        <caption>12 Sep → 13 Sep</caption>
+        <thead><tr><th>Dimension</th><th>Closing</th><th>HOA</th><th>What moved it</th></tr></thead>
+        <tbody>
+          <tr><td>Product functionality</td>
+            <td><div class="delta"><span class="was">78</span><span class="arrow">→</span><span class="now up">88</span></div></td>
+            <td><div class="delta"><span class="was">58</span><span class="arrow">→</span><span class="now up">82</span></div></td>
+            <td>Closing: 28 checks, check 23 reachable, escrow statement path, the rate check. HOA: covenants read at all, score computed.</td></tr>
+          <tr><td>Accuracy / reliability</td>
+            <td><div class="delta"><span class="was">62</span><span class="arrow">→</span><span class="now up">86</span></div></td>
+            <td><div class="delta"><span class="was">60</span><span class="arrow">→</span><span class="now up">80</span></div></td>
+            <td>The false-accusation class is gone and pinned. Held below 90 in both by unverified extraction and model behaviour.</td></tr>
+          <tr><td>UX</td>
+            <td><div class="delta"><span class="was">80</span><span class="arrow">→</span><span class="now up">85</span></div></td>
+            <td><div class="delta"><span class="was">74</span><span class="arrow">→</span><span class="now up">80</span></div></td>
+            <td>Resume link, passed-checks preview; HOA restrictions rendered and the score's basis shown.</td></tr>
+          <tr><td>Technical quality</td>
+            <td><div class="delta"><span class="was">85</span><span class="arrow">→</span><span class="now up">92</span></div></td>
+            <td><div class="delta"><span class="was">80</span><span class="arrow">→</span><span class="now up">88</span></div></td>
+            <td>12 new suites, four harnesses, the first fixture that is not clean, strict-schema validation.</td></tr>
+          <tr><td>Trust / transparency</td>
+            <td><div class="delta"><span class="was">88</span><span class="arrow">→</span><span class="now up">93</span></div></td>
+            <td><div class="delta"><span class="was">66</span><span class="arrow">→</span><span class="now up">90</span></div></td>
+            <td>HOA gained everything it lacked: limitations block, named checks, a sample, honest deletion copy, enforced citations. Both then gained the thing that is hardest to get back once spent — every remaining claim is one the engine can keep. The benchmarking and state removals took out the last of the ones it could not.</td></tr>
+          <tr><td>Marketing</td>
+            <td><div class="delta"><span class="was">76</span><span class="arrow">→</span><span class="now up">82</span></div></td>
+            <td><div class="delta"><span class="was">58</span><span class="arrow">→</span><span class="now up">80</span></div></td>
+            <td>Still no social proof on either — there is none to state honestly.</td></tr>
+          <tr><td>Conversion</td>
+            <td><div class="delta"><span class="was">68</span><span class="arrow">→</span><span class="now up">78</span></div></td>
+            <td><div class="delta"><span class="was">55</span><span class="arrow">→</span><span class="now up">72</span></div></td>
+            <td>Both improved structurally and neither is proven; no traffic has run against the changes.</td></tr>
+          <tr><td>Differentiation</td>
+            <td><div class="delta"><span class="was">82</span><span class="arrow">→</span><span class="now">82</span></div></td>
+            <td><div class="delta"><span class="was">70</span><span class="arrow">→</span><span class="now up">84</span></div></td>
+            <td>Closing briefly gained the statutory tax check and gave it back; it is where it started, on twenty-eight named checks nobody else publishes. Cited covenant analysis is the rarer thing now.</td></tr>
+          <tr><td>Overall readiness</td>
+            <td><div class="delta"><span class="was">72</span><span class="arrow">→</span><span class="now up">85</span></div></td>
+            <td><div class="delta"><span class="was">60</span><span class="arrow">→</span><span class="now up">81</span></div></td>
+            <td>Closing is finished work. HOA rests on one untested assumption.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="verdicts">
+      <div class="verdict">
+        <span class="who">Overall Closing</span>
+        <span class="score">85<span>/100</span></span>
+        <p>Was 74, briefly 86 with the tax corpus in. The engineering was always the strongest part of this business; it is now matched by a page that describes it accurately and tests that hold it there. One point came off for the capability given back, which is the right trade.</p>
+      </div>
+      <div class="verdict">
+        <span class="who">Overall HOA</span>
+        <span class="score">81<span>/100</span></span>
+        <p>Was 63, the largest move in the report, and up another point for dropping the remembered-statute instruction from its rubric. Still the higher ceiling of the two, and still the one with an untested assumption at its centre.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FINAL ===================== -->
+
+  <section>
+    <h2>Where this leaves both products</h2>
+    <div class="qa">
+      <div>
+        <p class="q">Are they ready for paid traffic?</p>
+        <p class="a">
+          <b>Closing: yes.</b> The critical defect is fixed, the letters are verified figure by figure,
+          and the page describes what the engine does.<br>
+          <b>HOA: yes, with the first reports read closely.</b> Everything that blocked it is shipped.
+          What has not been established is whether the model populates <code>risk_signals</code> and
+          <code>restrictions</code> well from real documents — the post-processing is proven, its
+          inputs are not.
+        </p>
+      </div>
+      <div>
+        <p class="q">What should be watched first?</p>
+        <p class="a">
+          The first live HOA report: whether <code>risk_signals</code> comes back populated rather than
+          all <code>-1</code>, whether <code>restrictions</code> finds the leasing cap, and whether the
+          now-five sibling object fields hold without malformed sections — six was the shape that
+          correlated with the <code>/buying</code> tag leak. Then the first closing report with a Loan
+          Estimate, to see the rate check and the tolerance buckets on a real document.
+        </p>
+      </div>
+      <div>
+        <p class="q">What is the next real piece of work?</p>
+        <p class="a">
+          <b>Nothing on this list.</b> Expanding the rate corpus was the answer here until the corpus was removed, and the reasoning that removed it applies to anything of that shape: do not add a capability whose correctness depends on data somebody has to remember to refresh. What is left is watching the first live reports, which needs credits rather than engineering — and, when there are credits, running the two blocked verifications this document keeps labelling Unable to verify.
+        </p>
+      </div>
+      <div>
+        <p class="q">What changed about how this should be tested?</p>
+        <p class="a">
+          Five defects in one day were invisible to unit tests and visible the moment something rendered
+          the output a customer receives. The instruments that found them — a document with known
+          answers, a harness pointed at the real engine, the letters actually built — are cheap, run in
+          one command, and needed no credits. <b>Assert on what the customer receives, not on what the
+          function returns.</b>
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <span class="label">The one-sentence version</span>
+      <p>
+        Eighteen findings closed and five more caught on the way through; Closing is finished work at
+        86, HOA made the largest move to 80, and the only thing still genuinely unknown about either is
+        what a real document does to them.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <span>Audited 12 Sep 2026 · closed 13 Sep · revised 14 Sep 2026</span>
+    <span>Twelve commits, <span class="mono">e9996a9</span> through <span class="mono">fdc837d</span></span>
+    <span>70 suites green in the deploy gate; live on streamnavigator.ai</span>
+    <span>No paid generation was run; items requiring one remain labelled Unable to verify</span>
+  </footer>
+
+</div>
