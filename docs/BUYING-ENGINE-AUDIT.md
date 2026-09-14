@@ -35,6 +35,7 @@ two by something failing. The metric is not completion.
 | 4 | Thousands separator split a requirement | "at least 7,000 lbs" graded as "at least 7" | `5029983` |
 | 5 | `unref`'d abort timer | Abort never fired if nothing else held the event loop | `3201f96` |
 | 6 | All-or-nothing verification | A slow requirement discarded the ones already graded | `3e1e271` |
+| 7 | An outage written off as a failed submission | A billing lapse permanently marked a row unverifiable | `c2979a9` |
 
 Defects 3 and 5 were introduced by the fix for defect 2. That is worth stating
 plainly: two of the five were self-inflicted, and both shipped.
@@ -43,6 +44,9 @@ Defect 6 was added on 2026-09-13. It is not a new discovery — the first pass
 named it, under "what this does not cover", as the open question of whether the
 vehicle category was reliable enough. It turned out to be a defect rather than a
 characteristic, which is why it is in the table now.
+
+Defect 7 was found the same day by a live run that never reached the model, and
+is the more serious of the two.
 
 ## 1. The whole-response tag leak
 
@@ -269,6 +273,49 @@ run. Two self-inflicted bugs in one fix, both caught before shipping this time
 — which is the difference between this entry and defects 3 and 5, not any
 greater care in writing it.
 
+## 7. An outage written off as a failed submission
+
+A live vehicle run was started to settle defect 6. It never reached the model:
+the account was out of Anthropic credit, and the verification came back with a
+400 saying so.
+
+The run failed. **The row is what mattered.** It came back carrying both
+`must_have_verification_abandoned` and `must_have_batch_failed`, with nothing
+attempted and nothing graded. Those markers exist to stop the engine re-buying a
+verification that has already proved it cannot finish. Here they were written
+because someone had not topped up a balance.
+
+The consequence is not an error anyone would see. When credit returns, that
+submission skips verification entirely and ships "0 of 2 confirmed" — a report
+that generates cleanly, reads fine, and is quietly worth less than the customer
+paid for, for a reason that has nothing to do with them or their product. It is
+the same shape as every other defect on this page.
+
+`api/_lib/provider-outage.js` already exists to tell "the provider is down"
+apart from "this submission failed", and the attempt budget already consults it
+(`d204f4c`). The verification markers did not. `runVerification` swallowed every
+API error into `null`, which made a dead API indistinguishable from a
+specification that cannot be found — and null is exactly what the caller treats
+as grounds to mark the row.
+
+An outage now propagates instead of being swallowed, the call site leaves the
+row completely unmarked, and the existing outage path returns it to `paid`
+without spending an attempt.
+
+**The flaw is older than the markers it was found through.**
+`markVerificationAbandoned` has had it since `72df99d`; submission `5b546ddd`
+was written off by the same outage on 2026-09-10, three days before defect 6's
+fix existed. Defect 6 widened it with a second marker rather than introducing
+it. Both affected rows were `is_test` with no Stripe session, so nobody paid for
+a downgraded report — this time.
+
+**The tests were part of the problem.** Five of them simulated "the verification
+failed" with HTTP 500, which `provider-outage.js` classifies as an outage —
+correctly, and that is precisely the one failure that must not be recorded
+against a submission. They now return a 200 carrying a tool call with no usable
+checks, which is the honest stand-in for "the model answered and the answer was
+no good". A test that models the wrong failure will defend the wrong behaviour.
+
 ## Method, and how much to trust it
 
 Eleven live production runs across the three categories, producing ten reports.
@@ -305,7 +352,7 @@ what had been banked fails the partial-banking test, and making
 `pendingFragments` forget what was graded fails five tests, three of which
 predate the change.
 
-146 tests in `purchase-engine.test.js`, 71 suites green, CI green.
+147 tests in `purchase-engine.test.js`, 71 suites green, CI green.
 
 `tests/buying-journey.test.js` (`e082eb4`) now walks the customer path end to
 end — sufficiency gate, requirement parsing, arithmetic, partial verification,
@@ -327,9 +374,12 @@ passed on every defect in this document.
   delivery, the paid-submission queue and outage handling after this audit.
   Those are about getting a finished report to a customer, not about generating
   one, and are not assessed here.
-- **Whether defect 6 holds in production.** It is verified offline only. Live
-  runs are closed, so nothing since `3201f96` has been confirmed against the
-  real API. The signal to look for on the next live vehicle run is
+- **Whether defect 6 holds in production.** It is verified offline only, and
+  will stay that way: the Anthropic account is out of credit and is not being
+  topped up, so nothing since `3201f96` has been confirmed against the real
+  API. One live vehicle run was attempted on 2026-09-13 and got no further than
+  the billing error — which is how defect 7 was found, and is the only thing
+  that run established. The signal to look for on the next live vehicle run is
   `job_state.must_have_verification` accumulating checks across attempts
   rather than the row arriving at "0 of N". Given that three defects in this
   document passed every green signal available and were caught by reading real
