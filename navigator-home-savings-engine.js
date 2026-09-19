@@ -189,14 +189,37 @@
     const n = Number(v);
     return isFinite(n) && n > 0 ? n : null;
   }
+  // A date-only string is a CALENDAR date, not an instant, and must be parsed
+  // as local midnight.
+  //
+  // `new Date('2026-12-01')` is midnight UTC, which is 30 November west of
+  // Greenwich. Flooring that to local midnight moved the date back a day, and
+  // this engine then told a customer in New York that a promotional rate
+  // printed on their bill as 12/01/2026 "ends 30 November 2026" — a wrong date
+  // on the one finding whose entire value is the date, and an instruction to
+  // call a month before the wrong day. navigator-subscription-engine.js has
+  // always appended the T00:00:00 that avoids this; this file did not.
+  // Found by tests/home-savings-pipeline.test.js.
   function toDate(v) {
     if (!v) return null;
-    const d = v instanceof Date ? new Date(v.getTime()) : new Date(String(v));
+    if (v instanceof Date) { const d = new Date(v.getTime()); d.setHours(0, 0, 0, 0); return d; }
+    const s = String(v);
+    const d = /^\d{4}-\d{2}-\d{2}/.test(s)
+      ? new Date(`${s.slice(0, 10)}T00:00:00`)
+      : new Date(s);
     if (isNaN(d.getTime())) return null;
     d.setHours(0, 0, 0, 0);
     return d;
   }
-  function iso(d) { return d ? d.toISOString().slice(0, 10) : null; }
+
+  // Formatted from LOCAL components, not via toISOString(), which re-converts
+  // to UTC and moves the day back east of Greenwich — the same defect in the
+  // other direction.
+  function iso(d) {
+    if (!d) return null;
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
   function daysBetween(a, b) { return Math.round((toDate(b) - toDate(a)) / DAY); }
   function prettyDate(v) {
     const d = toDate(v);

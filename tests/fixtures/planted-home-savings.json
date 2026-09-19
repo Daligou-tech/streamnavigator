@@ -1,0 +1,68 @@
+{
+  "_comment": "The transcription a correct reader would produce from the two PDFs written by scripts/make-home-savings-documents.js. Hand-written from those documents, so it is ground truth for everything DOWNSTREAM of the model: classification, the merge, all seven checks, the safety pass, the totals and the scorecard. What it cannot test is whether the extractor reads a real PDF correctly — that needs a live run, and tests/home-savings-pipeline.test.js says so in its header rather than implying otherwise. Same role as planted-purchase-va.json plays for /closing.",
+  "_documents": [
+    "tmp-home-savings-docs/xfinity-internet-sept-2026.pdf",
+    "tmp-home-savings-docs/verizon-wireless-sept-2026.pdf"
+  ],
+  "bills": [
+    {
+      "provider": "Xfinity",
+      "service_hint": "Internet",
+      "statement_date": { "value": "2026-09-05", "confidence": 0.98 },
+      "total_due": { "value": 89.0, "confidence": 0.98 },
+      "prior_period_amount": { "value": 74.0, "confidence": 0.96 },
+      "promo_end_date": { "value": "2026-12-01", "confidence": 0.95 },
+      "standard_rate_after_promo": { "value": 104.0, "confidence": 0.93 },
+      "line_items": [
+        { "label": "Performance Pro 400 Mbps Internet", "amount": 62.0, "monthly": true, "confidence": 0.98 },
+        { "label": "Equipment Rental - Wireless Gateway", "amount": 15.0, "monthly": true, "confidence": 0.97 },
+        { "label": "Inside Wire Maintenance Plan", "amount": 5.99, "monthly": true, "confidence": 0.96 },
+        { "label": "Broadcast TV Fee", "amount": 6.01, "monthly": true, "confidence": 0.98 },
+        { "label": "Regional Sports Fee", "amount": 3.0, "monthly": true, "confidence": 0.97 },
+        { "label": "Equipment Return Credit", "amount": -4.0, "monthly": true, "confidence": 0.95 },
+        { "label": "Federal Universal Service Fund", "amount": 1.0, "monthly": true, "confidence": 0.94 }
+      ]
+    },
+    {
+      "provider": "Verizon",
+      "service_hint": "Wireless",
+      "statement_date": { "value": "2026-09-03", "confidence": 0.98 },
+      "total_due": { "value": 120.0, "confidence": 0.98 },
+      "instalment_payments_made": { "made": 24, "total": 24, "confidence": 0.95 },
+      "line_items": [
+        { "label": "Unlimited Plus Plan - 1 line", "amount": 70.0, "monthly": true, "confidence": 0.98 },
+        { "label": "Device Payment Agreement - iPhone", "amount": 27.08, "monthly": true, "confidence": 0.97 },
+        { "label": "Device Protection", "amount": 17.0, "monthly": true, "confidence": 0.96 },
+        { "label": "Autopay and Paper-free Billing Discount", "amount": -10.0, "monthly": true, "confidence": 0.96 },
+        { "label": "Federal Universal Service Charge", "amount": 2.42, "monthly": true, "confidence": 0.94 },
+        { "label": "Regulatory Recovery Fee", "amount": 1.5, "monthly": true, "confidence": 0.93 },
+        { "label": "State and Local Taxes", "amount": 12.0, "monthly": true, "confidence": 0.95 }
+      ]
+    }
+  ],
+  "_typedByCustomer": [
+    { "kind": "internet", "provider": "Xfinity", "monthly": 75, "equipmentRental": false },
+    { "kind": "mobile", "provider": "Verizon", "monthly": 120 }
+  ],
+  "_groundTruth": {
+    "confirmedAnnual": 504.96,
+    "findings": {
+      "H1": { "bill": "Xfinity", "annual": 180.0, "kind": "confirmed", "action": "replace" },
+      "H3": { "bill": "Verizon", "annual": 324.96, "kind": "confirmed", "action": "stop" },
+      "H2": { "bill": "Xfinity", "exposureAnnual": 180.0, "kind": "at_risk", "action": "watch" },
+      "H6": { "bill": "Xfinity", "annual": 0, "kind": "at_risk", "action": "call" }
+    },
+    "questionsNotFindings": ["Inside Wire Maintenance Plan", "Device Protection"],
+    "traps": [
+      "Broadcast TV Fee",
+      "Regional Sports Fee",
+      "Equipment Return Credit",
+      "Federal Universal Service Fund",
+      "Federal Universal Service Charge",
+      "Regulatory Recovery Fee",
+      "State and Local Taxes"
+    ],
+    "disagreements": ["monthly", "equipmentRental"],
+    "verizonAutopayPasses": true
+  }
+}

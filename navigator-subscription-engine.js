@@ -329,7 +329,17 @@
     if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return new Date(v.slice(0, 10) + 'T00:00:00');
     return null;
   }
-  function iso(d) { return d ? d.toISOString().slice(0, 10) : null; }
+  // Formatted from LOCAL components. toDate above already parses a date-only
+  // string as local midnight, but toISOString() re-converts to UTC, which
+  // moves the day back for anyone east of Greenwich — so a customer in Berlin
+  // got a restart date one day early on every seasonal recommendation. Same
+  // defect the home-savings engine had in the other direction; see its
+  // toDate().
+  function iso(d) {
+    if (!d) return null;
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
   function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
   function daysBetween(a, b) { return Math.round((toDate(b) - toDate(a)) / DAY); }
   function prettyDate(v) {

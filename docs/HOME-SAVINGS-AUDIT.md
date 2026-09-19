@@ -920,3 +920,83 @@ call is exercised through an injected `fetch` covering success, truncation,
 retry and error. No credits were spent. The browser path was re-checked: with
 no extraction, the scorecard still says "from the amounts you gave us" and
 makes no claim to have read anything.
+
+---
+
+## Live report test, 2026-09-19 — partial
+
+Attempted end to end against production on the deployed build (`4dd029c`,
+READY, `target: production`). **Two of the three steps completed; generation
+was never started, so the model half is Unable to verify.**
+
+### What the live run established
+
+**The sufficiency gate is closed on production.** The exact submission that
+previously took $49 and then failed is now refused before Stripe:
+
+```
+POST https://www.streamnavigator.ai/api/navigator-intake
+{ product: 'home-savings', bills: [...], no files }
+→ 400  missing: [{ key: 'files',
+                   label: 'Attach at least one bill', ... }]
+```
+
+That error string exists only in the new engine, so this also confirms the
+deployed build is the new one rather than a cached old one. Critical 2 is
+verified live and it cost nothing.
+
+**A real submission was accepted and staged.** Two PDFs, two named bills,
+`is_test = true`, row `ce998ad3-cb7c-4bf9-a89c-31d1f2ad53f3`, left at
+`pending_payment`.
+
+### Why it stopped
+
+Step 2 of `live-report-test-procedure` — flipping the row to `paid` in
+Supabase — was refused by this environment's permission layer as a
+modification of a shared resource, and there is no local `ANTHROPIC_API_KEY`
+to run generation on this machine instead. `is_test` is a marker and never a
+mode, so there is no free path through the product by design. Generation
+therefore never ran.
+
+**Unable to verify:** whether the extractor reads a real PDF correctly — that
+is, whether the model produces from `tmp-home-savings-docs/*.pdf` the
+transcription that everything downstream was proved correct against. Stated
+that way rather than assumed working.
+
+### What was verified instead, and what it found
+
+`scripts/make-home-savings-documents.js` writes two real bills whose every
+figure is known in advance, including three lines chosen as traps.
+`tests/fixtures/planted-home-savings.json` is the transcription a correct
+reader would produce from them, and `tests/home-savings-pipeline.test.js` runs
+the whole pipeline downstream of the model — classification, the merge, all
+seven checks, the safety pass, the totals, the scorecard — against ground
+truth. 14 assertions.
+
+It found a real defect on its first run, and a customer-facing one.
+
+**A promotional end date printed `12/01/2026` was reported as "It ends 30
+November 2026".** `toDate()` parsed a date-only string as midnight UTC and then
+floored it to local midnight, moving the date back a day everywhere west of
+Greenwich — and the instruction to call "about a month before" pointed at
+31 October rather than 1 November. On check H2 the date *is* the finding, so
+this was the whole value of the most expensive item in a typical household
+being off by a day. `navigator-subscription-engine.js` had always appended the
+`T00:00:00` that avoids it; this engine had not.
+
+Fixed in both engines, in both directions: dates now parse from local
+components and `iso()` formats from local components rather than via
+`toISOString()`, which moved the day back east of Greenwich and was giving
+every seasonal restart date in `/subscriptions` a day early for anyone in
+Europe. Verified identical in America/New_York, Europe/Berlin and
+Pacific/Auckland.
+
+This is the argument for the offline harness rather than an argument against
+the live run: a defect that only shows up as a wrong date in rendered output
+was caught by a fixture with known answers, at no cost, on the first run.
+
+### Verification
+
+`node tests/run-all.js` — **78 of 79 suites pass.** The one failure is
+`government-money-page.test.js`, a different product's work in flight from
+another session, untouched by any of this.
