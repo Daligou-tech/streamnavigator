@@ -32,6 +32,26 @@ const PRODUCT_PAGES = Object.keys(prices.pages).map((file) => ({
   src: fs.readFileSync(path.join(ROOT, file), 'utf8'),
 }));
 
+// Plus the product pages sitting in `_skipped` while their Payment Link is
+// rebuilt. A page whose price is temporarily unchecked is still a page a
+// customer reads, and the claims below are about what it says, not what it
+// charges. Two products are repriced and awaiting links right now
+// (/subscriptions at $29, /government-money at $19) and both were outside
+// every claim check in this file until this line existed.
+//
+// streaming.html is deliberately NOT included: it sells $19.99/year against a
+// real annual subscription, which is the one thing the year check below is
+// written to forbid everywhere else.
+const REPRICED_PAGES = Object.keys(prices._skipped)
+  .filter((file) => file !== 'streaming.html' && fs.existsSync(path.join(ROOT, file)))
+  .map((file) => ({
+    file,
+    product: path.basename(file, '.html'),
+    src: fs.readFileSync(path.join(ROOT, file), 'utf8'),
+  }));
+
+const ALL_PRODUCT_PAGES = PRODUCT_PAGES.concat(REPRICED_PAGES);
+
 // Text a customer reads, minus the setup comment every page carries in its head.
 function visible(src) {
   // Newlines are preserved so a reported line number points at the real file
@@ -40,7 +60,13 @@ function visible(src) {
 }
 
 test('every priced page is covered by this contract', () => {
-  assert.ok(PRODUCT_PAGES.length >= 11, `only ${PRODUCT_PAGES.length} product pages found`);
+  // Counted over ALL_PRODUCT_PAGES, not `pages` alone. Moving a repriced
+  // product into `_skipped` while its Payment Link is rebuilt used to drop it
+  // out of every claim check in this file — a page could be taken out of the
+  // contract by a pricing change, which is the moment its copy is most likely
+  // to be wrong.
+  assert.ok(ALL_PRODUCT_PAGES.length >= 11,
+    `only ${ALL_PRODUCT_PAGES.length} product pages found`);
 });
 
 test('no page sells a year the code does not grant', () => {
@@ -286,4 +312,87 @@ test('the deal-breaker check is sold, not just implemented', () => {
   assert.ok(/checked against the actual specification/i.test(why),
     'the field explains only that it helps pick an alternative, which undersells it: '
     + 'what is typed there is verified, and a failed deal-breaker changes the recommendation');
+});
+
+/* --- the three claims /government-money was making, checked line-wide -------
+ *
+ * The audit of 2026-09-19 found government-money.html selling "AI searches
+ * current programs" and "generated fresh using current program information at
+ * the time of purchase" on top of a prompt whose own second paragraph reads
+ * "You do not have live access to current program databases", and whose shared
+ * HONESTY_RULES forbid by name "the name and current dollar amount of a
+ * specific government program".
+ *
+ * This file already existed to catch exactly that shape of defect and did not,
+ * because its regexes were written for market-rate and comparable-sales
+ * phrasings. These three are line-wide rather than page-specific for the same
+ * reason the year check is: the copy on these pages is template boilerplate,
+ * and a claim found on one page is usually sitting on four others.
+ */
+
+test('no page sells a lookup against live program or incentive data', () => {
+  const corpus = fs.readdirSync(path.join(ROOT, 'data')).filter((f) => f !== '.gitkeep');
+  const hasCorpus = (product) => corpus.some((f) => f.startsWith(`${product}-`));
+
+  // A page DENYING the lookup uses the same words and must not fail a test
+  // that exists to keep that denial there.
+  const claim = /searches current|current program information|live (?:program|incentive|rebate) (?:database|data)|checks? (?:today'?s|current) (?:amounts?|rules)/ig;
+  const NEGATED = /\b(?:no|not|never|without|cannot|don't|doesn't)\b[^.]{0,40}$/i;
+
+  const offenders = [];
+  for (const { file, product, src } of ALL_PRODUCT_PAGES) {
+    if (hasCorpus(product)) continue;
+    visible(src).split('\n').forEach((line, i) => {
+      claim.lastIndex = 0;
+      let m;
+      while ((m = claim.exec(line)) !== null) {
+        if (NEGATED.test(line.slice(0, m.index))) continue;
+        offenders.push(`${file}:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 80)}`);
+      }
+    });
+  }
+  assert.deepEqual(offenders, [],
+    'these pages sell a lookup against data nobody holds. No engine here has live '
+    + `internet or database access, and data/ holds only: ${corpus.join(', ') || '(nothing)'}:\n  `
+    + offenders.join('\n  '));
+});
+
+test('no page promises a dollar value for a government or utility program', () => {
+  // api/_lib/navigator-engine.js HONESTY_RULES forbids the model from stating
+  // "the name and current dollar amount of a specific government program"
+  // unless it is confident the figure is real and currently accurate — which,
+  // with a training cutoff and no lookup, it cannot be about a program amount.
+  // A page selling that figure sells the one thing the engine is built to
+  // refuse.
+  const claim = /estimated dollar value|dollar value (?:of|per) each|how much (?:each|every) program is worth/i;
+  const offenders = [];
+  for (const { file, src } of ALL_PRODUCT_PAGES) {
+    visible(src).split('\n').forEach((line, i) => {
+      if (claim.test(line)) offenders.push(`${file}:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 80)}`);
+    });
+  }
+  assert.deepEqual(offenders, [],
+    'these pages promise a program dollar figure the engines are instructed never to state:\n  '
+    + offenders.join('\n  '));
+});
+
+test('no page claims what share of households qualify for someone else\'s program', () => {
+  // "most households qualify for at least one program they didn't know about"
+  // is a quantified claim about the world, with no source, no internal data
+  // and no completed-report history behind it.
+  //
+  // Narrow on purpose. A page saying what ITS OWN engine typically finds is
+  // making a claim it could in principle support from its own runs. A page
+  // saying what proportion of the population qualifies for a third party's
+  // program is not — nobody here has ever been in a position to know that.
+  const claim = /most (?:households|people|customers|homeowners|families|renters)[^.]{0,60}\bqualif/i;
+  const offenders = [];
+  for (const { file, src } of ALL_PRODUCT_PAGES) {
+    visible(src).split('\n').forEach((line, i) => {
+      if (claim.test(line)) offenders.push(`${file}:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 80)}`);
+    });
+  }
+  assert.deepEqual(offenders, [],
+    'these pages state what share of households qualify for a program we do not administer '
+    + `and have no data about:\n  ${offenders.join('\n  ')}`);
 });

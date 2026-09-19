@@ -613,6 +613,26 @@ rules, flat square buttons, restrained weight. `/government-money` is
 neo-brutalist — geometric sans, lavender gradient, pill badges, hard offset
 shadows, 800-weight type.
 
+> **Correction, made while implementing this section — see §28.** The
+> recommendation that stood here was wrong, and wrong on a fact. It read: ten
+> of twelve Navigator pages use `navigator-shared.css`, so migrating this one
+> alone would make it the odd page out; adopt `/closing`'s system only as part
+> of a line-wide migration.
+>
+> Three of the four `navigator-shared.css` matches that count rested on are
+> **inside HTML comments**. `closing.html` does not load that stylesheet at
+> all, and `contractor.html`, `subscriptions.html` and `home-savings.html` had
+> already migrated to `navigator-editorial.css` — `subscriptions.html` carries
+> a test asserting it does not load both systems. The migration was already
+> under way and this page was one of the ones still waiting, not a candidate
+> for being stranded.
+>
+> Corrected recommendation, now shipped: **migrate `/government-money` to
+> `navigator-editorial.css` and the `/closing` chrome.** Measured after the
+> change, on the same tokens as the table above: body `IBM Plex Sans` 17px,
+> h1 `Newsreader` 52.8px, `--bg` `#FBFAF7`, primary button navy fill on paper
+> at 2px radius with no shadow. Every row below now matches.
+
 Ten of the twelve Navigator pages use `navigator-shared.css`, so this page is
 consistent with the *line* and inconsistent with the *reference the brief
 names*. That is worth saying plainly, because it changes the recommendation:
@@ -1196,3 +1216,60 @@ Nine questions, a gated catalogue, a safety pass that can only remove, and a
 model demoted to writing it up. That product is worth $39, is defensible in
 public, and is built out of parts already sitting in this repository. The one
 being sold today is worth $19 at most, and only after the copy tells the truth.
+
+---
+
+## 28. What shipped, and what is still open
+
+The Fix Immediately block (§26) shipped on 2026-09-19, the same day as the
+audit. Two items from Fix Next came with it, both noted below with the reason.
+
+### Shipped
+
+| # | Change | Closes |
+|---|---|---|
+| 1 | `government-money.html` rewritten on the copy in §24 — the eight deletions and their replacements | C1, C4, I3, I6, and §16 |
+| 2 | Price moved to **$19**, button href is the literal `REPLACE_WITH_19_ONE_TIME_LINK`, page says so, `prices.config.json` moved to `_skipped` with the reason, $39 link listed for deactivation | §23 |
+| 3 | `PRODUCT_CONFIGS['government-money']` rewritten: authority on every line, a ruled-out section, no program figure in `key_numbers`, and the four DON'T-COUNT rules as prose | the page↔prompt contradiction behind C1 |
+| 4 | `navigator-government-money-engine.js` + a branch in `api/navigator-intake.js` — a place is required before checkout, enforced in one file loaded by both | **C2** (Fix Next item 7, pulled forward) |
+| 5 | Dead `.category-chip` handler deleted; `formData.category` no longer posted | I2 |
+| 6 | Upload copy names WEBP; final CTA focuses the box instead of jumping to the price | I8, N1 |
+| 7 | Migrated to `navigator-editorial.css` and the `/closing` chrome | §17, as corrected |
+| 8 | `tests/government-money-page.test.js` (19 assertions) and three line-wide assertions in `tests/navigator-claims.test.js`, which now also covers pages parked in `_skipped` | **C5** |
+
+Item 4 was pulled forward out of Fix Next because it is C2, the second-worst
+finding, and because shipping honest copy over a checkout a single character
+can reach is half a fix. It is the *gate* only — the nine structured fields
+are still Fix Next. Item 7 came with the rewrite because nearly every line of
+copy was being replaced anyway, and doing the migration separately would have
+meant touching the same lines twice.
+
+### Verified
+
+- Full suite: **77 of 77 passing**. `npm run check-prices`: all 10 remaining
+  priced pages consistent.
+- Rendered locally and measured: design tokens match `/closing` on every row
+  of §17's table; no console errors; no horizontal overflow at 1280px or at
+  375px, where `.tell` collapses to one column.
+- The placeholder guard refuses to navigate and says why on the page.
+- The gate refuses `"We own our home and had a heat pump installed last year."`
+  with `missing: ['state']`, focuses the box, and creates no submission.
+
+### Still open
+
+- **C3, the phantom-money guard, is prose, not code.** The four DON'T-COUNT
+  rules live in the prompt and are enforced by instruction. They become a pass
+  that can only remove a figure when Stage 2 of §22 ships, and only then is
+  the test in §26 item 9 possible.
+- **The nine structured fields** (§5). The page now *asks* for all nine in a
+  labelled list beside the box, and the free-text answer is all the engine
+  gets. Six of them still cannot be gated on, because free text cannot be
+  parsed for them honestly.
+- **The free Eligibility Snapshot** (§25 step 3), which needs Stage 1.
+- **`data/government-programs.json`** — and with it the return to $39.
+- **The null-result refund** is now promised in the FAQ and the price block.
+  The exposure is stated in §26 item 13 and the self-serve path is not built;
+  today it is honoured by replying to the delivery email.
+- **The Stripe link itself.** Checkout is switched off until somebody creates
+  the $19 Payment Link. Until then this page takes no money at all, which is
+  the correct state for a page whose old link charges twice what it says.

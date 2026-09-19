@@ -23,6 +23,7 @@ const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_lib/rental-entitlement');
 const { checkSufficiency: checkSubscriptionSufficiency } = require('../navigator-subscription-engine');
 const { checkSufficiency: checkHomeSavingsSufficiency } = require('../navigator-home-savings-engine');
+const { checkSufficiency: checkGovernmentMoneySufficiency } = require('../navigator-government-money-engine');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -164,6 +165,31 @@ module.exports = async function handler(req, res) {
       res.status(400).json({
         ok: false,
         error: 'A few more details are needed before this can be analyzed — see missing[].',
+        missing: sufficiency.missing,
+      });
+      return;
+    }
+  } else if (product === 'government-money') {
+    // Government Money Finder gets a structured gate for the narrowest and
+    // most load-bearing reason in the line: every program that is not federal
+    // is scoped to a place, and the form never asked for one.
+    //
+    // Verified live on 2026-09-19 (docs/GOVERNMENT-MONEY-AUDIT.md, C2): a
+    // description of a single character created a submission and handed the
+    // browser to a $39 checkout. The report that money bought could only have
+    // covered federal programs and then said so — which was discoverable
+    // before payment and was not checked. Same D-04 defect, fifth product.
+    //
+    // Same rules government-money.html gates its own button on — both load
+    // navigator-government-money-engine.js — so a customer cannot reach
+    // checkout with input this endpoint would reject, and calling this
+    // endpoint directly cannot bypass the page.
+    const sufficiency = checkGovernmentMoneySufficiency(formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: sufficiency.message
+          || 'A few more details are needed before this can be analyzed — see missing[].',
         missing: sufficiency.missing,
       });
       return;

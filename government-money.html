@@ -1,266 +1,369 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Government Money Finder — StreamNavigator AI</title>
-<meta name="description" content="Find the rebates, tax credits, and public programs you actually qualify for — with instructions for claiming them. Government Money Finder — $39/report." />
-<link rel="canonical" href="https://streamnavigator.ai/government-money" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Government Money Finder — StreamNavigator</title>
+<meta name="description" content="A shortlist of the rebates, credits and public programs your household is most likely to qualify for — why each one is on your list, what would rule you out, and the office that can confirm today's amount. We hold no live program database and we say so. $19 per report.">
+<link rel="canonical" href="https://streamnavigator.ai/government-money">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- The /closing design system. This page used to carry navigator-shared.css
+     and a violet gradient hero. /contractor, /subscriptions and /home-savings
+     had already moved; the audit's first draft recommended leaving this one
+     alone on the grounds that most of the line was still on the old system,
+     and that was simply wrong — three product pages had already migrated and
+     /subscriptions carries a test asserting it. On a page asking for money
+     about tax credits, /closing's restraint is doing commercial work.
+     See docs/GOVERNMENT-MONEY-AUDIT.md §17. -->
+<link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* /government-money only. The shared system is in navigator-editorial.css and
+   nothing page-specific belongs in there. */
+
+/* The six facts the report turns on, shown where the customer is typing. */
+.tell{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--rule);
+  margin:0 0 14px;max-width:820px}
+@media(max-width:640px){.tell{grid-template-columns:1fr}}
+.tell div{padding:12px 15px;border-right:1px solid var(--rule-soft);
+  border-bottom:1px solid var(--rule-soft)}
+.tell div:nth-child(2n){border-right:none}
+.tell b{display:block;font-size:.92rem;margin-bottom:4px}
+.tell b .req{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--flag);
+  margin-right:7px;letter-spacing:.04em}
+.tell span{font-size:.83rem;color:var(--ink-soft);line-height:1.45;display:block}
+
+/* The four DON'T-COUNT rules, stated as a feature because they are one. */
+.wontcount{display:grid;grid-template-columns:1fr;border:1px solid var(--rule);max-width:820px}
+.wontcount div{padding:14px 16px;border-bottom:1px solid var(--rule-soft)}
+.wontcount div:last-child{border-bottom:none}
+.wontcount b{display:block;font-size:.95rem;margin-bottom:5px}
+.wontcount span{font-size:.86rem;color:var(--ink-soft);line-height:1.5;display:block}
+
+/* Checkout is switched off until the $19 Payment Link exists. */
+.offline{border:1px solid #C9A99F;background:var(--flag-tint);padding:14px 16px;
+  margin:16px 0 0;font-size:.9rem;line-height:1.55}
+.offline b{color:var(--flag)}
+</style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/government-money#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Government Money Finder</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Government Money Finder</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#shortlist">What you get</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> Rebates and credits most people never claim</div>
-      <h1>Find the money the government <span class="grad">already owes you.</span></h1>
-      <p class="sub">Tell StreamNavigator about your household, home, and situation. It searches for rebates, tax credits, utility incentives, and grants you actually qualify for — with instructions for claiming each one.</p>
-    </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head">
-      <div class="eyebrow">How it works</div>
-      <h2>From your situation to a claim list.</h2>
-      
-    </div>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">1</div>
-        <h4>Tell us about your situation</h4>
-        <p>Homeownership, income range, recent purchases (like an EV or heat pump), household size — whatever's relevant.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">2</div>
-        <h4>Pay $39</h4>
-        <p>One flat price per report.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">3</div>
-        <h4>AI searches current programs</h4>
-        <p>Federal, state, and local rebates, credits, incentives, and grants are checked against what you told us.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">4</div>
-        <h4>Get your personalized claim list</h4>
-        <p>Every program you likely qualify for, with plain-English instructions for claiming it.</p>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>Which rebates and credits actually apply to you &mdash; and which don&rsquo;t.</h1>
+      <p class="lede">Tell us about your household and what you have bought or changed recently. You get a shortlist of the federal, state, utility and local programs your situation points at, why each one is on your list, what would rule you out, and the office that can confirm today&rsquo;s amount. <strong>We hold no live program database, and every line says where to check it.</strong></p>
+      <div class="btn-row">
+        <a class="btn" href="#price">Start my shortlist &mdash; $19</a>
+        <span class="btn-note">No logins. No bank connection. No Social Security number.</span>
       </div>
     </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head">
-      <div class="eyebrow">What you get</div>
-      <h2>A personalized list, not a generic database dump.</h2>
-      
+
+    <div class="ledger" aria-label="Example line from a shortlist">
+      <div class="ledger-head"><b>One line, as it appears</b><span>on the shortlist</span></div>
+      <div class="row"><span class="lbl">Federal residential energy credit</span><span class="amt">on your list</span></div>
+      <div class="note"><b>Why you.</b> You told us you own your home and had a heat pump installed last year, which is the qualifying kind of work this category covers.</div>
+      <div class="note"><b>What would rule you out.</b> This kind of credit reduces tax you owe. If you expect to owe no federal income tax for the year, it is worth nothing to you until that changes &mdash; you did not tell us either way, so check it first.</div>
+      <div class="src">Confirm the current rate, cap and deadline in the official instructions for the form your preparer files. We do not hold today&rsquo;s figures and will not guess one.</div>
+      <div class="ledger-foot">1 of 7 on the shortlist &middot; 4 ruled out &middot; 3 things to confirm</div>
     </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card">
-        <ul class="check-list">
-          <li><span class="tick">✓</span> Federal, state, and local programs you likely qualify for</li>
-          <li><span class="tick">✓</span> Utility rebates and incentives specific to your situation</li>
-          <li><span class="tick">✓</span> Tax credits worth claiming on your next return</li>
-          <li><span class="tick">✓</span> Estimated dollar value of each program</li>
-          <li><span class="tick">✓</span> Step-by-step instructions for claiming each one</li>
-          <li><span class="tick">✓</span> Deadlines or windows you shouldn't miss</li>
-        </ul>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">Narrowing, not guessing. You still confirm every figure &mdash; we tell you exactly where.</p>
+    <ol class="steps">
+      <li><h3>Tell us about your household</h3><p>Where you live, whether you own or rent, how many people, roughly what the household earns, whether you expect to owe federal income tax, and anything you have bought, installed or changed in the last couple of years. Two minutes of typing.</p></li>
+      <li><h3>Pay $19</h3><p>One flat price, one report. Nothing renews and there is no account.</p></li>
+      <li><h3>Your situation is matched against how these programs work</h3><p>Federal, state, utility and local categories, checked against what you told us. <strong>We do not hold a live program database and we do not look up today&rsquo;s dollar amounts</strong> &mdash; see what this does not do, below.</p></li>
+      <li><h3>You get a shortlist with a source on every line</h3><p>What each program is, why your answers point at it, what would rule you out, the ones we ruled out already and why, and the office that can confirm the current amount and deadline.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="shortlist">
+  <div class="wrap">
+    <h2>What you get</h2>
+    <p class="sec-intro">A shortlist and the reasoning behind it. Not a database dump, and not a number we made up.</p>
+    <ul class="incl">
+      <li>The programs your situation points at — federal, state, utility and local</li>
+      <li>One sentence per program tying it to something you actually told us</li>
+      <li>What would rule you out, before you spend an evening on it</li>
+      <li>The office or document that can confirm the current amount and deadline</li>
+      <li><strong>The programs we ruled out for you, and the fact that ruled each one out</strong></li>
+      <li>What we could not determine from what you told us</li>
+    </ul>
+
+    <h3 style="margin:30px 0 10px">Four things this report will not count</h3>
+    <p class="sec-intro">These are the reasons to trust the rest of it. Every one is a way a confident-sounding report makes a household worse off.</p>
+    <div class="wontcount">
+      <div><b>A credit against tax you do not owe</b><span>Most of the big residential credits reduce what you owe rather than paying you. In a year you owe nothing they are worth nothing, and a report that hands you the headline figure anyway has told you something false about your own money. Where you have not told us, every affected line says so.</span></div>
+      <div><b>A cap, quoted as if it were a payment</b><span>Headline figures are almost always a ceiling worked out from what you actually spent. We say what governs the amount and send you to the authority that publishes it, rather than putting a number on it.</span></div>
+      <div><b>Two programs on one purchase, added together</b><span>A utility or state rebate often reduces the amount a federal credit is calculated on, so they do not simply stack. Where two programs touch the same purchase we say so and give you the order to work them out in.</span></div>
+      <div><b>A discovery you already made</b><span>Whoever sold you the solar, the EV or the heat pump almost certainly mentioned the credit at the time. Those come back as &ldquo;confirm you have already claimed this&rdquo;, because telling you what you already know is not worth $19.</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>The shape of a report</h2>
+    <p class="sec-intro">An illustration of the structure, not a prediction about you &mdash; the categories below are generic on purpose, because naming a specific program and amount here would be the exact thing this page promises not to do.</p>
+
+    <div class="col">
+      <div class="finding">
+        <div class="finding-h"><h3>Federal residential energy credit &mdash; on your shortlist</h3><span class="amt">confirm</span></div>
+        <p>You own your home and had qualifying work done last year, which is what this category covers.</p>
+        <p class="basis">The amount is a percentage of what you actually spent, up to a cap, and it reduces tax owed rather than paying out. <strong>You did not tell us whether you expect to owe federal income tax</strong>, so start there &mdash; if you do not, this is worth nothing this year.</p>
+        <p class="cite">Confirm with the official instructions for the form your preparer files</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>A utility efficiency rebate in your territory</h3><span class="amt">category only</span></div>
+        <p>Most utilities run rebates on the kind of equipment you described. We do not hold your utility&rsquo;s current program list and will not invent one.</p>
+        <p class="basis">Call your electricity provider and ask what rebates apply to that equipment. Ask <em>before</em> you claim the federal credit: if a rebate comes through, it usually reduces the amount the federal credit is calculated on, and doing it in the other order means redoing the arithmetic.</p>
+        <p class="cite">Confirm with your own utility &middot; the name is on your bill</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Ruled out: owner-only property relief</h3><span class="amt">not for you</span></div>
+        <p>You told us you rent. This category is for people who own and occupy the property, so it is off your list.</p>
+        <p class="basis">Named rather than quietly dropped, so you can see it was considered. If you buy in the next year or two it becomes worth revisiting.</p>
+        <p class="cite">Ruled out by: tenure</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Worth revisiting in January, not now</h3><span class="amt">not yet</span></div>
+        <p>You described two more upgrades you are planning. Several of these credits cap what you can claim in a single tax year.</p>
+        <p class="basis">Where a cap resets annually, splitting work across a year boundary can be the difference between claiming once and claiming twice. Confirm this year&rsquo;s cap and what you have already used before you book the work.</p>
+        <p class="cite">Confirm with the official form instructions before scheduling</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>What we could not determine</h3><span class="amt">&mdash;</span></div>
+        <p>You did not say whether you expect a federal tax liability, and you did not give the cost of the work.</p>
+        <p class="basis">Both change the answer materially. Named here rather than assumed, because assuming either one is how a report ends up confidently wrong about your money.</p>
+        <p class="cite">Two open questions &middot; both yours to answer</p>
       </div>
     </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    To go live for Government Money Finder:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Government Money Finder Report" — $39 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/navigator-status
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/00w14n0NS6UkdsEa80abK08 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
-    This page already appends ?client_reference_id=<submission id> to the
-    link automatically (see navigator-shared.js) so payment ties back to the
-    right submission — nothing else to configure here.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head">
-      <div class="eyebrow">Get started</div>
-      <h2>One flat price per report.</h2>
-      <p>Tell us your situation, pay once, get your claim list.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>One flat price per report.</h2>
+    <p class="sec-intro">$19, once. Nothing renews and there is no account.</p>
+
+    <div class="clean-result">
+      <h3>For this to be worth buying, it has to find you one thing you would have missed.</h3>
+      <p>A $250 utility rebate covers it thirteen times over. If your situation points at nothing worth acting on, the report says so in the first line and lists what was checked and why each one was ruled out &mdash; and you will know in two minutes rather than two weekends.</p>
+      <p><strong>If there is nothing on your report worth acting on, reply to the delivery email and we refund it in full.</strong></p>
     </div>
+
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
         <span class="price-badge">One-time</span>
-        <h3>Government Money Finder Report</h3>
-        <p class="desc">A personalized search for rebates, credits, and public programs you qualify for.</p>
-        <div class="price-amount">$39<span>/report</span></div>
-        <div class="price-period">one-time payment</div>
+        <h3>Government Money Shortlist</h3>
+        <p class="desc">A personalised shortlist of the programs your household is most likely to qualify for &mdash; with the reason for each, what would rule you out, and the authority that can confirm it.</p>
+        <div class="price-amount">$19</div>
+        <div class="price-period">Charged once &middot; not a subscription &middot; nothing renews</div>
 
         <div class="field-block">
           <label>Tell us about your situation</label>
-          <textarea id="intake-description" placeholder="e.g. Homeowner, installed solar panels in 2025, household of 4, live in Ohio..."></textarea>
+          <p class="hint" style="margin-top:-6px">Six things do most of the work. The more of them you cover, the fewer lines come back as &ldquo;we could not determine this&rdquo;.</p>
+          <div class="tell">
+            <div><b><span class="req">REQUIRED</span>Where you live</b><span>State at minimum; a ZIP is better. Federal programs are the same everywhere &mdash; state, county and utility ones are not, and those are most of them.</span></div>
+            <div><b>Own or rent</b><span>It decides roughly half the list either way.</span></div>
+            <div><b>Household size and roughly what it earns</b><span>A band is plenty. Many programs are gated on income against household size, and nobody needs your exact figure.</span></div>
+            <div><b>Whether you expect to owe federal income tax</b><span>The single most useful thing you can tell us. A credit against tax you do not owe is worth nothing that year.</span></div>
+            <div><b>What you have bought or installed recently</b><span>Solar, a heat pump, a water heater, insulation, windows, an EV, a panel upgrade &mdash; and roughly when.</span></div>
+            <div><b>What has changed, or is about to</b><span>A first home, a new baby, childcare, turning 65, a move, or work you are planning in the next year.</span></div>
+          </div>
+          <textarea id="intake-description" placeholder="e.g. We own our home in Columbus, Ohio (43215). Household of 4, roughly $95k a year, and we do owe federal tax. Had a heat pump and a new water heater installed in spring last year, about $9,000 all in. Planning attic insulation in the next few months. First baby arrived in March."></textarea>
         </div>
+
         <div class="field-block">
           <label>Upload supporting documents (optional)</label>
           <div class="upload-zone" id="upload-zone">
-            <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
-            <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
+            <div class="upload-sub">PDF, JPG, PNG or WEBP &middot; up to 50MB per file, 150MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Recent purchase receipts or utility bills can help identify more programs.</p>
+          <p class="hint" style="margin-top:10px">Purchase receipts and utility bills help &mdash; a receipt carries the date and the amount, and a utility bill names the provider whose rebates apply to you. Neither replaces telling us where you live: nothing reads these until after you have paid.</p>
+          <p class="hint">Your documents are read once and the copy sent for analysis is deleted immediately afterwards. The upload itself stays in encrypted storage for 90&nbsp;days so we can regenerate your report if anything goes wrong, then is deleted automatically.</p>
         </div>
+
         <div class="field-block">
-          <label>Email</label>
+          <label for="intake-email">Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers federal, state, and local programs</li>
-          <li><span class="tick">✓</span> Plain-English claiming instructions for each</li>
-          <li><span class="tick">✓</span> Estimated dollar value per program</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
-        </ul>
-        <a href="https://buy.stripe.com/00w14n0NS6UkdsEa80abK08" data-stripe-link="government-money" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+
+        <!--
+          ====================================================================
+          PAYMENT PORTAL (Stripe Payment Link — no backend required)
+
+          THE $19 LINK DOES NOT EXIST YET, so the href below is the literal
+          REPLACE_WITH_19_ONE_TIME_LINK and the script at the bottom of this
+          page refuses to navigate to it. That is deliberate. The price moved
+          from $39 to $19 on 2026-09-19 (docs/GOVERNMENT-MONEY-AUDIT.md §23:
+          $39 bought less engineering than /subscriptions does at $29, against
+          free substitutes that are better than the product). A page showing
+          $19 against a button that charges $39 is precisely the defect
+          scripts/check-prices.js was written for, so the button is switched
+          off rather than charging the old price.
+
+          TO GO LIVE:
+            1. Stripe Dashboard -> Product catalog -> "Government Money Finder
+               Report" -> add a $19 one-time price.
+            2. Payment links -> New -> pick that price -> Create link.
+            3. In the link's "After payment" step, set the redirect to
+               https://streamnavigator.ai/navigator-status
+            4. Paste the https://buy.stripe.com/... URL over
+               REPLACE_WITH_19_ONE_TIME_LINK below, AND put its plink id in
+               prices.config.json — moving government-money.html back out of
+               `_skipped` into `pages` with expectedPriceCents 1900.
+            5. DEACTIVATE the old $39 link 00w14n0NS6UkdsEa80abK08 in Stripe.
+               Until it is deactivated anyone holding that URL can still be
+               charged $39 for a product this page prices at $19; it is listed
+               in prices.config.json unreferencedActiveLinks with that reason.
+            6. npm run check-prices
+
+          The price returns to $39 when data/government-programs.json and the
+          gate/DON'T-COUNT engine ship — the same bargain /landlord holds $149
+          under. See docs/GOVERNMENT-MONEY-AUDIT.md §26, Later.
+
+          This page already appends ?client_reference_id=<submission id> to the
+          link automatically (see navigator-shared.js) so payment ties back to
+          the right submission — nothing else to configure here.
+          ====================================================================
+        -->
+        <a href="REPLACE_WITH_19_ONE_TIME_LINK" data-stripe-link="government-money" class="btn" id="pay-btn" style="width:100%;text-align:center">Get my shortlist &mdash; $19</a>
+
+        <div class="offline">
+          <b>Checkout is being updated.</b> The price moved to $19 and the new checkout link is not live yet, so this button is switched off rather than charging you the old price. Email <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a> and we will send you the link.
+        </div>
+
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
              Someone who reloads the page (which empties the email box), then
              attaches files and presses the button, otherwise sees a brief
              flash and nothing else, and no request is ever sent. -->
-        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
-        <p class="price-secure">🔒 Secured by Stripe</p>
+        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:var(--flag); font-size:.88rem; line-height:1.5; font-weight:500;"></p>
+        <p class="price-secure" style="text-align:center;font-size:.76rem;color:var(--ink-soft);margin-top:10px">&#128274; Payments are processed securely by Stripe &mdash; StreamNavigator never sees or stores your card details.</p>
       </div>
-    </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
-    </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">What kind of programs does this cover? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Rebates, tax credits, utility incentives, and grants — for things like energy efficiency, EVs, homeownership, childcare, and more, depending on your situation.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Do you file the claims for me? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — you get clear, step-by-step instructions for each program, but you (or your tax preparer) submit the actual claim.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">How current is the information? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Each report is generated fresh using current program information at the time of purchase — programs and eligibility rules do change over time.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if I don't qualify for anything? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You'll be told honestly — but most households qualify for at least one program they didn't know about.</div></div>
-      </div>
-    </div>
-  </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final">
-      <h2>There's a good chance you're leaving money unclaimed.</h2>
-      <p>Find out what it is, for $39.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Find My Money</a>
-    </div>
-  </section>
-</main>
-<footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
-      <a href="/streaming">Streaming Navigator</a>
-      <a href="/contractor">🔧 Contractor Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/home-savings">💡 Home Savings Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/subscriptions">📺 Subscription Navigator</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
-      <a href="/closing">🔍 Closing Navigator</a>
     </div>
   </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Read this before you start. It is most of what separates this from a confident-sounding guess.</p>
+    <div class="limits">
       <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul>
-        <li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li>
+        <li><strong>We do not hold a live program database and we do not look programs up.</strong> This runs on general knowledge of how these programs work, which has a cutoff and is not guaranteed to match today&rsquo;s rules. That is exactly why every line comes with the office or document that can confirm the current amount, eligibility and deadline.</li>
+        <li><strong>We do not tell you what you will get.</strong> Most of these figures are ceilings worked out from what you actually spent, several reduce tax owed rather than paying out, and rebates often change what a credit is calculated on. We tell you which programs apply and what governs the amount. You confirm the number.</li>
+        <li><strong>We do not ask for a login, a bank connection, a tax return or a Social Security number.</strong> There is no option to give us any of them. Everything here works from what you type into the form.</li>
+        <li><strong>We do not file anything for you</strong> and we never contact an agency or a utility on your behalf. You make every claim yourself, or your tax preparer does.</li>
+        <li><strong>We cannot know whether a program still has funding.</strong> Rebate pots close when they empty and reopen on a new fiscal year, and nothing here can see that. Where it matters we say to ask before you spend.</li>
+        <li><strong>Without a state, the report is federal-only.</strong> We will not guess where you live, so the form will not let you buy until you have said. That is the one thing we insist on.</li>
+        <li><strong>We cannot make the work go away.</strong> A shortlist of six programs is an evening of phone calls and forms. The report puts them in order and tells you who to call first, but you make the calls.</li>
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Government Money Finder provides AI-generated research for informational purposes only and is not legal, tax, or financial advice. Program eligibility, availability, and deadlines are determined solely by the issuing government agency or utility and can change without notice.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col">
+      <details><summary>Why can&rsquo;t I just search for this myself?</summary><div class="body">You can, and for one specific program you probably should. What takes the time is the other direction &mdash; working out which of hundreds of programs are even worth reading about, given that you rent, or that you will owe no federal tax this year, or that you have already used this year&rsquo;s cap. That narrowing is what you are buying. The confirming you still do yourself, and every line tells you where.</div></details>
+      <details><summary>Will you tell me exactly how much I&rsquo;ll get?</summary><div class="body">No, and anyone who does is guessing. Most of these figures are ceilings computed from what you actually spent; several are credits against tax owed, which are worth nothing to a household that owes nothing; and a utility rebate often reduces the amount a federal credit is calculated on. We tell you which programs apply, what governs the amount, and where to compute it.</div></details>
+      <details><summary>How current is this?</summary><div class="body">Not live, and we will not pretend otherwise. This runs on general knowledge of how these programs work &mdash; which has a training cutoff and is not guaranteed to match today&rsquo;s rules. That is exactly why every program on your shortlist comes with the office or document that can confirm the current amount, eligibility and deadline. Treat our descriptions as &ldquo;worth checking&rdquo;, never as &ldquo;what you will get&rdquo;.</div></details>
+      <details><summary>Do you file the claims for me?</summary><div class="body">No &mdash; you get clear, step-by-step next steps for each program, but you, or your tax preparer, submit the actual claim. We never contact an agency or a utility on your behalf.</div></details>
+      <details><summary>Why do you insist on knowing my state?</summary><div class="body">Because federal programs are the same everywhere and everything else is not. State credits, county exemptions and utility rebates are scoped to a place, and they are most of what is worth finding. Without one, the report could only cover the federal side and then tell you so &mdash; which is a thin thing to have paid for. A ZIP code works too, and tells us which utility territory you are in.</div></details>
+      <details><summary>What if I don&rsquo;t qualify for anything?</summary><div class="body">The report says so in the first line, and lists what was checked and the specific fact that ruled each one out. If there is nothing on your report worth acting on, reply to the delivery email and we refund it in full.</div></details>
+      <details><summary>Does this cover anything besides energy?</summary><div class="body">Yes &mdash; property tax relief, first-home programs, childcare, education, and assistance programs gated on income and household size all come up, depending on what you tell us. Energy is simply where the most money has been recently, which is why it comes up most.</div></details>
+    </div>
+  </div>
+</section>
+
+<section id="last">
+  <div class="wrap col">
+    <h2>Find out in two minutes what is worth your evening.</h2>
+    <p class="sec-intro">A shortlist, the reason for every line, and the office that can confirm it. $19, once.</p>
+    <div class="btn-row">
+      <a class="btn" href="#price" id="final-cta">Start my shortlist</a>
+      <span class="btn-note">No logins. No bank connection. No Social Security number.</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">Automated research for informational purposes only. Not legal, tax or financial advice. Government Money Finder does not file, submit or apply for anything on your behalf &mdash; you make every claim yourself. We hold no live database of government or utility programs and do not look them up; program eligibility, availability, amounts and deadlines are determined solely by the issuing government agency or utility, change without notice, and must be confirmed with the authority named on each line before you act on it.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="/home-savings">Home Savings Navigator</a>
+      <a href="/property-tax">Property Tax Navigator</a>
+      <a href="/subscriptions">Subscription Navigator</a>
+      <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
+    </div>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
 <div class="toast" id="toast">
-  <span class="ico">✓</span> <span id="toast-text"></span>
+  <span class="ico">&#10003;</span> <span id="toast-text"></span>
 </div>
+
+<script src="/navigator-government-money-engine.js"></script>
 <script src="/navigator-shared.js"></script>
 <script>
 (function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
+  var zone = document.getElementById('upload-zone');
+  var input = document.getElementById('upload-input');
+  var list = document.getElementById('upload-list');
+  var uploader = wireUploadZone(zone, input, list);
 
-  document.querySelectorAll('.category-chip').forEach(function(chip){
-    chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
-      chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
-    });
+  // The final CTA used to be an anchor to #pricing, which asked the visitor to
+  // make one more decision at the moment of highest intent. It scrolls to the
+  // box and puts the cursor in it instead.
+  document.getElementById('final-cta').addEventListener('click', function(e){
+    e.preventDefault();
+    var box = document.getElementById('intake-description');
+    document.getElementById('price').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(function(){ box.focus(); }, 420);
   });
 
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
-    const btn = e.currentTarget;
-    const errEl = document.getElementById('intake-error');
+    var btn = e.currentTarget;
+    var errEl = document.getElementById('intake-error');
     function fail(msg, focusEl) {
       errEl.textContent = msg;
       errEl.style.display = 'block';
@@ -268,24 +371,43 @@
       if (focusEl) focusEl.focus();
     }
     errEl.style.display = 'none';
-    const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
-    const email = emailEl.value.trim();
+
+    // The price moved to $19 and the Stripe link for it does not exist yet.
+    // Sending the customer to the old link would charge them $39 for a page
+    // that says $19 — the exact defect scripts/check-prices.js exists to
+    // catch. Refuse instead. See the setup comment above this button.
+    var href = btn.getAttribute('href') || '';
+    if (href.indexOf('REPLACE_WITH_') !== -1) {
+      fail('Checkout is being updated and this button is switched off rather than charging you '
+        + 'the old price. Email hello@streamnavigator.ai and we will send you the link.');
+      return;
+    }
+
+    var emailEl = document.getElementById('intake-email');
+    var descEl = document.getElementById('intake-description');
+    var email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-    const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { fail('Tell us about your situation, or upload a supporting document, so we have something to work with.', descEl); return; }
-    const originalText = btn.textContent;
+
+    // The same gate api/navigator-intake.js enforces — both load
+    // navigator-government-money-engine.js, so a customer cannot reach
+    // checkout with input the server would then reject, and a file upload
+    // does not substitute for telling us where you live. Before this existed,
+    // a single character reached a $39 checkout.
+    var sufficiency = GovernmentMoneyEngine.checkSufficiency({ description: descEl.value });
+    if (!sufficiency.sufficient) { fail(sufficiency.message, descEl); return; }
+
+    var files = uploader.getFiles();
+    var originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
     try {
-      const submission = await submitNavigatorIntake({
+      var submission = await submitNavigatorIntake({
         product: 'government-money',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: { description: descEl.value.trim() },
         files: files,
       });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'government-money' }, email);
+      goToStripe(href, { id: submission.id, token: submission.token, product: 'government-money' }, email);
     } catch (err) {
       fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;
