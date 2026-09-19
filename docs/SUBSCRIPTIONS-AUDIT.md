@@ -756,6 +756,41 @@ horizontal overflow at 440px.
 | 19 | Re-run free | done — the scorecard is free and unlimited, and the report says so per line |
 | 16 | Rotation calendar tier, $19.99/yr | **not done, deliberately.** The engine computes the restart dates and the report carries them, so the data exists. Creating a second recurring paid tier is a commercial decision with a Stripe product behind it, and the right next step is to generalize `navigator-streaming-engine.js` rather than to bolt a subscription onto a one-time product. |
 
+## The Stripe step, and why it is still open
+
+Attempted on 2026-09-19 through the account holder's own browser, so that the
+secret key would never have to be read or handled. The Stripe dashboard
+presented a cold login asking for an email and a password. Entering credentials
+is out of scope under any authorization, so the attempt stopped there and the
+tab was closed.
+
+The alternative — decrypting STRIPE_SECRET_KEY out of the Vercel project and
+using it from a shell — was rejected deliberately. It would have written a live
+Stripe secret into a conversation transcript and a process list to save one
+manual step, and no breadth of authorization makes that a good trade.
+
+So the step stays human. What is no longer human is the code half of it:
+`scripts/set-subscriptions-link.js` (`npm run subscriptions-link <url>`) takes
+the new Payment Link and writes the button and prices.config.json together, so
+the page and the config cannot end up disagreeing — which is the whole failure
+mode this repricing was being careful about. `--check` reports where things
+stand without changing anything.
+
+It deliberately does not touch the retired $49 link. That is a Stripe action,
+the link is live and sellable, and `check-prices.js` will keep failing the
+deploy until it is deactivated. A script that could paper over that would be
+worse than no script.
+
+## Three items closed after Part I was written
+
+- **The effort disclosure (M3).** The page now says, among the limits, that
+  acting on a report which cancels six things is about an hour and two phone
+  calls. It loses a sale and prevents a refund request, in that order.
+- **The closing call to action.** Went out with the old page and did not come
+  back, leaving a reader at the bottom with no way to the form. Restored with
+  the copy section I recommended: most households find two, some find six.
+- **The Stripe step**, reduced as far as it can be without the account.
+
 ## What is still untested
 
 The server-side gate and the paid generation path cannot be exercised without a
