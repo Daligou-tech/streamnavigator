@@ -562,7 +562,7 @@ already, so the form markup carries over unchanged. Then extend
    the page gates its own button on — the `checkBuyingSufficiency` pattern
    exactly. At least one line with a name and a price, and the three taps
    answered for every line. No line, no checkout.
-3. **Build the deterministic engine** (`api/_lib/subscription-engine.js`): the
+3. **Build the deterministic engine** (`navigator-subscription-engine.js`): the
    E.3 rules as a pure function, plus a service table carrying `canPause`,
    known cancel/manage URLs and tier structures — seeded from the 20 services
    already in `navigator-streaming-engine.js`, which is real, dated and verified.
@@ -630,3 +630,137 @@ recommendations, a savings total, and no indication anywhere that the product
 was never told when any of them was last used.
 
 That report will look exactly like a good one.
+
+---
+
+# Part II — What was built, 2026-09-19
+
+The audit above was written first and is left exactly as it was. This part
+records what was done about it the same day, and what was deliberately not.
+
+## The shape of the fix
+
+`/subscriptions` now works the way `/closing`, `/rental` and `/landlord` work:
+a deterministic engine decides, and the model writes up what it decided.
+
+- **`navigator-subscription-engine.js`** (new, repo root). The rules from
+  section E.3 as a pure function, plus a behaviour table. It lives beside
+  `navigator-streaming-engine.js` and for the same reason — it is required by
+  the API *and* served to the browser, so the check that decides whether a
+  customer may pay and the check the server enforces are one file, not two
+  copies that drift.
+- It **requires the streaming catalog** rather than copying it, so the 20
+  hand-checked cancellation URLs, the per-service pause policies and the
+  verified tier prices have exactly one home.
+- **`api/navigator-intake.js`** gates `subscriptions` on
+  `checkSufficiency()` — the `checkBuyingSufficiency` pattern, applied to the
+  product that never had it.
+- **`api/_lib/navigator-engine.js`** runs the engine and hands the writer the
+  decisions as data. The five-sentence prompt is replaced with a write-up brief
+  that forbids originating an action, a figure, a date or a URL.
+- **`subscriptions.html` / `subscriptions-intake.js`** (rewritten): per-line
+  editor, three taps, optional flags, restart path, and a **free scorecard
+  computed in the browser**.
+- **`navigator-status.html`** renders the ledger from
+  `report.subscription_analysis` — the engine's arithmetic, not a re-parse of
+  the prose about it.
+
+## The three safety rules, as invariants
+
+`applySafety()` is a pass that can only ever downgrade an action.
+`tests/subscription-engine.test.js` enumerates every combination of answers a
+customer can give — about 5,000 inputs — and asserts that **no input at all**
+produces a cancel on a shared plan, on a prepaid annual plan mid-term, or on
+anything holding the customer's own files. An example test would have caught
+the three cases somebody thought of; these catch the ones nobody did.
+
+Two more invariants over the same input set: no line without a price ever
+receives a figure, and no saving ever exceeds what the subscription costs in a
+year. Two more by enumeration: a URL is only ever produced for a service whose
+URL is in the hand-checked table, and the word "rotate" is never used on a
+service that cannot actually hold.
+
+## Two bugs the build found in itself
+
+Worth recording, because both produced plausible output rather than an error.
+
+**A fired safety block silenced the later ones.** Each block tested the
+*running* action rather than the one the usage rules produced, so the first to
+fire ended the chain. A shared music plan that also holds the customer's
+playlists came back citing the data risk and never mentioning that somebody
+else in the house uses it daily. Found by reading the output of a smoke run,
+not by a failing test.
+
+**A more specific answer was replaced by a vaguer one.** An annual Adobe plan
+hit both the annual-plan block and the holds-data block; the second overwrote
+the first and dropped the March renewal date, which was the entire useful part
+of the answer. Found by a scenario test.
+
+## The free scorecard
+
+Deterministic, so it costs nothing to run, so it can genuinely be free — which
+is the whole argument. It runs in the browser on the same engine, and **nothing
+leaves the page to produce it**, which is what makes "no bank login, ever" more
+than a slogan. It shows counts and totals and is tested to leak neither the
+per-line answers, nor the steps, nor the links.
+
+## Price
+
+**$29**, displayed. The Stripe Payment Link for it does not exist yet, and one
+manual step remains that only the account holder can take.
+
+Until then the button's href is the literal `REPLACE_WITH_29_ONE_TIME_LINK` and
+the page's own script **refuses to navigate**, showing the customer why. A page
+displaying $29 against a button that charges $49 is precisely the defect
+`scripts/check-prices.js` was written for after buying.html showed $39 while
+its button pointed at the $19 link, and shipping it would have been worse than
+shipping nothing. `subscriptions.html` is in `_skipped` in `prices.config.json`
+with the reason and the steps; the old $49 link is recorded under
+`unreferencedActiveLinks` as one to deactivate.
+
+**To finish:** create the $29 one-time price and Payment Link in Stripe, put
+the URL in the page and in `stripeLinkId`, move the entry back into `pages`
+with `expectedPriceCents: 2900`, deactivate `4gMaEXbsw2E49co5RKabK07`, and run
+`npm run check-prices`.
+
+## Design
+
+`navigator-editorial.css`, the system `/closing` and `/contractor` already use.
+Verified by computed style rather than by eye, against the live `/closing`:
+IBM Plex Sans 17px/1.6, `#FBFAF7` paper, `#1B2A3A` ink, Newsreader 500
+headings, left-aligned h1, ink-filled 2px-radius button at weight 500, 1px
+hairline sticky nav, tabular mono numerals — identical on every token. No
+horizontal overflow at 440px.
+
+## Status against the plan
+
+| | Item | Status |
+|---|---|---|
+| 1 | Structured intake | done |
+| 2 | Sufficiency gate, same rules both sides | done |
+| 3 | Deterministic engine | done |
+| 4 | Three safety rules as hard blocks | done, as invariants over ~5,000 inputs |
+| 5 | ROTATE separated from CANCEL on `canPause` | done |
+| 6 | Cancellation-link claim fixed, with a test | done |
+| 7 | Savings accounting by kind | done |
+| 8 | Reprice to $29 | done on the page; **one Stripe step outstanding** |
+| 9 | Free scorecard before payment | done, client-side |
+| 10 | Editorial design system + parity test | done |
+| 11 | Copy rewritten, limits and retention stated | done |
+| 12 | Per-line ledger output | done |
+| 13 | Refund position | done |
+| 14 | `/home-savings` narrowed, cross-linked | done |
+| 15 | Dead `category-chip` handler; orphan rows | handler removed. The two rows were inserted with `is_test = true` automatically — `example.com` is RFC-reserved and `api/_lib/test-submissions.js` catches it — so no sweep was needed. Section C's M5 overstated this. |
+| 17 | Duplicate-coverage detection | done |
+| 18 | Annual-charge blind spot | done — named on the page and asked for per line |
+| 19 | Re-run free | done — the scorecard is free and unlimited, and the report says so per line |
+| 16 | Rotation calendar tier, $19.99/yr | **not done, deliberately.** The engine computes the restart dates and the report carries them, so the data exists. Creating a second recurring paid tier is a commercial decision with a Stripe product behind it, and the right next step is to generalize `navigator-streaming-engine.js` rather than to bolt a subscription onto a one-time product. |
+
+## What is still untested
+
+The server-side gate and the paid generation path cannot be exercised without a
+deploy and a paid run, and no model credits were spent on this work. What is
+proven: the engine, the gate rules, the scorecard, the page and the ledger
+renderer, all against the shipped source. What is not: that a real Stripe
+payment reaches the engine and returns the report described above. That needs
+one live run after the $29 link exists.

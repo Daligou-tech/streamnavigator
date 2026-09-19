@@ -143,6 +143,13 @@ test('the placeholder is replaced in every link, and nowhere else', () => {
 test('the config rewrite keeps the checker honest', () => {
   const p = path.join(root, 'prices.config.json');
   const before = fs.readFileSync(p, 'utf8');
+  // Counted from the file rather than hard-coded. This assertion exists to
+  // catch the rewrite clobbering the other products, and a literal count also
+  // fails every time a product legitimately joins or leaves `pages` — which it
+  // did on 2026-09-19, when subscriptions.html moved to `_skipped` while its
+  // $29 Payment Link was being created. That is not the rewrite eating the
+  // config, which is the only thing this line is meant to detect.
+  const pagesBefore = Object.keys(JSON.parse(before).pages).length;
   try {
     M.updateConfig('plink_NEW123', ['plink_OLD_A', 'plink_OLD_B']);
     const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -154,7 +161,8 @@ test('the config rewrite keeps the checker honest', () => {
         `${id} is not recorded as deactivated`);
     }
     assert.ok(cfg.unreferencedActiveLinks._comment, 'the explanatory comment was dropped');
-    assert.ok(cfg.pages && Object.keys(cfg.pages).length >= 12, 'the other products were clobbered');
+    assert.ok(cfg.pages && Object.keys(cfg.pages).length === pagesBefore,
+      'the other products were clobbered');
   } finally {
     fs.writeFileSync(p, before);
   }

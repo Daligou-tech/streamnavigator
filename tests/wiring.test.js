@@ -58,8 +58,11 @@ test('every form_data key read by an endpoint is declared', () => {
       // collects and api/_lib/landlord-audit.js runs its checks against. Like
       // the others on this line it lives in the same column and belongs to a
       // different product's contract, not this one.
+      // `lines` is Subscription Navigator's: the per-subscription records
+      // subscriptions.html collects and navigator-subscription-engine.js runs
+      // its rules against. Same column, different product's contract.
       if (['category', 'description', 'zip', 'financing', 'timeline', 'budget', 'notes',
-        'properties'].includes(key)) continue;
+        'properties', 'lines'].includes(key)) continue;
       if (!KNOWN_KEYS.includes(key)) undeclared.push(`${rel(file)} reads formData.${key}`);
     }
   }

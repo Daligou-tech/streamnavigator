@@ -1,298 +1,392 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Subscription Navigator — StreamNavigator AI</title>
-<meta name="description" content="Optimize every recurring subscription you pay for — not just streaming. Subscription Navigator recommends what to keep, cancel, rotate, or downgrade — $49, once." />
-<link rel="canonical" href="https://streamnavigator.ai/subscriptions" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subscription Navigator — StreamNavigator</title>
+<meta name="description" content="List what you pay for, answer three questions about each, and get one call on every line — keep, downgrade, pause or cancel — with the dollar figure and the date. Free scorecard first, then $29. No bank login, ever.">
+<link rel="canonical" href="https://streamnavigator.ai/subscriptions">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- The /closing design system. Shared, not re-invented: this page used to
+     carry navigator-shared.css and a violet gradient hero, which made the two
+     halves of the same company look like two companies. -->
+<link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* /subscriptions only. The shared system is in navigator-editorial.css and
+   nothing page-specific belongs in there. */
+
+.sub-list{margin:0 0 18px;padding:0;list-style:none}
+.sub{border:1px solid var(--rule);background:var(--panel);padding:16px 18px;margin-bottom:12px}
+.sub.done{border-color:#BFC3BC}
+.sub-top{display:grid;grid-template-columns:1fr 120px 118px 34px;gap:10px;align-items:end}
+@media(max-width:640px){.sub-top{grid-template-columns:1fr 1fr;}.sub-top .sub-rm{grid-column:2;justify-self:end}}
+.sub-top label{font-size:.78rem;font-weight:500;color:var(--ink-soft);margin-bottom:5px;
+  letter-spacing:.02em;text-transform:uppercase}
+.sub input[type=text],.sub input[type=number],.sub input[type=date],.sub select{
+  width:100%;padding:10px 11px;border:1px solid var(--rule);border-radius:2px;
+  font-family:inherit;font-size:.95rem;background:var(--panel);color:var(--ink)}
+.sub input[type=number]{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.sub-rm{background:none;border:1px solid var(--rule);border-radius:2px;color:var(--ink-soft);
+  font:inherit;font-size:1rem;line-height:1;padding:10px 0;cursor:pointer;height:41px}
+.sub-rm:hover{border-color:var(--flag);color:var(--flag)}
+
+.taps{margin-top:14px;display:grid;gap:10px}
+.tap-row{display:grid;grid-template-columns:186px 1fr;gap:12px;align-items:center}
+@media(max-width:700px){.tap-row{grid-template-columns:1fr;gap:5px}}
+.tap-row > span{font-size:.88rem;color:var(--ink-soft)}
+.seg.compact{max-width:none}
+.seg.compact button{padding:9px 6px;font-size:.84rem}
+.seg.unanswered{border-color:#C9A99F}
+
+.adv{margin-top:12px;border-top:1px solid var(--rule-soft)}
+.adv > summary{padding:11px 0 4px;font-size:.87rem;color:var(--ink-soft);font-weight:400}
+.adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:6px 0 4px}
+@media(max-width:640px){.adv-grid{grid-template-columns:1fr}}
+.adv-grid .full{grid-column:1/-1}
+.chk{display:flex;gap:9px;align-items:flex-start;font-size:.89rem;color:var(--ink-soft);
+  padding:7px 0;cursor:pointer}
+.chk input{margin-top:3px;flex-shrink:0}
+
+.addrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+.linkbtn{background:none;border:none;padding:0;font:inherit;font-size:.9rem;color:var(--ink-soft);
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.linkbtn:hover{color:var(--ink)}
+
+/* The free scorecard. Counts and totals, never the answers. */
+.sc{border:1px solid var(--ink);background:var(--panel);margin:24px 0 0;
+  box-shadow:5px 5px 0 rgba(27,42,58,.08)}
+.sc-head{padding:14px 18px;border-bottom:1px solid var(--ink);font-size:.8rem;color:var(--ink-soft);
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.sc-head b{color:var(--ink);font-weight:600;font-size:.86rem}
+.sc-lede{padding:16px 18px;font-size:1.02rem;line-height:1.5;border-bottom:1px solid var(--rule-soft)}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.sc-grid{grid-template-columns:1fr}}
+.sc-cell{padding:13px 18px;border-bottom:1px solid var(--rule-soft);border-right:1px solid var(--rule-soft)}
+.sc-cell:nth-child(2n){border-right:none}
+.sc-cell .k{font-size:.77rem;color:var(--ink-soft);display:block;margin-bottom:3px}
+.sc-cell .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:1.15rem}
+.sc-cell .v.good{color:var(--ok)}
+.sc-cell .n{font-size:.76rem;color:var(--ink-soft);display:block;margin-top:3px}
+.sc-foot{padding:12px 18px;font-size:.82rem;color:var(--ink-soft)}
+.sc-empty{padding:22px 18px;font-size:.95rem;color:var(--ink-soft)}
+
+.gate{border:1px solid #C9A99F;background:var(--flag-tint);padding:14px 16px;margin:18px 0 0;
+  font-size:.9rem;line-height:1.55}
+.gate ul{margin:8px 0 0;padding-left:20px}
+.gate li{margin-bottom:6px}
+.gate li:last-child{margin-bottom:0}
+.gate b{color:var(--flag)}
+
+.paste{margin-bottom:22px}
+.paste textarea{width:100%;min-height:86px;padding:12px 13px;border:1px solid var(--rule);
+  border-radius:2px;font-family:inherit;font-size:.95rem;background:var(--panel);color:var(--ink);
+  resize:vertical}
+
+.five{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--rule);
+  max-width:780px;margin-bottom:26px}
+@media(max-width:760px){.five{grid-template-columns:1fr;}}
+.five div{padding:14px 16px;border-right:1px solid var(--rule-soft)}
+.five div:last-child{border-right:none}
+@media(max-width:760px){.five div{border-right:none;border-bottom:1px solid var(--rule-soft)}
+  .five div:last-child{border-bottom:none}}
+.five b{display:block;font-size:.95rem;margin-bottom:5px}
+.five span{font-size:.84rem;color:var(--ink-soft);line-height:1.45;display:block}
+
+.pending{border:1px solid var(--hold);background:var(--hold-tint);padding:13px 16px;
+  font-size:.88rem;line-height:1.55;margin-top:14px}
+</style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/subscriptions#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Subscription Navigator</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Subscription Navigator</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#calls">The five calls</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> Beyond streaming — every subscription you pay for</div>
-      <h1>Optimize every subscription <span class="grad">you're paying for.</span></h1>
-      <p class="sub">Not just streaming — software, memberships, boxes, apps. Tell StreamNavigator what you're subscribed to and it recommends what to keep, cancel, rotate, or downgrade.</p>
-    </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head">
-      <div class="eyebrow">How it works</div>
-      <h2>Every recurring charge, one recommendation each.</h2>
-      
-    </div>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">1</div>
-        <h4>List or upload your subscriptions</h4>
-        <p>Bank/card statements work well, or just list what you remember paying for.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">2</div>
-        <h4>Make a One-Time Payment</h4>
-        <p>One charge, not a subscription.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">3</div>
-        <h4>AI reviews usage and value</h4>
-        <p>Each subscription is checked against what it costs versus what it's realistically worth to you.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">4</div>
-        <h4>Get your keep/cancel/rotate list</h4>
-        <p>A clear recommendation for every subscription, with direct cancellation links where available.</p>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>You are paying for something you stopped using.</h1>
+      <p class="lede">List what you pay for and answer three questions about each. You get one call on every line &mdash; keep, downgrade, pause or cancel &mdash; with what it saves and, for a pause, the date to start again. <strong>No bank login, ever.</strong></p>
+      <div class="btn-row">
+        <a class="btn" href="#price">Show me what I&rsquo;m wasting &mdash; free</a>
+        <span class="btn-note">The scorecard runs in your browser. Nothing is sent anywhere.</span>
       </div>
     </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head">
-      <div class="eyebrow">What you get</div>
-      <h2>A clear call on every subscription — not just streaming.</h2>
-      
+
+    <div class="ledger" aria-label="Example decision">
+      <div class="ledger-head"><b>Your subscriptions</b><span>11 lines &middot; $104.91/mo</span></div>
+      <div class="row hit"><span class="lbl">Hulu &mdash; cancel</span><span class="amt">$227.88/yr</span></div>
+      <div class="row"><span class="lbl">Peacock &mdash; rotate, back 15 Aug</span><span class="amt">$15.98</span></div>
+      <div class="row"><span class="lbl">Adobe CC &mdash; keep until 14 Mar</span><span class="amt">$0</span></div>
+      <div class="note"><b>Adobe CC.</b> You have used it twice, which makes it look like the worst line on the page. It is an annual plan you have already paid for: cancelling today refunds nothing. The decision is worth $719.88 &mdash; on 14 March, not now.</div>
+      <div class="ledger-foot">$227.88 confirmed &middot; $15.98 conditional &middot; 3 lines we will not decide for you</div>
     </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card">
-        <ul class="check-list">
-          <li><span class="tick">✓</span> Which subscriptions are worth keeping as-is</li>
-          <li><span class="tick">✓</span> Which to cancel outright</li>
-          <li><span class="tick">✓</span> Which to rotate (pause and resume seasonally)</li>
-          <li><span class="tick">✓</span> Which to downgrade to a cheaper tier</li>
-          <li><span class="tick">✓</span> Direct links to cancel or downgrade where available</li>
-          <li><span class="tick">✓</span> Total estimated annual savings</li>
-        </ul>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">You see what we found before you decide whether to buy the report.</p>
+    <ol class="steps">
+      <li><h3>List them, or drop in a statement</h3><p>A bank or card statement fills in the names and the prices for you. Typing them yourself works just as well.</p></li>
+      <li><h3>Three taps per subscription</h3><p>When you last used it, whether you would miss it, and who else uses it. About fifteen seconds each &mdash; and those three answers are what decide the recommendation.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">free</span></h3><p>How many lines are worth acting on and what they are worth a year, worked out in your browser before anything is sent anywhere.</p></li>
+      <li><h3>Decide before buying the report</h3><p>If the scorecard finds nothing, you will know that for free. One flat price either way.</p></li>
+      <li><h3>Receive your report in your inbox</h3><p>A call on every line, ordered by what is at stake: what you pay, what you told us, the figure, and what to do &mdash; with dates on the ones that need one.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="calls">
+  <div class="wrap">
+    <h2>Five calls, not three</h2>
+    <p class="sec-intro">The difference between two of these is where the money actually is. Most subscriptions cannot be paused: on those, &ldquo;rotate&rdquo; means cancelling and signing up again later at whatever the price is then. We hold a pause policy per service and we will not use the word when it is not true.</p>
+
+    <div class="five">
+      <div><b>Keep</b><span>You are getting what you pay for.</span></div>
+      <div><b>Downgrade</b><span>You want it. You do not want this tier.</span></div>
+      <div><b>Rotate</b><span>A genuine hold exists. Off now, back on a named date.</span></div>
+      <div><b>Cancel</b><span>Stop paying. Coming back means signing up again.</span></div>
+      <div><b>Review</b><span>The decision is not ours to make. We say why.</span></div>
+    </div>
+
+    <h3 style="margin-bottom:10px">Three things we will not tell you to cancel</h3>
+    <div class="limits">
+      <ul>
+        <li><strong>A year you have already paid for.</strong> An annual plan used twice looks like the worst line on the page. Cancelling it part-way through refunds nothing and in some categories costs a termination fee on top. We give you the date the decision is actually due, and what it is worth.</li>
+        <li><strong>Something somebody else in the house uses.</strong> One person cannot cancel a family plan on their own say-so, and a report that tells them to is worth less than nothing.</li>
+        <li><strong>Something holding your own files.</strong> &ldquo;Barely used&rdquo; is the commonest answer about cloud storage and the worst possible reason to cancel it. Above the free tier, the provider starts deleting what does not fit.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>A sample report</h2>
+    <p class="sec-intro">Figures changed. Every line names the rule it came from and the answers it rests on.</p>
+
+    <div class="col">
+      <div class="finding">
+        <div class="finding-h"><h3>Cancel Hulu</h3><span class="amt">$227.88/yr</span></div>
+        <p>You last opened it four months ago, said you would not miss it, and nobody else in the house uses it.</p>
+        <p class="basis">$18.99 a month for twelve months. <strong>Confirmed</strong> &mdash; nothing offsets it.</p>
+        <p class="basis">Hulu has no pause. This is a cancellation: you keep access to the end of the period you have already paid for, and coming back means signing up again at whatever the price is then.</p>
+        <p class="cite">Rule R8 &middot; not used in 3+ months, not missed</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Rotate Peacock &mdash; back 15 August</h3><span class="amt">$15.98</span></div>
+        <p>You said you only use it for the Premier League. The season runs August to May.</p>
+        <p class="basis">Two monthly cycles at $7.99. <strong>Conditional</strong> &mdash; two cycles, not the full year. If switching it off and on twice is not worth $16 to you, keep it. We would not blame you.</p>
+        <p class="cite">Rule R9 &middot; seasonal need, off-season now</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Keep Adobe Creative Cloud until 14 March</h3><span class="amt">$0 today</span></div>
+        <p>You have used it twice. On the numbers this is the worst line on the page &mdash; and cancelling it today would still be a mistake.</p>
+        <p class="basis">Nothing today. This is an annual plan you have already paid for. The decision on 14 March is worth $719.88 a year; today&rsquo;s is worth nothing.</p>
+        <p class="cite">Rule R1 &middot; prepaid annual plan, mid-term</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>iCloud 2TB &mdash; your call, not ours</h3><span class="amt">no figure</span></div>
+        <p>You said you barely use it. We are not going to tell you to cancel it.</p>
+        <p class="basis">Cancelling paid storage does not just stop a charge. Above the free tier the provider starts removing what does not fit, and on most accounts that is the photo library. Check what is in it first. If it is 40GB of photos you want, this is $120 a year for keeping them, and that may be a fair price.</p>
+        <p class="cite">Rule R3 &middot; holds your own files</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Gym &mdash; could not price</h3><span class="amt">no figure</span></div>
+        <p>You did not tell us what this costs, so we have not decided it. You said you have not been since January and would not miss it &mdash; which points one way, and we will say so once we have the number.</p>
+        <p class="basis">No price, no figure. We do not estimate one.</p>
+        <p class="cite">Rule R8, held unpriced</p>
       </div>
     </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    To go live for Subscription Navigator:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Subscription Navigator Report" — $49 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/navigator-status
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/4gMaEXbsw2E49co5RKabK07 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
-    This page already appends ?client_reference_id=<submission id> to the
-    link automatically (see navigator-shared.js) so payment ties back to the
-    right submission — nothing else to configure here.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head">
-      <div class="eyebrow">Get started</div>
-      <h2>One price. One full review.</h2>
-      <p>Tell us what you're subscribed to, pay once, get your plan.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>See what we find. Then decide.</h2>
+    <p class="sec-intro">One price, however many subscriptions you have.</p>
+
+    <div class="clean-result">
+      <h3>Plenty of households are paying for nothing they do not use. That is worth knowing too.</h3>
+      <p>If we find nothing, you will know before you pay &mdash; the scorecard shows it free. What the report gives you then is the verification: every line you pay for, named, with what you told us about it and why keeping it is the right call. That is a different thing from a vague feeling that you are probably fine.</p>
+      <p><strong>If the report misses what it promised, we refund in full.</strong></p>
     </div>
+
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
-        <span class="price-badge">One-time</span>
-        <h3>Subscription Navigator Report</h3>
-        <p class="desc">Keep/cancel/rotate/downgrade recommendations across every recurring subscription you have.</p>
-        <div class="price-amount">$49</div>
-        <div class="price-period">charged once &middot; not a subscription</div>
+        <span class="price-badge">Free scorecard first</span>
+        <h3>Subscription Navigator</h3>
+        <p class="desc">A keep, downgrade, pause, cancel or review call on every recurring subscription you have &mdash; with the figure, the kind of figure it is, and the date.</p>
+        <div class="price-amount">$29</div>
+        <div class="price-period">Charged once &middot; not a subscription &middot; free scorecard first</div>
 
         <div class="field-block">
-          <label>What are you subscribed to?</label>
-          <textarea id="intake-description" placeholder="e.g. Spotify, Adobe CC, gym, meal kit, cloud storage, streaming services..."></textarea>
+          <label for="paste-box">Start from a list (optional)</label>
+          <div class="paste">
+            <textarea id="paste-box" placeholder="Netflix $19.99&#10;Hulu 18.99/mo&#10;Adobe CC $719.88/year&#10;gym"></textarea>
+            <button type="button" class="btn ghost btn-sm" id="paste-btn" style="margin-top:8px">Add these</button>
+            <p class="hint" style="margin-top:9px">One per line. We read the prices and never invent one &mdash; anything we cannot read is left blank for you to fill in.</p>
+          </div>
         </div>
+
         <div class="field-block">
-          <label>Upload a statement (optional, improves accuracy)</label>
+          <label>Your subscriptions</label>
+          <ul class="sub-list" id="sub-list"></ul>
+          <div class="addrow">
+            <button type="button" class="btn ghost btn-sm" id="add-btn">+ Add a subscription</button>
+            <button type="button" class="linkbtn" id="add-cancelled-btn">I cancelled something and wonder if I should restart it</button>
+          </div>
+          <p class="hint" style="margin-top:-12px">Do not forget the ones that bill <strong>once a year</strong> &mdash; domain names, password managers, antivirus, professional memberships, a warehouse club. They are usually the largest single charges you have and they will not appear on this month&rsquo;s statement at all. Set &ldquo;Billed&rdquo; to per year and we will ask when it renews.</p>
+        </div>
+
+        <div class="field-block">
+          <label>Upload a statement (optional)</label>
           <div class="upload-zone" id="upload-zone">
-            <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
             <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">A bank or card statement lets us catch subscriptions you might have forgotten about.</p>
+          <p class="hint" style="margin-top:10px">A statement lets us catch the ones you forgot &mdash; particularly anything that bills once a year, which will not appear on this month&rsquo;s statement at all. <strong>The scorecard above covers only the lines you have typed;</strong> we read the statement when we build the report.</p>
+          <p class="hint">Your statement is read once and the copy sent for analysis is deleted immediately afterwards. The upload itself stays in encrypted storage for 90&nbsp;days so we can regenerate your report if anything goes wrong, then is deleted automatically.</p>
         </div>
-        <div class="field-block">
-          <label>Email</label>
+
+        <!-- The free scorecard. Computed in the browser by the same engine that
+             produces the paid report (navigator-subscription-engine.js), which is
+             why it can be free and why nothing has to leave the page to produce
+             it. It shows counts and totals and never the per-line answers. -->
+        <div class="sc" id="scorecard" aria-live="polite">
+          <div class="sc-empty" id="sc-empty">Add a subscription above and your scorecard appears here, worked out in your browser. Nothing is sent anywhere until you choose to buy the report.</div>
+          <div id="sc-body" style="display:none"></div>
+        </div>
+
+        <div id="gate" class="gate" style="display:none"></div>
+
+        <div class="field-block" style="margin-top:22px">
+          <label for="intake-email">Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers software, memberships, boxes, apps — not just streaming</li>
-          <li><span class="tick">✓</span> Direct cancel/downgrade links where available</li>
-          <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
-        </ul>
-        <a href="https://buy.stripe.com/4gMaEXbsw2E49co5RKabK07" data-stripe-link="subscriptions" class="btn btn-primary" id="pay-btn">Get My Report →</a>
-        <!-- The checks that run before the upload starts report themselves
-             here rather than through a toast that clears after 3.6 seconds.
-             Someone who reloads the page (which empties the email box), then
-             attaches files and presses the button, otherwise sees a brief
-             flash and nothing else, and no request is ever sent. -->
-        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
-        <p class="price-secure">🔒 Secured by Stripe</p>
+
+        <a href="REPLACE_WITH_29_ONE_TIME_LINK" data-stripe-link="subscriptions" class="btn" id="pay-btn" style="width:100%;text-align:center">Get the full report &mdash; $29</a>
+        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:var(--flag); font-size:.88rem; line-height:1.5; font-weight:500;"></p>
+
+        <!--
+          ====================================================================
+          ONE MANUAL STEP REMAINS BEFORE THIS PAGE CAN TAKE MONEY.
+
+          The price moved from $49 to $29 on 2026-09-19 (see
+          docs/SUBSCRIPTIONS-AUDIT.md, section H). The old $49 Payment Link
+          4gMaEXbsw2E49co5RKabK07 is still what Stripe holds, so it is
+          deliberately NOT linked here: a page showing $29 against a link that
+          charges $49 is the exact defect scripts/check-prices.js was written
+          for after buying.html displayed $39 while its button pointed at the
+          $19 link.
+
+          To go live:
+            1. Stripe -> Product catalog -> Subscription Navigator Report ->
+               add a $29 one-time price.
+            2. Payment links -> New -> pick it -> after payment, redirect to
+               https://streamnavigator.ai/navigator-status
+            3. Put the resulting https://buy.stripe.com/... URL in the href
+               above AND in prices.config.json (stripeLinkId), then move
+               subscriptions.html back out of "_skipped" into "pages".
+            4. Deactivate the old $49 link so nobody holding the URL can buy
+               at a price we no longer sell.
+            5. npm run check-prices
+
+          Until then the button below refuses to send anyone to checkout
+          rather than charging them $49 for a $29 product. See the
+          REPLACE_WITH_ guard in the script at the bottom of this file and
+          tests/subscriptions-page.test.js.
+          ====================================================================
+        -->
+        <div class="pending" id="pending-note">
+          <strong>Checkout is being updated.</strong> The price moved to $29 and the new checkout link is not live yet, so this button is switched off rather than charging you the old price. Email <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a> and we will send you the link. Your scorecard above is complete and costs nothing.
+        </div>
       </div>
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Read this before you start.</p>
+    <div class="limits">
+      <ul>
+        <li><strong>We do not connect to your bank.</strong> There is no login, no account access and no read-only link. You tell us what you pay for, or you show us a statement.</li>
+        <li><strong>We do not cancel anything for you.</strong> You get the call, the figure and the step. You make every change yourself.</li>
+        <li><strong>We do not know what anything will cost if you come back.</strong> Prices rise and promotional rates do not return. Where that matters we say so instead of pretending otherwise.</li>
+        <li><strong>We do not hold a checked cancellation link for every service.</strong> We hold one for twenty of them. For the rest we tell you where the setting lives in your own account, and we do not invent a URL.</li>
+        <li><strong>We do not put a number on a line you did not price.</strong> No price, no figure. The report says which lines those are and asks you for the amount.</li>
+        <li><strong>Some decisions are not ours.</strong> Shared plans, bundles and anything holding your files come back as a review with the reason named. That is the product working, not a gap in it.</li>
+      </ul>
     </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">How is this different from the streaming tracker on the homepage? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">The homepage tool is purpose-built for streaming services. Subscription Navigator covers everything else you pay for monthly or yearly — software, memberships, boxes, apps, and more.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Do I need to connect my bank account? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — you can list subscriptions manually, or upload a statement as a PDF/photo. No bank login is ever required.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What does 'rotate' mean? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Pausing a subscription during months you won't use it and resuming it when you will — common for seasonal services.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Will you cancel things automatically? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — you get direct links and clear instructions, but you make every change yourself.</div></div>
-      </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col">
+      <details><summary>Do I need to connect my bank account?</summary><div class="body">No, and there is no option to. You list your subscriptions, or upload a statement as a PDF or a photo. No bank login is ever required, and the free scorecard is computed in your browser without sending anything at all.</div></details>
+      <details><summary>Why not just read my own bank statement?</summary><div class="body">A statement tells you what you are charged. It does not tell you which of fourteen charges is safe to stop, which service cannot be paused, which one loses a price you will never get back, or which date to turn something on again — and it will not show you an annual charge that fired eight months ago. The decision is the work, and the statement does not do it.</div></details>
+      <details><summary>What is the difference between rotate and cancel?</summary><div class="body">A rotate is a genuine hold: the account stays as it is and you resume on a date. A cancel is a cancel — you re-sign later at whatever the price is then. Most services do not offer a hold, so most of the time &ldquo;rotate&rdquo; would be a lie. We hold a pause policy per service and use the right word.</div></details>
+      <details><summary>How is this different from the streaming tool on the homepage?</summary><div class="body">The streaming tool is purpose-built for video: it checks when the shows and sports you actually follow are on, and dates your recommendations against them. This covers everything else you pay for — software, memberships, boxes, storage, apps — and works from what you tell us rather than a TV schedule. If streaming is your whole problem, use that one; it is $19.99 a year and it is better at it.</div></details>
+      <details><summary>Will you cancel things for me?</summary><div class="body">No. You get the call, the amount, the date and the step. You make every change yourself.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">You will know that before you pay — the scorecard shows it free. What the report gives you then is every line named, with what you told us about it and why keeping it is right. If the report misses what it promised, we refund in full.</div></details>
+      <details><summary>Why do you need three answers per subscription?</summary><div class="body">Because they are what decide the recommendation, and nothing else can supply them. A statement knows the money; only you know whether you would miss it. Without those answers we could tell you what to think about, but not what to do — and that is not worth paying for.</div></details>
     </div>
-  </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final">
-      <h2>You're probably paying for something you forgot about.</h2>
-      <p>Find out what, and fix it in a few clicks.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Review My Subscriptions</a>
-    </div>
-  </section>
-</main>
-<footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">Automated analysis for informational purposes only. Not financial advice. Subscription Navigator does not have the ability to cancel, pause, downgrade or otherwise change your subscriptions on your behalf — you make every change yourself. Recommendations are produced from the answers you give and from general knowledge of how these services behave; always check your own account and terms before you cancel anything.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
       <a href="/streaming">Streaming Navigator</a>
-      <a href="/contractor">🔧 Contractor Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/home-savings">💡 Home Savings Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/government-money">🏛️ Government Money Finder</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
-      <a href="/closing">🔍 Closing Navigator</a>
+      <a href="/home-savings">Home Savings Navigator</a>
+      <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
     </div>
-  </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
-      <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul>
-        <li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li>
-      </ul>
-    </div>
-  </div>
-  <p class="footer-disclaimer">Subscription Navigator provides AI-generated recommendations for informational purposes only and does not have the ability to cancel, pause, downgrade, or otherwise change your subscriptions on your behalf. You make every change yourself.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
 <div class="toast" id="toast">
-  <span class="ico">✓</span> <span id="toast-text"></span>
+  <span class="ico">&#10003;</span> <span id="toast-text"></span>
 </div>
+
+<!-- Order matters: the subscription engine reads the streaming catalog at load
+     time for prices, tier tables, pause policies and the twenty checked
+     cancellation URLs. -->
+<script src="/navigator-streaming-engine.js"></script>
+<script src="/navigator-subscription-engine.js"></script>
 <script src="/navigator-shared.js"></script>
-<script>
-(function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
-
-  document.querySelectorAll('.category-chip').forEach(function(chip){
-    chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
-      chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
-    });
-  });
-
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
-    e.preventDefault();
-    const btn = e.currentTarget;
-    const errEl = document.getElementById('intake-error');
-    function fail(msg, focusEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-      showToast(msg);
-      if (focusEl) focusEl.focus();
-    }
-    errEl.style.display = 'none';
-    const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
-    const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-    const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { showToast('List what you\'re subscribed to, or upload a statement, so we have something to work with.'); descEl.focus(); return; }
-    const originalText = btn.textContent;
-    btn.textContent = 'Saving your submission…';
-    btn.style.pointerEvents = 'none';
-    try {
-      const submission = await submitNavigatorIntake({
-        product: 'subscriptions',
-        email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
-        files: files,
-      });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'subscriptions' }, email);
-    } catch (err) {
-      fail(err.message || 'Something went wrong — please try again.');
-      btn.textContent = originalText;
-      btn.style.pointerEvents = 'auto';
-    }
-  });
-})();
-</script>
+<script src="/subscriptions-intake.js"></script>
 </body>
 </html>

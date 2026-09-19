@@ -21,6 +21,7 @@ const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
 const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_lib/rental-entitlement');
+const { checkSufficiency: checkSubscriptionSufficiency } = require('../navigator-subscription-engine');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -104,6 +105,33 @@ module.exports = async function handler(req, res) {
   // gate either.
   if (product === 'buying') {
     const sufficiency = checkBuyingSufficiency(formData.category, formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: 'A few more details are needed before this can be analyzed — see missing[].',
+        missing: sufficiency.missing,
+      });
+      return;
+    }
+  } else if (product === 'subscriptions') {
+    // Subscription Navigator gets the same structured gate, and for the same
+    // reason both of the others got one. Before this existed the product fell
+    // through to the generic D-04 check below, which only asks that the
+    // description be non-empty: posting a single character returned 200 and a
+    // submission id ready for a $49 checkout. Verified against production on
+    // 2026-09-19 (docs/SUBSCRIPTIONS-AUDIT.md).
+    //
+    // That is worse here than anywhere else in the line, because the report
+    // this product sells is a keep/cancel/rotate/downgrade call on each
+    // subscription, and every one of those four turns on a fact the old form
+    // never asked for. A customer could buy, in good faith, a report that
+    // could only ever tell them it had nothing to work with.
+    //
+    // Same rules the page gates its own button on — api/_lib/subscription-
+    // engine.js is loaded by both — so a customer cannot reach checkout with
+    // input this would reject, and calling this endpoint directly cannot
+    // bypass the page.
+    const sufficiency = checkSubscriptionSufficiency(formData);
     if (!sufficiency.sufficient) {
       res.status(400).json({
         ok: false,

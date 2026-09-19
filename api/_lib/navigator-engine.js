@@ -49,6 +49,7 @@ const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 const { sendFailureAlert } = require('./alerts');
 const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
+const subscriptionEngine = require('../../navigator-subscription-engine');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -254,9 +255,51 @@ State plainly that this is not legal, tax, or investment advice.`,
   'subscriptions': {
     label: 'Subscription Navigator',
     requiresFiles: false,
-    task: `You are the analysis engine behind Subscription Navigator. A customer paid to review every recurring subscription they listed or uploaded (a statement, or a manual list).
+    // Like Closing, Rental and Landlord, and for the same reason: the
+    // recommendations in this report are produced by
+    // navigator-subscription-engine.js, not by the model. The model's job is to
+    // write them up. It must not originate an action, a dollar figure, a date
+    // or a cancellation link.
+    //
+    // What this replaced was five sentences telling the model to read a
+    // free-text box and decide what to cancel. The audit of 2026-09-19 found
+    // that on three of thirteen realistic household scenarios the obvious read
+    // of the only information the form collected pointed straight at the
+    // recommendation that made the customer worse off — cancelling a prepaid
+    // annual plan mid-term, cancelling a bundled membership, cancelling paid
+    // storage holding the customer's photo library. None of those was a
+    // reasoning failure. Nothing was checking a list.
+    task: `You are the writer for a Subscription Navigator review. A customer listed what they pay for, told us when they last used each one, whether they would miss it, and who else in the house uses it, and paid for a call on every line.
 
-For each subscription, recommend one of: keep as-is, cancel outright, rotate (pause seasonally and resume when needed), or downgrade to a cheaper tier — grounded in whatever the customer told you about usage or value, and general knowledge of typical tier structures for well-known named services. Don't invent a specific current price for a named service unless you're confident it's accurate, or unless the customer told you the price — describe the type of change instead (e.g., "downgrade to the ad-supported tier") when you're not sure of the exact current figure. Where a well-known, stable cancellation or downgrade path exists for a widely known service, describe it in general terms rather than fabricating a specific URL. Total an estimated annual savings figure with your reasoning shown.`,
+The decision engine has already run. Every line below carries an action, the rule that produced it, the reasons, the dollar figure and its kind, what to do, and any cautions. Your job is to present those clearly. It is not to add to them.
+
+Hard rules:
+- NEVER state a dollar figure that is not in the decisions you were given. If a line has no figure, it has no figure — say what is missing instead of estimating.
+- NEVER change an action. If the engine says review, it is a review, however obvious the cancel looks to you. Those are the safety rules, and they exist because on the lines they cover the obvious answer is the one that costs the customer money or deletes their files.
+- NEVER invent a cancellation URL. Where a decision carries a link, use it exactly. Where it does not, say how to find the setting inside the customer's own account, and say plainly that we do not hold a checked link for that one.
+- CARRY THE SAVING KIND THROUGH, every time you state a figure. "confirmed" is money that stops leaving the account. "conditional" is a rotation, and counts only the billing cycles actually skipped — never a full year. "at risk" touches a promotional rate or a bundle and is NEVER added into a total. "unpriced" means the customer did not tell us the amount, and no figure may be attached to it at all. Never total figures of different kinds together. The headline savings number is the confirmed total and nothing else.
+- Reproduce every date exactly. A rotation or a restart without its date is not actionable, and the date is the product.
+
+STRUCTURE.
+
+Lead with the strongest TRUE statement, in this order of preference:
+1. A confirmed annual saving, with the figure and how many lines it comes from.
+2. An annual plan with a decision date coming that is worth real money — name the date.
+3. A subscription that should be restarted because the customer is about to need it.
+4. Conditional savings from rotations, stated as cycles rather than as a year.
+5. If there is none of the above: lead with what was checked and found sound. A customer told that every line they pay for is one they use has bought exactly what they came for. Deliver that as a result, name the lines, and do not pad it with manufactured concern.
+
+Then one section holding EVERY line, in the order given, each as: the action, what they pay, what they told us, the figure and its kind, and what to do. Do not drop a line for length and do not merge two. A customer who listed eleven subscriptions paid for eleven answers.
+
+Then a section for the lines the engine would not decide — the shared plans, the bundles, the things holding their data, the ones with no price. Frame these as the product working rather than as a shortfall: refusing to tell somebody to cancel a family plan on one person's say-so is the service, not a gap in it.
+
+Then, if the engine found duplicate coverage, one short section naming it — without recommending which one to drop, because the engine does not know what they use each for and neither do you.
+
+Close with a plain list of what this did not do: we did not look at their accounts, we do not know what anything will cost if they come back, some of these decisions are theirs, and acting on all of it will take them about an hour.
+
+Use key_numbers for the confirmed total, the conditional total, the monthly spend, and the number of lines reviewed — and label each so its kind is unmistakable.
+
+State plainly that this is automated analysis, not financial advice, and that we cannot cancel anything on their behalf.`,
   },
 
   'government-money': {
@@ -1179,6 +1222,81 @@ async function generateNavigatorReport(submissionId) {
       }
     }
 
+    // Subscription Navigator. The recommendations are computed here, not by
+    // the model — see navigator-subscription-engine.js and the task prompt
+    // above. Handing the writer the decisions as data, rather than the
+    // customer's list plus an instruction to judge it, is what stops it
+    // telling somebody to cancel a prepaid annual plan because they only used
+    // it twice.
+    let subscriptionAnalysis = null;
+    if (submission.product === 'subscriptions') {
+      const lines = Array.isArray(formData.lines) ? formData.lines : [];
+      if (lines.length) {
+        subscriptionAnalysis = subscriptionEngine.analyze({ lines });
+        const a = subscriptionAnalysis;
+
+        // Blocked lines go over separately from the decided ones for the same
+        // reason landlord's passed checks do: they sort last, and a writer
+        // told to cover every one of a long list will summarise its tail
+        // however firmly it is instructed not to. These are the lines where
+        // the product refused to give an answer, which is the part a customer
+        // is most likely to think was an omission, so it gets its own heading
+        // and its own instruction.
+        const blocked = a.decisions.filter((d) => d.action === subscriptionEngine.Action.REVIEW);
+        const decided = a.decisions.filter((d) => d.action !== subscriptionEngine.Action.REVIEW);
+
+        auditBlock = [
+          '',
+          'DECISIONS — these are the report. Write these up. Do not add to them, do not',
+          'recompute one, and do not change an action. Every figure you may state is here.',
+          JSON.stringify(decided, null, 1),
+          '',
+          blocked.length
+            ? [
+              `LINES THE ENGINE REFUSED TO DECIDE — ${blocked.length} of them, below.`,
+              'These need their own section. Every one is a line where telling the customer to',
+              'cancel would have cost them money, deleted something of theirs, or made a decision',
+              'that was not theirs alone to make. Write each one as the product working: name what',
+              'is at stake and what the customer should check. Never convert one into a cancel',
+              'recommendation, however clearly the usage answers point that way.',
+              JSON.stringify(blocked, null, 1),
+            ].join('\n')
+            : '',
+          '',
+          a.overlaps.length
+            ? 'DUPLICATE COVERAGE — name this in a short section, without choosing for them:\n'
+              + JSON.stringify(a.overlaps, null, 1)
+            : '',
+          '',
+          'TOTALS — the headline savings figure is confirmedAnnual and nothing else. Never add',
+          'these together. conditionalAnnual is cycles skipped, not a year. atRiskAnnual is shown',
+          'and never counted. unpricedLines have no figure at all and must not be given one.',
+          JSON.stringify({
+            lineCount: a.lineCount,
+            monthlySpend: a.monthlySpend,
+            annualSpend: a.annualSpend,
+            confirmedAnnual: a.totals.confirmedAnnual,
+            conditionalAnnual: a.totals.conditionalAnnual,
+            atRiskAnnual: a.totals.atRiskAnnual,
+            unpricedLines: a.totals.unpricedLines,
+            reviewLines: a.totals.reviewLines,
+          }, null, 1),
+        ].filter(Boolean).join('\n');
+      } else {
+        // The intake gate blocks this client- and server-side, so reaching
+        // here means something upstream let a blank submission through. Say
+        // so rather than writing a general article about subscriptions, which
+        // is not what was paid for.
+        auditBlock = [
+          '',
+          'NO SUBSCRIPTION LINES WERE RECORDED for this submission, so not one decision could be',
+          'made. Say that first, plainly, in the summary and again in missing_or_uncertain. Do not',
+          'produce general advice about managing subscriptions in its place. Tell them to reply to',
+          'their receipt with what they pay for and what each one costs, and the review will be run.',
+        ].join('\n');
+      }
+    }
+
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -1306,6 +1424,14 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // dollar amount — and silently deleting a customer's sentence on that basis
     // would be worse than the problem. It is logged and recorded, so a pattern
     // shows up in one place instead of one report at a time.
+    // The engine's own decisions, attached to the stored report so the ledger
+    // on navigator-status.html renders from the arithmetic rather than from
+    // the prose written about it. A figure shown to the customer and a figure
+    // the engine computed must be the same figure.
+    if (submission.product === 'subscriptions' && subscriptionAnalysis) {
+      report.subscription_analysis = subscriptionAnalysis;
+    }
+
     if (submission.product === 'closing' && closingFindings) {
       try {
         const { problems, totalImpact } = checkClosingConsistency({
