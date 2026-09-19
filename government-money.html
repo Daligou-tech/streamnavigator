@@ -4,18 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Government Money Finder — StreamNavigator</title>
-<meta name="description" content="A shortlist of the rebates, credits and public programs your household is most likely to qualify for — why each one is on your list, what would rule you out, and the office that can confirm today's amount. We hold no live program database and we say so. $19 per report.">
+<meta name="description" content="Twenty-eight rebate, credit and assistance programs checked against your household — what is on your shortlist, what is ruled out and why, and the office that can confirm each one. We hold no current amounts and never state one. Free scorecard first, then $39.">
 <link rel="canonical" href="https://streamnavigator.ai/government-money">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!-- The /closing design system. This page used to carry navigator-shared.css
      and a violet gradient hero. /contractor, /subscriptions and /home-savings
-     had already moved; the audit's first draft recommended leaving this one
-     alone on the grounds that most of the line was still on the old system,
-     and that was simply wrong — three product pages had already migrated and
-     /subscriptions carries a test asserting it. On a page asking for money
-     about tax credits, /closing's restraint is doing commercial work.
+     had already moved; this one followed on 2026-09-19. On a page asking for
+     money about tax credits, /closing's restraint is doing commercial work.
      See docs/GOVERNMENT-MONEY-AUDIT.md §17. -->
 <link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -27,29 +24,75 @@
 /* /government-money only. The shared system is in navigator-editorial.css and
    nothing page-specific belongs in there. */
 
-/* The six facts the report turns on, shown where the customer is typing. */
-.tell{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--rule);
-  margin:0 0 14px;max-width:820px}
-@media(max-width:640px){.tell{grid-template-columns:1fr}}
-.tell div{padding:12px 15px;border-right:1px solid var(--rule-soft);
-  border-bottom:1px solid var(--rule-soft)}
-.tell div:nth-child(2n){border-right:none}
-.tell b{display:block;font-size:.92rem;margin-bottom:4px}
-.tell b .req{font-family:"IBM Plex Mono",monospace;font-size:.72rem;color:var(--flag);
-  margin-right:7px;letter-spacing:.04em}
-.tell span{font-size:.83rem;color:var(--ink-soft);line-height:1.45;display:block}
+.qgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:6px}
+@media(max-width:640px){.qgrid{grid-template-columns:1fr}}
+.qgrid .full{grid-column:1/-1}
+.q label,.qblock > label{font-size:.78rem;font-weight:500;color:var(--ink-soft);
+  margin-bottom:5px;letter-spacing:.02em;text-transform:uppercase;display:block}
+.q input[type=text],.q input[type=number],.q select{width:100%;padding:10px 11px;
+  border:1px solid var(--rule);border-radius:2px;font-family:inherit;font-size:.95rem;
+  background:var(--panel);color:var(--ink)}
+.q input[type=number]{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.q .why{font-size:.79rem;color:var(--ink-soft);margin:5px 0 0;line-height:1.45}
 
-/* The four DON'T-COUNT rules, stated as a feature because they are one. */
-.wontcount{display:grid;grid-template-columns:1fr;border:1px solid var(--rule);max-width:820px}
+/* Two- and three-way pickers. Unanswered is marked, because an unanswered
+   question here is the difference between a shortlist and a shrug. */
+.seg2,.seg3{display:grid;border:1px solid var(--rule);border-radius:2px;overflow:hidden}
+.seg2{grid-template-columns:repeat(2,1fr)}
+.seg3{grid-template-columns:repeat(3,1fr)}
+.seg2 button,.seg3 button{background:var(--panel);border:none;border-right:1px solid var(--rule-soft);
+  font:inherit;font-size:.86rem;padding:10px 4px;cursor:pointer;color:var(--ink-soft)}
+.seg2 button:last-child,.seg3 button:last-child{border-right:none}
+.seg2 button[aria-pressed=true],.seg3 button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.unanswered{border-color:#C9A99F}
+
+.qblock{margin-bottom:18px}
+.ticks{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--rule);border-radius:2px}
+@media(max-width:700px){.ticks{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:430px){.ticks{grid-template-columns:1fr}}
+.ticks label{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;font-size:.87rem;
+  border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft);
+  cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink);margin:0;font-weight:400}
+.ticks label:nth-child(3n){border-right:none}
+@media(max-width:700px){.ticks label:nth-child(3n){border-right:1px solid var(--rule-soft)}
+  .ticks label:nth-child(2n){border-right:none}}
+@media(max-width:430px){.ticks label{border-right:none}}
+.ticks input{margin-top:3px;flex:0 0 auto}
+
+/* The free scorecard. Counts and categories, never a program name. */
+.sc{border:1px solid var(--ink);background:var(--panel);margin:24px 0 0;
+  box-shadow:5px 5px 0 rgba(27,42,58,.08)}
+.sc-head{padding:14px 18px;border-bottom:1px solid var(--ink);font-size:.8rem;color:var(--ink-soft);
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.sc-head b{color:var(--ink);font-weight:600;font-size:.86rem}
+.sc-lede{padding:16px 18px;font-size:1.02rem;line-height:1.5;border-bottom:1px solid var(--rule-soft)}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.sc-grid{grid-template-columns:1fr}}
+.sc-cell{padding:13px 18px;border-bottom:1px solid var(--rule-soft);border-right:1px solid var(--rule-soft)}
+.sc-cell:nth-child(2n){border-right:none}
+.sc-cell .k{font-size:.77rem;color:var(--ink-soft);display:block;margin-bottom:3px}
+.sc-cell .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:1.15rem}
+.sc-cell .v.good{color:var(--ok)}
+.sc-cell .n{font-size:.76rem;color:var(--ink-soft);display:block;margin-top:3px}
+.sc-foot{padding:12px 18px;font-size:.82rem;color:var(--ink-soft)}
+.sc-empty{padding:22px 18px;font-size:.95rem;color:var(--ink-soft)}
+
+.gate{border:1px solid #C9A99F;background:var(--flag-tint);padding:14px 16px;margin:18px 0 0;
+  font-size:.9rem;line-height:1.55}
+.gate ul{margin:8px 0 0;padding-left:20px}
+.gate li{margin-bottom:6px}
+.gate li:last-child{margin-bottom:0}
+.gate b{color:var(--flag)}
+
+/* The four rules that refuse. */
+.wontcount{display:grid;grid-template-columns:1fr;border:1px solid var(--rule);max-width:820px;
+  margin-bottom:26px}
 .wontcount div{padding:14px 16px;border-bottom:1px solid var(--rule-soft)}
 .wontcount div:last-child{border-bottom:none}
 .wontcount b{display:block;font-size:.95rem;margin-bottom:5px}
+.wontcount b .cid{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--flag);
+  margin-right:7px}
 .wontcount span{font-size:.86rem;color:var(--ink-soft);line-height:1.5;display:block}
-
-/* Checkout is switched off until the $19 Payment Link exists. */
-.offline{border:1px solid #C9A99F;background:var(--flag-tint);padding:14px 16px;
-  margin:16px 0 0;font-size:.9rem;line-height:1.55}
-.offline b{color:var(--flag)}
 </style>
 </head>
 <body>
@@ -59,7 +102,7 @@
     <a class="brand" href="/">StreamNavigator <span>/ Government Money Finder</span></a>
     <nav class="nav-links">
       <a href="#how">How it works</a>
-      <a href="#shortlist">What you get</a>
+      <a href="#refuse">What it refuses</a>
       <a href="#sample">Sample report</a>
       <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
@@ -71,20 +114,20 @@
   <div class="wrap hero-grid">
     <div>
       <h1>Which rebates and credits actually apply to you &mdash; and which don&rsquo;t.</h1>
-      <p class="lede">Tell us about your household and what you have bought or changed recently. You get a shortlist of the federal, state, utility and local programs your situation points at, why each one is on your list, what would rule you out, and the office that can confirm today&rsquo;s amount. <strong>We hold no live program database, and every line says where to check it.</strong></p>
+      <p class="lede">Answer nine questions. Twenty-eight rebate, credit and assistance programs are checked against your household, and you get the ones that fit, the ones that don&rsquo;t with the fact that ruled each one out, and the office that can confirm every line. <strong>We hold no current dollar amounts and will never state one.</strong></p>
       <div class="btn-row">
-        <a class="btn" href="#price">Start my shortlist &mdash; $19</a>
-        <span class="btn-note">No logins. No bank connection. No Social Security number.</span>
+        <a class="btn" href="#price">Show me my shortlist &mdash; free</a>
+        <span class="btn-note">The scorecard runs in your browser. Nothing is sent anywhere.</span>
       </div>
     </div>
 
     <div class="ledger" aria-label="Example line from a shortlist">
       <div class="ledger-head"><b>One line, as it appears</b><span>on the shortlist</span></div>
-      <div class="row"><span class="lbl">Federal residential energy credit</span><span class="amt">on your list</span></div>
-      <div class="note"><b>Why you.</b> You told us you own your home and had a heat pump installed last year, which is the qualifying kind of work this category covers.</div>
-      <div class="note"><b>What would rule you out.</b> This kind of credit reduces tax you owe. If you expect to owe no federal income tax for the year, it is worth nothing to you until that changes &mdash; you did not tell us either way, so check it first.</div>
-      <div class="src">Confirm the current rate, cap and deadline in the official instructions for the form your preparer files. We do not hold today&rsquo;s figures and will not guess one.</div>
-      <div class="ledger-foot">1 of 7 on the shortlist &middot; 4 ruled out &middot; 3 things to confirm</div>
+      <div class="row"><span class="lbl">Federal efficiency credit &mdash; heat pumps</span><span class="amt">on your list</span></div>
+      <div class="note"><b>Why you.</b> You own your home and told us a heat pump was installed.</div>
+      <div class="note hit"><b>Before you count it.</b> A rebate from your utility on the same equipment usually reduces the cost the federal credit is worked out on. Apply for the utility rebate first, then work the credit out on what you were left paying.</div>
+      <div class="src">The amount is a percentage of what you actually spent, up to an annual ceiling. We hold no current figures and will not estimate one &mdash; confirm it in the IRS guidance for residential energy credits.</div>
+      <div class="ledger-foot">2 on the shortlist &middot; 5 to confirm &middot; 21 ruled out</div>
     </div>
   </div>
 </div>
@@ -92,79 +135,78 @@
 <section id="how">
   <div class="wrap">
     <h2>How it works</h2>
-    <p class="sec-intro">Narrowing, not guessing. You still confirm every figure &mdash; we tell you exactly where.</p>
+    <p class="sec-intro">You see what we found before you decide whether to buy the report.</p>
     <ol class="steps">
-      <li><h3>Tell us about your household</h3><p>Where you live, whether you own or rent, how many people, roughly what the household earns, whether you expect to owe federal income tax, and anything you have bought, installed or changed in the last couple of years. Two minutes of typing.</p></li>
-      <li><h3>Pay $19</h3><p>One flat price, one report. Nothing renews and there is no account.</p></li>
-      <li><h3>Your situation is matched against how these programs work</h3><p>Federal, state, utility and local categories, checked against what you told us. <strong>We do not hold a live program database and we do not look up today&rsquo;s dollar amounts</strong> &mdash; see what this does not do, below.</p></li>
-      <li><h3>You get a shortlist with a source on every line</h3><p>What each program is, why your answers point at it, what would rule you out, the ones we ruled out already and why, and the office that can confirm the current amount and deadline.</p></li>
+      <li><h3>Answer nine questions</h3><p>Where you live, own or rent, household size, income band, whether you expect to owe federal income tax, what you have had done, what you are planning, and what has changed. About two minutes.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">free</span></h3><p>How many of the twenty-eight programs your answers point at, how many are ruled out, and whether any of them interact &mdash; worked out in your browser before anything is sent anywhere.</p></li>
+      <li><h3>Decide before buying the report</h3><p>If the scorecard finds nothing, you will know that for free. One flat price either way.</p></li>
+      <li><h3>Get the shortlist</h3><p>Every line named, with why your answers point at it, what would rule you out, what governs the amount, the interactions that stop two programs adding up, and the office that can confirm it.</p></li>
+      <li><h3>And the ones that are not for you</h3><p>Every program ruled out, with the specific fact that ruled it out. A customer who learns four programs are not for them has been saved four evenings.</p></li>
     </ol>
   </div>
 </section>
 
-<section id="shortlist">
+<section id="refuse">
   <div class="wrap">
-    <h2>What you get</h2>
-    <p class="sec-intro">A shortlist and the reasoning behind it. Not a database dump, and not a number we made up.</p>
-    <ul class="incl">
-      <li>The programs your situation points at — federal, state, utility and local</li>
-      <li>One sentence per program tying it to something you actually told us</li>
-      <li>What would rule you out, before you spend an evening on it</li>
-      <li>The office or document that can confirm the current amount and deadline</li>
-      <li><strong>The programs we ruled out for you, and the fact that ruled each one out</strong></li>
-      <li>What we could not determine from what you told us</li>
-    </ul>
+    <h2>What it refuses to do</h2>
+    <p class="sec-intro">These four rules are the reason to trust the rest of it. Each one is a way a confident-sounding report leaves a household worse off, and each is enforced by code that can only ever <em>remove</em> a line from your shortlist &mdash; never add one. <a href="https://github.com/Daligou-tech/streamnavigator/blob/main/tests/government-money-engine.test.js">The test enumerates every combination of answers you can give</a> and checks that not one escapes.</p>
 
-    <h3 style="margin:30px 0 10px">Four things this report will not count</h3>
-    <p class="sec-intro">These are the reasons to trust the rest of it. Every one is a way a confident-sounding report makes a household worse off.</p>
     <div class="wontcount">
-      <div><b>A credit against tax you do not owe</b><span>Most of the big residential credits reduce what you owe rather than paying you. In a year you owe nothing they are worth nothing, and a report that hands you the headline figure anyway has told you something false about your own money. Where you have not told us, every affected line says so.</span></div>
-      <div><b>A cap, quoted as if it were a payment</b><span>Headline figures are almost always a ceiling worked out from what you actually spent. We say what governs the amount and send you to the authority that publishes it, rather than putting a number on it.</span></div>
-      <div><b>Two programs on one purchase, added together</b><span>A utility or state rebate often reduces the amount a federal credit is calculated on, so they do not simply stack. Where two programs touch the same purchase we say so and give you the order to work them out in.</span></div>
-      <div><b>A discovery you already made</b><span>Whoever sold you the solar, the EV or the heat pump almost certainly mentioned the credit at the time. Those come back as &ldquo;confirm you have already claimed this&rdquo;, because telling you what you already know is not worth $19.</span></div>
+      <div><b><span class="cid">D1</span>A credit against tax you do not owe</b><span>Most of the large residential credits reduce what you owe rather than paying out. In a year you owe nothing they are worth nothing &mdash; and that is the case where the obvious answer is most wrong, because a household that has just spent thousands on a heat pump is exactly the one most pleased to hear about a credit. If you tell us you expect no federal tax, no non-refundable credit reaches your shortlist.</span></div>
+      <div><b><span class="cid">D3</span>One annual ceiling, counted twice</b><span>Several kinds of efficiency work share a single yearly cap. Three jobs in one year is one ceiling, not three. Where two of your lines share one, both say so &mdash; and if more work is planned, the report tells you the date after which it would count against next year&rsquo;s ceiling instead.</span></div>
+      <div><b><span class="cid">D4</span>A rebate and a credit, added together</b><span>A utility rebate usually reduces the cost a federal credit is calculated on, so the two do not add up. Where both touch the same purchase, both lines carry the order to work them out in.</span></div>
+      <div><b><span class="cid">D5</span>A discovery your installer already made</b><span>Whoever sold you the solar, the EV or the heat pump almost certainly mentioned the credit at the time. Those come back as &ldquo;confirm you already claimed this&rdquo;, because telling you what you already know is not worth $39.</span></div>
+    </div>
+
+    <h3 style="margin-bottom:10px">And the thing it holds no opinion about at all</h3>
+    <div class="limits">
+      <ul>
+        <li><strong>How much you will get.</strong> The catalogue behind this report holds who each program is for, what it is gated on, which programs it interacts with, and the office that administers it. It holds <strong>no dollar amounts, no percentages, no caps, no income thresholds and no deadlines</strong> &mdash; on purpose, because those are exactly the facts that go stale silently, and a figure quoted from a file written last September is no better than one half-remembered. Every line tells you what governs the amount and where to get today&rsquo;s version of it.</li>
+      </ul>
     </div>
   </div>
 </section>
 
 <section id="sample">
   <div class="wrap">
-    <h2>The shape of a report</h2>
-    <p class="sec-intro">An illustration of the structure, not a prediction about you &mdash; the categories below are generic on purpose, because naming a specific program and amount here would be the exact thing this page promises not to do.</p>
+    <h2>A sample report</h2>
+    <p class="sec-intro">The structure, from a household that owns its home in a state with an income tax, had a heat pump and insulation put in, and is planning windows.</p>
 
     <div class="col">
       <div class="finding">
-        <div class="finding-h"><h3>Federal residential energy credit &mdash; on your shortlist</h3><span class="amt">confirm</span></div>
-        <p>You own your home and had qualifying work done last year, which is what this category covers.</p>
-        <p class="basis">The amount is a percentage of what you actually spent, up to a cap, and it reduces tax owed rather than paying out. <strong>You did not tell us whether you expect to owe federal income tax</strong>, so start there &mdash; if you do not, this is worth nothing this year.</p>
-        <p class="cite">Confirm with the official instructions for the form your preparer files</p>
+        <div class="finding-h"><h3>Federal efficiency credit &mdash; heat pumps</h3><span class="amt">on your shortlist</span></div>
+        <p>You own your home and told us a heat pump was installed.</p>
+        <p class="basis">The amount is a percentage of what you actually spent, up to an annual ceiling. <strong>A utility rebate on the same equipment usually reduces the cost this is worked out on</strong> &mdash; apply for the rebate first, then work this out on what you were left paying.</p>
+        <p class="basis">Whoever sold you the heat pump very likely mentioned this credit at the time. Check your paperwork before treating it as new.</p>
+        <p class="cite">Confirm with the IRS guidance for residential energy credits &middot; rules D2, D4, D5</p>
       </div>
 
       <div class="finding">
-        <div class="finding-h"><h3>A utility efficiency rebate in your territory</h3><span class="amt">category only</span></div>
-        <p>Most utilities run rebates on the kind of equipment you described. We do not hold your utility&rsquo;s current program list and will not invent one.</p>
-        <p class="basis">Call your electricity provider and ask what rebates apply to that equipment. Ask <em>before</em> you claim the federal credit: if a rebate comes through, it usually reduces the amount the federal credit is calculated on, and doing it in the other order means redoing the arithmetic.</p>
-        <p class="cite">Confirm with your own utility &middot; the name is on your bill</p>
+        <div class="finding-h"><h3>Federal efficiency credit &mdash; building envelope</h3><span class="amt">on your shortlist</span></div>
+        <p>You told us insulation was put in, and that windows are planned.</p>
+        <p class="basis">This shares one annual ceiling with the other envelope work on your list. <strong>Finishing the windows on or after 1 January puts them against next year&rsquo;s ceiling instead of this one.</strong> Where the cap binds, that scheduling is worth more than anything else on this report.</p>
+        <p class="cite">Confirm with the IRS guidance for residential energy credits &middot; rules D2, D3, T3</p>
       </div>
 
       <div class="finding">
-        <div class="finding-h"><h3>Ruled out: owner-only property relief</h3><span class="amt">not for you</span></div>
-        <p>You told us you rent. This category is for people who own and occupy the property, so it is off your list.</p>
-        <p class="basis">Named rather than quietly dropped, so you can see it was considered. If you buy in the next year or two it becomes worth revisiting.</p>
-        <p class="cite">Ruled out by: tenure</p>
+        <div class="finding-h"><h3>Property tax relief for owner-occupiers</h3><span class="amt">worth checking</span></div>
+        <p>You own and occupy the home. Most states run a homestead exemption and add more for older owners, veterans and people with disabilities.</p>
+        <p class="basis">Written as likely-and-worth-confirming, not as settled fact, because what exists varies by state and county. Almost always has to be applied for once rather than arriving automatically &mdash; which is why it is missed for years by people who already qualify.</p>
+        <p class="cite">Confirm with your county auditor or assessor&rsquo;s office</p>
       </div>
 
       <div class="finding">
-        <div class="finding-h"><h3>Worth revisiting in January, not now</h3><span class="amt">not yet</span></div>
-        <p>You described two more upgrades you are planning. Several of these credits cap what you can claim in a single tax year.</p>
-        <p class="basis">Where a cap resets annually, splitting work across a year boundary can be the difference between claiming once and claiming twice. Confirm this year&rsquo;s cap and what you have already used before you book the work.</p>
-        <p class="cite">Confirm with the official form instructions before scheduling</p>
+        <div class="finding-h"><h3>Ruled out: renter&rsquo;s property tax relief</h3><span class="amt">not for you</span></div>
+        <p>You told us you own. This one is for renters.</p>
+        <p class="basis">Named rather than quietly dropped, so you can see it was considered.</p>
+        <p class="cite">Ruled out by: tenure &middot; 20 others ruled out, each with its reason</p>
       </div>
 
       <div class="finding">
         <div class="finding-h"><h3>What we could not determine</h3><span class="amt">&mdash;</span></div>
-        <p>You did not say whether you expect a federal tax liability, and you did not give the cost of the work.</p>
-        <p class="basis">Both change the answer materially. Named here rather than assumed, because assuming either one is how a report ends up confidently wrong about your money.</p>
-        <p class="cite">Two open questions &middot; both yours to answer</p>
+        <p>You did not tell us which company sends your electricity bill, so the two utility lines have to be confirmed by you, by name.</p>
+        <p class="basis">Named here rather than assumed. A program we can neither rule in nor out is one you should know to check yourself.</p>
+        <p class="cite">1 open question</p>
       </div>
     </div>
   </div>
@@ -172,38 +214,115 @@
 
 <section id="price">
   <div class="wrap">
-    <h2>One flat price per report.</h2>
-    <p class="sec-intro">$19, once. Nothing renews and there is no account.</p>
+    <h2>See what we find. Then decide.</h2>
+    <p class="sec-intro">Nine questions, a free scorecard, and one flat price if you want the detail.</p>
 
     <div class="clean-result">
-      <h3>For this to be worth buying, it has to find you one thing you would have missed.</h3>
-      <p>A $250 utility rebate covers it thirteen times over. If your situation points at nothing worth acting on, the report says so in the first line and lists what was checked and why each one was ruled out &mdash; and you will know in two minutes rather than two weekends.</p>
-      <p><strong>If there is nothing on your report worth acting on, reply to the delivery email and we refund it in full.</strong></p>
+      <h3>A shortlist of nothing is still an answer.</h3>
+      <p>If your answers point at nothing, you will know before you pay &mdash; the scorecard shows it free. What the report gives you then is the verification: all twenty-eight programs named, and the specific fact that rules each one out. That is a different thing from a vague feeling that you are probably not missing anything.</p>
+      <p><strong>And if nothing at all comes back &mdash; no shortlist and nothing even worth confirming &mdash; the charge is refunded automatically and you keep the report.</strong> You do not have to ask, and there is no form. If what <em>does</em> come back turns out not to be worth acting on, reply to the delivery email and we refund it in full.</p>
     </div>
 
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
-        <span class="price-badge">One-time</span>
-        <h3>Government Money Shortlist</h3>
-        <p class="desc">A personalised shortlist of the programs your household is most likely to qualify for &mdash; with the reason for each, what would rule you out, and the authority that can confirm it.</p>
-        <div class="price-amount">$19</div>
-        <div class="price-period">Charged once &middot; not a subscription &middot; nothing renews</div>
+        <span class="price-badge">Free scorecard first</span>
+        <h3>Government Money Finder</h3>
+        <p class="desc">Twenty-eight programs checked against your household &mdash; what fits, what is ruled out and why, what governs each amount, and the office that can confirm it.</p>
+        <div class="price-amount">$39</div>
+        <div class="price-period">Charged once &middot; not a subscription &middot; free scorecard first</div>
 
-        <div class="field-block">
-          <label>Tell us about your situation</label>
-          <p class="hint" style="margin-top:-6px">Six things do most of the work. The more of them you cover, the fewer lines come back as &ldquo;we could not determine this&rdquo;.</p>
-          <div class="tell">
-            <div><b><span class="req">REQUIRED</span>Where you live</b><span>State at minimum; a ZIP is better. Federal programs are the same everywhere &mdash; state, county and utility ones are not, and those are most of them.</span></div>
-            <div><b>Own or rent</b><span>It decides roughly half the list either way.</span></div>
-            <div><b>Household size and roughly what it earns</b><span>A band is plenty. Many programs are gated on income against household size, and nobody needs your exact figure.</span></div>
-            <div><b>Whether you expect to owe federal income tax</b><span>The single most useful thing you can tell us. A credit against tax you do not owe is worth nothing that year.</span></div>
-            <div><b>What you have bought or installed recently</b><span>Solar, a heat pump, a water heater, insulation, windows, an EV, a panel upgrade &mdash; and roughly when.</span></div>
-            <div><b>What has changed, or is about to</b><span>A first home, a new baby, childcare, turning 65, a move, or work you are planning in the next year.</span></div>
+        <div class="qblock">
+          <div class="qgrid">
+            <div class="q">
+              <label for="q-state">Which state</label>
+              <select id="q-state"><option value="">Choose…</option></select>
+              <p class="why">Federal programs are the same everywhere. State, county and utility ones are not, and those are most of them.</p>
+            </div>
+            <div class="q">
+              <label for="q-zip">ZIP code <span style="text-transform:none;font-weight:400">(optional)</span></label>
+              <input type="text" id="q-zip" inputmode="numeric" maxlength="10" placeholder="43215">
+              <p class="why">Identifies your utility territory, and a few federal conditions are tied to the address itself.</p>
+            </div>
+            <div class="q">
+              <label>Do you own or rent?</label>
+              <div class="seg2 unanswered" id="q-tenure">
+                <button type="button" data-v="own" aria-pressed="false">Own</button>
+                <button type="button" data-v="rent" aria-pressed="false">Rent</button>
+              </div>
+              <p class="why">Splits the catalogue roughly in half.</p>
+            </div>
+            <div class="q">
+              <label for="q-size">People in the household</label>
+              <input type="number" id="q-size" min="1" max="20" step="1" placeholder="4">
+              <p class="why">Almost every income test is adjusted for household size.</p>
+            </div>
+            <div class="q">
+              <label for="q-income">Roughly what the household earns</label>
+              <select id="q-income"><option value="">Choose…</option></select>
+              <p class="why">A band is plenty. Nobody here needs your exact figure.</p>
+            </div>
+            <div class="q">
+              <label>Do you expect to owe federal income tax this year?</label>
+              <div class="seg3 unanswered" id="q-liability">
+                <button type="button" data-v="yes" aria-pressed="false">Yes</button>
+                <button type="button" data-v="no" aria-pressed="false">No</button>
+                <button type="button" data-v="unsure" aria-pressed="false">Not sure</button>
+              </div>
+              <p class="why"><strong>The most useful thing you can tell us.</strong> A credit against tax you do not owe is worth nothing that year, and several of these are exactly that.</p>
+            </div>
           </div>
-          <textarea id="intake-description" placeholder="e.g. We own our home in Columbus, Ohio (43215). Household of 4, roughly $95k a year, and we do owe federal tax. Had a heat pump and a new water heater installed in spring last year, about $9,000 all in. Planning attic insulation in the next few months. First baby arrived in March."></textarea>
+
+          <div class="q" style="margin-bottom:16px">
+            <label>Bought or installed in the last two years</label>
+            <div class="ticks" id="q-done"></div>
+            <p class="why">Tick nothing if there was nothing. An empty answer is an answer; a skipped question is not.</p>
+          </div>
+
+          <div class="q" style="margin-bottom:16px">
+            <label>Planning in the next twelve months</label>
+            <div class="ticks" id="q-planned"></div>
+            <p class="why">This is what produces the dated lines &mdash; the ones telling you when to finish the work.</p>
+          </div>
+
+          <div class="q" style="margin-bottom:16px">
+            <label>Changes for the household</label>
+            <div class="ticks" id="q-events"></div>
+          </div>
+
+          <div class="qgrid">
+            <div class="q">
+              <label>Has anything already been claimed for that work?</label>
+              <div class="seg3 unanswered" id="q-claimed">
+                <button type="button" data-v="no" aria-pressed="false">No</button>
+                <button type="button" data-v="yes" aria-pressed="false">Yes</button>
+                <button type="button" data-v="unsure" aria-pressed="false">Not sure</button>
+              </div>
+              <p class="why">The same expense cannot be used twice, and installers very often claim or advise on it at the point of sale.</p>
+            </div>
+            <div class="q">
+              <label for="q-utility">Who sends your electricity bill? <span style="text-transform:none;font-weight:400">(optional)</span></label>
+              <input type="text" id="q-utility" placeholder="the name printed on your bill">
+              <p class="why">Every utility line has to be confirmed with them by name.</p>
+            </div>
+            <div class="q full">
+              <label for="intake-description">Anything else we should know? <span style="text-transform:none;font-weight:400">(optional)</span></label>
+              <textarea id="intake-description" placeholder="Something unusual about the home, a move mid-year, a business use, a second property — whatever the questions above did not cover."></textarea>
+            </div>
+          </div>
         </div>
 
-        <div class="field-block">
+        <!-- The free scorecard. Computed in the browser by the same engine that
+             produces the paid report (navigator-government-money-engine.js),
+             which is why it can be free and why nothing has to leave the page
+             to produce it. Counts and categories only — never a program name. -->
+        <div class="sc" id="scorecard" aria-live="polite">
+          <div class="sc-empty" id="sc-empty">Answer the questions above and your scorecard appears here, worked out in your browser. Nothing is sent anywhere until you choose to buy the report.</div>
+          <div id="sc-body" style="display:none"></div>
+        </div>
+
+        <div id="gate" class="gate" style="display:none"></div>
+
+        <div class="field-block" style="margin-top:22px">
           <label>Upload supporting documents (optional)</label>
           <div class="upload-zone" id="upload-zone">
             <div class="upload-cta">Click to upload or drag files here</div>
@@ -211,7 +330,7 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="hint" style="margin-top:10px">Purchase receipts and utility bills help &mdash; a receipt carries the date and the amount, and a utility bill names the provider whose rebates apply to you. Neither replaces telling us where you live: nothing reads these until after you have paid.</p>
+          <p class="hint" style="margin-top:10px">Purchase receipts and utility bills help the write-up quote real dates and providers. <strong>They do not change the shortlist</strong> &mdash; that is decided by your answers above, which is why the scorecard can be free.</p>
           <p class="hint">Your documents are read once and the copy sent for analysis is deleted immediately afterwards. The upload itself stays in encrypted storage for 90&nbsp;days so we can regenerate your report if anything goes wrong, then is deleted automatically.</p>
         </div>
 
@@ -224,46 +343,26 @@
           ====================================================================
           PAYMENT PORTAL (Stripe Payment Link — no backend required)
 
-          THE $19 LINK DOES NOT EXIST YET, so the href below is the literal
-          REPLACE_WITH_19_ONE_TIME_LINK and the script at the bottom of this
-          page refuses to navigate to it. That is deliberate. The price moved
-          from $39 to $19 on 2026-09-19 (docs/GOVERNMENT-MONEY-AUDIT.md §23:
-          $39 bought less engineering than /subscriptions does at $29, against
-          free substitutes that are better than the product). A page showing
-          $19 against a button that charges $39 is precisely the defect
-          scripts/check-prices.js was written for, so the button is switched
-          off rather than charging the old price.
+          $39 one-time. Link 00w14n0NS6UkdsEa80abK08, matched against
+          prices.config.json by scripts/check-prices.js on every deploy.
 
-          TO GO LIVE:
-            1. Stripe Dashboard -> Product catalog -> "Government Money Finder
-               Report" -> add a $19 one-time price.
-            2. Payment links -> New -> pick that price -> Create link.
-            3. In the link's "After payment" step, set the redirect to
-               https://streamnavigator.ai/navigator-status
-            4. Paste the https://buy.stripe.com/... URL over
-               REPLACE_WITH_19_ONE_TIME_LINK below, AND put its plink id in
-               prices.config.json — moving government-money.html back out of
-               `_skipped` into `pages` with expectedPriceCents 1900.
-            5. DEACTIVATE the old $39 link 00w14n0NS6UkdsEa80abK08 in Stripe.
-               Until it is deactivated anyone holding that URL can still be
-               charged $39 for a product this page prices at $19; it is listed
-               in prices.config.json unreferencedActiveLinks with that reason.
-            6. npm run check-prices
-
-          The price returns to $39 when data/government-programs.json and the
-          gate/DON'T-COUNT engine ship — the same bargain /landlord holds $149
-          under. See docs/GOVERNMENT-MONEY-AUDIT.md §26, Later.
+          The price went to $19 and came back the same day, and the reason is
+          the same reason /landlord holds $149: the audit's lower number was
+          for the UNFIXED product — a 219-word prompt with no engine, no
+          catalogue and no test — and it named the conditions under which $39
+          stands. All three shipped: data/government-programs.json,
+          navigator-government-money-engine.js with the four rules that
+          refuse, and tests/government-money-engine.test.js enumerating every
+          combination of answers a customer can give. So the $19 Payment Link
+          was never created and this link never needed replacing.
+          See docs/GOVERNMENT-MONEY-AUDIT.md §23 and §29.
 
           This page already appends ?client_reference_id=<submission id> to the
           link automatically (see navigator-shared.js) so payment ties back to
           the right submission — nothing else to configure here.
           ====================================================================
         -->
-        <a href="REPLACE_WITH_19_ONE_TIME_LINK" data-stripe-link="government-money" class="btn" id="pay-btn" style="width:100%;text-align:center">Get my shortlist &mdash; $19</a>
-
-        <div class="offline">
-          <b>Checkout is being updated.</b> The price moved to $19 and the new checkout link is not live yet, so this button is switched off rather than charging you the old price. Email <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a> and we will send you the link.
-        </div>
+        <a href="https://buy.stripe.com/00w14n0NS6UkdsEa80abK08" data-stripe-link="government-money" class="btn" id="pay-btn" style="width:100%;text-align:center">Get the full report &mdash; $39</a>
 
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
@@ -283,12 +382,12 @@
     <p class="sec-intro">Read this before you start. It is most of what separates this from a confident-sounding guess.</p>
     <div class="limits">
       <ul>
-        <li><strong>We do not hold a live program database and we do not look programs up.</strong> This runs on general knowledge of how these programs work, which has a cutoff and is not guaranteed to match today&rsquo;s rules. That is exactly why every line comes with the office or document that can confirm the current amount, eligibility and deadline.</li>
+        <li><strong>We do not hold a live program database and we do not look programs up.</strong> The catalogue holds gates and authorities, was last reviewed on the date printed in your report, and holds no amounts at all. Every line names the office that can confirm the current figure, the current rules and the current deadline.</li>
         <li><strong>We do not tell you what you will get.</strong> Most of these figures are ceilings worked out from what you actually spent, several reduce tax owed rather than paying out, and rebates often change what a credit is calculated on. We tell you which programs apply and what governs the amount. You confirm the number.</li>
-        <li><strong>We do not ask for a login, a bank connection, a tax return or a Social Security number.</strong> There is no option to give us any of them. Everything here works from what you type into the form.</li>
+        <li><strong>We do not ask for a login, a bank connection, a tax return or a Social Security number.</strong> There is no option to give us any of them, and the free scorecard never leaves your browser at all.</li>
         <li><strong>We do not file anything for you</strong> and we never contact an agency or a utility on your behalf. You make every claim yourself, or your tax preparer does.</li>
-        <li><strong>We cannot know whether a program still has funding.</strong> Rebate pots close when they empty and reopen on a new fiscal year, and nothing here can see that. Where it matters we say to ask before you spend.</li>
-        <li><strong>Without a state, the report is federal-only.</strong> We will not guess where you live, so the form will not let you buy until you have said. That is the one thing we insist on.</li>
+        <li><strong>We cannot know whether a program still has funding.</strong> Rebate pots close when they empty and reopen on a new fiscal year, and nothing here can see that. Where it matters the line says to ask before you spend.</li>
+        <li><strong>Utility rebates are not government money,</strong> and we include them anyway because they sit on the same purchases, change what the federal credits are worth, and are missed just as often. Every one is marked as a utility line so you know who you are dealing with.</li>
         <li><strong>We cannot make the work go away.</strong> A shortlist of six programs is an evening of phone calls and forms. The report puts them in order and tells you who to call first, but you make the calls.</li>
       </ul>
     </div>
@@ -299,13 +398,14 @@
   <div class="wrap">
     <h2>Questions</h2>
     <div class="col">
-      <details><summary>Why can&rsquo;t I just search for this myself?</summary><div class="body">You can, and for one specific program you probably should. What takes the time is the other direction &mdash; working out which of hundreds of programs are even worth reading about, given that you rent, or that you will owe no federal tax this year, or that you have already used this year&rsquo;s cap. That narrowing is what you are buying. The confirming you still do yourself, and every line tells you where.</div></details>
-      <details><summary>Will you tell me exactly how much I&rsquo;ll get?</summary><div class="body">No, and anyone who does is guessing. Most of these figures are ceilings computed from what you actually spent; several are credits against tax owed, which are worth nothing to a household that owes nothing; and a utility rebate often reduces the amount a federal credit is calculated on. We tell you which programs apply, what governs the amount, and where to compute it.</div></details>
-      <details><summary>How current is this?</summary><div class="body">Not live, and we will not pretend otherwise. This runs on general knowledge of how these programs work &mdash; which has a training cutoff and is not guaranteed to match today&rsquo;s rules. That is exactly why every program on your shortlist comes with the office or document that can confirm the current amount, eligibility and deadline. Treat our descriptions as &ldquo;worth checking&rdquo;, never as &ldquo;what you will get&rdquo;.</div></details>
-      <details><summary>Do you file the claims for me?</summary><div class="body">No &mdash; you get clear, step-by-step next steps for each program, but you, or your tax preparer, submit the actual claim. We never contact an agency or a utility on your behalf.</div></details>
-      <details><summary>Why do you insist on knowing my state?</summary><div class="body">Because federal programs are the same everywhere and everything else is not. State credits, county exemptions and utility rebates are scoped to a place, and they are most of what is worth finding. Without one, the report could only cover the federal side and then tell you so &mdash; which is a thin thing to have paid for. A ZIP code works too, and tells us which utility territory you are in.</div></details>
-      <details><summary>What if I don&rsquo;t qualify for anything?</summary><div class="body">The report says so in the first line, and lists what was checked and the specific fact that ruled each one out. If there is nothing on your report worth acting on, reply to the delivery email and we refund it in full.</div></details>
-      <details><summary>Does this cover anything besides energy?</summary><div class="body">Yes &mdash; property tax relief, first-home programs, childcare, education, and assistance programs gated on income and household size all come up, depending on what you tell us. Energy is simply where the most money has been recently, which is why it comes up most.</div></details>
+      <details><summary>Why can&rsquo;t I just search for this myself?</summary><div class="body">You can, and for one specific program you probably should. What takes the time is the other direction &mdash; working out which of dozens of programs are even worth reading about, given that you rent, or that you will owe no federal tax this year, or that you have already used this year&rsquo;s ceiling, or that your state has no income tax for a credit to sit on. That narrowing is what you are buying, and the report shows its working: every program ruled out, with the fact that ruled it out. The confirming you still do yourself, and every line tells you where.</div></details>
+      <details><summary>Will you tell me exactly how much I&rsquo;ll get?</summary><div class="body">No, and anyone who does is guessing. Most of these figures are ceilings computed from what you actually spent; several are credits against tax owed, which are worth nothing to a household that owes nothing; and a utility rebate often reduces the amount a federal credit is calculated on. The catalogue behind this report holds no figures at all, on purpose &mdash; so the report cannot state one even by accident. It tells you which programs apply, what governs the amount, and where to compute it.</div></details>
+      <details><summary>How current is this?</summary><div class="body">The catalogue is dated, and your report prints the date it was last reviewed. What it holds is the durable part &mdash; who a program is for, what it is gated on, which programs interact, and who administers it &mdash; which changes on a timescale of years. Amounts, caps, thresholds and deadlines change every year, so we hold none of them and send you to the authority instead. If the catalogue is ever more than eighteen months old, every line in your report is automatically downgraded to &ldquo;worth checking&rdquo; and says why.</div></details>
+      <details><summary>Do you file the claims for me?</summary><div class="body">No &mdash; you get the line, the reasoning and the office to take it to, but you, or your tax preparer, submit the actual claim. We never contact an agency or a utility on your behalf.</div></details>
+      <details><summary>Why do you insist on knowing my state?</summary><div class="body">Because federal programs are the same everywhere and everything else is not. It is also one of the few genuinely decisive facts we hold: eight states have no broad individual income tax, so for a household in one of them a state income-tax credit is ruled out outright rather than hedged. A ZIP code helps too &mdash; it tells us which utility territory you are in.</div></details>
+      <details><summary>What if I don&rsquo;t qualify for anything?</summary><div class="body">You will know before you pay &mdash; the scorecard shows it free. What the report gives you then is all twenty-eight programs named and the specific fact that rules each one out. And if nothing at all comes back &mdash; no shortlist and nothing even worth confirming &mdash; the charge is refunded automatically, you keep the report, and you do not have to ask: the engine knows the shortlist was empty, so the refund is queued the moment the report is written. If what does come back turns out not to be worth acting on, that is a judgement call rather than something we can detect, so reply to the delivery email and we refund it in full.</div></details>
+      <details><summary>What if I come back next year?</summary><div class="body">Each report is its own $39 and there is no subscription. But if you buy a second one under the same email, it is compared against your first: the report leads with what <em>opened</em> since then &mdash; you bought the house, the work got finished, the household changed &mdash; and what closed. That comparison is the only honest basis for telling somebody to look at something again, and a cold report can never make it.</div></details>
+      <details><summary>Does this cover anything besides energy?</summary><div class="body">Yes &mdash; property tax relief, first-home assistance, childcare, education, retirement saving, health insurance premium help, and assistance programs gated on income and household size. Energy is simply where the most money has been recently, which is why it comes up most.</div></details>
     </div>
   </div>
 </section>
@@ -313,17 +413,17 @@
 <section id="last">
   <div class="wrap col">
     <h2>Find out in two minutes what is worth your evening.</h2>
-    <p class="sec-intro">A shortlist, the reason for every line, and the office that can confirm it. $19, once.</p>
+    <p class="sec-intro">Nine questions, a free scorecard, and a shortlist that shows its working.</p>
     <div class="btn-row">
-      <a class="btn" href="#price" id="final-cta">Start my shortlist</a>
-      <span class="btn-note">No logins. No bank connection. No Social Security number.</span>
+      <a class="btn" href="#price" id="final-cta">Show me my shortlist &mdash; free</a>
+      <span class="btn-note">No logins. Nothing leaves your browser.</span>
     </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p class="disc">Automated research for informational purposes only. Not legal, tax or financial advice. Government Money Finder does not file, submit or apply for anything on your behalf &mdash; you make every claim yourself. We hold no live database of government or utility programs and do not look them up; program eligibility, availability, amounts and deadlines are determined solely by the issuing government agency or utility, change without notice, and must be confirmed with the authority named on each line before you act on it.</p>
+    <p class="disc">Automated research for informational purposes only. Not legal, tax or financial advice. Government Money Finder does not file, submit or apply for anything on your behalf &mdash; you make every claim yourself. The catalogue behind each report holds eligibility conditions and administering authorities only; it holds no dollar amounts, caps, thresholds or deadlines, and we do not look them up. Program eligibility, availability, amounts and deadlines are determined solely by the issuing government agency or utility, change without notice, and must be confirmed with the authority named on each line before you act on it.</p>
     <div class="foot-links">
       <a href="/">All Navigators</a>
       <a href="/home-savings">Home Savings Navigator</a>
@@ -343,78 +443,6 @@
 
 <script src="/navigator-government-money-engine.js"></script>
 <script src="/navigator-shared.js"></script>
-<script>
-(function(){
-  var zone = document.getElementById('upload-zone');
-  var input = document.getElementById('upload-input');
-  var list = document.getElementById('upload-list');
-  var uploader = wireUploadZone(zone, input, list);
-
-  // The final CTA used to be an anchor to #pricing, which asked the visitor to
-  // make one more decision at the moment of highest intent. It scrolls to the
-  // box and puts the cursor in it instead.
-  document.getElementById('final-cta').addEventListener('click', function(e){
-    e.preventDefault();
-    var box = document.getElementById('intake-description');
-    document.getElementById('price').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(function(){ box.focus(); }, 420);
-  });
-
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
-    e.preventDefault();
-    var btn = e.currentTarget;
-    var errEl = document.getElementById('intake-error');
-    function fail(msg, focusEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-      showToast(msg);
-      if (focusEl) focusEl.focus();
-    }
-    errEl.style.display = 'none';
-
-    // The price moved to $19 and the Stripe link for it does not exist yet.
-    // Sending the customer to the old link would charge them $39 for a page
-    // that says $19 — the exact defect scripts/check-prices.js exists to
-    // catch. Refuse instead. See the setup comment above this button.
-    var href = btn.getAttribute('href') || '';
-    if (href.indexOf('REPLACE_WITH_') !== -1) {
-      fail('Checkout is being updated and this button is switched off rather than charging you '
-        + 'the old price. Email hello@streamnavigator.ai and we will send you the link.');
-      return;
-    }
-
-    var emailEl = document.getElementById('intake-email');
-    var descEl = document.getElementById('intake-description');
-    var email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-
-    // The same gate api/navigator-intake.js enforces — both load
-    // navigator-government-money-engine.js, so a customer cannot reach
-    // checkout with input the server would then reject, and a file upload
-    // does not substitute for telling us where you live. Before this existed,
-    // a single character reached a $39 checkout.
-    var sufficiency = GovernmentMoneyEngine.checkSufficiency({ description: descEl.value });
-    if (!sufficiency.sufficient) { fail(sufficiency.message, descEl); return; }
-
-    var files = uploader.getFiles();
-    var originalText = btn.textContent;
-    btn.textContent = 'Saving your submission…';
-    btn.style.pointerEvents = 'none';
-    try {
-      var submission = await submitNavigatorIntake({
-        product: 'government-money',
-        email: email,
-        formData: { description: descEl.value.trim() },
-        files: files,
-      });
-      goToStripe(href, { id: submission.id, token: submission.token, product: 'government-money' }, email);
-    } catch (err) {
-      fail(err.message || 'Something went wrong — please try again.');
-      btn.textContent = originalText;
-      btn.style.pointerEvents = 'auto';
-    }
-  });
-})();
-</script>
+<script src="/government-money-intake.js"></script>
 </body>
 </html>

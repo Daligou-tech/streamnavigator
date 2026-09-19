@@ -1,0 +1,377 @@
+{
+  "version": 1,
+  "asOf": "2026-09-19",
+  "holdsCurrentAmounts": false,
+  "_what_this_is": "The gate catalogue behind /government-money. It holds what is DURABLE about each kind of program — who it is for, what it is gated on, which other programs it interacts with, and the office that can confirm it — and deliberately holds NO dollar amounts, percentages, caps, thresholds or deadlines. See _why_no_amounts.",
+  "_why_no_amounts": "A held figure is a figure that goes stale silently. Amounts, caps, income thresholds and deadlines are exactly the facts that change every year, and a report that prints one from a file written in September is the same defect as a model reciting one from its training data — the audit's whole finding, moved from the prompt into a JSON file. What does NOT change on that timescale is that a credit against tax owed is useless to a household that owes none, that a renter cannot claim an owner's credit, that a rebate usually reduces the basis a federal credit is computed on, and that nine states have no individual income tax. Those are what this file holds, and they are enough to decide every line. The amount is then confirmed by the customer, at the authority named on the line. tests/government-money-engine.test.js fails if any entry ever acquires a number.",
+  "_confidence": "high = a long-standing, structurally stable feature of how this kind of program works. check = commonly true but varies by state, utility or year, and is written as likely-and-worth-confirming. Nothing in this file is written as settled fact about a specific current program.",
+
+  "authorities": {
+    "federal-tax": "the IRS guidance for residential energy credits — ask your tax preparer, or search irs.gov for the residential energy credit guidance for the year the work was finished",
+    "federal-vehicle": "the IRS clean vehicle credit guidance, plus the dealer, who must supply a time-of-sale report",
+    "federal-benefit": "benefits.gov, or the federal agency that administers the program",
+    "state-tax": "your state's department of revenue or taxation",
+    "state-energy": "your state energy office, or your local community action agency",
+    "state-housing": "your state housing finance agency",
+    "state-human-services": "your state department of human services — the 211 helpline will route you",
+    "county-assessor": "your county auditor or assessor's office",
+    "utility": "your electricity and gas providers — the names are printed on your bill",
+    "marketplace": "healthcare.gov, or your state's own insurance marketplace"
+  },
+
+  "capGroups": {
+    "fed-efficiency-annual": "A federal annual aggregate for efficiency work on the home envelope and systems. Several kinds of work share one yearly ceiling, so doing three of them in one year does not produce three ceilings — and splitting work across a year boundary can produce two.",
+    "fed-efficiency-heatpump": "A separate federal annual ceiling for heat-pump equipment, which does not share with the envelope group above."
+  },
+
+  "noIndividualIncomeTax": ["AK", "FL", "NV", "SD", "TN", "TX", "WA", "WY"],
+  "_noIndividualIncomeTax": "States with no broad individual income tax, so a state income-tax credit cannot apply to a resident of one. New Hampshire is deliberately NOT on this list: it has no tax on wages but has taxed investment income, so 'no state income tax credits exist for you' would be too strong a statement to make about a New Hampshire household. Structural and stable — this is the one genuinely state-specific fact in the file, and it produces a real ruled-out line rather than a hedge.",
+
+  "incomeBands": ["under-50k", "50-75k", "75-100k", "100-150k", "over-150k", "prefer-not-say"],
+  "_incomeBands": "Bands, never an exact figure — nobody needs one, and most real gates are against household size and area median income rather than a flat number. A gate listed here is therefore a SCREEN, not a determination: being in a qualifying band produces 'check', not 'claim'.",
+
+  "actions": [
+    "solar", "battery", "geothermal", "heat-pump", "heat-pump-water-heater",
+    "water-heater", "furnace-ac", "insulation", "air-sealing", "windows", "doors",
+    "panel-upgrade", "induction-range", "ev-new", "ev-used", "ev-charger",
+    "energy-audit", "smart-thermostat"
+  ],
+
+  "events": [
+    "first-home", "new-child", "paid-childcare", "tuition", "turned-65",
+    "veteran", "disability", "low-income-year", "bought-own-health-insurance"
+  ],
+
+  "programs": [
+    {
+      "id": "fed-efficiency-envelope",
+      "scope": "federal",
+      "label": "Federal home energy efficiency credit — building envelope",
+      "covers": "insulation, air sealing, exterior doors and windows",
+      "tenure": ["own"],
+      "residence": "principal",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["insulation", "air-sealing", "windows", "doors"],
+      "capKind": "percentage-of-cost-with-cap",
+      "capGroup": "fed-efficiency-annual",
+      "basisReducedByRebate": true,
+      "confidence": "high",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-efficiency-heatpump",
+      "scope": "federal",
+      "label": "Federal home energy efficiency credit — heat pumps",
+      "covers": "air-source heat pumps and heat-pump water heaters",
+      "tenure": ["own"],
+      "residence": "principal",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["heat-pump", "heat-pump-water-heater"],
+      "capKind": "percentage-of-cost-with-cap",
+      "capGroup": "fed-efficiency-heatpump",
+      "basisReducedByRebate": true,
+      "confidence": "high",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-efficiency-systems",
+      "scope": "federal",
+      "label": "Federal home energy efficiency credit — other systems",
+      "covers": "efficient furnaces, air conditioners, conventional water heaters and electrical panel upgrades done as part of qualifying work",
+      "tenure": ["own"],
+      "residence": "principal",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["furnace-ac", "water-heater", "panel-upgrade"],
+      "capKind": "percentage-of-cost-with-cap",
+      "capGroup": "fed-efficiency-annual",
+      "basisReducedByRebate": true,
+      "confidence": "check",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-efficiency-audit",
+      "scope": "federal",
+      "label": "Federal credit for a home energy audit",
+      "covers": "a written home energy assessment by a qualified auditor",
+      "tenure": ["own"],
+      "residence": "principal",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["energy-audit"],
+      "capKind": "percentage-of-cost-with-cap",
+      "capGroup": "fed-efficiency-annual",
+      "basisReducedByRebate": true,
+      "confidence": "check",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-clean-energy",
+      "scope": "federal",
+      "label": "Federal residential clean energy credit",
+      "covers": "solar electric, solar water heating, battery storage, geothermal heat pumps and small wind",
+      "tenure": ["own"],
+      "residence": "principal-or-second",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "carryforward": true,
+      "qualifyingActions": ["solar", "battery", "geothermal"],
+      "capKind": "percentage-of-cost",
+      "basisReducedByRebate": true,
+      "confidence": "high",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-ev-new",
+      "scope": "federal",
+      "label": "Federal new clean vehicle credit",
+      "covers": "a qualifying new plug-in or fuel-cell vehicle",
+      "tenure": ["own", "rent"],
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["ev-new"],
+      "capKind": "fixed-with-eligibility-conditions",
+      "incomeBands": ["under-50k", "50-75k", "75-100k", "100-150k"],
+      "confidence": "check",
+      "authority": "federal-vehicle",
+      "note": "Eligibility turns on the specific vehicle as well as the buyer — assembly location, battery sourcing and a price ceiling all apply, and in recent years the credit could be taken at the dealer instead of on the return. The dealer must give you a time-of-sale report either way; without it the credit is usually lost."
+    },
+    {
+      "id": "fed-ev-used",
+      "scope": "federal",
+      "label": "Federal used clean vehicle credit",
+      "covers": "a qualifying used plug-in or fuel-cell vehicle bought from a dealer",
+      "tenure": ["own", "rent"],
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["ev-used"],
+      "capKind": "percentage-of-price-with-cap",
+      "incomeBands": ["under-50k", "50-75k", "75-100k"],
+      "confidence": "check",
+      "authority": "federal-vehicle",
+      "note": "Private-party sales are generally excluded, and there are limits on the vehicle's age and price."
+    },
+    {
+      "id": "fed-ev-charger",
+      "scope": "federal",
+      "label": "Federal credit for home EV charging equipment",
+      "covers": "a charger installed at the home",
+      "tenure": ["own", "rent"],
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "qualifyingActions": ["ev-charger"],
+      "capKind": "percentage-of-cost-with-cap",
+      "basisReducedByRebate": true,
+      "confidence": "check",
+      "authority": "federal-tax",
+      "note": "This one has a geographic condition — eligibility has been limited to homes in certain census tracts. Confirm your address qualifies before counting on it."
+    },
+    {
+      "id": "fed-child",
+      "scope": "federal",
+      "label": "Federal child tax credit",
+      "covers": "a qualifying child in the household",
+      "requiresEvents": ["new-child"],
+      "partiallyRefundable": true,
+      "confidence": "high",
+      "authority": "federal-tax",
+      "note": "Partly refundable, so unlike the energy credits it can be worth something even in a year with little tax owed."
+    },
+    {
+      "id": "fed-childcare",
+      "scope": "federal",
+      "label": "Federal child and dependent care credit",
+      "covers": "care you paid for so that you could work or look for work",
+      "requiresEvents": ["paid-childcare"],
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "confidence": "high",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-earned-income",
+      "scope": "federal",
+      "label": "Federal earned income credit",
+      "covers": "working households under an income ceiling that rises with household size",
+      "refundable": true,
+      "incomeBands": ["under-50k", "50-75k"],
+      "confidence": "high",
+      "authority": "federal-tax",
+      "note": "Refundable, so it can pay out even with no tax owed. The ceiling depends heavily on household size and on whether there are children."
+    },
+    {
+      "id": "fed-education",
+      "scope": "federal",
+      "label": "Federal education credits",
+      "covers": "tuition and required expenses for higher education",
+      "requiresEvents": ["tuition"],
+      "partiallyRefundable": true,
+      "incomeBands": ["under-50k", "50-75k", "75-100k", "100-150k"],
+      "confidence": "high",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-saver",
+      "scope": "federal",
+      "label": "Federal retirement savings contributions credit",
+      "covers": "money you put into a retirement account, for lower- and middle-income households",
+      "requiresTaxLiability": true,
+      "refundable": false,
+      "incomeBands": ["under-50k", "50-75k"],
+      "confidence": "check",
+      "authority": "federal-tax"
+    },
+    {
+      "id": "fed-marketplace",
+      "scope": "federal",
+      "label": "Health insurance marketplace premium assistance",
+      "covers": "households buying their own health cover rather than getting it through an employer",
+      "requiresEvents": ["bought-own-health-insurance"],
+      "refundable": true,
+      "confidence": "high",
+      "authority": "marketplace",
+      "note": "Assistance is applied to the premium during the year and reconciled on the return, so income changes mid-year matter."
+    },
+    {
+      "id": "state-income-credit",
+      "scope": "state",
+      "label": "Your state's own version of the federal credits",
+      "covers": "state income-tax credits that often mirror or top up the federal energy, childcare and earned-income credits",
+      "requiresStateIncomeTax": true,
+      "confidence": "check",
+      "authority": "state-tax"
+    },
+    {
+      "id": "state-property-relief",
+      "scope": "state",
+      "label": "Property tax relief for owner-occupiers",
+      "covers": "homestead exemptions and the extra relief many states add for older owners, veterans and people with disabilities",
+      "tenure": ["own"],
+      "residence": "principal",
+      "confidence": "check",
+      "authority": "county-assessor",
+      "note": "Almost always has to be applied for once rather than arriving automatically, and is often missed for years by people who already qualify."
+    },
+    {
+      "id": "state-renter-relief",
+      "scope": "state",
+      "label": "Renter's property tax relief",
+      "covers": "the renter's credit or 'circuit breaker' some states run, on the basis that rent carries property tax through it",
+      "tenure": ["rent"],
+      "requiresStateIncomeTax": true,
+      "incomeBands": ["under-50k", "50-75k", "75-100k"],
+      "confidence": "check",
+      "authority": "state-tax"
+    },
+    {
+      "id": "state-weatherization",
+      "scope": "state",
+      "label": "Weatherization assistance",
+      "covers": "insulation, air sealing and heating repairs done at no cost for income-qualified households",
+      "incomeBands": ["under-50k", "50-75k"],
+      "confidence": "high",
+      "authority": "state-energy",
+      "note": "Federally funded and delivered locally, usually through a community action agency. Renters can sometimes qualify with the owner's consent."
+    },
+    {
+      "id": "state-energy-assistance",
+      "scope": "state",
+      "label": "Home energy bill assistance",
+      "covers": "help with heating and cooling bills, and in many states with a crisis shut-off",
+      "incomeBands": ["under-50k", "50-75k"],
+      "confidence": "high",
+      "authority": "state-human-services"
+    },
+    {
+      "id": "state-first-home",
+      "scope": "state",
+      "label": "First-time homebuyer assistance",
+      "covers": "down payment help, closing cost assistance and in some states a mortgage credit certificate",
+      "requiresEvents": ["first-home"],
+      "confidence": "check",
+      "authority": "state-housing",
+      "note": "A mortgage credit certificate has to be obtained BEFORE closing, which is why this one is so often missed."
+    },
+    {
+      "id": "state-senior-relief",
+      "scope": "state",
+      "label": "Age- or disability-based relief",
+      "covers": "property tax freezes and deferrals, utility discounts and transport concessions",
+      "requiresEvents": ["turned-65", "disability"],
+      "confidence": "check",
+      "authority": "county-assessor"
+    },
+    {
+      "id": "state-veteran-relief",
+      "scope": "state",
+      "label": "Veteran property tax and fee relief",
+      "covers": "property tax exemptions and fee waivers for veterans, often larger where a disability rating applies",
+      "requiresEvents": ["veteran"],
+      "confidence": "check",
+      "authority": "county-assessor"
+    },
+    {
+      "id": "util-efficiency-equipment",
+      "scope": "utility",
+      "label": "Utility rebate on efficient equipment",
+      "covers": "heat pumps, water heaters, furnaces, air conditioners and efficient appliances",
+      "qualifyingActions": ["heat-pump", "heat-pump-water-heater", "water-heater", "furnace-ac", "induction-range"],
+      "reducesFederalBasis": true,
+      "confidence": "check",
+      "authority": "utility",
+      "note": "Very often has to be applied for within a window after installation, and the window is short."
+    },
+    {
+      "id": "util-weatherization",
+      "scope": "utility",
+      "label": "Utility rebate on insulation and air sealing",
+      "covers": "envelope work, sometimes conditional on an audit first",
+      "qualifyingActions": ["insulation", "air-sealing", "windows", "doors"],
+      "reducesFederalBasis": true,
+      "confidence": "check",
+      "authority": "utility"
+    },
+    {
+      "id": "util-audit",
+      "scope": "utility",
+      "label": "Free or discounted utility energy audit",
+      "covers": "an assessment of the home, often with free equipment fitted on the visit",
+      "qualifyingActions": ["energy-audit", "insulation", "air-sealing", "heat-pump", "furnace-ac"],
+      "confidence": "check",
+      "authority": "utility",
+      "note": "Worth doing first where it exists: some utility rebates are only available to households that have had the audit."
+    },
+    {
+      "id": "util-smart-controls",
+      "scope": "utility",
+      "label": "Utility rebate on thermostats and controls",
+      "covers": "smart thermostats and connected controls, sometimes free in exchange for enrolling in demand response",
+      "qualifyingActions": ["smart-thermostat"],
+      "reducesFederalBasis": true,
+      "confidence": "check",
+      "authority": "utility"
+    },
+    {
+      "id": "util-solar-export",
+      "scope": "utility",
+      "label": "Net metering or solar export credit",
+      "covers": "what your utility pays or credits for power your panels send back",
+      "qualifyingActions": ["solar", "battery"],
+      "confidence": "check",
+      "authority": "utility",
+      "note": "Not a rebate — an ongoing tariff, and the terms differ enormously between utilities and change for new customers."
+    },
+    {
+      "id": "util-income-discount",
+      "scope": "utility",
+      "label": "Income-qualified utility rate discount",
+      "covers": "a permanently reduced rate or a fixed monthly credit for income-qualified households",
+      "incomeBands": ["under-50k", "50-75k"],
+      "confidence": "check",
+      "authority": "utility",
+      "note": "Separate from bill assistance, and a household can usually have both."
+    }
+  ]
+}

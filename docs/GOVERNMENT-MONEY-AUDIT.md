@@ -1273,3 +1273,124 @@ meant touching the same lines twice.
 - **The Stripe link itself.** Checkout is switched off until somebody creates
   the $19 Payment Link. Until then this page takes no money at all, which is
   the correct state for a page whose old link charges twice what it says.
+
+---
+
+## 29. Fix Next and Later, shipped — and a correction to §23
+
+Everything in §26 shipped on 2026-09-19 except one item, which was deliberately
+not built; the reason is at the end.
+
+### A correction to §23's pricing recommendation
+
+**§23 recommended $19 and it was wrong by the end of the day — not because the
+reasoning was wrong, but because the conditions it set were met.**
+
+The exact words were: *"$19 today, $39 when data/government-programs.json and
+the Stage 1–2 engine ship"*, and the reasoning was that the $39 was for a
+219-word prompt with no engine, no catalogue and no test. All three conditions
+shipped within hours:
+
+- `data/government-programs.json` — 28 programs, each declaring its gates and
+  the authority that can confirm it, with a per-entry `asOf`;
+- `navigator-government-money-engine.js` — the four stages of §22, including a
+  safety pass that can only lower a verdict;
+- `tests/government-money-engine.test.js` — 10,368 combinations of every
+  answer a customer can give.
+
+So the price is **$39**, unchanged, and the practical consequence is the best
+one available: **the $19 Payment Link was never created, the original link was
+never retired, and there is no Stripe action outstanding.** This is the
+`landlord-stays-at-$149` pattern exactly — the audit's lower number was for the
+unfixed product, and the conditions attached to the higher one are what make it
+honest.
+
+### What shipped
+
+| # | §26 item | What it is |
+|---|---|---|
+| 7 | Fix Next | **The nine-question form.** State, ZIP, tenure, household size, income band, federal tax liability, work done, work planned, life events — plus an already-claimed answer and an optional utility name. Five are required; the two checklists distinguish an empty answer from a skipped question, which the engine relies on. |
+| 8 | Fix Next | **Stages 1–3 of §22.** Gate → DON'T-COUNT → time. The model is demoted to writer, under the same contract `/closing`, `/rental`, `/landlord`, `/subscriptions` and `/home-savings` run: it may not originate a program, a verdict, a date or an amount. |
+| 9 | Fix Next | **The combinatorial test.** 3 states × 2 tenures × 6 income bands × 3 liability answers × 3 already-claimed answers × 8 work sets × 4 event sets × 3 planned sets = **10,368 customers**, each asserted against D1, D3, D4, D5, tenure, the state income-tax gate, the income screen, the dated-NOT-NOW rule, and the demote-only invariant. |
+| 10 | Fix Next | **The free Eligibility Snapshot.** Stage 1–3 run in the browser with no model call and no network request. Counts, scopes and interaction flags; never a program name. |
+| 11 | Later | **The catalogue** — see below for what it deliberately does not hold. |
+| 12 | Later (part) | **The re-check.** A second report under the same email is compared with the first and leads with what *opened* and what *closed*. |
+| 13 | Later | **The null-result refund, made automatic.** |
+| I7 | Important | The page now says plainly that a utility is not the government, and why they are included anyway. |
+| N2, N4 | Nice to have | The report's shape is described before the ask; the utility is asked for by name. |
+
+### The one design decision worth stating on its own
+
+**The catalogue holds no amounts.** No dollar figures, no percentages, no caps,
+no income thresholds, no deadlines — and `tests/government-money-engine.test.js`
+fails if a `$` or a `%` ever appears in the file.
+
+This was not caution. A held figure goes stale *silently*, which is the audit's
+own central finding moved from a prompt into a JSON file and made harder to
+see. What the catalogue holds instead is the part that changes on a timescale
+of years: who a program is for, what it is gated on, which programs interact
+with it, and who administers it. That is enough to decide every line. The
+amount is then confirmed by the customer, at the authority printed on that
+line.
+
+It also has a consequence worth naming: **the writer physically cannot state a
+figure from the data it is given.** §13's four unsupported claims were closed by
+rewriting copy, which is an instruction. This closes them structurally.
+
+`tests/navigator-claims.test.js` was tightened to match: a corpus existing no
+longer licenses a page to claim it checks current amounts. Only a corpus that
+declares `holdsCurrentAmounts: true` does, and none does.
+
+### The automatic refund, and the line it is drawn on
+
+A report where **nothing at all** comes back — no shortlist *and* nothing worth
+confirming — queues its own refund at generation time, onto the same
+`due_thin_result` queue Contractor Navigator has used since it started
+refunding thin document sets. The customer keeps the report and does not pay
+for it, and nobody has to ask.
+
+The trigger is deliberately **not** an empty shortlist alone. A report with no
+claims but eight lines worth confirming is a report that did its job. That case
+remains the promise the page makes in words — reply to the delivery email — and
+is a judgement call rather than something code can detect honestly.
+
+### What was deliberately not built
+
+**The January re-check email (§26 item 12, second half).** `api/rental-reminders.js`
+and `api/landlord-reminders.js` exist as precedent, but both belong to products
+with an entitlement the customer bought. `/government-money` has none, and its
+page says plainly that nothing renews and there is no account. Mailing past
+customers in January would be an unsolicited send that contradicts the page —
+and `tests/navigator-claims.test.js` exists precisely to stop a page selling a
+recurring relationship the code does not grant. The dated lines are in the
+report itself instead, and the FAQ explains what a second report gets compared
+against.
+
+### Verified
+
+- **79 suites pass** (two new: the engine and the page contract).
+  `npm run check-prices`: **11 of 11** pages consistent, `Government Money
+  Finder $39 link ok`.
+- Driven live in the browser at 1280px and 375px: catalogue loads, 57 places,
+  28 programs considered, no console errors, no horizontal overflow, every grid
+  collapsing correctly on a phone.
+- D1 visible in the free scorecard: a Texas household with a heat pump and no
+  federal tax liability gets "Nothing fits outright" rather than a credit it
+  cannot use.
+- The gate refuses a half-filled form by naming the missing dropdown, and
+  creates no submission. One bug was found this way and fixed: a submission
+  with structured answers but an empty state box was being routed down the
+  legacy free-text path and told to "tell us about your situation" instead of
+  being told which dropdown was empty. It has a regression test.
+
+### What is still open
+
+- **The catalogue is 28 programs and general-purpose.** It holds no
+  state-specific program lists beyond the one genuinely decisive state fact —
+  the eight states with no individual income tax. Adding real per-state
+  programme sets is the next meaningful increase in value, and the claims test
+  is already in place to stop the page naming one the file does not hold.
+- **No utility territory data.** The customer types their utility's name; the
+  ZIP is collected but nothing maps it yet.
+- **Cost is still not collected**, so nothing can be said about how a cap
+  binds in a particular case — only that one applies and what governs it.

@@ -332,7 +332,26 @@ test('the deal-breaker check is sold, not just implemented', () => {
 
 test('no page sells a lookup against live program or incentive data', () => {
   const corpus = fs.readdirSync(path.join(ROOT, 'data')).filter((f) => f !== '.gitkeep');
-  const hasCorpus = (product) => corpus.some((f) => f.startsWith(`${product}-`));
+
+  // A corpus existing is NOT enough to license this claim, and that is the
+  // difference between this guard and the reference-data one below.
+  //
+  // data/government-programs.json arrived on 2026-09-19 and holds gates and
+  // administering authorities and deliberately no amounts, caps, thresholds or
+  // deadlines — because those are the facts that go stale silently, which is
+  // the whole finding the audit made about the prompt. A file that holds none
+  // of them does not license a page to say it checks current amounts. Only a
+  // corpus that declares `holdsCurrentAmounts: true` does, and nothing here
+  // does yet.
+  const hasCorpus = (product) => corpus.some((f) => {
+    if (!f.startsWith(`${product}-`) || !f.endsWith('.json')) return false;
+    try {
+      const held = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', f), 'utf8'));
+      return held.holdsCurrentAmounts === true;
+    } catch (err) {
+      return false;
+    }
+  });
 
   // A page DENYING the lookup uses the same words and must not fail a test
   // that exists to keep that denial there.

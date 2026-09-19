@@ -51,6 +51,7 @@ const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 const subscriptionEngine = require('../../navigator-subscription-engine');
 const homeSavingsEngine = require('../../navigator-home-savings-engine');
+const governmentMoneyEngine = require('../../navigator-government-money-engine');
 const {
   extractHouseholdBills, merge: mergeHouseholdBills,
 } = require('./home-savings-extract');
@@ -359,46 +360,55 @@ State plainly that this is automated analysis, not financial advice, and that we
   'government-money': {
     label: 'Government Money Finder',
     requiresFiles: false,
-    // The audit of 2026-09-19 (docs/GOVERNMENT-MONEY-AUDIT.md) found the page
-    // and this prompt written to contradict each other: the page sold "AI
-    // searches current programs", "estimated dollar value of each program" and
-    // "deadlines or windows you shouldn't miss", while HONESTY_RULES above
-    // forbids by name "the name and current dollar amount of a specific
-    // government program" and this task told the model to generalise instead.
-    // Three of the six things the customer paid for were declined here as
-    // policy.
+    // Like Closing, Rental, Landlord, Subscriptions and Home Savings, and for
+    // the same reason: the shortlist in this report is produced by
+    // navigator-government-money-engine.js against data/government-programs.json,
+    // not by the model. The model's job is to write it up. It must not
+    // originate a program, a verdict, a date or — the one that matters most
+    // here — an amount.
     //
-    // The page has been rewritten to sell what this actually produces: a
-    // shortlist, the reason each line is on it, what would rule them out, and
-    // the authority to confirm it with. These rules are the other half of that
-    // bargain — without them the copy would be a promise again.
-    //
-    // The four DON'T-COUNT rules are the ones that matter, and they are the
-    // /subscriptions lesson applied here: on the lines they cover, the obvious
-    // answer is the one that costs the customer. The obvious answer for a
-    // household with no tax liability is "you qualify for a $2,000 credit".
-    // The correct answer is "that is worth nothing to you this year."
-    task: `You are the analysis engine behind Government Money Finder. A customer paid for a personalised shortlist of the rebates, tax credits, utility incentives and grants their situation points at, based on what they told us about their household — where they live, whether they own or rent, household size, income, what they have bought or installed recently, and any life changes.
+    // What this replaced was a 219-word prompt told to judge eligibility from
+    // one free-text box, on a page selling "AI searches current programs" and
+    // "estimated dollar value of each program". The audit of 2026-09-19 found
+    // seven ways that arrangement puts a number in front of a customer that
+    // they will never receive, and the first of them is the whole problem in
+    // one line: a household that has just spent thousands on a heat pump is
+    // exactly the household most pleased to hear about a credit, and exactly
+    // the household for whom it is worth nothing if they owe no tax. None of
+    // those was a reasoning failure. Nothing was checking a list.
+    task: `You are the writer for a Government Money Finder shortlist. A customer told us where they live, whether they own or rent, how big the household is and roughly what it earns, whether they expect to owe federal income tax, what they have bought or installed, what they are planning, and what has changed for the household. They paid for a call on every program we hold.
 
-You have no live access to any program database. Eligibility rules, dollar amounts, deadlines and a program's continued existence all change, and you cannot see today's version of any of them. Everything below follows from that, and none of it is optional.
+The decision engine has already run. Every line below carries a verdict, the reasons behind it, the facts that ruled it out where it was ruled out, any cautions, the authority that can confirm it, and a revisit date where there is one. Your job is to present those clearly. It is not to add to them.
 
-WHAT YOU MAY NAME. Name a specific program only when you are confident it is a long-standing, well-established category — a federal residential energy credit, a state homestead exemption, a common utility efficiency rebate. Otherwise name the CATEGORY and say where that kind of program lives in their state ("many utilities run a rebate of this kind — check yours"). Never invent a program name, an agency, a form number or a statute.
+Hard rules:
+- NEVER STATE A DOLLAR AMOUNT, A PERCENTAGE, A CAP, AN INCOME THRESHOLD OR A DEADLINE. Not one appears in the decisions, because we hold none — the catalogue behind this report deliberately contains no figures at all. Where a line carries "amountGovernedBy", say what governs the amount in those terms and send them to the authority. A number in this report is a defect, not a detail.
+- NEVER CHANGE A VERDICT. If the engine says "check", it is a check, however obvious the claim looks to you. If it says "ruled out", it is ruled out. Those are the safety rules, and on the lines they cover the obvious answer is the one that costs the customer money.
+- REPRODUCE EVERY CAUTION. The cautions are the product. A line that shares an annual ceiling, or that stacks badly with a utility rebate, or that is worth nothing because the household owes no tax, is a line where the caution matters more than the program does.
+- NAME THE AUTHORITY ON EVERY LINE, exactly as given. Naming the office that can confirm it IS the answer where a figure would be — say it plainly rather than apologising for it.
+- REPRODUCE EVERY DATE EXACTLY. A "not this year" line without its date is not actionable, and the date is the product.
+- NEVER INVENT A PROGRAM. Only the programs in the decisions exist for the purposes of this report.
 
-EVERY LINE CARRIES ITS AUTHORITY. For every program on the shortlist, name the office, agency or document that can confirm today's amount, eligibility and deadline — the customer's own utility, their state energy office, their county assessor, the official form instructions. Naming that authority IS the answer where a figure would be, and it must appear on every line. A line without one is not finished.
+STRUCTURE.
 
-NEVER PUT A PROGRAM'S DOLLAR FIGURE IN key_numbers. That field renders in large type at the top of the report and reads as a total the customer is going to receive. Use it for counts instead — programs on the shortlist, programs ruled out, things to verify. Where you discuss an amount at all in the body, say what GOVERNS it (a percentage of what they actually spent, an annual cap, an income threshold) rather than asserting a number, and say plainly it must be confirmed against the authority you named.
+Lead with the strongest TRUE statement, in this order of preference:
+1. How many programs are on their shortlist, and the single most actionable one.
+2. A dated scheduling point that is worth real money — an annual ceiling that resets, work that should be finished after a date. Name the date.
+3. Something that opened since their last report, if a comparison is given.
+4. If the shortlist is empty: lead with what was checked and ruled out. A customer told that twenty-eight programs were considered and why each one is not for them has bought exactly what they came for. Deliver it as a result and do not pad it with manufactured hope.
 
-FOUR THINGS YOU MUST NOT LET THE CUSTOMER BELIEVE.
-- A credit that reduces tax owed is worth nothing in a year they owe nothing. If they did not tell you whether they expect a federal tax liability, say so on every non-refundable line rather than assuming they have one.
-- A headline figure is almost always a CEILING computed from what they actually spent, not a payment. Say which.
-- A utility or state rebate frequently reduces the cost basis a federal credit is calculated on, so these do not simply add up. Where two programs touch the same purchase, say so and give the order to work them out in.
-- Anyone who had solar, an EV or a heat pump installed was probably told about the headline credit by whoever sold it. Frame those as "confirm you have already claimed this" rather than as a discovery.
+Then one section for the shortlist lines, in the order given, each as: what the program is, why their answers point at it, what governs the amount, every caution, and the authority to confirm it with.
 
-RULE THINGS OUT, OUT LOUD. Include a section naming the programs their situation does NOT point at and the specific fact that rules each one out — they rent, their income band, no qualifying purchase, wrong state. A customer who learns four programs are not for them has been saved four evenings, and that section is the clearest evidence the shortlist was built from what they actually told us.
+Then one section for the lines to confirm — the ones the engine would not settle — framed as the product working rather than as a shortfall. Refusing to tell somebody a credit is theirs when the deciding fact was never established is the service, not a gap in it.
 
-WHAT YOU COULD NOT DETERMINE. Use missing_or_uncertain for every fact you needed and did not get. If they never said which state they live in, that is the first line of it and the report is federal-only — say that plainly rather than guessing at a state.
+Then one section for anything "not this year", each with its date or its named event, and what changes on it.
 
-Close by stating that this is automated research, not tax, legal or financial advice; that we do not file anything on their behalf; and that every figure and deadline must be confirmed with the authority named on its line before they act on it.`,
+Then a section naming the programs that were RULED OUT and the specific fact that ruled each one out. Group them so it reads quickly. Do not drop this section for length: a customer who learns four programs are not for them has been saved four evenings, and this section is the clearest evidence the shortlist was built from what they actually told us.
+
+Use key_numbers for COUNTS ONLY — programs on the shortlist, programs to confirm, programs ruled out, open questions. Never put a program figure there; that field renders in large type at the top of the report and reads as money the customer is going to receive.
+
+Close with the open questions exactly as given, and with a plain list of what this did not do: we did not look at their tax return or their accounts, we hold no current amounts and did not look any up, every figure and deadline has to be confirmed at the authority named on its line, and we do not file anything on their behalf.
+
+State plainly that this is automated research, not tax, legal or financial advice.`,
   },
 
   'home-maintenance': {
@@ -654,6 +664,40 @@ async function resolvePriorLandlord(admin, submission) {
   if (!findings.length) return null;
 
   return { findings, when: String(row.created_at).slice(0, 10), submissionId: row.id };
+}
+
+// The customer's own previous Government Money shortlist, if they have one.
+//
+// This is what makes the "not this year" verb worth anything. A line that was
+// ruled out last year and is open now — they bought the house, the work got
+// finished, the household changed — is the only honest basis for telling
+// somebody to look at something again, and it is the one thing a cold report
+// can never say. Scoped to their email and to completed submissions of this
+// product, so a history is only ever compared against itself.
+//
+// Only the verdicts are stored and compared, never an amount: there are no
+// amounts anywhere in this product, and a comparison is about what OPENED and
+// what CLOSED.
+async function resolvePriorGovernmentMoney(admin, submission) {
+  if (!submission.email) return null;
+
+  const { data: earlier, error } = await admin
+    .from('navigator_submissions')
+    .select('id, form_data, created_at')
+    .eq('product', 'government-money')
+    .eq('email', submission.email)
+    .eq('status', 'complete')
+    .neq('id', submission.id)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error || !earlier || !earlier.length) return null;
+  const row = earlier[0];
+  const verdicts = Array.isArray((row.form_data || {}).government_money_verdicts)
+    ? row.form_data.government_money_verdicts : [];
+  if (!verdicts.length) return null;
+
+  return { verdicts, when: String(row.created_at).slice(0, 10), submissionId: row.id };
 }
 
 function guessMediaType(filename) {
@@ -1542,6 +1586,130 @@ async function generateNavigatorReport(submissionId) {
       }
     }
 
+    // Government Money Finder. Same shape and same reason as Subscriptions and
+    // Home Savings above: the shortlist is decided by
+    // navigator-government-money-engine.js against data/government-programs.json,
+    // and the model presents it.
+    //
+    // The difference on this product is what the engine refuses to hand over.
+    // There is no amount anywhere in the decisions — the catalogue holds gates
+    // and authorities and no figures at all — so the writer physically cannot
+    // state one from the data it is given. That is the audit's central finding
+    // closed structurally rather than by instruction.
+    let governmentMoneyAnalysis = null;
+    if (submission.product === 'government-money') {
+      governmentMoneyAnalysis = governmentMoneyEngine.analyze(formData);
+
+      if (governmentMoneyAnalysis) {
+        const g = governmentMoneyAnalysis;
+        const V = governmentMoneyEngine.Verdict;
+        const pick = (v) => g.lines.filter((l) => l.verdict === v);
+
+        // The re-check. Only ever a comparison against this customer's own
+        // previous shortlist, and only of verdicts.
+        let changed = null;
+        const prior = await resolvePriorGovernmentMoney(admin, submission);
+        if (prior) changed = governmentMoneyEngine.compareWithPrior(g, prior.verdicts);
+
+        auditBlock = [
+          '',
+          'THE SHORTLIST — these are the report. Write these up. Do not add a program, do not',
+          'change a verdict, and do not state a figure. There are no figures here because we hold',
+          'none; "amountGovernedBy" is what you say instead, and the authority is the answer.',
+          JSON.stringify(pick(V.CLAIM), null, 1),
+          '',
+          pick(V.CHECK).length
+            ? [
+              `LINES THE ENGINE WOULD NOT SETTLE — ${pick(V.CHECK).length} of them, below.`,
+              'These need their own section. Each is a line where a deciding fact was never',
+              'established — usually the tax-liability answer or the income band — or where what we',
+              'hold about that kind of program is "commonly true" rather than settled. Write each',
+              'one as likely-and-worth-confirming, in those words. Presenting one of these as',
+              'settled fact is the single most damaging thing you can do in this report.',
+              JSON.stringify(pick(V.CHECK), null, 1),
+            ].join('\n')
+            : '',
+          '',
+          pick(V.NOT_NOW).length
+            ? [
+              'NOT THIS YEAR — each of these carries a revisit date or a named event. Reproduce it',
+              'exactly. A line saying "not this year" without saying when is not actionable, and the',
+              'date is the product.',
+              JSON.stringify(pick(V.NOT_NOW), null, 1),
+            ].join('\n')
+            : '',
+          '',
+          `RULED OUT — ${pick(V.RULED_OUT).length} programs, each with the fact that ruled it out.`,
+          'These get their own section and must not be dropped for length. A customer who learns',
+          'which programs are not for them, and why, has been saved the evenings. Group them so it',
+          'reads quickly, but name every one.',
+          JSON.stringify(pick(V.RULED_OUT).map((l) => ({
+            label: l.label, scope: l.scope, because: l.blockers.map((b) => b.say),
+          })), null, 1),
+          '',
+          g.stacking.length
+            ? 'STACKING — a utility rebate and a federal credit touching the same purchase. Both\n'
+              + 'lines already carry the order to work them out in. Say it once, clearly, in its own\n'
+              + 'short section as well:\n' + JSON.stringify(g.stacking, null, 1)
+            : '',
+          '',
+          g.sharedCaps.length
+            ? 'SHARED ANNUAL CEILINGS — these lines do not stack into several ceilings:\n'
+              + JSON.stringify(g.sharedCaps, null, 1)
+            : '',
+          '',
+          changed && changed.changes.length
+            ? [
+              `WHAT CHANGED since this customer's shortlist of ${prior.when}. This is the only`,
+              'basis on which you may tell them to look at something again. "opened" means it is',
+              'available to them now and was not; "closed" means the reverse. Lead with an opened',
+              'line if there is one.',
+              JSON.stringify(changed.changes, null, 1),
+            ].join('\n')
+            : prior
+              ? `This customer also bought a shortlist on ${prior.when}, and nothing has moved since.`
+                + ' Say so plainly — a customer told their position is unchanged has been told'
+                + ' something useful.'
+              : '',
+          '',
+          'OPEN QUESTIONS — reproduce these, in missing_or_uncertain, in these words:',
+          JSON.stringify(g.openQuestions, null, 1),
+          '',
+          'COUNTS — key_numbers takes these and nothing else. Never a program figure.',
+          JSON.stringify(g.totals, null, 1),
+          '',
+          `The catalogue behind this report was last reviewed on ${g.asOf}. Say so.`,
+          g.totals.shortlist === 0 && g.totals.toConfirm === 0
+            ? [
+              '',
+              'THIS REPORT IS BEING REFUNDED AUTOMATICALLY. Nothing at all came back for this',
+              'household — no shortlist and nothing even worth confirming — so the charge is already',
+              'queued to be returned and the customer keeps the report. Say so plainly in the',
+              'summary, in these terms: we checked every program we hold, here is the fact that',
+              'rules each one out, and you are not paying for this. Do NOT hedge it, do not ask them',
+              'to request it, and do not manufacture a lead to soften it — a customer told honestly',
+              'that they are not missing anything has been told something useful.',
+            ].join('\n')
+            : '',
+        ].filter(Boolean).join('\n');
+      } else {
+        // The intake gate blocks this client- and server-side, so reaching
+        // here means a submission arrived without the structured answers — in
+        // practice, a browser holding a cached copy of the old free-text page.
+        // Say what was and was not run rather than passing a prose read off as
+        // the shortlist they paid for.
+        auditBlock = [
+          '',
+          'THIS SUBMISSION CARRIES NO STRUCTURED ANSWERS, so the decision engine could not run and',
+          'no program was checked against anything. Say that first, plainly, in the summary and',
+          'again in missing_or_uncertain. Work only from the free text below, name no program you',
+          'are not confident is a long-standing category, state no amount whatsoever, and end every',
+          'line at the office that can confirm it. Then tell them to reply to their receipt with',
+          'their state, whether they own or rent, household size, income band and whether they',
+          'expect to owe federal income tax, and the full shortlist will be run at no extra charge.',
+        ].join('\n');
+      }
+    }
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -1675,6 +1843,52 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // the engine computed must be the same figure.
     if (submission.product === 'subscriptions' && subscriptionAnalysis) {
       report.subscription_analysis = subscriptionAnalysis;
+    }
+
+    // Stored so the customer's NEXT shortlist can say what moved. Verdicts only —
+    // there are no amounts in this product, and a comparison is about what opened
+    // and what closed.
+    if (submission.product === 'government-money' && governmentMoneyAnalysis) {
+      report.government_money_analysis = governmentMoneyAnalysis;
+      try {
+        await admin
+          .from('navigator_submissions')
+          .update({
+            form_data: Object.assign({}, submission.form_data || {}, {
+              government_money_verdicts: governmentMoneyEngine.storableVerdicts(governmentMoneyAnalysis),
+            }),
+          })
+          .eq('id', submissionId);
+      } catch (err) {
+        // A re-check that cannot be set up must never cost this customer the
+        // report they already paid for.
+        console.error('[government-money] could not store verdicts:', err.message);
+      }
+
+      // Nothing at all came back — no shortlist and nothing even worth
+      // confirming — so the charge goes back without anybody having to ask.
+      //
+      // Same queue Contractor Navigator uses when too few checks could run on
+      // the documents (REFUND_STATE_THIN in api/process-refunds.js): the row is
+      // 'complete', the report exists, the customer keeps it, and they do not
+      // pay for it. The page promises a refund when there is nothing worth
+      // acting on, and this is the half of that promise a customer should never
+      // have to claim. The judgement cases — a shortlist that exists but does
+      // not suit them — still go through replying to the delivery email.
+      //
+      // Deliberately NOT triggered by an empty shortlist alone. A report with
+      // no claims but eight lines worth confirming is a report that did its job.
+      if (governmentMoneyAnalysis.totals.shortlist === 0
+        && governmentMoneyAnalysis.totals.toConfirm === 0) {
+        try {
+          await admin
+            .from('navigator_submissions')
+            .update({ refund_state: 'due_thin_result', updated_at: new Date().toISOString() })
+            .eq('id', submissionId);
+        } catch (err) {
+          console.error('[government-money] could not queue the refund:', err.message);
+        }
+      }
     }
 
     if (submission.product === 'closing' && closingFindings) {

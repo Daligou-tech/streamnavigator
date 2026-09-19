@@ -20,7 +20,9 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const PAGE = fs.readFileSync(path.join(ROOT, 'government-money.html'), 'utf8');
-const ENGINE = require('../navigator-government-money-engine.js');
+const INTAKE_JS = fs.readFileSync(path.join(ROOT, 'government-money-intake.js'), 'utf8');
+const E = require('../navigator-government-money-engine.js');
+const CAT = require('../data/government-programs.json');
 
 // Text a customer reads, minus the setup comments the page carries for whoever
 // maintains it. Newlines are preserved so a reported line number is real.
@@ -29,36 +31,29 @@ function visible(src) {
 }
 const VISIBLE = visible(PAGE);
 
-// The page's own inline script — the half of the gate that runs in the browser.
-const INLINE = (PAGE.match(/<script>([\s\S]*?)<\/script>/) || [])[1] || '';
-
 /* ----------------------------------------------- the money-safety guarantee */
 
 test('the page cannot send anyone to checkout while the price and the link disagree', () => {
-  // The price moved to $19 and the Stripe link for it does not exist yet. A
-  // page displaying $19 against a button that charges $39 is precisely the
-  // defect scripts/check-prices.js was written for after buying.html showed
-  // $39 while its button pointed at the $19 link.
   const hrefAttr = (PAGE.match(/<a href="([^"]+)"[^>]*id="pay-btn"/) || [])[1]
     || (PAGE.match(/id="pay-btn"[^>]*href="([^"]+)"/) || [])[1];
   assert.ok(hrefAttr, "could not find the pay button's href");
 
   if (hrefAttr.indexOf('REPLACE_WITH_') !== -1) {
-    assert.match(INLINE, /indexOf\('REPLACE_WITH_'\) !== -1[\s\S]{0,400}return;/,
+    assert.match(INTAKE_JS, /indexOf\('REPLACE_WITH_'\) !== -1[\s\S]{0,400}return;/,
       'the button carries a placeholder link and the script does not refuse to follow it '
-      + 'before any checkout call — a customer would be sent to a dead URL or, worse, '
-      + 'charged the old price');
+      + 'before any checkout call');
     assert.match(VISIBLE, /Checkout is being updated/,
       'a switched-off button must say so on the page, not just fail silently');
   } else {
     assert.match(hrefAttr, /^https:\/\/buy\.stripe\.com\//,
       'the pay button must point at a Stripe Payment Link or at nothing at all');
+    // The guard stays in the script even when there is a real link. Both of
+    // this product's price moves went through a placeholder, and the runtime
+    // half of check-prices.js is what stops a page showing one number while
+    // its button charges another.
+    assert.match(INTAKE_JS, /REPLACE_WITH_/,
+      'the placeholder guard was deleted along with the placeholder');
   }
-});
-
-test('the old $39 payment link is not linked from the page any more', () => {
-  assert.ok(!VISIBLE.includes('buy.stripe.com/00w14n0NS6UkdsEa80abK08'),
-    'government-money.html still links the $39 Payment Link while displaying $19');
 });
 
 test('the displayed price and prices.config.json agree about what this costs', () => {
@@ -85,7 +80,7 @@ test('the page and the server gate checkout on the same rules', () => {
   // drift that let a customer reach checkout with input the server rejected.
   assert.match(PAGE, /navigator-government-money-engine\.js/,
     'the page must load the engine rather than carrying its own copy of the rules');
-  assert.match(INLINE, /GovernmentMoneyEngine\.checkSufficiency/,
+  assert.match(INTAKE_JS, /E\.checkSufficiency/,
     'the page must gate its button on the engine');
 
   const server = fs.readFileSync(path.join(ROOT, 'api', 'navigator-intake.js'), 'utf8');
@@ -96,54 +91,37 @@ test('the page and the server gate checkout on the same rules', () => {
 });
 
 test('a single character is still not a submission, on the page and on the server', () => {
-  // Verified live on 2026-09-19: description "x" created a submission and
-  // handed the browser to a $39 checkout.
-  assert.equal(ENGINE.checkSufficiency({ description: 'x' }).sufficient, false);
-  assert.equal(ENGINE.checkSufficiency({ description: '' }).sufficient, false);
-  assert.equal(ENGINE.checkSufficiency({}).sufficient, false);
+  assert.equal(E.checkSufficiency({ description: 'x' }).sufficient, false);
+  assert.equal(E.checkSufficiency({}).sufficient, false);
 });
 
-test('a description with no place in it cannot buy a report', () => {
-  // The one fact without which the report is silently federal-only.
-  const d = ENGINE.checkSufficiency({
-    description: 'We own our home and had a heat pump installed last year. Household of four.',
+test('the checkout gate does not depend on the catalogue fetch', () => {
+  // The free scorecard needs data/government-programs.json; the gate must not,
+  // or a failed fetch becomes either a customer who cannot buy or a customer
+  // who can buy anything.
+  assert.match(INTAKE_JS, /The gate does NOT need this/,
+    'the separation is undocumented, which is how it gets undone');
+  const gateOnly = E.checkSufficiency({
+    state: 'OH', tenure: 'own', householdSize: 2, incomeBand: '75-100k',
+    taxLiability: 'yes', actionsDone: [], events: [],
   });
-  assert.equal(d.sufficient, false);
-  assert.deepEqual(d.missing, ['state']);
-  assert.match(d.message, /state|ZIP/i, 'the refusal must name what is missing');
+  assert.equal(gateOnly.sufficient, true);
 });
 
-test('a state name, a postal code or a ZIP all satisfy the gate', () => {
-  for (const said of [
-    'We own our home in Columbus, Ohio and had a heat pump installed.',
-    'Homeowner, OH, heat pump installed last spring.',
-    'We rent, 43215, household of two.',
-    'Live in Puerto Rico, own the house.',
-  ]) {
-    assert.equal(ENGINE.checkSufficiency({ description: said }).sufficient, true,
-      `the gate rejected a description that names a place: ${said}`);
+test('every question the engine requires is a control on the page', () => {
+  for (const id of ['q-state', 'q-tenure', 'q-size', 'q-income', 'q-liability', 'q-done', 'q-events']) {
+    assert.ok(PAGE.includes(`id="${id}"`), `the engine requires an answer the page has no control for: ${id}`);
   }
+  // And the one that decides whether half the shortlist is worth anything is
+  // asked in so many words, not implied.
+  assert.match(VISIBLE, /expect to owe federal income tax/i);
 });
 
-test('lowercase postal codes are not mistaken for states', () => {
-  // Half the codes are ordinary English words. A case-insensitive match on
-  // them passes every sentence ever written, which is a gate that is not one.
-  assert.equal(ENGINE.namesAPlace('we live in a house and would or may qualify'), false);
-  assert.equal(ENGINE.namesAPlace('ok so I am a homeowner and I rent out a room'), false);
-});
-
-/* ------------------------------------------------- the claims that had none */
+/* ------------------------------------------- the claims that had none behind */
 
 test('the page does not sell a live lookup nothing performs', () => {
-  // C1. data/ holds no program corpus, nothing in vercel.json refreshes one,
-  // and PRODUCT_CONFIGS['government-money'] opens by saying so.
-  const corpus = fs.readdirSync(path.join(ROOT, 'data')).filter((f) => f !== '.gitkeep');
-  if (corpus.some((f) => f.startsWith('government-'))) return;  // a corpus arrived
-
-  // A DENIAL of the lookup is the thing this page is supposed to say, and it
-  // uses the same words. "We hold no live program database" must not fail a
-  // test whose whole purpose is to keep that sentence on the page — so a match
-  // counts as a claim only when nothing negates it in the run-up to it.
+  // A DENIAL of the lookup uses the same words and must not fail a test whose
+  // purpose is to keep that denial on the page.
   const claim = /searches current|current program information|live (?:program|incentive) (?:database|data)/ig;
   const NEGATED = /\b(?:no|not|never|without|cannot|don't|doesn't)\b[^.]{0,40}$/i;
   VISIBLE.split('\n').forEach((line, i) => {
@@ -158,10 +136,6 @@ test('the page does not sell a live lookup nothing performs', () => {
 });
 
 test('the page does not promise a figure the engine refuses to print', () => {
-  // HONESTY_RULES forbids by name "the name and current dollar amount of a
-  // specific government program", and the task prompt forbids putting a
-  // program figure in key_numbers. The page sold "estimated dollar value of
-  // each program" twice and "deadlines or windows you shouldn't miss" once.
   for (const re of [
     /estimated dollar value/i,
     /deadlines? or windows? you shouldn'?t miss/i,
@@ -172,30 +146,80 @@ test('the page does not promise a figure the engine refuses to print', () => {
   }
 });
 
+test('the page names no program the catalogue does not hold', () => {
+  // The landlord-jurisdictions rule, applied to this product. A program named
+  // in the sales copy and absent from the catalogue is exactly the finding the
+  // customer was promised and will not get.
+  //
+  // Matched on the distinctive noun phrases the catalogue uses, not on every
+  // word: the page is allowed to talk about "rebates" in general.
+  const held = CAT.programs.map((p) => p.label.toLowerCase());
+  const namedOnPage = VISIBLE.replace(/<[^>]+>/g, ' ').toLowerCase();
+  const suspicious = [
+    'federal efficiency credit', 'residential clean energy', 'clean vehicle credit',
+    'property tax relief', 'weatherization', 'earned income credit',
+    'child and dependent care', 'premium assistance', 'net metering',
+  ];
+  for (const phrase of suspicious) {
+    if (namedOnPage.indexOf(phrase) === -1) continue;
+    assert.ok(held.some((l) => l.indexOf(phrase.split(' ')[0]) !== -1
+      || phrase.split(' ').every((w) => l.indexOf(w) !== -1)
+      || l.indexOf(phrase) !== -1),
+    `the page names "${phrase}" and the catalogue holds no such program`);
+  }
+});
+
+test('the number of programs the page sells is the number the catalogue holds', () => {
+  // The landlord "nine checks" rule. A page that oversells the count by one is
+  // the same defect as any other overclaim.
+  const WORDS = {
+    24: 'Twenty-four', 25: 'Twenty-five', 26: 'Twenty-six', 27: 'Twenty-seven',
+    28: 'Twenty-eight', 29: 'Twenty-nine', 30: 'Thirty',
+  };
+  const word = WORDS[CAT.programs.length];
+  assert.ok(word, `${CAT.programs.length} programs — add the word to this test's map`);
+  assert.ok(new RegExp(`${word} (?:rebate|program)`, 'i').test(VISIBLE)
+    || new RegExp(`${word} programs`, 'i').test(VISIBLE),
+  `the catalogue holds ${CAT.programs.length} programs and the page does not say `
+    + `"${word.toLowerCase()}"`);
+});
+
 test('the page states the limit its whole method rests on', () => {
-  assert.match(VISIBLE, /do not hold a live program database|hold no live program database/i,
-    'the page must say plainly that there is no live database behind it');
-  assert.match(VISIBLE, /confirm|check/i);
+  assert.match(VISIBLE, /hold no current dollar amounts|holds no amounts|no dollar amounts/i,
+    'the page must say plainly that no amounts are held');
+  assert.match(VISIBLE, /do not hold a live program database/i);
 });
 
 test('every promise on the page is one the prompt requires', () => {
-  // The other half of the bargain. The page sells a source on every line and a
-  // ruled-out section; if the prompt does not require them the copy is a
-  // promise again rather than a description.
   const engine = fs.readFileSync(path.join(ROOT, 'api', '_lib', 'navigator-engine.js'), 'utf8');
   const start = engine.indexOf("'government-money': {");
   const task = engine.slice(start, engine.indexOf("'home-maintenance': {", start));
   assert.ok(task.length > 500, 'the government-money product config is gone or empty');
 
-  assert.match(task, /EVERY LINE CARRIES ITS AUTHORITY/,
-    'the page promises the office that can confirm each line and the prompt does not require one');
-  assert.match(task, /RULE THINGS OUT, OUT LOUD/,
+  assert.match(task, /NEVER STATE A DOLLAR AMOUNT/,
+    'the page sells "we never state an amount" and the prompt does not forbid one');
+  assert.match(task, /NEVER CHANGE A VERDICT/,
+    'the engine decides and the prompt does not say so');
+  assert.match(task, /NAME THE AUTHORITY ON EVERY LINE/,
+    'the page promises the office that can confirm each line');
+  assert.match(task, /RULED OUT/,
     'the page sells a ruled-out section and the prompt does not require one');
-  assert.match(task, /NEVER PUT A PROGRAM'S DOLLAR FIGURE IN key_numbers/,
+  assert.match(task, /key_numbers takes these and nothing else|COUNTS ONLY/,
     'key_numbers renders as a total at the top of the report — a program figure there '
     + 'reads as money the customer is going to receive');
-  assert.match(task, /worth nothing in a year they owe nothing/,
-    'the first DON\'T-COUNT rule is missing: a credit against tax you do not owe');
+});
+
+test('the four rules the page sells are the four the engine runs', () => {
+  // Sold on the page as D1, D3, D4, D5. If a rule is renamed or removed, the
+  // page is selling something that no longer exists.
+  for (const code of ['D1', 'D3', 'D4', 'D5']) {
+    assert.ok(VISIBLE.indexOf(`>${code}<`) !== -1, `the page no longer names rule ${code}`);
+  }
+  const src = fs.readFileSync(path.join(ROOT, 'navigator-government-money-engine.js'), 'utf8');
+  for (const code of ['D1', 'D3', 'D4', 'D5']) {
+    assert.ok(new RegExp(`code: '${code}`).test(src),
+      `the page sells rule ${code} and the engine does not emit it`);
+  }
 });
 
 test('the page states a refund position', () => {
@@ -203,15 +227,41 @@ test('the page states a refund position', () => {
     'a product whose output is this hard to verify in advance needs a stated refund position');
 });
 
+test('the automatic refund the page promises is one the code actually queues', () => {
+  // The page says a report that comes back with nothing is refunded without
+  // the customer asking. That is only true if something sets the flag, and the
+  // condition on the page has to be the condition in the code — "nothing at
+  // all", not "no shortlist", because a report with no claims but eight lines
+  // worth confirming is a report that did its job.
+  assert.match(VISIBLE, /refunded automatically/i,
+    'the page no longer promises the automatic refund');
+  assert.match(VISIBLE, /you do not have to ask|do not have to ask/i);
+
+  const engine = fs.readFileSync(path.join(ROOT, 'api', '_lib', 'navigator-engine.js'), 'utf8');
+  assert.match(engine, /governmentMoneyAnalysis\.totals\.shortlist === 0\s*\n?\s*&& governmentMoneyAnalysis\.totals\.toConfirm === 0/,
+    'nothing queues the refund the page promises, or it triggers on the wrong condition');
+  assert.match(engine, /refund_state: 'due_thin_result'/,
+    'the refund is not put on a queue process-refunds.js reads');
+
+  const refunds = fs.readFileSync(path.join(ROOT, 'api', 'process-refunds.js'), 'utf8');
+  assert.match(refunds, /REFUND_STATE_THIN = 'due_thin_result'/,
+    'the queue the engine writes to is not the one the sweep reads');
+});
+
 test('the page carries a "what this does not do" section', () => {
   assert.match(VISIBLE, /What this does not do/i);
   for (const promise of [
-    /do not file anything for you|do not file, submit or apply|does not file, submit or apply/i,
-    /do not ask for a login|no logins/i,
-    /federal-only|federal side/i,
+    /do not file anything for you|does not file, submit or apply/i,
+    /no login|do not ask for a login/i,
+    /cannot know whether a program still has funding/i,
   ]) {
     assert.match(VISIBLE, promise, `missing limit: ${promise}`);
   }
+});
+
+test('the page says plainly that a utility is not the government', () => {
+  // I7 in the audit: utility rebates sold under a "Government Money" name.
+  assert.match(VISIBLE, /Utility rebates are not government money/i);
 });
 
 /* --------------------------------------------------------------- dead code */
@@ -220,16 +270,15 @@ test('no handler is bound to an element that does not exist', () => {
   // I2: the old page wired .category-chip listeners and had no chips, so
   // selectedCategory was always null and was posted as such on every
   // submission for as long as the page existed.
-  assert.equal(/category-chip/.test(PAGE), false,
-    'the dead category-chip handler is back');
-  const ids = [...INLINE.matchAll(/getElementById\('([^']+)'\)/g)].map((m) => m[1]);
+  assert.equal(/category-chip/.test(PAGE), false, 'the dead category-chip handler is back');
+  const ids = [...INTAKE_JS.matchAll(/el\('([^']+)'\)/g)].map((m) => m[1])
+    .concat([...INTAKE_JS.matchAll(/getElementById\('([^']+)'\)/g)].map((m) => m[1]));
   const missing = [...new Set(ids)].filter((id) => !PAGE.includes(`id="${id}"`));
   assert.deepEqual(missing, [],
-    `the page script reaches for ids the page does not have: ${missing.join(', ')}`);
+    `government-money-intake.js reaches for ids the page does not have: ${missing.join(', ')}`);
 });
 
 test('the upload copy names the file types the input accepts', () => {
-  // I8: the copy said "PDF, JPG or PNG" while accept= also took .webp.
   const accept = (PAGE.match(/id="upload-input"[^>]*accept="([^"]+)"/) || [])[1] || '';
   const exts = accept.split(',').map((e) => e.trim().replace('.', '').toUpperCase())
     .filter((e) => e && e !== 'JPEG');
@@ -259,8 +308,6 @@ test('the page chrome is the same chrome /closing uses', () => {
 });
 
 test('no emoji in the body copy', () => {
-  // /closing has none, and on a page asking for money about tax credits they
-  // read as a different company.
   const emoji = VISIBLE.replace(/&[a-z]+;/g, '').replace(/&#\d+;/g, '')
     .match(/[\u{1F300}-\u{1FAFF}\u{2190}-\u{21FF}\u{2600}-\u{27BF}]/gu) || [];
   assert.deepEqual(emoji, [], `emoji left in the copy: ${emoji.join(' ')}`);
