@@ -549,7 +549,48 @@
       };
     }
 
-    // Nothing decisive. Say so rather than picking.
+    // R12 — wanted, and not being used. The tension is the finding.
+    //
+    // This rule exists because R11 below used to swallow these cases and tell
+    // the customer "we do not have enough from you to call this one either
+    // way" while `needs` was EMPTY — they had answered all three questions.
+    // Eight of the 72 answer combinations landed here, and they are the ones
+    // where an honest engine is worth the most: high cost, low usage, high
+    // stated attachment. A $720-a-year gym, never used, "would miss it a lot"
+    // is the archetype, and the report said nothing and blamed the customer
+    // for it. See docs/HOME-SAVINGS-AUDIT.md, Defect 1.
+    //
+    // It is deliberately still a REVIEW. "I would miss it" against "I have not
+    // opened it" is a real disagreement between two true answers, and an
+    // intention is not a use — but neither is it ours to overrule. What
+    // changes is that the reason is true and the number is on the page.
+    if (months !== undefined && months >= 2 && wouldMiss !== 'unknown'
+        && wouldMiss !== 'not-at-all' && lastUsed !== 'unknown') {
+      const annualCost = annualCostOf(line.price, line.period);
+      const strong = wouldMiss === 'a-lot';
+      const why = [
+        `${lastUsed === 'never'
+          ? 'You have never used it'
+          : `You last used it ${lastUsedPhrase(lastUsed)}`} and said you would miss it `
+          + `${strong ? 'a lot' : 'a bit'}. Those two answers pull in opposite directions, `
+          + `and only one of them is a fact about what you have actually done.`,
+      ];
+      if (annualCost) {
+        why.push(`It is ${money(annualCost)} a year. That is what the intention is costing `
+          + `while it stays an intention.`);
+      }
+      return {
+        action: Action.REVIEW, ruleId: 'R12', confidence: 'medium',
+        why,
+        firstStep: annualCost
+          ? `Put a date in the diary to use it in the next three weeks. If the date comes and `
+            + `goes, you have your answer and ${money(annualCost)} a year back.`
+          : `Put a date in the diary to use it in the next three weeks. If the date comes and `
+            + `goes, you have your answer.`,
+      };
+    }
+
+    // Nothing decisive, because something is genuinely missing. Say which.
     return {
       action: Action.REVIEW, ruleId: 'R11', confidence: 'none',
       why: ['We do not have enough from you to call this one either way.'],
@@ -705,6 +746,27 @@
     //
     // Cancelling a rate that is no longer offered is frequently a permanent
     // loss that dwarfs the saving, and it is invisible in every usage signal.
+    // The caution attaches to EVERY promotional line, whatever the action.
+    //
+    // It used to sit inside the `wouldLoseAccess` branch below, which meant a
+    // KEEP never reached it: a customer who declared a promotional rate on a
+    // service they use weekly was told "you are getting what you pay for.
+    // Nothing to do. Leave it as it is." — with no mention that the price is
+    // about to rise. A $35/month promo reverting to $89 is $648 a year, the
+    // largest single line in most households, and it was silently dropped at
+    // the exact point the engine was most confident. The rule's own comment
+    // says a promo rate "is invisible in every usage signal"; gating it behind
+    // a usage-driven action was the contradiction. See
+    // docs/HOME-SAVINGS-AUDIT.md, Defect 2.
+    if (line.promoRate === true) {
+      cautions.push({
+        kind: 'promo',
+        text: 'Promotional or legacy rate — you will not get it back. Find out what the '
+          + 'standard price is and when yours changes to it: that date is worth more than '
+          + 'anything else on this line.',
+      });
+    }
+
     if (line.promoRate === true && wouldLoseAccess) {
       if (d.action === Action.ROTATE || d.action === Action.CANCEL_AND_RETURN) {
         block(Action.REVIEW, 'R5a',
@@ -717,7 +779,8 @@
           + 'figure suggests. Find out what the current price is before you cancel — if it is '
           + 'much higher, keeping a cheap thing you rarely use can still be the right call.');
       }
-      cautions.push({ kind: 'promo', text: 'Promotional or legacy rate — you will not get it back.' });
+      // The promo caution is pushed unconditionally above, for every action —
+      // pushing it again here would print it twice on a cancel.
     }
 
     // Not a block, but a caution the customer would be angry to find out later.
@@ -863,6 +926,14 @@
         if (d.cautions && d.cautions.length) return d.cautions[0].text;
         return `Read the reason above and decide it yourself — we are not going to decide it for you.`;
       default:
+        // A KEEP that carries a caution is not "nothing to do". The promo
+        // caution in particular lands almost exclusively on keeps — it is the
+        // rate you are happy with today that changes underneath you — so
+        // printing "leave it as it is" over the top of it would put the engine
+        // back where Defect 2 found it.
+        if (d.cautions && d.cautions.length) {
+          return `Keep it — and then: ${d.cautions[0].text}`;
+        }
         return `Nothing to do. Leave it as it is.`;
     }
   }

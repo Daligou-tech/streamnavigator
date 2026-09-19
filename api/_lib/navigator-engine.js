@@ -50,6 +50,7 @@ const { sendFailureAlert } = require('./alerts');
 const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 const subscriptionEngine = require('../../navigator-subscription-engine');
+const homeSavingsEngine = require('../../navigator-home-savings-engine');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -192,9 +193,59 @@ Give an honest read on whether appealing looks worth the homeowner's time given 
   'home-savings': {
     label: 'Home Savings Navigator',
     requiresFiles: true,
-    task: `You are the analysis engine behind Home Savings Navigator. A homeowner paid for a full household recurring-bill audit and uploaded bills/statements (utility, internet, phone, insurance, memberships, and similar).
+    // Like Closing, Rental, Landlord and Subscriptions, and for the same
+    // reason: the findings in this report are produced by
+    // navigator-home-savings-engine.js, not by the model. The model's job is
+    // to write them up. It must not originate a number, a threshold, or a
+    // recommendation.
+    //
+    // What this replaced was a single instruction to read the bills and judge
+    // whether each "looks priced above a typical market rate for that
+    // category, using your general knowledge of typical U.S. pricing
+    // patterns" — while the page's own footer said, correctly, that we hold no
+    // price database and do not look prices up. The product's headline claim
+    // was a model's undated, un-regional recollection of what things cost,
+    // sold at $49 as a market comparison, and nothing could catch it being
+    // wrong. See docs/HOME-SAVINGS-AUDIT.md.
+    task: `You are the writer for a Home Savings Navigator household bill audit. A homeowner paid for an independent audit of their recurring bills and uploaded statements — internet, phone, insurance, utilities, memberships and similar.
 
-Review every bill provided: identify what's being paid for and how much, and assess whether each looks priced above a typical market rate for that category, using your general knowledge of typical U.S. pricing patterns — clearly flag when you're not confident about a current, region-specific rate rather than inventing one. For each recurring expense give one clear recommendation: cancel outright, downgrade without losing what they actually use, switch providers (name the type of alternative, not a fabricated specific current promotional price), or renegotiate (with specific talking points). Total an estimated annual savings figure, show your reasoning, and label it clearly as an estimate. Be honest when something is already fairly priced — don't manufacture savings that aren't really there.`,
+The deterministic audit engine has already run every check and produced a ranked list of findings. Each finding carries a checkId, the bill it came from, an action, a saving kind, an evidence basis, and where applicable an annual amount and an exposure figure. Your job is to present those findings clearly. It is not to add to them.
+
+Hard rules:
+- Never state a dollar figure, ratio, comparison or recommendation that is not present in the findings you were given. If a line on a bill is not covered by a finding, it is not in the report.
+- NEVER SAY A BILL IS ABOVE OR BELOW MARKET, or compare any amount to what that service "typically" or "usually" costs. You do not have a price table, this company does not hold one, and the footer of the page the customer bought from says so. Every finding here is arithmetic on the customer's own documents, and that is the product: not "you are overpaying for internet" but "this equipment rental line is $15 a month and it is yours to stop".
+- THE DOCUMENTS ARE ATTACHED SO YOU CAN QUOTE THEM, NOT SO YOU CAN AUDIT THEM. You will see charges in these bills that no finding mentions. That is the normal case and it needs no explanation: a charge with no finding simply does not appear in the report. Do not list it, do not total it, do not account for its absence, and do not create a section to hold it. Quote the documents only to support a finding you were given — a line label, an amount, a date.
+- CARRY THE SAVING KIND THROUGH, every time you state a figure. "confirmed" is money that stops leaving the account once the customer acts, and it is the only kind that may be added into the headline total. "at_risk" is a promotional rate about to end, a discount the provider may not offer, or a negotiating lever — it is NEVER a saving, must never be described as one, and must never be added into a total of savings. "unpriced" means the customer did not tell us the amount, and no figure may be attached to it at all — not an estimate, not a range, not a typical value.
+- Two exposure figures exist and they are never summed: promoExposureAnnual is a rise that has not happened yet, increaseAnnual is one that already has. A bill can carry both. Report them separately or the customer cannot reconstruct either.
+- Where a finding names a one-off offsetting cost (buying your own modem), state it alongside the saving. A saving printed gross when a purchase is required to get it is the kind of figure that loses a customer's trust the first time they check it.
+- Carry each finding's action through exactly: something to stop, something to replace with your own, a call to make, a date to act before, or a decision the engine refused to make for them.
+
+HEADLINE AND ORDERING — this determines whether the report reads as work delivered or work not done.
+
+Lead with the strongest TRUE statement available, in this order of preference:
+1. Confirmed annual savings, with the figure and the number of things to stop.
+2. Findings that are real but unpriced, if there are no confirmed ones: say plainly that the customer has things worth stopping and that the figure is waiting on amounts only they can supply.
+3. A promotional rate about to end, with its date. This is often the largest number in the household even though it is not a saving — say exactly what it is.
+4. A bill that has risen against its own prior year, with the increase.
+5. If there are none of the above: lead with WHAT WAS CHECKED AND PASSED. Name the specific checks that ran and found nothing — no rented equipment, no instalment outliving its device, no duplicate cover, an autopay discount already applied. State plainly that these bills were checked line by line and hold up.
+
+A household that is told its bills are running clean has bought exactly what they came for, and the report must deliver that as a result rather than apologise for the absence of problems. Do not hedge it, do not pad it with things to worry about, and do not imply they got less than a household with a leaking bill did.
+
+The one thing that must never happen is a clean bill of health written over thin coverage. If only a couple of checks could run, the honest headline is about what is missing — which questions went unanswered and which bills were not sent — not about the household, because nobody has established anything about the household yet.
+
+Never open with what could not be done. Checks that could not run are real and must be reported honestly — but they belong AFTER the results, not in the headline.
+
+ALWAYS include a section naming what was checked and found clean, whether or not anything was flagged. Every check that ran and produced nothing is work the customer paid for. Name them. A report that flags three findings and never mentions the checks that passed has quietly thrown away most of the work it did.
+
+ALWAYS include a section for the checks that could not run, from couldNotRun, in the engine's words. Each one is a question only the customer can answer, and each one is a finding they have not had yet.
+
+Structure. Open with the headline. Then the findings in the order given, the strongest few at two or three lines each: what the line is, what it costs, what that rests on, the annual figure and its kind, and exactly what to do — including the words to say where the finding supplies them. Then every remaining finding as one compact line. Then the checked-and-clean section. Then the could-not-run section.
+
+Use key_numbers for the confirmed total, each exposure figure separately, the number of checks run, and the household's total monthly spend across the bills provided — and label each one so its kind is unmistakable: "confirmed", "not a saving — rise coming", "not a saving — already landed".
+
+Close by telling the customer that nothing here is cancelled on their behalf, and that every step is theirs to take.
+
+State plainly that this is not financial, legal or insurance advice.`,
   },
 
   'rental': {
@@ -1293,6 +1344,78 @@ async function generateNavigatorReport(submissionId) {
           'made. Say that first, plainly, in the summary and again in missing_or_uncertain. Do not',
           'produce general advice about managing subscriptions in its place. Tell them to reply to',
           'their receipt with what they pay for and what each one costs, and the review will be run.',
+        ].join('\n');
+      }
+    }
+
+    // Home Savings Navigator. Same shape and same reason as Subscriptions
+    // above: the findings are computed by navigator-home-savings-engine.js
+    // from the structured answers the customer gave alongside their bills, and
+    // the model presents them. The uploaded documents are still attached — the
+    // writer quotes them — but nothing it reads in them may become a finding.
+    let homeSavingsAnalysis = null;
+    if (submission.product === 'home-savings') {
+      const bills = Array.isArray(formData.bills) ? formData.bills : [];
+      if (bills.length) {
+        homeSavingsAnalysis = homeSavingsEngine.analyze({ bills });
+        const a = homeSavingsAnalysis;
+        const block = homeSavingsEngine.toAuditBlock(a);
+
+        const refused = block.findings.filter((f) => f.action === homeSavingsEngine.Action.REVIEW);
+        const decided = block.findings.filter((f) => f.action !== homeSavingsEngine.Action.REVIEW);
+
+        auditBlock = [
+          '',
+          'FINDINGS — these are the report. Write these up. Do not add to them, do not recompute',
+          'one, and do not change an action. Every figure you may state is here.',
+          JSON.stringify(decided, null, 1),
+          '',
+          refused.length
+            ? [
+              `FINDINGS THE ENGINE REFUSED TO DECIDE — ${refused.length} of them, below.`,
+              'These need their own section. Every one is a case where telling the customer to',
+              'stop paying would have cost them something the arithmetic cannot see — cover they',
+              'told us they rely on, or a saving too small to be worth the call. Write each one as',
+              'the product working: name what is at stake and what they should check. Never',
+              'convert one into a recommendation to stop paying.',
+              JSON.stringify(refused, null, 1),
+            ].join('\n')
+            : '',
+          '',
+          block.couldNotRun.length
+            ? 'CHECKS THAT COULD NOT RUN — give these their own section, in these words. Each is a\n'
+              + 'question only the customer can answer, and each is a finding they have not had yet:\n'
+              + JSON.stringify(block.couldNotRun, null, 1)
+            : '',
+          '',
+          'TOTALS — the headline savings figure is confirmedAnnual and nothing else. Never add',
+          'these together. promoExposureAnnual is a rise that has not happened; increaseAnnual is',
+          'one that already has; neither is a saving and neither may be called one. unpricedFindings',
+          'have no figure at all and must not be given one.',
+          JSON.stringify({
+            billCount: block.billCount,
+            checkCount: block.checkCount,
+            checkRuns: block.checkRuns,
+            monthlySpend: block.monthlySpend,
+            annualSpend: block.annualSpend,
+            confirmedAnnual: block.totals.confirmedAnnual,
+            promoExposureAnnual: block.totals.promoExposureAnnual,
+            increaseAnnual: block.totals.increaseAnnual,
+            unpricedFindings: block.totals.unpricedFindings,
+            reviewFindings: block.totals.reviewFindings,
+          }, null, 1),
+        ].filter(Boolean).join('\n');
+      } else {
+        // The intake gate blocks this client- and server-side, so reaching
+        // here means something upstream let a submission through with no
+        // named bills. Say so rather than writing a general article about
+        // saving money on household bills, which is not what was paid for.
+        auditBlock = [
+          '',
+          'NO BILLS WERE RECORDED for this submission, so not one check could run. Say that first,',
+          'plainly, in the summary and again in missing_or_uncertain. Do not produce general advice',
+          'about lowering household bills in its place. Tell them to reply to their receipt naming',
+          'each bill, who it is from and what it costs, and the audit will be run.',
         ].join('\n');
       }
     }

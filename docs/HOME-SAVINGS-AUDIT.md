@@ -779,3 +779,73 @@ instances of exactly the pattern `/home-savings` needs, and
 `docs/SUBSCRIPTIONS-AUDIT.md` is a worked example of this same gap being found
 and closed in a single day. `/home-savings` is the last product on the line still
 waiting for it.
+
+---
+
+## Closure — what shipped, 2026-09-19
+
+Every item in Required Changes Before Launch is closed. The audit above is left
+as written; this section records what was done about it.
+
+### Must Fix
+
+| # | Item | Closed by |
+|---|---|---|
+| 1 | Pre-payment sufficiency gate | `checkSufficiency()` in `navigator-home-savings-engine.js`, called by `api/navigator-intake.js` for `home-savings` and by `home-savings-intake.js` to gate the button. One file, so the page and the endpoint cannot drift. Verified in the browser: the old description-only purchase is now refused before Stripe. |
+| 2 | The unfunded refresh claim | Deleted from step 2 and the price card. `tests/navigator-claims.test.js` regex extended with `refreshed check`, `a refresh as`, `through the year`, `as your bills change` — the phrasing that slipped past it. `tests/home-savings-claims.test.js` guards the page directly. |
+| 3 | "Priced above what that service usually costs" | Gone from the page and from the engine prompt, which now forbids the comparison in terms. The page says so in the body, not only the footer. `tests/home-savings-claims.test.js` fails on seven phrasings of the claim, skipping lines that deny it. |
+| 4 | Build the engine, or reprice | **Engine built.** `navigator-home-savings-engine.js` — 7 named checks, a safety pass that can only demote, three saving kinds never summed. |
+
+### The pricing decision
+
+**$49 stands.** The audit recommended $39 *for the unfixed product*, and named
+the condition under which $49 is defensible: the page names a specific number
+of checks and a test asserts the number sold equals the number the catalog
+runs. Both shipped. This is the same reasoning that kept `/landlord` at $149
+after its own audit proposed $99 — the discount was priced against defects that
+no longer exist. No new Stripe link was needed, which also avoids the
+placeholder trap `/subscriptions` is still sitting in.
+
+### Should Fix / Nice to Have
+
+All eleven closed: free scorecard before payment (runs the paid engine in the
+browser); migrated to `navigator-editorial.css` with the `.ledger` worked
+example in the hero; `#sample` section and nav link; R11 and the promo-on-KEEP
+gap fixed in `/subscriptions`; the dead `.category-chip` handler deleted with
+the whole old form; "No bank login, ever" in the hero; a behavioural test suite
+(22 cases); the description field replaced by the structured bill form; "four to
+eight" bills stated; the refund promise stated at the decision point; last
+year's bill requested and used by check H7.
+
+### The two `/subscriptions` defects
+
+- **R11 empty `needs`** — new rule **R12** covers the eight cells where all
+  three answers were given. The sweep now reports **0 of 72** (was 8 of 72).
+  The $720/yr gym gets a true reason and its annual cost, not "we do not have
+  enough from you".
+- **Promo on a KEEP** — the caution moved out of the `wouldLoseAccess` branch
+  and now attaches to every promotional line whatever the action. `stepFor` no
+  longer prints "Nothing to do" over a caution.
+
+### What is deliberately NOT done
+
+- **No price corpus.** The product now states plainly that it holds none. The
+  seven checks were chosen precisely because none of them needs one.
+- **No live report run.** The engine is verified offline against fixtures with
+  known answers; no API credits were spent.
+- **The engine's document-extraction half is still the model's.** The checks
+  run on the structured answers the customer gives; the uploaded bills are read
+  by the writer for quoting, under a prompt that forbids originating a finding.
+  Extracting line items deterministically from a PDF is a larger piece of work
+  and is the obvious next one.
+
+### Verification
+
+`node tests/run-all.js` — **75 of 75 suites pass**, including the 22 new engine
+cases and 14 new page-contract cases. The page was driven in a browser: the
+scorecard computes live, the two exposure figures render separately, and the
+checkout button refuses and never reaches Stripe when no bill is attached.
+Every computed style token on `/home-savings` now matches `/closing` — body
+`IBM Plex Sans` 17px/1.6 on `#FBFAF7`, `h1` Newsreader 500 at `-0.01em`, button
+`2px` radius weight 500, numerals in `IBM Plex Mono`, ledger shadow
+`5px 5px 0 rgba(27,42,58,.08)`, and no gradient layer.

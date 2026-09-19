@@ -44,7 +44,23 @@ test('every priced page is covered by this contract', () => {
 });
 
 test('no page sells a year the code does not grant', () => {
-  const claim = /\$\d+\s*\/\s*year|per year|a full year|full year of|ongoing monitoring|ongoing checks|billed once per year/i;
+  // The "refresh" family was added after this test PASSED over a real offence.
+  //
+  // /home-savings sold "a refreshed check as your bills change through the
+  // year" in its how-it-works step and "with a refresh as your bills change"
+  // on its price card, against a one-time $49 charge, no entitlement, and its
+  // own FAQ two screens further down saying "Each audit is its own $49 report
+  // ... that is a fresh upload and a fresh report". This test was written for
+  // exactly that defect and did not catch it, because the wording reached
+  // "through the year" rather than "a full year". A guard that only matches
+  // the phrasing of the last offence is not a guard.
+  // See docs/HOME-SAVINGS-AUDIT.md, Critical 3.
+  const claim = new RegExp([
+    /\$\d+\s*\/\s*year/, /per year/, /a full year/, /full year of/,
+    /ongoing monitoring/, /ongoing checks/, /billed once per year/,
+    /refreshed check/, /a refresh as/, /through the year/,
+    /as your bills change/, /re-?checked? automatically/,
+  ].map((r) => r.source).join('|'), 'i');
   const offenders = [];
   for (const { file, product, src } of PRODUCT_PAGES) {
     if (ENTITLED_PRODUCTS.includes(product)) continue;

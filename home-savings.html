@@ -1,297 +1,383 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Home Savings Navigator — StreamNavigator AI</title>
-<meta name="description" content="Upload your household bills and recurring expenses. Home Savings Navigator finds concrete opportunities to cancel, downgrade, switch, or renegotiate — $49, once." />
-<link rel="canonical" href="https://streamnavigator.ai/home-savings" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Savings Navigator — StreamNavigator</title>
+<meta name="description" content="Seven checks on your household bills — the equipment you rent, the promotion about to end, the instalment that outlived the device. Every finding is arithmetic on your own bill, never a guess at market rate. Free scorecard first, then $49. No bank login, ever.">
+<link rel="canonical" href="https://streamnavigator.ai/home-savings">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/navigator-shared.css">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- The /closing design system. Shared, not re-invented: this page used to
+     carry navigator-shared.css and a violet gradient hero, which made it and
+     /closing look like two different companies. /subscriptions and /contractor
+     had already moved; this was the last product page on the old system.
+     See docs/HOME-SAVINGS-AUDIT.md, Visual Audit. -->
+<link rel="stylesheet" href="/navigator-editorial.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+/* /home-savings only. The shared system is in navigator-editorial.css and
+   nothing page-specific belongs in there. */
+
+.bill-list{margin:0 0 18px;padding:0;list-style:none}
+.bill{border:1px solid var(--rule);background:var(--panel);padding:16px 18px;margin-bottom:12px}
+.bill-top{display:grid;grid-template-columns:1fr 150px 120px 34px;gap:10px;align-items:end}
+@media(max-width:640px){.bill-top{grid-template-columns:1fr 1fr}.bill-top .bill-rm{grid-column:2;justify-self:end}}
+.bill-top label,.bill-q label{font-size:.78rem;font-weight:500;color:var(--ink-soft);
+  margin-bottom:5px;letter-spacing:.02em;text-transform:uppercase;display:block}
+.bill input[type=text],.bill input[type=number],.bill input[type=date],.bill select{
+  width:100%;padding:10px 11px;border:1px solid var(--rule);border-radius:2px;
+  font-family:inherit;font-size:.95rem;background:var(--panel);color:var(--ink)}
+.bill input[type=number]{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.bill-rm{background:none;border:1px solid var(--rule);border-radius:2px;color:var(--ink-soft);
+  font:inherit;font-size:1rem;line-height:1;padding:10px 0;cursor:pointer;height:41px}
+.bill-rm:hover{border-color:var(--flag);color:var(--flag)}
+
+.qs{margin-top:14px;display:grid;gap:10px}
+.q-row{display:grid;grid-template-columns:1fr 210px;gap:12px;align-items:center}
+@media(max-width:700px){.q-row{grid-template-columns:1fr;gap:5px}}
+.q-row > span{font-size:.88rem;color:var(--ink-soft)}
+.tri{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--rule);border-radius:2px;
+  overflow:hidden}
+.tri button{background:var(--panel);border:none;border-right:1px solid var(--rule-soft);
+  font:inherit;font-size:.84rem;padding:9px 4px;cursor:pointer;color:var(--ink-soft)}
+.tri button:last-child{border-right:none}
+.tri button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.tri.unanswered{border-color:#C9A99F}
+
+.detail{margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.detail{grid-template-columns:1fr}}
+.detail .full{grid-column:1/-1}
+.detail label{font-size:.78rem;font-weight:500;color:var(--ink-soft);margin-bottom:5px;
+  letter-spacing:.02em;text-transform:uppercase;display:block}
+
+.addrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+
+/* The free scorecard. Counts and totals, never the paid report's scripts. */
+.sc{border:1px solid var(--ink);background:var(--panel);margin:24px 0 0;
+  box-shadow:5px 5px 0 rgba(27,42,58,.08)}
+.sc-head{padding:14px 18px;border-bottom:1px solid var(--ink);font-size:.8rem;color:var(--ink-soft);
+  display:flex;justify-content:space-between;align-items:baseline;gap:14px;flex-wrap:wrap}
+.sc-head b{color:var(--ink);font-weight:600;font-size:.86rem}
+.sc-lede{padding:16px 18px;font-size:1.02rem;line-height:1.5;border-bottom:1px solid var(--rule-soft)}
+.sc-grid{display:grid;grid-template-columns:1fr 1fr}
+@media(max-width:560px){.sc-grid{grid-template-columns:1fr}}
+.sc-cell{padding:13px 18px;border-bottom:1px solid var(--rule-soft);border-right:1px solid var(--rule-soft)}
+.sc-cell:nth-child(2n){border-right:none}
+.sc-cell .k{font-size:.77rem;color:var(--ink-soft);display:block;margin-bottom:3px}
+.sc-cell .v{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;font-size:1.15rem}
+.sc-cell .v.good{color:var(--ok)}
+.sc-cell .v.warn{color:var(--hold)}
+.sc-cell .n{font-size:.76rem;color:var(--ink-soft);display:block;margin-top:3px}
+.sc-foot{padding:12px 18px;font-size:.82rem;color:var(--ink-soft)}
+.sc-empty{padding:22px 18px;font-size:.95rem;color:var(--ink-soft)}
+
+.gate{border:1px solid #C9A99F;background:var(--flag-tint);padding:14px 16px;margin:18px 0 0;
+  font-size:.9rem;line-height:1.55}
+.gate ul{margin:8px 0 0;padding-left:20px}
+.gate li{margin-bottom:6px}
+.gate li:last-child{margin-bottom:0}
+.gate b{color:var(--flag)}
+
+.seven{display:grid;grid-template-columns:repeat(2,1fr);gap:0;border:1px solid var(--rule);
+  max-width:820px;margin-bottom:26px}
+@media(max-width:700px){.seven{grid-template-columns:1fr}}
+.seven div{padding:14px 16px;border-right:1px solid var(--rule-soft);
+  border-bottom:1px solid var(--rule-soft)}
+.seven div:nth-child(2n){border-right:none}
+.seven b{display:block;font-size:.95rem;margin-bottom:5px}
+.seven b .cid{font-family:"IBM Plex Mono",monospace;font-size:.78rem;color:var(--flag);
+  margin-right:7px}
+.seven span{font-size:.84rem;color:var(--ink-soft);line-height:1.45;display:block}
+</style>
 </head>
 <body>
-<div class="bg-noise"></div>
-<header>
-  <nav>
-    <a href="/home-savings#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Home Savings Navigator</span>
-    </a>
-    <div class="nav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="#what-you-get">What you get</a>
-      <a href="#pricing">Pricing</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">StreamNavigator <span>/ Home Savings Navigator</span></a>
+    <nav class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#checks">The seven checks</a>
+      <a href="#sample">Sample report</a>
+      <a href="#price">Price</a>
       <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="/" class="btn btn-ghost btn-sm back-home">← All Navigators</a>
-    </div>
-  </nav>
+    </nav>
+  </div>
 </header>
-<main id="top">
-  <section class="hero" style="padding-bottom:8px;">
-    <div class="wrap">
-      <div class="pill"><span class="dot">✓</span> Find what you're overpaying for at home</div>
-      <h1>Audit your household bills <span class="grad">in one upload.</span></h1>
-      <p class="sub">Upload your recurring bills — utilities, internet, phone, insurance, gym and warehouse memberships — and get a concrete list of what to cancel, downgrade, switch, or renegotiate. For app and streaming subscriptions, <a href="/subscriptions" style="text-decoration:underline">Subscription Navigator</a> asks the three questions this one cannot.</p>
-    </div>
-  </section>
-  <section id="how-it-works">
-    <div class="section-head">
-      <div class="eyebrow">How it works</div>
-      <h2>One upload, a full household audit.</h2>
-      
-    </div>
-    <div class="steps-grid">
-      <div class="step-card">
-        <div class="step-num">1</div>
-        <h4>Upload your bills</h4>
-        <p>Utility statements, internet/phone bills, insurance, memberships — whatever recurring costs you want checked.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">2</div>
-        <h4>Make a One-Time Payment</h4>
-        <p>Covers a full audit now, plus a refreshed check as your bills change through the year.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">3</div>
-        <h4>AI reviews every line</h4>
-        <p>Each bill is checked against what that kind of service typically costs, and says so when it cannot be sure.</p>
-      </div>
-      <div class="step-card">
-        <div class="step-num">4</div>
-        <h4>Get your savings plan</h4>
-        <p>A ranked list of what to cancel, downgrade, switch, or renegotiate — with the expected savings for each.</p>
+
+<div class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <h1>You are probably renting a modem you could own.</h1>
+      <p class="lede">Upload your bills and we find the line items you are paying for and no longer need &mdash; the equipment fee, the promotion about to end, the instalment that outlived the device, the add-on from four years ago &mdash; and tell you exactly what to say to stop them. <strong>No bank login, ever.</strong></p>
+      <div class="btn-row">
+        <a class="btn" href="#price">Show me what&rsquo;s on my bills &mdash; free</a>
+        <span class="btn-note">The scorecard runs in your browser. Nothing is sent anywhere.</span>
       </div>
     </div>
-  </section>
-  <section id="what-you-get" style="background:var(--bg-alt); border-top:2px solid var(--ink); border-bottom:2px solid var(--ink);">
-    <div class="section-head">
-      <div class="eyebrow">What you get</div>
-      <h2>A ranked list of real savings, not generic tips.</h2>
-      
+
+    <div class="ledger" aria-label="Example finding">
+      <div class="ledger-head"><b>Internet &mdash; monthly statement</b><span>$89.00/mo</span></div>
+      <div class="row"><span class="lbl">Performance Pro 400</span><span class="amt">$62.00</span></div>
+      <div class="row hit"><span class="lbl">Equipment rental &mdash; gateway</span><span class="amt">$15.00</span></div>
+      <div class="row hit"><span class="lbl">Inside wire maintenance</span><span class="amt">$5.99</span></div>
+      <div class="row"><span class="lbl">Broadcast TV fee</span><span class="amt">$6.01</span></div>
+      <div class="note"><b>$251.88 a year, confirmed.</b> The gateway is $180 a year to rent; your own costs $60&ndash;$160 once and pays for itself inside a year. The wire maintenance plan is $71.88 a year and you told us you have never used it.</div>
+      <div class="src">Both figures are lines on this bill. We did not compare your rate to anyone else&rsquo;s.</div>
+      <div class="ledger-foot">$251.88 confirmed &middot; promotion ends 30 Nov &middot; 1 question still open</div>
     </div>
-    <div class="wrap" style="max-width:680px;">
-      <div class="check-card">
-        <ul class="check-list">
-          <li><span class="tick">✓</span> Which recurring expenses look priced above what that service usually costs</li>
-          <li><span class="tick">✓</span> What to cancel outright</li>
-          <li><span class="tick">✓</span> What to downgrade without losing what you actually use</li>
-          <li><span class="tick">✓</span> What to switch providers for, and to whom</li>
-          <li><span class="tick">✓</span> What's worth calling to renegotiate — and what to say</li>
-          <li><span class="tick">✓</span> Total estimated annual savings across everything you uploaded</li>
-        </ul>
+  </div>
+</div>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sec-intro">You see what we found before you decide whether to buy the report.</p>
+    <ol class="steps">
+      <li><h3>Name your bills and what they cost</h3><p>Internet, phone, insurance, utilities, gym, warehouse club. Most households have four to eight worth checking; fewer than three and there is usually not enough to compare.</p></li>
+      <li><h3>Answer the questions that apply</h3><p>Do you rent your modem. Are you on a promotional rate. Is the phone paid off. About twenty seconds a bill, and those answers are what the checks run on &mdash; a statement can show us the amount, but only you can tell us what you still want.</p></li>
+      <li><h3>Get your free scorecard<span class="free-tag">free</span></h3><p>How many things are yours to stop and what they are worth a year, worked out in your browser before anything is sent anywhere.</p></li>
+      <li><h3>Decide before buying the report</h3><p>If the scorecard finds nothing, you will know that for free. One flat price either way.</p></li>
+      <li><h3>Upload the bills and get your report</h3><p>We read the statements themselves, quote the lines back to you, and give you the call to make and the words to say &mdash; ordered by what it is worth against how long it takes.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="checks">
+  <div class="wrap">
+    <h2>Seven checks</h2>
+    <p class="sec-intro">Every one of these is arithmetic on your own bill. <strong>We do not hold a database of what things cost and we will never tell you a bill is above market</strong> &mdash; nobody publishes anything trustworthy about what your neighbours pay, and a made-up comparison is worse than no comparison. What we can tell you is which lines on your own statement are yours to stop.</p>
+
+    <div class="seven" id="check-catalog">
+      <div><b><span class="cid">H1</span>Equipment you rent that you could own</b><span>A gateway, modem, router or monitoring box billed monthly, forever. We price the rental against what buying one costs once.</span></div>
+      <div><b><span class="cid">H2</span>A promotional rate with an end date</b><span>Not a saving &mdash; the opposite. We date it and tell you when to call, because this is usually the largest number in the house.</span></div>
+      <div><b><span class="cid">H3</span>An instalment that outlived its device</b><span>The phone is paid off and the line is still on the bill. Also worth asking for the months since to be credited back.</span></div>
+      <div><b><span class="cid">H4</span>Add-ons you do not use</b><span>Wire maintenance, channel packs, device protection, roadside. You name them; we price them.</span></div>
+      <div><b><span class="cid">H5</span>Cover you are paying for twice</b><span>Roadside or rental-car cover on a policy when a card already carries it. We check you are not relying on it before we say a word.</span></div>
+      <div><b><span class="cid">H6</span>An autopay or paperless discount not applied</b><span>Many providers offer one and apply it only when asked. We do not know whether yours does, so there is no figure here &mdash; only the question.</span></div>
+      <div><b><span class="cid">H7</span>What this bill was a year ago</b><span>Your own statement against your own statement. A rise you can name is much harder for them to defend than one you cannot.</span></div>
+    </div>
+
+    <h3 style="margin-bottom:10px">Three things we will not do</h3>
+    <div class="limits">
+      <ul>
+        <li><strong>We will not tell you a bill is above market.</strong> We hold no price table, we do not look prices up, and we are not going to invent a regional rate to make a report look thorough. Every figure here is a line on your own statement.</li>
+        <li><strong>We will not tell you to drop cover you rely on.</strong> Duplicate cover is sometimes deliberate and two policies rarely exclude the same things. If you tell us you rely on it, that finding comes back as a question, not an instruction.</li>
+        <li><strong>We will not put a figure on a line you did not price.</strong> No amount, no number. The report names those lines and asks you for the amount rather than estimating one and folding it into a total.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="sample">
+  <div class="wrap">
+    <h2>A sample report</h2>
+    <p class="sec-intro">Figures changed. Every finding names the check it came from and the line on the bill it rests on.</p>
+
+    <div class="col">
+      <div class="finding">
+        <div class="finding-h"><h3>Stop renting the gateway from your internet provider</h3><span class="amt">$180.00/yr</span></div>
+        <p>You pay $15 a month to rent it &mdash; $180 a year, every year, forever.</p>
+        <p class="basis">Buying your own is a one-off of roughly $60&ndash;$160, so it pays for itself in 4&ndash;11 months. <strong>Confirmed</strong> &mdash; the rental line stops.</p>
+        <p class="basis">Check the provider&rsquo;s approved-device list first, buy one, swap it, and return the rented unit. Keep the return receipt: an unreturned-equipment charge is the one way this goes wrong.</p>
+        <p class="cite">Check H1 &middot; equipment rental line on your bill</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Your promotional rate ends 30 November</h3><span class="amt">not a saving</span></div>
+        <p>You pay $89 a month now. The standard rate is $104, so when this ends your bill rises by $180 a year.</p>
+        <p class="basis"><strong>Not a saving &mdash; a rise coming.</strong> This figure is never added into your total. It is here because it is the largest number on your bills and the only one with a deadline.</p>
+        <p class="basis">Call about a month before 30 November and ask what retention rate they can put you on. Say you are comparing providers and mean it.</p>
+        <p class="cite">Check H2 &middot; end date printed on your bill</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>A device instalment is still on the phone bill</h3><span class="amt">$324.96/yr</span></div>
+        <p>$27.08 a month for a handset you told us you finished paying for in March.</p>
+        <p class="basis"><strong>Confirmed.</strong> Ask for the line to be removed and for the months billed after the final payment to be credited back. Have the payoff date ready.</p>
+        <p class="cite">Check H3 &middot; instalment line, against your own answer</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Roadside cover on your auto policy &mdash; your call, not ours</h3><span class="amt">no figure</span></div>
+        <p>You told us your card already carries roadside cover, and that you rely on this one.</p>
+        <p class="basis">We are not going to tell you to drop it on the strength of a form. Duplicate cover is sometimes deliberate, and the exclusions in two policies are rarely identical &mdash; card cover often stops at a mileage limit the policy does not have. Read both, then decide. If it turns out to be genuinely duplicated, it is $96 a year.</p>
+        <p class="cite">Check H5, held by safety rule S1 &middot; you said you rely on it</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>Electricity &mdash; checked, nothing found</h3><span class="amt">$0</span></div>
+        <p>No rented equipment, no promotional rate running out, no add-ons, and the autopay discount is already applied.</p>
+        <p class="basis">Four checks ran on this bill and it holds up. That is a result, not a gap.</p>
+        <p class="cite">Checks H2, H4, H6, H7 &middot; all clean</p>
+      </div>
+
+      <div class="finding">
+        <div class="finding-h"><h3>One question still open</h3><span class="amt">&mdash;</span></div>
+        <p>You did not tell us whether the security monitoring contract includes rented equipment, so check H1 could not run on it.</p>
+        <p class="basis">Named rather than quietly dropped. It is one line on your statement and it is the difference between six findings and seven.</p>
+        <p class="cite">Check H1 &middot; could not run</p>
       </div>
     </div>
-  </section>
-  <!--
-    ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
-    ============================================================================
-    To go live for Home Savings Navigator:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Home Savings Navigator Report" — $49 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/navigator-status
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/6oU8wPdAE92sdsE6VOabK05 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
-    This page already appends ?client_reference_id=<submission id> to the
-    link automatically (see navigator-shared.js) so payment ties back to the
-    right submission — nothing else to configure here.
-    ============================================================================
-  -->
-  <section id="pricing">
-    <div class="section-head">
-      <div class="eyebrow">Get started</div>
-      <h2>One price. One full bill audit.</h2>
-      <p>Upload your bills, pay once, get your savings plan.</p>
+  </div>
+</section>
+
+<section id="price">
+  <div class="wrap">
+    <h2>See what we find. Then decide.</h2>
+    <p class="sec-intro">One price, however many bills you have.</p>
+
+    <div class="clean-result">
+      <h3>Plenty of households are paying for nothing they do not need. That is worth knowing too.</h3>
+      <p>If we find nothing, you will know before you pay &mdash; the scorecard shows it free. What the report gives you then is the verification: every bill named, every check that ran on it, and the amounts behind them. That is a different thing from a vague feeling that you are probably fine.</p>
+      <p><strong>If the report misses what it promised, we refund in full.</strong></p>
     </div>
+
     <div class="single-price-wrap">
       <div class="price-card featured" id="intake-card">
-        <span class="price-badge">One-time</span>
-        <h3>Home Savings Navigator Report</h3>
-        <p class="desc">A full recurring-expense audit, with a refresh as your bills change.</p>
+        <span class="price-badge">Free scorecard first</span>
+        <h3>Home Savings Navigator</h3>
+        <p class="desc">Seven checks run against every recurring bill you send &mdash; with the line it came from, what it is worth a year, what kind of figure that is, and exactly what to say.</p>
         <div class="price-amount">$49</div>
-        <div class="price-period">charged once &middot; not a subscription</div>
+        <div class="price-period">Charged once &middot; not a subscription &middot; free scorecard first</div>
 
         <div class="field-block">
-          <label>What kinds of bills are you uploading?</label>
-          <textarea id="intake-description" placeholder="e.g. Electric, internet, phone, home insurance, gym membership..."></textarea>
+          <label>Your bills</label>
+          <ul class="bill-list" id="bill-list"></ul>
+          <div class="addrow">
+            <button type="button" class="btn ghost btn-sm" id="add-btn">+ Add a bill</button>
+          </div>
+          <p class="hint" style="margin-top:-12px">Most households have <strong>four to eight</strong> worth checking. Fewer than three and there is usually not enough to find. Do not forget the ones that bill once a year &mdash; a warehouse club, a monitoring contract, an annual insurance premium.</p>
         </div>
+
         <div class="field-block">
-          <label>Upload your bills</label>
+          <label>Upload the bills</label>
           <div class="upload-zone" id="upload-zone">
-            <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
             <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">PDFs or photos of statements both work — the more you upload, the more thorough the audit.</p>
+          <p class="hint" style="margin-top:10px">PDFs or clear photos both work. <strong>The scorecard above covers only what you have typed;</strong> we read the statements themselves when we build the report, which is where the lines you did not know to look for come from.</p>
+          <p class="hint"><strong>Send last year&rsquo;s bill too if you have it.</strong> Your own statement against your own statement a year ago is check H7, and it needs no outside data at all &mdash; it is the one comparison we can make honestly.</p>
+          <p class="hint">Your bills are read once and the copy sent for analysis is deleted immediately afterwards. The upload itself stays in encrypted storage for 90&nbsp;days so we can regenerate your report if anything goes wrong, then is deleted automatically.</p>
         </div>
-        <div class="field-block">
-          <label>Email</label>
+
+        <!-- The free scorecard. Computed in the browser by the same engine that
+             produces the paid report (navigator-home-savings-engine.js), which
+             is why it can be free and why nothing has to leave the page to
+             produce it. -->
+        <div class="sc" id="scorecard" aria-live="polite">
+          <div class="sc-empty" id="sc-empty">Add a bill above and your scorecard appears here, worked out in your browser. Nothing is sent anywhere until you choose to buy the report.</div>
+          <div id="sc-body" style="display:none"></div>
+        </div>
+
+        <div id="gate" class="gate" style="display:none"></div>
+
+        <div class="field-block" style="margin-top:22px">
+          <label for="intake-email">Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
-        <ul class="price-feats">
-          <li><span class="tick">✓</span> Covers utilities, internet, phone, insurance and memberships</li>
-          <li><span class="tick">✓</span> Ranked by expected savings, highest first</li>
-          <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
-          <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
-        </ul>
-        <a href="https://buy.stripe.com/6oU8wPdAE92sdsE6VOabK05" data-stripe-link="home-savings" class="btn btn-primary" id="pay-btn">Get My Report →</a>
-        <!-- The checks that run before the upload starts report themselves
-             here rather than through a toast that clears after 3.6 seconds.
-             Someone who reloads the page (which empties the email box), then
-             attaches files and presses the button, otherwise sees a brief
-             flash and nothing else, and no request is ever sent. -->
-        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:#b4442b; font-size:13.5px; line-height:1.5; font-weight:600;"></p>
-        <p class="price-secure">🔒 Secured by Stripe</p>
+
+        <!--
+          ====================================================================
+          PAYMENT PORTAL (Stripe Payment Link — no backend required)
+
+          $49 one-time. Link 6oU8wPdAE92sdsE6VOabK05, matched against
+          prices.config.json by scripts/check-prices.js on every deploy.
+
+          The price did NOT move when this page was rebuilt. The audit's
+          recommendation was $39 *for the unfixed product*, and it named the
+          condition under which $49 stands: the page names a specific number of
+          checks and a test asserts that the number sold equals the number the
+          catalog runs. Both shipped — see the "seven checks" section above,
+          navigator-home-savings-engine.js CHECKS, and
+          tests/home-savings-claims.test.js. Same reasoning as landlord at $149.
+
+          This page already appends ?client_reference_id=<submission id> to the
+          link automatically (see navigator-shared.js) so payment ties back to
+          the right submission — nothing else to configure here.
+          ====================================================================
+        -->
+        <a href="https://buy.stripe.com/6oU8wPdAE92sdsE6VOabK05" data-stripe-link="home-savings" class="btn" id="pay-btn" style="width:100%;text-align:center">Get the full report &mdash; $49</a>
+        <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:var(--flag); font-size:.88rem; line-height:1.5; font-weight:500;"></p>
+        <p class="price-secure" style="text-align:center;font-size:.76rem;color:var(--ink-soft);margin-top:10px">&#128274; Payments are processed securely by Stripe &mdash; StreamNavigator never sees or stores your card details.</p>
       </div>
     </div>
-    <p class="pricing-footnote">Payments are processed securely by Stripe — StreamNavigator never sees or stores your card details.</p>
-  </section>
-  <section id="faq">
-    <div class="section-head">
-      <div class="eyebrow">FAQ</div>
-      <h2>Questions, answered.</h2>
+  </div>
+</section>
+
+<section id="limits">
+  <div class="wrap">
+    <h2>What this does not do</h2>
+    <p class="sec-intro">Read this before you start.</p>
+    <div class="limits">
+      <ul>
+        <li><strong>We do not connect to your bank.</strong> There is no login, no account access and no read-only link. You tell us what you pay for and you show us the bills.</li>
+        <li><strong>We do not hold a price database and do not look prices up.</strong> So we cannot tell you whether your rate is competitive, and we will not pretend to. What we can do is read your own statement line by line, which is where the money on a household bill actually is.</li>
+        <li><strong>We do not cancel or renegotiate anything for you.</strong> You get the finding, the figure and the script. You make every call yourself.</li>
+        <li><strong>We do not know what a provider will offer you.</strong> A retention rate depends on who answers the phone. Where that matters we give you the ask and say plainly that we cannot promise the outcome.</li>
+        <li><strong>We do not estimate a figure you did not give us.</strong> No amount, no number &mdash; the report names those lines and asks.</li>
+        <li><strong>Some decisions are not ours.</strong> Cover you rely on comes back as a question with the reason named. That is the product working, not a gap in it.</li>
+        <li><strong>We cannot make the work go away.</strong> Acting on a report with four findings takes about an hour and two of them will want a phone call. The report puts them in order and starts you on the largest, but you do the hour.</li>
+      </ul>
     </div>
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q">What counts as a 'recurring expense'? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Anything billed to you on paper or by email: utilities, internet, phone, insurance, gym and warehouse memberships, and similar bills. App and streaming subscriptions are a different problem — deciding those needs to know when you last used each one and whether you would miss it, which no statement can tell us. <a href="/subscriptions">Subscription Navigator</a> asks you directly, and costs $29.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">Will you cancel things for me? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — like the rest of StreamNavigator, you stay in control. You get a direct link or instructions for each recommended action; you decide what to act on.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if nothing needs to change? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You'll be told that plainly — the report only recommends changes that are actually worth your time.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q">What if my bills change later? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Each audit is its own $49 report. There is no recurring charge and nothing to cancel — and equally, nothing already paid for sitting unused. If your bills move enough to be worth re-checking, that is a fresh upload and a fresh report.</div></div>
-      </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <h2>Questions</h2>
+    <div class="col">
+      <details><summary>Do I need to connect my bank account?</summary><div class="body">No, and there is no option to. You name your bills and upload them as PDFs or photos. No bank login is ever required, and the free scorecard is computed in your browser without sending anything at all.</div></details>
+      <details><summary>How do you know if I am overpaying?</summary><div class="body">We do not, and we will not claim to. Nobody publishes a trustworthy table of what internet costs on your street this month, so a report that told you your rate was "above typical" would be guessing with a confident face. What we do instead is read your own bill for the things that are unambiguously yours to stop: equipment you rent, a promotion with an end date, an instalment for a phone you have paid off, add-ons you named, cover you hold twice. Those need no market data, and on most bills they are where the money is.</div></details>
+      <details><summary>What counts as a recurring bill?</summary><div class="body">Anything billed to you on paper or by email: internet, TV, mobile, insurance, electricity and gas, water, home security or monitoring, gym and warehouse memberships. App and streaming subscriptions are a different problem &mdash; deciding those needs to know when you last used each one and whether you would miss it, which no statement can tell us. <a href="/subscriptions">Subscription Navigator</a> asks you directly, and costs $29.</div></details>
+      <details><summary>Why do you ask questions when I am sending you the bill?</summary><div class="body">Because the bill shows the amount and not the answer. A statement cannot tell us whether you use the wire maintenance plan, whether the handset is paid off, or whether the roadside cover on your policy duplicates the one on your card. Those are the facts that turn a charge into a finding, and you are the only person who has them. The bills then let us read the lines you did not know to look for.</div></details>
+      <details><summary>Will you cancel things for me?</summary><div class="body">No. You get the finding, the amount and the words to say. You make every change yourself.</div></details>
+      <details><summary>What if you find nothing?</summary><div class="body">You will know that before you pay &mdash; the scorecard shows it free. What the report gives you then is every bill named, every check that ran on it, and the amounts behind them. If the report misses what it promised, we refund in full.</div></details>
+      <details><summary>What if my bills change later?</summary><div class="body">Each audit is its own $49 report. There is no recurring charge, nothing to cancel, and equally nothing already paid for sitting unused. If your bills move enough to be worth re-checking, that is a fresh upload and a fresh report.</div></details>
     </div>
-  </section>
-  <section style="padding-top:0; padding-bottom:90px;">
-    <div class="cta-final">
-      <h2>Most households are overpaying for something.</h2>
-      <p>Find out what, in one upload.</p>
-      <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Audit My Bills</a>
+  </div>
+</section>
+
+<section id="last">
+  <div class="wrap col">
+    <h2>Most households find two. Some find five.</h2>
+    <p class="sec-intro">You will know which before you pay anything.</p>
+    <div class="btn-row">
+      <a class="btn" href="#price">Show me what&rsquo;s on my bills &mdash; free</a>
+      <span class="btn-note">No bank login. Nothing leaves your browser.</span>
     </div>
-  </section>
-</main>
-<footer id="contact">
-  <div class="other-navs">
-    <h5>Other Navigators</h5>
-    <div class="other-navs-grid">
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disc">Automated analysis for informational purposes only. Not financial, legal or insurance advice. Home Savings Navigator does not cancel, downgrade, switch or renegotiate anything on your behalf &mdash; you make every change yourself. Every figure in the report is arithmetic on the documents and amounts you provide. We do not hold a database of current prices, do not look them up, and do not tell you whether a bill is priced above or below market; anything you intend to act on should be checked against your own statement and with the provider first.</p>
+    <div class="foot-links">
+      <a href="/">All Navigators</a>
+      <a href="/subscriptions">Subscription Navigator</a>
       <a href="/streaming">Streaming Navigator</a>
-      <a href="/contractor">🔧 Contractor Navigator</a>
-      <a href="/property-tax">🏠 Property Tax Navigator</a>
-      <a href="/rental">🔑 Rental Navigator</a>
-      <a href="/subscriptions">📺 Subscription Navigator</a>
-      <a href="/government-money">🏛️ Government Money Finder</a>
-      <a href="/home-maintenance">🛠️ Home Maintenance Navigator</a>
-      <a href="/landlord">📋 Landlord Navigator</a>
-      <a href="/insurance">🛡️ Insurance Navigator</a>
-      <a href="/buying">🛒 Purchase Navigator</a>
-      <a href="/hoa">🏘️ HOA Navigator</a>
-      <a href="/closing">🔍 Closing Navigator</a>
+      <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a>
+      <a href="/privacy-policy">Privacy Policy</a>
+      <a href="/terms">Terms of Service</a>
     </div>
-  </div>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h5>Product</h5>
-      <ul>
-        <li><a href="#how-it-works">How it works</a></li>
-        <li><a href="#what-you-get">What you get</a></li>
-        <li><a href="#pricing">Pricing</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-    </div>
-    <div class="footer-col">
-      <h5>Contact</h5>
-      <ul>
-        <li><a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a></li>
-      </ul>
-    </div>
-  </div>
-  <p class="footer-disclaimer">Home Savings Navigator provides AI-generated recommendations for informational purposes only and does not execute any cancellation, downgrade, or switch on your behalf. Estimated savings are reasoned from what that kind of service typically costs and are labelled as estimates, not quotes. We do not hold a database of current prices and do not look them up, so anything specific should be checked with the provider before you act on it.</p>
-  <div class="footer-bottom">
-    <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
-    <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
+    <p style="margin-top:20px">&copy; 2026 StreamNavigator LLC</p>
   </div>
 </footer>
 
 <div class="toast" id="toast">
-  <span class="ico">✓</span> <span id="toast-text"></span>
+  <span class="ico">&#10003;</span> <span id="toast-text"></span>
 </div>
+
+<script src="/navigator-home-savings-engine.js"></script>
 <script src="/navigator-shared.js"></script>
-<script>
-(function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
-
-  document.querySelectorAll('.category-chip').forEach(function(chip){
-    chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
-      chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
-    });
-  });
-
-  document.getElementById('pay-btn').addEventListener('click', async function(e){
-    e.preventDefault();
-    const btn = e.currentTarget;
-    const errEl = document.getElementById('intake-error');
-    function fail(msg, focusEl) {
-      errEl.textContent = msg;
-      errEl.style.display = 'block';
-      showToast(msg);
-      if (focusEl) focusEl.focus();
-    }
-    errEl.style.display = 'none';
-    const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
-    const email = emailEl.value.trim();
-    if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-    const files = uploader.getFiles();
-    if (true && files.length === 0) { fail('Please attach at least one file to continue.'); return; }
-    const originalText = btn.textContent;
-    btn.textContent = 'Saving your submission…';
-    btn.style.pointerEvents = 'none';
-    try {
-      const submission = await submitNavigatorIntake({
-        product: 'home-savings',
-        email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
-        files: files,
-      });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'home-savings' }, email);
-    } catch (err) {
-      fail(err.message || 'Something went wrong — please try again.');
-      btn.textContent = originalText;
-      btn.style.pointerEvents = 'auto';
-    }
-  });
-})();
-</script>
+<script src="/home-savings-intake.js"></script>
 </body>
 </html>

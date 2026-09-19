@@ -22,6 +22,7 @@ const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_lib/rental-entitlement');
 const { checkSufficiency: checkSubscriptionSufficiency } = require('../navigator-subscription-engine');
+const { checkSufficiency: checkHomeSavingsSufficiency } = require('../navigator-home-savings-engine');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -132,6 +133,33 @@ module.exports = async function handler(req, res) {
     // input this would reject, and calling this endpoint directly cannot
     // bypass the page.
     const sufficiency = checkSubscriptionSufficiency(formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: 'A few more details are needed before this can be analyzed — see missing[].',
+        missing: sufficiency.missing,
+      });
+      return;
+    }
+  } else if (product === 'home-savings') {
+    // Home Savings Navigator gets the same structured gate, and for the same
+    // reason the other three got one — except here the failure it prevents was
+    // the loudest of the lot.
+    //
+    // PRODUCT_CONFIGS['home-savings'] sets requiresFiles: true, and that is
+    // enforced in api/_lib/navigator-engine.js at generation time, AFTER
+    // payment. This endpoint's generic D-04 check accepts a description OR a
+    // file. So a description-only submission was accepted, went to Stripe,
+    // took $49, and then threw `Home Savings Navigator requires at least one
+    // uploaded document`. The refund is queued automatically, which is not the
+    // same thing as the purchase never having been allowed: the customer paid,
+    // waited, and got an apology. See docs/HOME-SAVINGS-AUDIT.md, Critical 2.
+    //
+    // Same rules home-savings.html gates its own button on — both load
+    // navigator-home-savings-engine.js — so a customer cannot reach checkout
+    // with input this would reject, and calling this endpoint directly cannot
+    // bypass the page.
+    const sufficiency = checkHomeSavingsSufficiency(formData, attachmentCount);
     if (!sufficiency.sufficient) {
       res.status(400).json({
         ok: false,

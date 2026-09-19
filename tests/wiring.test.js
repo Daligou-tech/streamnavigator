@@ -61,8 +61,11 @@ test('every form_data key read by an endpoint is declared', () => {
       // `lines` is Subscription Navigator's: the per-subscription records
       // subscriptions.html collects and navigator-subscription-engine.js runs
       // its rules against. Same column, different product's contract.
+      // `bills` is Home Savings Navigator's: the per-bill records
+      // home-savings.html collects and navigator-home-savings-engine.js runs
+      // its seven checks against. Same column again.
       if (['category', 'description', 'zip', 'financing', 'timeline', 'budget', 'notes',
-        'properties', 'lines'].includes(key)) continue;
+        'properties', 'lines', 'bills'].includes(key)) continue;
       if (!KNOWN_KEYS.includes(key)) undeclared.push(`${rel(file)} reads formData.${key}`);
     }
   }
