@@ -141,7 +141,7 @@
     max-width:560px; margin:0 auto 34px;
   }
   .explore-btn{
-    display:inline-flex; align-items:center; gap:10px; font-family:var(--font-display);
+    display:inline-flex; align-items:center; font-family:var(--font-display);
     font-weight:700; font-size:16px; color:#0a0f1f; text-decoration:none;
     background:linear-gradient(135deg, var(--accent-2), var(--accent));
     padding:15px 30px; border-radius:999px;
@@ -151,8 +151,6 @@
   .explore-btn:hover, .explore-btn:focus-visible{
     transform:translateY(-2px); box-shadow:0 12px 36px -6px rgba(91,157,255,.75);
   }
-  .explore-btn svg{ width:16px; height:16px; animation:bob 2.2s ease-in-out infinite; }
-  @keyframes bob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(3px); } }
 
   /* ---------- Solar system ---------- */
   .system-section{ position:relative; z-index:2; padding:56px 20px 40px; }
@@ -219,7 +217,7 @@
 
   @media (prefers-reduced-motion: reduce){
     html{ scroll-behavior:auto; }
-    .stars, .stars-2, .sun, .explore-btn svg{ animation:none; }
+    .stars, .stars-2, .sun{ animation:none; }
   }
 
   /* ---------- Mobile / simplified nav ---------- */
@@ -303,10 +301,7 @@
     <div class="eyebrow">✦ StreamNavigator AI</div>
     <h1>Save Smarter. Keep More. Live Better.</h1>
 <p class="sub">Explore focused tools for the decisions that matter.</p>
-<a href="#system" class="explore-btn" id="explore-cta">
-  Find Your Fit
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-    </a>
+<a href="#system" class="explore-btn" id="explore-cta">Find Your Fit</a>
   </section>
 
   <section class="system-section" id="system" tabindex="-1" aria-labelledby="system-heading">
