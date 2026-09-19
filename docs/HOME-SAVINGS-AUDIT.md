@@ -833,11 +833,8 @@ year's bill requested and used by check H7.
   seven checks were chosen precisely because none of them needs one.
 - **No live report run.** The engine is verified offline against fixtures with
   known answers; no API credits were spent.
-- **The engine's document-extraction half is still the model's.** The checks
-  run on the structured answers the customer gives; the uploaded bills are read
-  by the writer for quoting, under a prompt that forbids originating a finding.
-  Extracting line items deterministically from a PDF is a larger piece of work
-  and is the obvious next one.
+- **Nothing else.** The document-extraction half was the one item left open
+  here, and it shipped the same day — see the section below.
 
 ### Verification
 
@@ -849,3 +846,77 @@ Every computed style token on `/home-savings` now matches `/closing` — body
 `IBM Plex Sans` 17px/1.6 on `#FBFAF7`, `h1` Newsreader 500 at `-0.01em`, button
 `2px` radius weight 500, numerals in `IBM Plex Mono`, ledger shadow
 `5px 5px 0 rgba(27,42,58,.08)`, and no gradient layer.
+
+---
+
+## Extraction — the second half, 2026-09-19
+
+The closure above left one thing open: the checks ran on what the customer
+typed, and the uploaded bills were read only by the writer, for quoting. That
+is now the same split one level down.
+
+**The model transcribes. A pattern table classifies. The engine decides.**
+
+`api/_lib/home-savings-extract.js` hands the model a schema and one
+instruction: report the lines that are printed, with a confidence score per
+reading. It is explicitly forbidden to classify, to judge, or to infer a value
+that is not on the page. `classifyLine()` then maps each transcribed label to a
+category through a regex table, and the seven checks run on the result.
+
+**Why the classification is a table and not the model's judgement.** The
+exclusions are the reason. "Broadcast TV Fee" and "Regional Sports Fee" read
+exactly like optional extras and are mandatory; "Equipment Return Credit"
+contains the word *equipment* and is money in the customer's favour. A model
+asked to decide what a line *is* will get each of those wrong often enough to
+matter, and every instance sends a customer to spend twenty minutes losing an
+argument on the phone. The table is auditable, testable, and wrong in the same
+way every time. `tests/home-savings-extract.test.js` pins thirteen mandatory
+charges and four credits against exactly this.
+
+### What reading the bill buys
+
+Traced end to end on a three-bill household:
+
+| | Typed by the customer | After reading the statements |
+|---|---|---|
+| Bills audited | 3 | **4** — an ADT bill in the upload they never named |
+| Confirmed savings | $96 | **$744.96** |
+| Equipment rental | "no rented equipment" | **$180/yr** — the statement disagreed, twice |
+| Device instalment | not mentioned | **$324.96/yr** — the bill prints "24 of 24" |
+| Promotional end date | unknown | **1 December 2026**, printed |
+| Basis of each figure | the form | the line, quoted |
+
+The disagreements are reported rather than silently resolved. A customer who
+said they do not rent a modem, on a statement with an equipment line, has
+learned something worth $180 a year and has a reason to believe the rest.
+
+### What extraction is still not allowed to decide
+
+- **Whether an add-on is wanted.** A line found on the bill that the customer
+  never mentioned becomes a *question* — never a finding, never a figure in a
+  total. Only they know whether they use the wire maintenance plan.
+- **Whether a month-on-month change is a price rise.** Statements print last
+  *month*; check H7 is year-on-year. Conflating them would file a January
+  heating bill as an increase, so a month-on-month jump is a question, raised
+  only on bills whose amount is not driven by usage.
+- **Anything below 0.85 confidence.** Discarded rather than used, the same
+  threshold and the same helper as `closing-extract.js`. A discarded reading
+  costs a question; a wrong one costs a phone call the customer loses.
+
+### Failure behaviour
+
+A failed or truncated read costs the report its document half and nothing else
+— the typed answers are a complete input on their own, which is what the free
+scorecard has always run on. The writer is told explicitly that no statement
+was consulted and is forbidden from quoting one, and the customer is told which
+half they got. The scorecard's own headline changes wording to match: "confirmed
+from the lines printed on your statements" only when they were.
+
+### Verification
+
+`node tests/run-all.js` — **76 of 76 suites pass**, including 25 new extraction
+cases. The classifier and the merge are pure and test entirely offline; the API
+call is exercised through an injected `fetch` covering success, truncation,
+retry and error. No credits were spent. The browser path was re-checked: with
+no extraction, the scorecard still says "from the amounts you gave us" and
+makes no claim to have read anything.

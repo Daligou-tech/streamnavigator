@@ -51,6 +51,9 @@ const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 const subscriptionEngine = require('../../navigator-subscription-engine');
 const homeSavingsEngine = require('../../navigator-home-savings-engine');
+const {
+  extractHouseholdBills, merge: mergeHouseholdBills,
+} = require('./home-savings-extract');
 
 const ANTHROPIC_MODEL = 'claude-sonnet-5';
 
@@ -1355,9 +1358,53 @@ async function generateNavigatorReport(submissionId) {
     // writer quotes them — but nothing it reads in them may become a finding.
     let homeSavingsAnalysis = null;
     if (submission.product === 'home-savings') {
-      const bills = Array.isArray(formData.bills) ? formData.bills : [];
+      let bills = Array.isArray(formData.bills) ? formData.bills : [];
+
+      // Read the statements before running the checks.
+      //
+      // This is the difference between the free scorecard and the report the
+      // customer paid for. The scorecard runs the same seven checks against
+      // what they typed; this runs them against what is printed. A modem
+      // rental the customer guessed at $12 and the bill prints at $15, an
+      // add-on they never mentioned, a promotional end date nobody remembers,
+      // an instalment agreement the bill itself says is complete — none of
+      // those are available to a form.
+      //
+      // The model transcribes and a pattern table classifies; see
+      // home-savings-extract.js. It is allowed to be wrong about what a line
+      // SAYS, which the confidence gate catches, and it is not allowed to
+      // decide what a line IS.
+      let extractionQuestions = [];
+      let extractionDisagreements = [];
+      let extractionFailure = null;
+      let billsRead = 0;
+      if (bills.length && contentBlocks.length) {
+        try {
+          const read = await extractHouseholdBills(ANTHROPIC_API_KEY, contentBlocks);
+          const merged = mergeHouseholdBills(bills, read);
+          bills = merged.bills;
+          extractionQuestions = merged.newQuestions;
+          extractionDisagreements = merged.disagreements;
+          billsRead = (read.bills || []).length;
+        } catch (err) {
+          // The answers the customer typed are a complete input on their own —
+          // that is what the free scorecard runs on. A failed read costs the
+          // report its document-grounded half, and the customer is told which
+          // half they got rather than being handed a thinner report that looks
+          // identical to a full one.
+          //
+          // Reported through the audit block rather than `unreadableUploads`,
+          // which is folded into the context text hundreds of lines above this
+          // point and is already sealed by the time extraction runs.
+          extractionFailure = err.message;
+        }
+      }
+
       if (bills.length) {
-        homeSavingsAnalysis = homeSavingsEngine.analyze({ bills });
+        homeSavingsAnalysis = homeSavingsEngine.analyze({ bills }, {
+          openQuestions: extractionQuestions,
+          disagreements: extractionDisagreements,
+        });
         const a = homeSavingsAnalysis;
         const block = homeSavingsEngine.toAuditBlock(a);
 
@@ -1365,6 +1412,22 @@ async function generateNavigatorReport(submissionId) {
         const decided = block.findings.filter((f) => f.action !== homeSavingsEngine.Action.REVIEW);
 
         auditBlock = [
+          '',
+          extractionFailure
+            ? [
+              'THE STATEMENTS COULD NOT BE READ. Every finding below comes from the answers the',
+              `customer typed, not from their documents (reason: ${extractionFailure}).`,
+              'Say this plainly in missing_or_uncertain and do NOT quote any bill, cite any line',
+              'label, or imply a statement was consulted — nothing in this report was read off',
+              'one. Tell them to reply to their receipt and we will re-run it against the',
+              'documents at no extra charge.',
+            ].join('\n')
+            : billsRead
+              ? `THE STATEMENTS WERE READ — ${billsRead} of them. Findings whose basis begins `
+                + `"Read from your statement" are quoting a line printed on their bill; quote it `
+                + `back exactly as the basis gives it. Findings without that are from the form, `
+                + `and must not be dressed up as document findings.`
+              : '',
           '',
           'FINDINGS — these are the report. Write these up. Do not add to them, do not recompute',
           'one, and do not change an action. Every figure you may state is here.',
@@ -1386,6 +1449,28 @@ async function generateNavigatorReport(submissionId) {
             ? 'CHECKS THAT COULD NOT RUN — give these their own section, in these words. Each is a\n'
               + 'question only the customer can answer, and each is a finding they have not had yet:\n'
               + JSON.stringify(block.couldNotRun, null, 1)
+            : '',
+          '',
+          block.openQuestions.length
+            ? [
+              'READ OFF THE STATEMENTS, AND NOT YET DECIDED — put these in the same section as the',
+              'checks that could not run, or in their own. Each is a line we found on the bill that',
+              'the customer never mentioned, or a change we can see but cannot interpret. Ask the',
+              'question as it is written. DO NOT turn one into a recommendation and DO NOT put a',
+              'figure from one into any total: an add-on on the statement is not an add-on they',
+              'want rid of, and only they know which.',
+              JSON.stringify(block.openQuestions, null, 1),
+            ].join('\n')
+            : '',
+          '',
+          block.disagreements.length
+            ? [
+              'WHERE THE STATEMENT DISAGREED WITH THE FORM — report these plainly and without',
+              'blame. The customer answered from memory and the bill says otherwise; we used the',
+              'bill. Saying so is the point, because it is how they know the report read their',
+              'documents rather than replaying their own answers back at them.',
+              JSON.stringify(block.disagreements, null, 1),
+            ].join('\n')
             : '',
           '',
           'TOTALS — the headline savings figure is confirmedAnnual and nothing else. Never add',

@@ -14,7 +14,16 @@
    it: closing-audit.js, rental-audit.js, landlord-audit.js and
    navigator-subscription-engine.js decide, and the model writes up what they
    decided. Nothing here calls a model, nothing here reaches the network, and
-   every figure it prints is arithmetic on a number the customer typed.
+   every figure it prints is arithmetic on a number that was either typed by
+   the customer or read off their own statement.
+
+   Where those numbers come from on the paid path is api/_lib/home-savings-
+   extract.js, which runs the same split one level down: the model TRANSCRIBES
+   the bill's lines, a pattern table CLASSIFIES them, and this file decides.
+   The model never gets to call something an equipment rental. In the browser
+   there is no extraction and the answers are the customer's own, which is why
+   the free scorecard and the paid report can differ — the report reads the
+   statement, and the scorecard says so.
 
    THE POINT OF THE REDESIGN is that none of these checks needs a price table.
    Each one is arithmetic on the customer's own bill:
@@ -205,6 +214,27 @@
      the same total as a real one.
      -------------------------------------------------------------------- */
 
+  // What a finding rests on, named as precisely as we can name it.
+  //
+  // When the bill was read, this quotes the line and the amount printed on it.
+  // When it was not, it says so rather than implying a document was consulted.
+  // The difference matters: "your statement shows Equipment Rental — Gateway
+  // at $15.00" is checkable by the customer in ten seconds, and "you told us
+  // you rent it" is not.
+  function basisFor(bill, key, fallback) {
+    const ev = bill.evidence && bill.evidence[key];
+    if (Array.isArray(ev) && ev.length) {
+      return `Read from your statement: ${ev.map((e) => `"${e.label}" $${Number(e.amount).toFixed(2)}`).join(', ')}.`;
+    }
+    if (ev && ev.label && ev.amount != null) {
+      return `Read from your statement: "${ev.label}" $${Number(ev.amount).toFixed(2)}.`;
+    }
+    if (ev && ev.label && ev.value != null) {
+      return `Read from your statement: "${ev.label}" ${ev.value}.`;
+    }
+    return fallback;
+  }
+
   function fH1(bill) {
     if (bill.equipmentRental !== true) return null;
     const fee = num(bill.equipmentFee);
@@ -212,7 +242,7 @@
       checkId: 'H1', slug: 'equipment-rental',
       title: `Stop renting the ${kindOf(bill) === 'security' ? 'equipment' : 'modem or router'} from ${bill.provider || 'your provider'}`,
       action: Action.REPLACE,
-      basis: 'A rental line on your own bill.',
+      basis: basisFor(bill, 'equipment', 'A rental line on your own bill, as you described it.'),
     };
     if (!fee) {
       return Object.assign(base, {
@@ -252,7 +282,7 @@
       checkId: 'H2', slug: 'promo-expiring',
       title: `${bill.provider || 'This bill'} is on a promotional rate`,
       action: Action.WATCH,
-      basis: 'The end date printed on your own bill.',
+      basis: basisFor(bill, 'promoEndsOn', 'The end date printed on your own bill.'),
       // NEVER a saving. Losing a promotional rate is a cost, and an engine
       // that counted the gap as money found would be reporting a price rise
       // as a discovery. See the audit's Defect 2 on /subscriptions, which is
@@ -299,7 +329,8 @@
       checkId: 'H3', slug: 'device-paid-off',
       title: `A device instalment is still on the ${bill.provider || 'phone'} bill`,
       action: Action.STOP,
-      basis: 'An instalment line on your own bill, against your own answer that it is paid off.',
+      basis: basisFor(bill, 'instalment',
+        'An instalment line on your own bill, against your own answer that it is paid off.'),
     };
     if (!fee) {
       return Object.assign(base, {
@@ -331,7 +362,7 @@
       checkId: 'H4', slug: 'unused-addons',
       title: `Add-ons on the ${bill.provider || kindMeta(bill).label} bill you said you do not use`,
       action: Action.STOP,
-      basis: 'Lines you identified on your own bill.',
+      basis: basisFor(bill, 'addOnCandidates', 'Lines you identified on your own bill.'),
     };
     if (!priced.length) {
       return Object.assign(base, {
@@ -389,7 +420,9 @@
       checkId: 'H6', slug: 'autopay-discount',
       title: `No autopay or paperless discount on the ${bill.provider || kindMeta(bill).label} bill`,
       action: Action.CALL,
-      basis: 'The absence of a discount line on your own bill.',
+      basis: bill.evidence && Array.isArray(bill.evidence.autopayDiscount)
+        ? 'We read your statement line by line and there is no autopay or paperless discount on it.'
+        : 'The absence of a discount line on your own bill.',
       // at_risk, not confirmed: whether this provider offers one, and what it
       // is worth, is exactly the kind of fact we do not hold and will not
       // invent. The check is that it is not currently applied.
@@ -619,10 +652,25 @@
     const counts = {};
     for (const f of findings) counts[f.action] = (counts[f.action] || 0) + 1;
 
+    // Whether the statements were actually read. The scorecard says different
+    // things either way, because "confirmed from the amounts you gave us" is
+    // a lie once the figures came off the bill — and the difference is exactly
+    // what the customer paid for.
+    const documentsRead = findings.some((f) => /^Read from your statement/.test(f.basis || ''));
+
+    // Questions the extraction raised that no check could answer — an add-on
+    // on the statement the customer never mentioned, a month-on-month jump.
+    // They ride alongside couldNotRun rather than becoming findings, because
+    // every one of them turns on something only the customer knows.
+    const openQuestions = Array.isArray(opts.openQuestions) ? opts.openQuestions : [];
+
     return {
       generatedAt: iso(today),
       checkCount: CHECK_COUNT,
       billCount: bills.length,
+      documentsRead,
+      openQuestions,
+      disagreements: Array.isArray(opts.disagreements) ? opts.disagreements : [],
       pricedBills,
       monthlySpend: round2(monthlySpend),
       annualSpend: round2(monthlySpend * 12),
@@ -652,12 +700,13 @@
       annualSpend: a.annualSpend,
       actionableFindings: actionable,
       leverFindings: levers,
+      documentsRead: a.documentsRead === true,
       confirmedAnnual: a.totals.confirmedAnnual,
       promoExposureAnnual: a.totals.promoExposureAnnual,
       increaseAnnual: a.totals.increaseAnnual,
       unpricedFindings: a.totals.unpricedFindings,
       reviewFindings: a.totals.reviewFindings,
-      openQuestions: a.couldNotRun.length,
+      openQuestions: a.couldNotRun.length + (a.openQuestions || []).length,
       headline: scorecardHeadline(a, actionable, levers),
       nothingFound: actionable === 0 && levers === 0 && a.totals.unpricedFindings === 0,
     };
@@ -667,7 +716,8 @@
     if (a.totals.confirmedAnnual > 0) {
       return `${actionable} thing${actionable === 1 ? '' : 's'} on your bills `
         + `${actionable === 1 ? 'is' : 'are'} yours to stop. `
-        + `${money(a.totals.confirmedAnnual)} a year, confirmed from the amounts you gave us.`;
+        + `${money(a.totals.confirmedAnnual)} a year, confirmed `
+        + `${a.documentsRead ? 'from the lines printed on your statements' : 'from the amounts you gave us'}.`;
     }
     if (a.totals.unpricedFindings > 0) {
       return `We found ${a.totals.unpricedFindings} thing${a.totals.unpricedFindings === 1 ? '' : 's'} `
@@ -800,6 +850,8 @@
         withinNorms: f.withinNorms === true,
       })),
       couldNotRun: analysis.couldNotRun,
+      openQuestions: analysis.openQuestions || [],
+      disagreements: analysis.disagreements || [],
     };
   }
 
