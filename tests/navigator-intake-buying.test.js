@@ -148,15 +148,15 @@ test('a raw description with no structured fields (the pre-fix behavior) is now 
   assert.equal(inserted.length, 0);
 });
 
-test('other products are unaffected: a bare non-empty description still passes for e.g. property-tax', async (t) => {
+test('other products are unaffected: a bare non-empty description still passes for e.g. contractor', async (t) => {
   const { inserted } = installFakeSupabaseAdmin();
   t.after(uninstallFakeSupabaseAdmin);
 
   const handler = require('../api/navigator-intake');
   const { req, res } = makeReqRes({
-    product: 'property-tax',
+    product: 'contractor',
     email: 'homeowner@example.com',
-    formData: { description: '123 Main St, assessment went up 40% this year' },
+    formData: { description: 'Contractor quoted $8,400 to replace the deck' },
     files: [],
   });
 

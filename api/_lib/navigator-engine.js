@@ -53,6 +53,7 @@ const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 const subscriptionEngine = require('../../navigator-subscription-engine');
 const homeMaintenanceEngine = require('../../navigator-home-maintenance-engine');
+const propertyTaxEngine = require('../../navigator-property-tax-engine');
 const homeSavingsEngine = require('../../navigator-home-savings-engine');
 const governmentMoneyEngine = require('../../navigator-government-money-engine');
 const {
@@ -190,11 +191,35 @@ const PRODUCT_CONFIGS = {
   'property-tax': {
     label: 'Property Tax Navigator',
     requiresFiles: false,
-    task: `You are the analysis engine behind Property Tax Navigator. A homeowner paid for a review of whether their property tax assessment looks worth appealing, based on their address/description and, if provided, their latest assessment notice.
+    // Like Insurance and Home Maintenance, and for the same reason: the
+    // findings in this report are produced by
+    // navigator-property-tax-engine.js, not by the model. The model's job is
+    // to write them up. It must not originate a comparable property, a
+    // dollar estimate, or a verdict.
+    //
+    // What this replaced was a prompt that already, correctly, refused to
+    // invent comparable-sale data — and a page that promised "the specific
+    // comparable properties used as evidence" and "AI pulls comparable
+    // properties" anyway. docs/PROPERTY-TAX-AUDIT.md found the page simply
+    // wrong about what the prompt behind it could do, the same shape
+    // docs/GOVERNMENT-MONEY-AUDIT.md found on that product. The fix is not a
+    // comparable-sale database this codebase does not hold; it is arithmetic
+    // on figures the homeowner actually supplies — their own prior and
+    // current assessed value, their own tax rate, and comparable properties
+    // they looked up themselves.
+    task: `You are the writer for a Property Tax Navigator appeal review. A homeowner paid for a read on whether their property tax assessment is worth appealing, and answered structured questions about their assessed value, any reported changes to the property, and whatever comparable properties or tax-rate figures they have.
 
-You do not have access to a live MLS or county assessor database, so you cannot pull real comparable-sale records — never invent a specific comparable address, sale price, or assessed value you were not given. Instead: reason from what's actually in the description/assessment notice, general knowledge of how property tax assessment and appeals work (and that the process varies significantly by state and county), and any patterns worth flagging (an assessment increase that looks unusually large, an inconsistency between the assessed value and what the homeowner describes about the property, an obvious data error). Where a real analysis would cite specific comparable properties, instead tell the homeowner exactly what kind of comparables to pull themselves (e.g., from their county assessor's public record site) and how to use them.
+The deterministic engine has already run. Every finding below carries a category, a basis, a recommended action, and where applicable a dollar impact computed from the homeowner's own figures. Your job is to present them clearly. It is not to add to them.
 
-Give an honest read on whether appealing looks worth the homeowner's time given what was provided, explicitly saying when there isn't enough information to have a view rather than guessing. Close with a practical, generalized appeal checklist: typical evidence to gather and what to expect from the process — only get state/county-specific if the homeowner told you their location and you're genuinely confident about that jurisdiction's process.`,
+Hard rules:
+- NEVER INVENT A COMPARABLE PROPERTY, sale price, or assessed value. Every comparable in this report is one the homeowner typed in themselves — quote it exactly, never supplement it with one you construct from general knowledge, however plausible it would sound.
+- NEVER STATE A DOLLAR FIGURE that is not the homeowner's own assessed value, tax rate, or a finding's own computed dollarImpact. You hold no comparable-sale database and no rate table for what property tax "usually" runs — the page you are writing for does not promise one, and neither may you.
+- NEVER CALL AN ASSESSMENT "TYPICAL," "IN LINE WITH THE MARKET," OR SIMILAR. Every finding here rests on arithmetic between the homeowner's own figures across two years, or against comparables they supplied — nothing here is a market judgement.
+- A factual_error finding always leads — present it first, plainly, before any dollar-based finding, exactly as the engine's own reasons describe it. This is the single most actionable, least adversarial appeal ground in the report.
+- CARRY EACH FINDING'S CATEGORY THROUGH exactly. "worth_appealing" means the documents show a change or a gap the homeowner did not create and cannot explain. "likely_justified" means the increase tracks something the homeowner themselves reported (a renovation, an addition) — say that plainly rather than treating it as a problem. "within_norms" is the product working when nothing needs the homeowner's attention, including an assessment that changed by less than this engine's own disclosed materiality threshold, or one that fell.
+- If the comparison could not run (no prior value, no comparables, no factual error), say so plainly and name exactly what would let it run — do not render a verdict on the current assessment in isolation.
+
+Close with a practical, generalized appeal checklist — typical evidence to gather and what to expect from the process — and only get state/county-specific if the homeowner told you their location and you are genuinely confident about that jurisdiction's process. Be explicit that this is not legal or tax advice and that only the local taxing authority determines any actual outcome.`,
   },
 
   'home-savings': {
@@ -1921,6 +1946,55 @@ async function generateNavigatorReport(submissionId) {
       }
     }
 
+    // Property Tax Navigator. Same shape and same reason as Insurance and
+    // Home Maintenance above: the findings are computed by
+    // navigator-property-tax-engine.js from the structured answers the
+    // homeowner gave, and the model presents them. Nothing it reads in an
+    // uploaded assessment notice may become or change a finding — files
+    // remain attached only so the writer can quote them.
+    let propertyTaxAnalysis = null;
+    if (submission.product === 'property-tax') {
+      const sufficiency = propertyTaxEngine.checkSufficiency(formData);
+      if (sufficiency.sufficient) {
+        propertyTaxAnalysis = propertyTaxEngine.analyze(formData);
+        const a = propertyTaxAnalysis;
+        const flagged = a.findings.filter((f) => f.category !== propertyTaxEngine.Category.WITHIN_NORMS);
+        const passed = a.findings.filter((f) => f.category === propertyTaxEngine.Category.WITHIN_NORMS);
+
+        auditBlock = [
+          '',
+          'FINDINGS — these are the report. Write them up. Do not add to them, do not recompute one,',
+          'and do not change a category. Every figure and comparable you may state is here.',
+          JSON.stringify(flagged, null, 1),
+          '',
+          passed.length
+            ? [
+              `CHECKS THAT RAN AND FOUND NOTHING TO FLAG — ${passed.length} of them, below.`,
+              'These belong in their own short section — a check that ran on the homeowner\'s own figures',
+              'and came back clean is still work they paid for.',
+              JSON.stringify(passed.map((f) => ({ title: f.title, basis: f.basis })), null, 1),
+            ].join('\n')
+            : '',
+          '',
+          a.hasBaseline
+            ? ''
+            : 'NO COMPARISON COULD BE MADE. Say this first and plainly, and do not render any verdict on the '
+              + 'current assessment by itself — see the COMPARISON_NOT_POSSIBLE finding above for exactly what to ask for.',
+        ].filter(Boolean).join('\n');
+      } else {
+        // The intake gate blocks this client- and server-side, so reaching
+        // here means something upstream let a blank submission through.
+        auditBlock = [
+          '',
+          'THIS SUBMISSION IS MISSING REQUIRED ANSWERS, so no finding could be computed. Say that first,',
+          'plainly, in the summary and again in missing_or_uncertain, and name exactly what is missing:',
+          JSON.stringify(sufficiency.missing.map((m) => m.label), null, 1),
+          'Do not produce a general article about property tax appeals in its place. Tell them to reply',
+          'to their receipt with the missing answers and the review will be run.',
+        ].join('\n');
+      }
+    }
+
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -2062,6 +2136,10 @@ Then do what you can. Work only from what is legibly present, flag anything that
 
     if (submission.product === 'home-maintenance' && homeMaintenanceAnalysis) {
       report.home_maintenance_analysis = homeMaintenanceAnalysis;
+    }
+
+    if (submission.product === 'property-tax' && propertyTaxAnalysis) {
+      report.property_tax_analysis = propertyTaxAnalysis;
     }
 
     // Stored so the customer's NEXT shortlist can say what moved. Verdicts only —

@@ -25,6 +25,7 @@ const { checkSufficiency: checkSubscriptionSufficiency } = require('../navigator
 const { checkSufficiency: checkHomeSavingsSufficiency } = require('../navigator-home-savings-engine');
 const { checkSufficiency: checkGovernmentMoneySufficiency } = require('../navigator-government-money-engine');
 const { checkSufficiency: checkHomeMaintenanceSufficiency } = require('../navigator-home-maintenance-engine');
+const { checkSufficiency: checkPropertyTaxSufficiency } = require('../navigator-property-tax-engine');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -250,6 +251,25 @@ module.exports = async function handler(req, res) {
     // checkout with input this endpoint would then reject, and calling this
     // endpoint directly cannot bypass the page.
     const sufficiency = checkHomeMaintenanceSufficiency(formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: sufficiency.missing[0].label + '.',
+        missing: sufficiency.missing,
+      });
+      return;
+    }
+  } else if (product === 'property-tax') {
+    // Property Tax Navigator gets the same structured gate, for the same
+    // reason: the old free-text address box let a customer reach checkout
+    // with nothing the deterministic engine could compare against. See
+    // docs/PROPERTY-TAX-AUDIT.md.
+    //
+    // Same rules property-tax.html gates its own button on — both load
+    // navigator-property-tax-engine.js — so a customer cannot reach checkout
+    // with input this endpoint would then reject, and calling this endpoint
+    // directly cannot bypass the page.
+    const sufficiency = checkPropertyTaxSufficiency(formData);
     if (!sufficiency.sufficient) {
       res.status(400).json({
         ok: false,
