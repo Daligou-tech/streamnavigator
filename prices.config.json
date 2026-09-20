@@ -34,7 +34,8 @@
     "home-maintenance.html": {
       "label": "Home Maintenance Navigator",
       "expectedPriceCents": 5900,
-      "stripeLinkId": "28EeVd9ko3I80FS1BuabK09"
+      "stripeLinkId": "28EeVd9ko3I80FS1BuabK09",
+      "_price": "$59 held, on the same standard insurance, landlord and government-money were held to: docs/HOME-MAINTENANCE-AUDIT.md found the product running on a single model call told to use 'general knowledge of typical lifespans and typical cost ranges' -- the same banned claim found on Insurance -- with a free-text intake that guaranteed no real numbers to work from. navigator-home-maintenance-engine.js replaced it: no cost claim anywhere in its logic, a structured intake requiring the customer's own quotes for a financial verdict, and a safety override that cost math can never reach. If any of that regresses, this price no longer stands on the audit's own terms."
     },
     "home-savings.html": {
       "label": "Home Savings Navigator",
