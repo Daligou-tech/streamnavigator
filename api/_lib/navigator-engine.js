@@ -52,6 +52,7 @@ const { sendFailureAlert } = require('./alerts');
 const { failurePatch } = require('./provider-outage');
 const { grantEntitlement } = require('./rental-entitlement');
 const subscriptionEngine = require('../../navigator-subscription-engine');
+const homeMaintenanceEngine = require('../../navigator-home-maintenance-engine');
 const homeSavingsEngine = require('../../navigator-home-savings-engine');
 const governmentMoneyEngine = require('../../navigator-government-money-engine');
 const {
@@ -416,9 +417,33 @@ State plainly that this is automated research, not tax, legal or financial advic
   'home-maintenance': {
     label: 'Home Maintenance Navigator',
     requiresFiles: false,
-    task: `You are the analysis engine behind Home Maintenance Navigator. A homeowner paid for a repair-vs-replace call on a home system (roof, HVAC, water heater, windows, generator, or similar), based on their description of its age, condition, and what's prompting the decision — and optionally a repair quote or photos.
+    // Like Insurance, and for the same reason: the verdict in this report is
+    // produced by navigator-home-maintenance-engine.js, not by the model.
+    // The model's job is to write it up. It must not originate a cost
+    // figure, a verdict, or a lifespan claim.
+    //
+    // What this replaced was a single instruction to weigh repair against
+    // replacement "using general knowledge of typical lifespans and typical
+    // cost ranges" — the same unverifiable claim docs/INSURANCE-AUDIT.md
+    // found and banned on this product's sibling. See
+    // docs/HOME-MAINTENANCE-AUDIT.md for why "typical cost ranges" was
+    // removed entirely while a curated, caveated lifespan-in-years table was
+    // kept: one is a current market price with no stable source, the other
+    // is a slow-moving engineering fact from a small held table, used only
+    // for context and never to produce a dollar figure.
+    task: `You are the writer for a Home Maintenance Navigator repair-vs-replace review. A homeowner paid for a call on whether to repair or replace a home system, and answered structured questions about its age, what's prompting the decision, and whatever repair/replacement quotes they have.
 
-Weigh expected remaining life if repaired vs. replaced using general knowledge of typical lifespans and typical cost ranges for that system and repair type, stating clearly that costs vary significantly by region and what you give is an estimate, not a quote. Give a clear repair-or-replace recommendation with your reasoning, list warning signs that mean it's time to stop patching and replace, and list specific questions to ask before hiring anyone for the work. If a quote was provided, weigh it directly into the recommendation.`,
+The deterministic decision engine has already run. The verdict, the reasons behind it, the age-vs-typical-service-life context (if the category has one), any cautions, and a checklist of questions to ask a contractor are all computed. Your job is to present them clearly. It is not to add to them.
+
+Hard rules:
+- NEVER STATE A DOLLAR FIGURE that is not the customer's own repair_quote or replacement_quote, exactly as given. You hold no price data for what any repair or replacement "usually" costs, and neither does the engine — inventing one is the single most damaging thing this report could do.
+- NEVER CHANGE THE VERDICT. If it is urgent_safety, nothing about cost may be discussed until the safety guidance is given first and completely on its own — do not soften it into a repair-vs-replace comparison, however clearly the numbers might seem to favor repair.
+- THE LIFESPAN RANGE, WHEN GIVEN, IS CONTEXT — never a cost, never a claim about this specific unit's remaining life, and always paired with the caveat the engine supplies (e.g. that it assumes a common material/type). If age is unknown or the category is "Other," there is no range — say nothing about typical life rather than estimating one.
+- If the verdict is need_repair_quote, need_replacement_quote, or need_both_quotes, say plainly that no financial recommendation can be made yet and name exactly what would complete it. Do not fill the gap with general guidance dressed up as a recommendation.
+- Reproduce every caution given, in the engine's own terms — a caution attached to a "repair" verdict (e.g. the system is already past its typical range) matters as much as the verdict itself.
+- The checklist of contractor questions is the one part of this report that is a fixed reference list, not a finding — present it as practical next steps, not as something the engine "discovered."
+
+Close by stating plainly that this is not a substitute for an in-person inspection by a licensed professional, and that repair and replacement costs vary by contractor and region — the customer's own quotes are the only figures in this report, and getting more than one quote is worth doing regardless of the verdict.`,
   },
 
   'landlord': {
@@ -1827,6 +1852,75 @@ async function generateNavigatorReport(submissionId) {
       }
     }
 
+    // Home Maintenance Navigator. Same shape and same reason as Insurance
+    // above: the verdict is computed by navigator-home-maintenance-engine.js
+    // from the structured answers the customer gave, and the model presents
+    // it. Any uploaded quote/photos are still attached — the writer may
+    // quote them — but nothing it reads in them may become or change the
+    // verdict, the cost comparison, or the lifespan context.
+    let homeMaintenanceAnalysis = null;
+    if (submission.product === 'home-maintenance') {
+      const sufficiency = homeMaintenanceEngine.checkSufficiency(formData);
+      if (sufficiency.sufficient) {
+        homeMaintenanceAnalysis = homeMaintenanceEngine.analyze(formData);
+        const a = homeMaintenanceAnalysis;
+        const V = homeMaintenanceEngine.Verdict;
+
+        auditBlock = [
+          '',
+          'DECISION — this is the report. Write it up. Do not add to it, do not recompute it, and',
+          'do not change the verdict.',
+          JSON.stringify({
+            category: a.category,
+            verdict: a.verdict,
+            reasons: a.reasons,
+            costComparison: a.costComparison,
+            cautions: a.cautions,
+          }, null, 1),
+          '',
+          a.verdict === V.URGENT_SAFETY
+            ? [
+              'THIS IS A SAFETY VERDICT. The headline and summary must lead with the safety guidance',
+              'above, in full, before anything else. Do not produce a repair-vs-replace comparison, a',
+              'cost figure, or a lifespan-context section on this report — none of that is relevant',
+              'until the hazard itself is addressed, and including it would bury the one thing this',
+              'report needs to say.',
+            ].join('\n')
+            : '',
+          a.ageContext
+            ? [
+              '',
+              `AGE CONTEXT — for ${a.category}, the typical service-life range is `
+                + `${a.ageContext.range.low}-${a.ageContext.range.high} years (${a.ageContext.range.caveat}).`,
+              a.ageContext.ageYears !== null
+                ? `This system is ${a.ageContext.ageYears} years old, which is `
+                  + `${a.ageContext.pastTypicalRange ? 'past' : (a.ageContext.withinTypicalRange ? 'within' : 'before')} `
+                  + 'that range.'
+                : 'The age was not given, so state the range as general context only — do not say where this system falls in it.',
+              'Give this its own short section. State the range and its caveat exactly as given here,',
+              'and never imply it is a fact about this specific unit rather than a general range for the category.',
+            ].join('\n')
+            : `AGE CONTEXT — none. ${a.category === 'Other' ? 'There is no single typical range for an unnamed system category.' : 'The age was not given.'} Do not invent one.`,
+          '',
+          `CHECKLIST — practical questions to ask a contractor, not a finding:`,
+          JSON.stringify(a.checklist, null, 1),
+        ].filter(Boolean).join('\n');
+      } else {
+        // The intake gate blocks this client- and server-side, so reaching
+        // here means something upstream let a blank submission through. Say
+        // so rather than falling back to a general article about home
+        // maintenance, which is not what was paid for.
+        auditBlock = [
+          '',
+          'THIS SUBMISSION IS MISSING REQUIRED ANSWERS, so no verdict could be computed. Say that first,',
+          'plainly, in the summary and again in missing_or_uncertain, and name exactly what is missing:',
+          JSON.stringify(sufficiency.missing.map((m) => m.label), null, 1),
+          'Do not produce general advice about home maintenance in its place. Tell them to reply to',
+          'their receipt with the missing answers and the review will be run.',
+        ].join('\n');
+      }
+    }
+
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -1964,6 +2058,10 @@ Then do what you can. Work only from what is legibly present, flag anything that
 
     if (submission.product === 'insurance' && insuranceAnalysis) {
       report.insurance_analysis = insuranceAnalysis;
+    }
+
+    if (submission.product === 'home-maintenance' && homeMaintenanceAnalysis) {
+      report.home_maintenance_analysis = homeMaintenanceAnalysis;
     }
 
     // Stored so the customer's NEXT shortlist can say what moved. Verdicts only —

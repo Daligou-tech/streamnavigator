@@ -24,6 +24,7 @@ const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_
 const { checkSufficiency: checkSubscriptionSufficiency } = require('../navigator-subscription-engine');
 const { checkSufficiency: checkHomeSavingsSufficiency } = require('../navigator-home-savings-engine');
 const { checkSufficiency: checkGovernmentMoneySufficiency } = require('../navigator-government-money-engine');
+const { checkSufficiency: checkHomeMaintenanceSufficiency } = require('../navigator-home-maintenance-engine');
 
 // Two upload routes reach this handler, and both are supported on purpose.
 //
@@ -234,6 +235,26 @@ module.exports = async function handler(req, res) {
         ok: false,
         error: 'Attach both your renewal notice and your prior policy or declarations page — the '
           + 'comparison this report is built on needs both documents.',
+      });
+      return;
+    }
+  } else if (product === 'home-maintenance') {
+    // Home Maintenance Navigator gets the same structured gate Buying, Home
+    // Savings, Government Money and Landlord already have, for the same
+    // reason: the old free-text box let a customer reach checkout with
+    // nothing the deterministic engine could use, and the report could only
+    // say so after payment. See docs/HOME-MAINTENANCE-AUDIT.md.
+    //
+    // Same rules home-maintenance.html gates its own button on — both load
+    // navigator-home-maintenance-engine.js — so a customer cannot reach
+    // checkout with input this endpoint would then reject, and calling this
+    // endpoint directly cannot bypass the page.
+    const sufficiency = checkHomeMaintenanceSufficiency(formData);
+    if (!sufficiency.sufficient) {
+      res.status(400).json({
+        ok: false,
+        error: sufficiency.missing[0].label + '.',
+        missing: sufficiency.missing,
       });
       return;
     }

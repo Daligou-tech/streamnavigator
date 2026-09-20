@@ -10,6 +10,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<style>
+.field-block input[type="number"]{
+  width:100%; padding:12px 16px; border-radius:10px; border:1.5px solid var(--border-strong);
+  background:var(--surface); color:var(--text); font-size:14.5px; font-family:inherit; outline:none;
+}
+.field-block input[type="number"]:focus{ border-color:var(--accent-deep); }
+.field-checkbox{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13.5px; font-weight:500; text-transform:none; color:var(--text-dim); cursor:pointer; }
+.field-checkbox input{ width:16px; height:16px; accent-color:var(--accent-deep); cursor:pointer; }
+</style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -41,6 +50,21 @@
       <div class="pill"><span class="dot">✓</span> Repair or replace? Get the real math.</div>
       <h1>Repair it or replace it? <span class="grad">Get the real economics.</span></h1>
       <p class="sub">Roof, HVAC, water heater, windows, generator — tell StreamNavigator what you're deciding on, and get a clear repair-vs-replace recommendation grounded in real numbers.</p>
+      <div class="check-card" style="margin:32px auto 0; max-width:460px; text-align:left; padding:20px 24px;">
+        <div class="check-card-kicker" style="justify-content:space-between; margin-bottom:14px;">
+          <span>Example finding</span>
+          <span style="background:var(--yellow); color:var(--ink); border:2px solid var(--ink); border-radius:999px; padding:3px 11px; font-size:11px; font-weight:800;">Replace</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--border);">
+          <span style="font-size:13.5px; color:var(--text-dim); font-weight:600;">Water heater, age 14</span>
+          <span style="font-size:14.5px; font-weight:700; color:var(--ink);">Repair $1,400 vs. Replace $2,600</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; padding:8px 0;">
+          <span style="font-size:13.5px; color:var(--text-dim); font-weight:600;">Typical service life</span>
+          <span style="font-size:14.5px; font-weight:700; color:var(--ink);">8-12 years (past range)</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-dim); margin:12px 0 0; line-height:1.5;">The repair quote is 54% of the replacement quote — at our 50% threshold for calling it worth replacing — and the unit is already past a typical water heater's service life. That's what a real finding looks like: your own two quotes, compared, not a guess at what either one "usually" costs.</p>
+      </div>
     </div>
   </section>
   <section id="how-it-works">
@@ -53,7 +77,7 @@
       <div class="step-card">
         <div class="step-num">1</div>
         <h4>Tell us what you're deciding on</h4>
-        <p>The system, its age, condition, and what's prompting the decision (a breakdown, a quote, general wear).</p>
+        <p>The system, its age, what's prompting the decision, and whatever repair or replacement quotes you already have.</p>
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
@@ -62,8 +86,8 @@
       </div>
       <div class="step-card">
         <div class="step-num">3</div>
-        <h4>AI runs the real economics</h4>
-        <p>Expected remaining life, repair cost, replacement cost, and efficiency gains are weighed against each other.</p>
+        <h4>The engine runs the numbers</h4>
+        <p>Your repair quote against your replacement quote, checked against where your system's age sits on a typical service-life range for its category.</p>
       </div>
       <div class="step-card">
         <div class="step-num">4</div>
@@ -81,12 +105,11 @@
     <div class="wrap" style="max-width:680px;">
       <div class="check-card">
         <ul class="check-list">
-          <li><span class="tick">✓</span> Whether repairing or replacing makes more financial sense</li>
-          <li><span class="tick">✓</span> Expected remaining life if you repair vs. replace</li>
-          <li><span class="tick">✓</span> Efficiency and cost-of-ownership differences</li>
-          <li><span class="tick">✓</span> Typical cost ranges for this system and repair/replacement type</li>
+          <li><span class="tick">✓</span> Whether repairing or replacing makes more financial sense, using your own quoted numbers</li>
+          <li><span class="tick">✓</span> Where your system's age sits against a typical service-life range for its category</li>
           <li><span class="tick">✓</span> Warning signs it's time to stop patching and replace</li>
           <li><span class="tick">✓</span> Questions to ask before hiring anyone for the work</li>
+          <li><span class="tick">✓</span> A safety check first — if you flag a hazard, cost comes second</li>
         </ul>
       </div>
     </div>
@@ -137,8 +160,34 @@
         </div>
       </div>
         <div class="field-block">
-          <label>What are you deciding on?</label>
-          <textarea id="intake-description" placeholder="e.g. 12-year-old water heater, started leaking slightly, quoted $1,400 to repair vs $2,600 to replace..."></textarea>
+          <label>System age (years)</label>
+          <input type="number" id="intake-age" min="0" max="100" placeholder="e.g. 14">
+          <label class="field-checkbox"><input type="checkbox" id="intake-age-unknown"> I'm not sure how old it is</label>
+        </div>
+        <div class="field-block">
+          <label>What's prompting this decision?</label>
+          <div class="chip-row" id="symptom-chips">
+            <button type="button" class="chip-toggle symptom-chip" data-value="stopped_working">It stopped working</button>
+            <button type="button" class="chip-toggle symptom-chip" data-value="leaking_or_damage">Leaking / water damage</button>
+            <button type="button" class="chip-toggle symptom-chip" data-value="declining_performance">Declining performance</button>
+            <button type="button" class="chip-toggle symptom-chip" data-value="safety_concern">Safety concern (gas smell, sparking, carbon monoxide)</button>
+            <button type="button" class="chip-toggle symptom-chip" data-value="comparing_before_failure">Comparing options before it fails</button>
+            <button type="button" class="chip-toggle symptom-chip" data-value="other">Other</button>
+          </div>
+        </div>
+        <div class="field-block">
+          <label>Repair quote ($, if you have one)</label>
+          <input type="number" id="intake-repair-quote" min="0" placeholder="e.g. 1400">
+        </div>
+        <div class="field-block">
+          <label>Replacement quote ($, if you have one)</label>
+          <input type="number" id="intake-replacement-quote" min="0" placeholder="e.g. 2600">
+          <label class="field-checkbox"><input type="checkbox" id="intake-no-quotes"> I don't have a quote for either yet</label>
+          <p class="field-hint">Every dollar figure in your report comes from your own quotes — never a guess at what either one "usually" costs. Without at least one, you'll get the service-life context and the contractor checklist, not a financial recommendation.</p>
+        </div>
+        <div class="field-block">
+          <label>Anything else worth knowing? (optional)</label>
+          <textarea id="intake-description" placeholder="e.g. brand, model, what a contractor already told you..."></textarea>
         </div>
         <div class="field-block">
           <label>Upload a repair quote or photos (optional)</label>
@@ -157,7 +206,7 @@
         </div>
         <ul class="price-feats">
           <li><span class="tick">✓</span> Covers roofs, HVAC, water heaters, windows, generators, and more</li>
-          <li><span class="tick">✓</span> Real cost-of-ownership math, not generic advice</li>
+          <li><span class="tick">✓</span> A real comparison of your own quotes, not a guess at "typical" cost</li>
           <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
@@ -185,7 +234,11 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Do I need a contractor's quote first? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">No — a quote helps sharpen the numbers, but you can get a recommendation from a description alone.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">You can submit without one and still get the service-life context and the contractor checklist. But the actual repair-or-replace verdict is arithmetic on your own quoted numbers — we hold no data on what things "usually" cost, so without at least a repair or replacement quote, there's no financial recommendation to give you yet.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What if this is a safety issue? <span class="plus">+</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Flag it, and that's what the report leads with — get a professional out now, before any cost comparison. A safety concern is never weighed against price.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">How is this different from Contractor Navigator? <span class="plus">+</span></button>
@@ -240,7 +293,7 @@
       </ul>
     </div>
   </div>
-  <p class="footer-disclaimer">Home Maintenance Navigator provides AI-generated analysis for informational purposes only and is not a substitute for an in-person inspection by a licensed professional. Cost estimates are based on typical published ranges and may not reflect your specific property or region.</p>
+  <p class="footer-disclaimer">Home Maintenance Navigator provides AI-generated analysis for informational purposes only and is not a substitute for an in-person inspection by a licensed professional. The repair-vs-replace comparison uses only the repair and replacement figures you provide — we hold no data on typical costs and do not estimate one. Typical service-life ranges, where shown, are general figures for the category and may not reflect your specific unit, brand or region.</p>
   <div class="footer-bottom">
     <p>&copy; 2026 StreamNavigator LLC. All rights reserved.</p>
     <p class="footer-legal"><a href="/privacy-policy">Privacy Policy</a> &nbsp;&middot;&nbsp; <a href="/terms">Terms of Service</a></p>
@@ -251,6 +304,7 @@
   <span class="ico">✓</span> <span id="toast-text"></span>
 </div>
 <script src="/navigator-shared.js"></script>
+<script src="/navigator-home-maintenance-engine.js"></script>
 <script>
 (function(){
   const zone = document.getElementById('upload-zone');
@@ -258,6 +312,7 @@
   const list = document.getElementById('upload-list');
   const uploader = wireUploadZone(zone, input, list);
   let selectedCategory = "Roof";
+  const selectedSymptoms = new Set();
 
   document.querySelectorAll('.category-chip').forEach(function(chip){
     chip.addEventListener('click', function(){
@@ -266,6 +321,43 @@
       selectedCategory = chip.dataset.value;
     });
   });
+
+  document.querySelectorAll('.symptom-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      const value = chip.dataset.value;
+      if (selectedSymptoms.has(value)) { selectedSymptoms.delete(value); chip.classList.remove('active'); }
+      else { selectedSymptoms.add(value); chip.classList.add('active'); }
+    });
+  });
+
+  const ageInput = document.getElementById('intake-age');
+  const ageUnknownEl = document.getElementById('intake-age-unknown');
+  ageUnknownEl.addEventListener('change', function(){
+    ageInput.disabled = ageUnknownEl.checked;
+    if (ageUnknownEl.checked) ageInput.value = '';
+  });
+
+  const repairEl = document.getElementById('intake-repair-quote');
+  const replacementEl = document.getElementById('intake-replacement-quote');
+  const noQuotesEl = document.getElementById('intake-no-quotes');
+  noQuotesEl.addEventListener('change', function(){
+    repairEl.disabled = noQuotesEl.checked;
+    replacementEl.disabled = noQuotesEl.checked;
+    if (noQuotesEl.checked) { repairEl.value = ''; replacementEl.value = ''; }
+  });
+
+  function buildFormData(descEl) {
+    return {
+      category: selectedCategory,
+      system_age_years: ageUnknownEl.checked ? null : (ageInput.value === '' ? null : Number(ageInput.value)),
+      age_unknown: ageUnknownEl.checked,
+      symptoms: Array.from(selectedSymptoms),
+      repair_quote: noQuotesEl.checked || repairEl.value === '' ? null : Number(repairEl.value),
+      replacement_quote: noQuotesEl.checked || replacementEl.value === '' ? null : Number(replacementEl.value),
+      no_quotes_yet: noQuotesEl.checked,
+      description: descEl.value.trim(),
+    };
+  }
 
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
@@ -282,9 +374,12 @@
     const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
+
+    const formData = buildFormData(descEl);
+    const sufficiency = HomeMaintenanceEngine.checkSufficiency(formData);
+    if (!sufficiency.sufficient) { fail(sufficiency.missing[0].label + '.'); return; }
+
     const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { showToast('Tell us what you\'re deciding on, or upload a quote/photo, so we have something to work with.'); descEl.focus(); return; }
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
@@ -292,7 +387,7 @@
       const submission = await submitNavigatorIntake({
         product: 'home-maintenance',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: formData,
         files: files,
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'home-maintenance' }, email);
