@@ -346,6 +346,113 @@ const bylaws = (doc) => {
   P(doc, 'As of the date of this certificate, seventeen (17) of the eighty-four (84) units are leased, which is the maximum permitted under Article XI. Nine (9) owners are presently on the leasing waiting list.');
 };
 
+// ---------------------------------------------------------------------------
+// GROUND TRUTH — insurance
+// ---------------------------------------------------------------------------
+//
+//   Meridian Mutual homeowners policy. Renewal term 11/01/2026-11/01/2027,
+//   premium $2,300; prior term 11/01/2025-11/01/2026, premium $2,000.
+//
+//   These figures are not arbitrary — they are
+//   tests/fixtures/insurance-fixtures.js's homeCoverageCutBehindTheRise(),
+//   transcribed onto paper instead of typed as JSON. That fixture is already
+//   the hand-authored "correct extraction" api/_lib/insurance-audit.js is
+//   tested against (tests/insurance-audit.test.js), so a live read of these
+//   two PDFs can be compared directly against it with no second ground-truth
+//   document to keep in sync — see scripts/insurance-audit-harness.js
+//   --compare, which does exactly that.
+//
+//   PLANTED 1  dwelling limit cut $340,000 -> $310,000 while the premium
+//              rose. Must produce PREMIUM_ROSE_COVERAGE_DECREASED and
+//              COVERAGE_LIMIT_REDUCED, both coverage_gap where the second
+//              applies, ranked ahead of everything else.
+//   PLANTED 2  deductible rose $1,500 -> $2,500 alongside the same premium
+//              rise. Must produce DEDUCTIBLE_INCREASED, worth_challenging.
+//   PLANTED 3  the Multi-Policy Discount is on the prior policy and absent
+//              from the renewal; Autopay Discount is on both and must NOT be
+//              reported as dropped. Must produce DISCOUNT_DROPPED naming only
+//              Multi-Policy Discount.
+//   PLANTED 4  a Water Backup Exclusion appears on the renewal's schedule of
+//              forms and not the prior policy's. Must produce
+//              NEW_EXCLUSION_ADDED. The Replacement Cost Endorsement is on
+//              both and must NOT be reported as dropped.
+//   UNCHANGED  personal property ($155,000) and liability ($300,000) limits
+//              are identical on both documents and must produce no coverage
+//              finding for either category.
+
+const insuranceRenewalNotice = (doc) => {
+  H(doc, 'Meridian Mutual Insurance Company');
+  S(doc, 'Homeowners Renewal Declarations');
+  P(doc, 'This is your renewal notice. Review the coverages, limits and deductibles below before your current policy expires.');
+  doc.moveDown(0.3);
+
+  S(doc, 'Policy Information');
+  row(doc, 'Policy Number', 'HO-4471182');
+  row(doc, 'Named Insured', 'Dana and Chris Alvarez');
+  row(doc, 'Property Address', '118 Birchwood Lane, Maple Grove, MN 55369');
+  row(doc, 'Policy Period', '11/01/2026 to 11/01/2027');
+  doc.moveDown(0.3);
+
+  S(doc, 'Coverages and Limits');
+  row(doc, 'Coverage A - Dwelling', '$310,000');
+  row(doc, 'Coverage C - Personal Property', '$155,000');
+  row(doc, 'Coverage E - Liability', '$300,000');
+  doc.moveDown(0.3);
+
+  S(doc, 'Deductibles');
+  row(doc, 'All Other Perils', '$2,500');
+  doc.moveDown(0.3);
+
+  S(doc, 'Discounts Applied');
+  P(doc, 'Autopay Discount');
+  doc.moveDown(0.3);
+
+  S(doc, 'Schedule of Forms and Endorsements');
+  P(doc, 'HO 04 95 - Water Backup and Sump Overflow Exclusion');
+  P(doc, 'HO 07 42 - Replacement Cost Endorsement (Dwelling)');
+  doc.moveDown(0.3);
+
+  S(doc, 'Premium');
+  row(doc, 'Your premium is changing from', '$2,000.00');
+  row(doc, 'to', '$2,300.00');
+  P(doc, 'This renewal notice reflects your premium for the term shown above. Review your coverage carefully — if you have questions, contact your agent before this policy takes effect.');
+};
+
+const insurancePriorPolicy = (doc) => {
+  H(doc, 'Meridian Mutual Insurance Company');
+  S(doc, 'Homeowners Policy Declarations');
+  doc.moveDown(0.3);
+
+  S(doc, 'Policy Information');
+  row(doc, 'Policy Number', 'HO-4471182');
+  row(doc, 'Named Insured', 'Dana and Chris Alvarez');
+  row(doc, 'Property Address', '118 Birchwood Lane, Maple Grove, MN 55369');
+  row(doc, 'Policy Period', '11/01/2025 to 11/01/2026');
+  doc.moveDown(0.3);
+
+  S(doc, 'Coverages and Limits');
+  row(doc, 'Coverage A - Dwelling', '$340,000');
+  row(doc, 'Coverage C - Personal Property', '$155,000');
+  row(doc, 'Coverage E - Liability', '$300,000');
+  doc.moveDown(0.3);
+
+  S(doc, 'Deductibles');
+  row(doc, 'All Other Perils', '$1,500');
+  doc.moveDown(0.3);
+
+  S(doc, 'Discounts Applied');
+  P(doc, 'Autopay Discount');
+  P(doc, 'Multi-Policy Discount');
+  doc.moveDown(0.3);
+
+  S(doc, 'Schedule of Forms and Endorsements');
+  P(doc, 'HO 07 42 - Replacement Cost Endorsement (Dwelling)');
+  doc.moveDown(0.3);
+
+  S(doc, 'Premium');
+  row(doc, 'Total Annual Premium', '$2,000.00');
+};
+
 (async () => {
   const made = [];
   made.push(await write('closing-disclosure.pdf', closingDisclosure));
@@ -354,5 +461,7 @@ const bylaws = (doc) => {
   made.push(await write('hoa-budget.pdf', budget));
   made.push(await write('hoa-minutes.pdf', minutes));
   made.push(await write('hoa-bylaws.pdf', bylaws));
+  made.push(await write('insurance-renewal-notice.pdf', insuranceRenewalNotice));
+  made.push(await write('insurance-prior-policy.pdf', insurancePriorPolicy));
   made.forEach((f) => console.log('wrote', f, fs.statSync(f).size, 'bytes'));
 })();
