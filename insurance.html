@@ -52,8 +52,8 @@
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-num">1</div>
-        <h4>Upload your renewal notice</h4>
-        <p>And your prior policy or declarations page, if you have it — the comparison is sharper with both.</p>
+        <h4>Upload both policies</h4>
+        <p>Your renewal notice and your prior policy or declarations page — we compare them line by line, so we need both.</p>
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
@@ -141,14 +141,24 @@
         </div>
         <div class="field-block">
           <label>Upload your renewal notice</label>
-          <div class="upload-zone" id="upload-zone">
+          <div class="upload-zone" id="upload-zone-renewal">
             <div class="upload-ico">📎</div>
             <div class="upload-cta">Click to upload or drag files here</div>
             <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
           </div>
-          <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
-          <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">Add your prior policy or declarations page too, if you have it, for a sharper comparison.</p>
+          <input type="file" id="upload-input-renewal" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list-renewal"></div>
+        </div>
+        <div class="field-block">
+          <label>Upload your prior policy or declarations page</label>
+          <div class="upload-zone" id="upload-zone-prior">
+            <div class="upload-ico">📎</div>
+            <div class="upload-cta">Click to upload or drag files here</div>
+            <div class="upload-sub">PDF, JPG or PNG &middot; up to 50MB per file, 150MB total</div>
+          </div>
+          <input type="file" id="upload-input-prior" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div class="upload-file-list" id="upload-list-prior"></div>
+          <p class="field-hint">Required — the comparison this report is built on runs against your prior policy. Without it, there's nothing to compare this renewal to.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
@@ -184,7 +194,7 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Do I need my old policy too? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">It's not required, but including your prior policy or declarations page makes the comparison significantly more precise.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Yes. This report compares your renewal against your prior policy line by line, so we need both — your renewal notice and your prior policy or declarations page.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">Will you shop for a new policy for me? <span class="plus">+</span></button>
@@ -252,10 +262,16 @@
 <script src="/navigator-shared.js"></script>
 <script>
 (function(){
-  const zone = document.getElementById('upload-zone');
-  const input = document.getElementById('upload-input');
-  const list = document.getElementById('upload-list');
-  const uploader = wireUploadZone(zone, input, list);
+  const renewalUploader = wireUploadZone(
+    document.getElementById('upload-zone-renewal'),
+    document.getElementById('upload-input-renewal'),
+    document.getElementById('upload-list-renewal'),
+  );
+  const priorUploader = wireUploadZone(
+    document.getElementById('upload-zone-prior'),
+    document.getElementById('upload-input-prior'),
+    document.getElementById('upload-list-prior'),
+  );
   let selectedCategory = "Auto";
 
   document.querySelectorAll('.category-chip').forEach(function(chip){
@@ -281,8 +297,11 @@
     const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
-    const files = uploader.getFiles();
-    if (true && files.length === 0) { fail('Please attach at least one file to continue.'); return; }
+    const renewalFiles = renewalUploader.getFiles();
+    const priorFiles = priorUploader.getFiles();
+    if (renewalFiles.length === 0) { fail('Please attach your renewal notice.'); return; }
+    if (priorFiles.length === 0) { fail('Please attach your prior policy or declarations page — we need both documents to run the comparison.'); return; }
+    const files = renewalFiles.concat(priorFiles);
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';

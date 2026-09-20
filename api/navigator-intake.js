@@ -217,6 +217,26 @@ module.exports = async function handler(req, res) {
       });
       return;
     }
+  } else if (product === 'insurance') {
+    // Insurance Navigator's core promise is a comparison between the renewal
+    // notice and the prior policy — api/_lib/insurance-audit.js cannot run
+    // that comparison from one document alone. Before this gate, the prior
+    // policy was optional, so a customer could pay full price for a report
+    // whose core mechanism never ran, and only find out from the report
+    // itself (see docs/INSURANCE-AUDIT.md, Critical 3).
+    //
+    // insurance.html now gates its own checkout button on the same two-file
+    // rule — a separate upload zone for each document — so a customer cannot
+    // reach checkout with input this endpoint would then reject, and calling
+    // this endpoint directly cannot bypass the page.
+    if (attachmentCount < 2) {
+      res.status(400).json({
+        ok: false,
+        error: 'Attach both your renewal notice and your prior policy or declarations page — the '
+          + 'comparison this report is built on needs both documents.',
+      });
+      return;
+    }
   } else {
     // D-04 fix: require at least one piece of substantive input — a
     // non-empty description/address, or an uploaded document — before
