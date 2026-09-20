@@ -44,7 +44,8 @@
     "insurance.html": {
       "label": "Insurance Navigator",
       "expectedPriceCents": 7900,
-      "stripeLinkId": "3cI9ATaosfqQ88k7ZSabK0b"
+      "stripeLinkId": "3cI9ATaosfqQ88k7ZSabK0b",
+      "_price": "$79 held rather than cut, on the same standard landlord and government-money were held to: docs/INSURANCE-AUDIT.md set three conditions on this price, and all three have now shipped. api/_lib/insurance-extract.js + api/_lib/insurance-audit.js replaced the single ungrounded model call -- the audit's Critical 1 -- with a deterministic extract-then-diff engine that has no 'typical' or 'market' evidence kind anywhere in its vocabulary, closing Critical 2. And the prior policy, previously optional, is now required in both upload zones on the page and by api/navigator-intake.js server-side, closing Critical 3: the comparison this price sells can now actually run on every paid submission. If any of the three regresses, this price no longer stands on the audit's own terms."
     },
     "landlord.html": {
       "label": "Landlord Navigator",
