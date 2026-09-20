@@ -45,6 +45,8 @@ const { extractLandlordLicences, applyLicences } = require('./landlord-extract')
 const { runRentalTrend, sameProperty } = require('./rental-trend');
 const { runRentalOutcomes } = require('./rental-outcomes');
 const { buildRentalEmails, renderRentalLetters } = require('./rental-emails');
+const { extractInsuranceDocuments } = require('./insurance-extract');
+const { runInsuranceAudit, rankFindings: rankInsuranceFindings, Category: InsuranceCategory } = require('./insurance-audit');
 const { isTabularUpload, MAX_TABULAR_CHARS } = require('./upload-limits');
 const { sendFailureAlert } = require('./alerts');
 const { failurePatch } = require('./provider-outage');
@@ -441,9 +443,49 @@ A landlord whose properties come back clean has bought exactly what they came fo
   'insurance': {
     label: 'Insurance Navigator',
     requiresFiles: true,
-    task: `You are the analysis engine behind Insurance Navigator. A customer paid for a renewal-vs-prior-policy comparison and uploaded their renewal notice, and optionally their prior policy or declarations page.
+    // Like Closing, Rental, Landlord, Subscriptions, Home Savings and
+    // Government Money, and for the same reason: the findings in this report
+    // are produced by api/_lib/insurance-audit.js, not by the model. The
+    // model's job is to write them up. It must not originate a number, a
+    // category, or a verdict on whether a change is "typical".
+    //
+    // What this replaced was a single instruction to compare two documents
+    // "line by line" and "give a clear verdict on whether the renewal looks
+    // fair/typical" — from general training knowledge, with no rate table,
+    // no regional data and no carrier filings anywhere in this codebase.
+    // docs/INSURANCE-AUDIT.md found that to be exactly the unverifiable claim
+    // this codebase's own audits had already identified and banned on Home
+    // Savings ("never say a bill is above or below market") and Government
+    // Money ("never invent... the current dollar amount of a specific
+    // government program"). Insurance had no engine to enforce the same rule
+    // structurally, so its prompt asked for the one claim nothing here can
+    // back up. It no longer does: every figure below is arithmetic on the
+    // customer's own two documents, and "typical" does not appear anywhere
+    // in this task.
+    task: `You are the writer for an Insurance Navigator renewal review. A customer paid for a comparison of their renewal notice against their prior policy, and uploaded whatever documents they had.
 
-Compare premium, coverage limits, deductibles, and exclusions line by line between what was provided — if only the renewal notice was given, work from that alone and say so explicitly rather than guessing at what changed. Give a clear verdict on whether the renewal looks fair/typical or worth shopping elsewhere, backed by your reasoning, and flag when you don't have enough information to be confident. List specific, pointed questions for the customer to ask their insurer, and be explicit that only they or a licensed agent can actually shop for or bind a new policy.`,
+The deterministic audit engine has already run every check and produced a ranked list of findings. Each finding carries a category, an evidence basis, an actionability label, a recommended action, and where applicable a dollar impact. Your job is to present those findings clearly. It is not to add to them.
+
+Hard rules:
+- Never state a dollar figure, percentage, or judgement that is not present in the findings you were given. If a coverage line, deductible or discount is not covered by a finding, it is not in the report.
+- NEVER CALL A PREMIUM CHANGE "TYPICAL," "MARKET," OR "IN LINE WITH" ANYTHING. You hold no rate table, no regional pricing data and no carrier filings, and neither does the engine that produced these findings — every finding here rests on arithmetic between this customer's own two documents, nothing else. Where a finding says a rise has nothing on the documents to explain it, say exactly that; never soften it into or dress it up as a market comparison.
+- NEVER RECOMMEND REDUCING COVERAGE TO LOWER A PREMIUM. Findings in the coverage_gap category (a limit that fell, a limit or endorsement that disappeared, a new exclusion) are protection-risk findings, not savings opportunities, and must be presented that way regardless of which direction the premium moved. If the customer is considering shopping this renewal, remind them once, plainly, to confirm replacement coverage is bound before cancelling anything — a gap in coverage while switching carriers is the one outcome this report must help them avoid.
+- CARRY EACH FINDING'S CATEGORY THROUGH, every time you present it. "coverage_gap" is a protection risk and always leads. "worth_challenging" is a premium or term change the documents do not explain — reproduce the engine's reasoning for why, do not invent your own. "likely_justified" means the documents show more coverage or a lower deductible behind the increase; say that plainly rather than treating it as a problem. "within_norms" is the product working when nothing needs the customer's attention — including a premium that changed by less than this engine's own disclosed materiality threshold, or one that fell.
+- THE DOCUMENTS ARE ATTACHED SO YOU CAN QUOTE THEM, NOT SO YOU CAN AUDIT THEM. You will see coverage lines, dates and figures on the renewal or prior policy that no finding mentions. That is the normal case: a line with no finding simply does not appear in the report. Do not list it, do not total it, and do not create a section to hold it.
+- Carry each finding's actionability through exactly: something to ask the insurer before accepting the renewal, or nothing further needed.
+
+HEADLINE AND ORDERING.
+
+Lead with the strongest TRUE statement available, in this order of preference:
+1. Any coverage_gap finding — a reduced or dropped limit, a new exclusion, a dropped endorsement. These are protection risks and they lead even over a large dollar figure on a premium finding, because a lapsed limit discovered after a loss costs far more than a premium ever saves.
+2. The headline premium finding, when it is worth_challenging — state the dollar and percentage change and exactly what about it the documents do not explain.
+3. If the headline premium finding is likely_justified: say so plainly, and name what on the documents explains the increase (more coverage, a lower deductible). A customer told their increase tracks real added protection has bought exactly what they came for.
+4. If there is no baseline at all (no prior policy and no prior premium stated on the renewal notice): lead with that. Say plainly that the comparison this product is built on could not run, list what the renewal notice alone states, and tell the customer exactly what to send — their prior policy or declarations page — to get the full comparison at no extra charge. Do not render a verdict on the renewal in isolation.
+5. Otherwise, if the premium changed by less than the materiality threshold and nothing else was flagged: lead with that as a clean result. A renewal that held steady is the product working, not a report with nothing to say.
+
+Then every remaining finding, grouped by category, each with its figure and its recommended action. Then a section naming what was checked and found unremarkable, when there is one — the coverage-gap check with nothing found, the discount that still applies. Then a short section for checks that could not run, in the engine's own words, from the skipped list.
+
+Close with the questions to ask the insurer, drawn only from the findings' own recommended actions — never invent a question not grounded in a specific finding. Be explicit that only the customer or a licensed agent can actually shop for or bind a new policy, and that nothing here is licensed insurance advice.`,
   },
 
   'buying': {
@@ -1710,6 +1752,81 @@ async function generateNavigatorReport(submissionId) {
         ].join('\n');
       }
     }
+
+    // Insurance Navigator. Same shape and same reason as Closing, Rental,
+    // Landlord, Subscriptions, Home Savings and Government Money above: the
+    // findings are computed by api/_lib/insurance-audit.js from a structured
+    // read of the renewal notice and, when the customer sent one, their
+    // prior policy — see api/_lib/insurance-extract.js — and the model
+    // presents them. Nothing the model notices in the documents on its own
+    // may become a finding, which is what closes the gap
+    // docs/INSURANCE-AUDIT.md found: a single-pass read asked to render a
+    // verdict on whether a renewal "looks typical," backed by nothing this
+    // codebase holds.
+    let insuranceAnalysis = null;
+    if (submission.product === 'insurance') {
+      let extraction = null;
+      try {
+        extraction = await extractInsuranceDocuments(ANTHROPIC_API_KEY, contentBlocks);
+      } catch (err) {
+        console.error('[insurance] extraction failed:', err.message);
+      }
+
+      const audited = extraction
+        ? runInsuranceAudit(extraction)
+        : { findings: [], skipped: [], checksRun: 0, checksTotal: 0, comparisonAvailable: false, priorPremiumSource: null };
+      insuranceAnalysis = audited;
+
+      if (extraction) {
+        const ranked = rankInsuranceFindings(audited.findings);
+        const flagged = ranked.filter((f) => f.category !== InsuranceCategory.WITHIN_NORMS);
+        const passed = ranked.filter((f) => f.category === InsuranceCategory.WITHIN_NORMS);
+
+        auditBlock = [
+          '',
+          'FINDINGS — these are the report. Write these up. Do not add to them, do not recompute',
+          'one, and do not change a category. Every figure and judgement you may state is here.',
+          JSON.stringify(flagged, null, 1),
+          '',
+          passed.length
+            ? [
+              `CHECKS THAT RAN AND FOUND NOTHING TO FLAG — ${passed.length} of them, below.`,
+              'These belong in their own short section. Each is a check that ran on the customer\'s',
+              'own documents and came back clean, which is work they paid for even when — especially',
+              'when — there is nothing to act on.',
+              JSON.stringify(passed.map((f) => ({ title: f.title, basis: f.basis })), null, 1),
+            ].join('\n')
+            : '',
+          '',
+          audited.comparisonAvailable
+            ? `COVERAGE — ${audited.checksRun} of ${audited.checksTotal} possible checks ran on these documents `
+              + (audited.priorPremiumSource === 'renewal_notice_stated'
+                ? '(the prior premium came from the renewal notice\'s own stated figure, not a second document — say so once, plainly, and note that only the premium comparison could run without the prior policy itself).'
+                : '(both the renewal notice and a prior policy were read).')
+            : 'NO COMPARISON COULD BE MADE. Neither a prior policy nor a prior-premium figure printed on the '
+              + 'renewal notice was available, so the core comparison this product is built on did not run. Say '
+              + 'this first and plainly, and do not render any verdict on the renewal by itself.',
+          '',
+          audited.skipped.length
+            ? `Checks that could not be run because the required figures were missing or unreadable: ${audited.skipped.join('; ')}. Say so plainly rather than implying they passed.`
+            : '',
+        ].filter(Boolean).join('\n');
+      } else {
+        // Extraction failed outright — a photograph too dark to read, or an
+        // attachment that turned out not to be an insurance document. The
+        // customer has still paid, and a thinner analysis they are told is
+        // thinner beats an empty report.
+        auditBlock = [
+          '',
+          'THE UPLOADED DOCUMENTS COULD NOT BE READ INTO FIGURES precisely enough for the audit engine',
+          'to run a single check. Say that plainly and early, in the summary and again in',
+          'missing_or_uncertain: no verdict could be reached, and this should be treated as a starting',
+          'point, not a comparison. Tell the customer exactly what would fix it — a clearer scan or the',
+          'original PDF of their renewal notice and prior policy, rather than a photograph.',
+        ].join('\n');
+      }
+    }
+
     // The pre-engine prompt, used only on the fallback path above. It is the
     // weaker product and the report has to say so rather than passing an
     // unverified read off as an audit.
@@ -1843,6 +1960,10 @@ Then do what you can. Work only from what is legibly present, flag anything that
     // the engine computed must be the same figure.
     if (submission.product === 'subscriptions' && subscriptionAnalysis) {
       report.subscription_analysis = subscriptionAnalysis;
+    }
+
+    if (submission.product === 'insurance' && insuranceAnalysis) {
+      report.insurance_analysis = insuranceAnalysis;
     }
 
     // Stored so the customer's NEXT shortlist can say what moved. Verdicts only —
