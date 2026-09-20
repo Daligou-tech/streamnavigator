@@ -153,6 +153,33 @@ test('a renewal notice that states its own prior premium lets the premium check 
   assert.equal(result.findings.length, 1);
 });
 
+// --- no finding, in any scenario, ever reaches for an outside figure -------
+//
+// The general form of the first test in this file, run the way
+// closing-restraint.test.js runs its equivalent ("no finding anywhere rests
+// on an outside figure"): across every fixture this suite has, not just the
+// ones written to provoke it. A single passing assertion on one crafted
+// scenario would not have caught a market claim that only shows up on a
+// different combination of inputs.
+
+test('across every fixture, no finding title, basis or recommended action claims a premium is typical or matches the market', () => {
+  const scenarios = [
+    homeCoverageCutBehindTheRise(), autoMoreCoverageBehindTheRise(),
+    premiumRoseUnexplained(), premiumFlat(),
+    renewalOnlyNoBaseline(), renewalOnlyWithStatedPriorPremium(),
+  ];
+  const banned = /typical|market(?!ed)|benchmark|average premium|in line with/i;
+  const offenders = [];
+  for (const scenario of scenarios) {
+    const { findings } = runInsuranceAudit(scenario);
+    for (const f of findings) {
+      const text = [f.title, f.basis, f.recommendedAction].filter(Boolean).join(' ');
+      if (banned.test(text)) offenders.push(`${f.checkId}: "${text}"`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
 // --- ranking puts protection risk ahead of everything else -----------------
 
 test('rankFindings via runInsuranceAudit already orders coverage gaps before worth-challenging before within-norms', () => {
