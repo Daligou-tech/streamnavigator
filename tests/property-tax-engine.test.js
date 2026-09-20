@@ -86,12 +86,23 @@ test('an assessment above the customer\'s own supplied comparables is worth appe
       { address: '12 Oak St', assessed_value: 340000 },
       { address: '14 Oak St', assessed_value: 350000 },
     ],
-    physical_changes: false, factual_errors: false,
+    physical_changes: false, factual_errors: false, tax_rate_pct: 1.2,
   });
   const f = one(findings, 'ABOVE_OWN_COMPARABLES');
   assert.equal(f.category, Category.WORTH_APPEALING);
   assert.match(f.basis, /2 comparable properties/);
   assert.match(f.basis, /\$345,000|345,000/, 'the average of the customer\'s own two comps must be cited');
+  assert.equal(f.dollarImpact, 660, '$55,000 excess over the $345,000 average at a 1.2% rate');
+});
+
+test('a comparables finding carries no dollar impact when no tax rate was supplied', () => {
+  const { findings } = E.analyze({
+    new_assessed_value: 400000,
+    comparables: [{ address: '12 Oak St', assessed_value: 340000 }],
+    physical_changes: false, factual_errors: false,
+  });
+  const f = one(findings, 'ABOVE_OWN_COMPARABLES');
+  assert.equal(f.dollarImpact, null);
 });
 
 test('no comparable finding is produced when the assessment is in line with the customer\'s own comps', () => {
@@ -149,15 +160,34 @@ test('a completely empty submission is insufficient on every required field', ()
   );
 });
 
-test('current value plus a prior value plus both booleans answered is sufficient', () => {
+test('current value plus a prior value plus both booleans answered is NOT sufficient without a tax rate', () => {
   const s = E.checkSufficiency({
     new_assessed_value: 360000, prior_assessed_value: 300000,
     physical_changes: false, factual_errors: false,
   });
+  assert.equal(s.sufficient, false);
+  assert.deepEqual(s.missing.map((m) => m.key), ['tax_rate_pct']);
+});
+
+test('current value plus a prior value plus both booleans plus a tax rate is sufficient', () => {
+  const s = E.checkSufficiency({
+    new_assessed_value: 360000, prior_assessed_value: 300000,
+    physical_changes: false, factual_errors: false, tax_rate_pct: 1.2,
+  });
   assert.equal(s.sufficient, true);
 });
 
-test('current value plus a factual-error flag is sufficient, with no prior value needed', () => {
+test('comparables count as a numeric baseline that also requires a tax rate', () => {
+  const s = E.checkSufficiency({
+    new_assessed_value: 400000,
+    comparables: [{ address: '12 Oak St', assessed_value: 340000 }],
+    physical_changes: false, factual_errors: false,
+  });
+  assert.equal(s.sufficient, false);
+  assert.deepEqual(s.missing.map((m) => m.key), ['tax_rate_pct']);
+});
+
+test('current value plus a factual-error flag is sufficient, with no prior value or tax rate needed', () => {
   const s = E.checkSufficiency({
     new_assessed_value: 360000, physical_changes: false, factual_errors: true,
   });

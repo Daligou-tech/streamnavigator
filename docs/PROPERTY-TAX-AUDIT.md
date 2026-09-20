@@ -57,16 +57,27 @@ always leads, regardless of the dollar math. The design now matches
 `/closing`'s paper-and-ink system rather than the shared violet/mint
 gradient.
 
-**What remains weak:** the report can ship with zero dollar figures, because
-the one field that produces a dollar amount — the customer's own tax rate —
-is optional, while the page's headline promise is "the dollar impact of any
-change." A "worth appealing" verdict is not scaled to size: a 6% change at a
-low tax rate and a 40% change at a high one both read as "the strongest case
-in this report for an appeal," with no minimum-savings judgment call. And any
-reported physical change — however small — unconditionally reclassifies an
-increase as "likely justified," with no check on whether the increase is
-proportionate to the change. None of these are found-and-shipped defects the
-way the checkout gap was; they are gaps in an otherwise sound, honest engine.
+**The tax-rate gap is also now closed.** `navigator-property-tax-engine.js`'s
+sufficiency gate requires a tax rate whenever a numeric baseline (a prior
+value or a comparable) is supplied — the exact case where the old gate let a
+customer through without one and the engine silently produced a category
+with no dollar figure behind it. `comparablesFinding` also now computes a
+`dollarImpact` the same way `trendFinding` always did; it previously always
+returned `null`, so a "worth appealing" verdict built on comparables alone
+could never state what it was worth even when a rate existed. The one case
+where the rate correctly stays optional is a factual-error-only submission,
+which has no delta to multiply a rate against in the first place. 15 tests
+now pin this (2 new comparables-dollar-impact tests, 4 rewritten sufficiency
+tests, 2 new intake-gate tests) — 85 suites still pass.
+
+**What remains weak:** a "worth appealing" verdict is still not scaled to
+size — a 6% change at a low tax rate and a 40% change at a high one both read
+as "the strongest case in this report for an appeal," with no minimum-savings
+judgment call. And any reported physical change — however small —
+unconditionally reclassifies an increase as "likely justified," with no
+check on whether the increase is proportionate to the change. Neither is a
+regression from today's fix; both were already named as Medium priority
+above and remain open.
 
 **Price:** current $99, one-time. **Recommended: $79, one-time** — see
 Pricing, below. This is not the unfixed product's price; it is what this
@@ -78,6 +89,32 @@ averaging up to two numbers the customer typed in) and next to the one
 product ($59, Home Maintenance) that shares its exact shape — no document
 required, the customer supplies the figures, a deterministic engine
 categorizes them, the model writes it up.
+
+**The price itself is not moved in this update, and that is a hard stop, not
+a deferral.** Every other fix in this line has been code the codebase
+controls end to end. A price cut is not: `property-tax.html`'s Payment Link
+is a live Stripe object charging $99 today, and the only way to charge $79
+instead is a *new* Stripe Price and Payment Link — an action Stripe's API
+supports but that this session has no credentials for (`STRIPE_SECRET_KEY`
+lives in Vercel, encrypted, and is deliberately never decrypted without an
+explicit, specific request to do so). Displaying $79 against a button still
+wired to the $99 link is the exact defect `scripts/check-prices.js` exists to
+catch (see `subscriptions.html`'s own history of this). Disabling the button
+via the `REPLACE_WITH_` pattern that page uses is not free either: doing so
+here without also registering the old link's real Stripe object ID in
+`unreferencedActiveLinks` would make it an undocumented orphan, which fails
+`npm run check-prices` — a step every deploy runs — and blocks shipping
+*anything*, on any product, until it is resolved. That is a site-wide blast
+radius for a single-product price cut, not a contained one.
+
+**The one remaining step is entirely Stripe-side and takes about two
+minutes:**
+1. Stripe Dashboard → Product catalog → "Property Tax Navigator Report" → add a new one-time price, $79.
+2. Payment Links → New → pick that price → after-payment redirect to `https://streamnavigator.ai/navigator-status` → Create.
+3. Send the resulting `https://buy.stripe.com/...` URL over, and deactivate the old $99 link (`bJeaEX68c4Mc0FS2FyabK04`).
+
+The moment that URL exists, the page copy, `prices.config.json`, and this
+document all flip in one pass — nothing else is blocking it.
 
 ---
 
@@ -345,12 +382,16 @@ that rejected every checkout, was fixed in `636136b` during this audit and
 verified live.)*
 
 ### High Priority
-1. **Make `tax_rate_pct` effectively required**, or supply a clearly-flagged
-   fallback rate, so a paid report is not allowed to ship with zero dollar
-   figures when the page's own promise is "the dollar impact of any change."
-2. **Cut the price to $79**, on the reasoning above, until the tax-rate gap
-   closes and the comparable cap is raised — at which point $99 is earned
-   back on its own terms.
+1. ~~Make `tax_rate_pct` effectively required~~ — **Shipped.** Required
+   whenever a prior value or a comparable is supplied; stays optional only
+   for a factual-error-only submission, where it would have nothing to
+   multiply against.
+2. **Cut the price to $79.** Code-ready but not shippable by this session:
+   requires a new Stripe Price and Payment Link, which needs
+   `STRIPE_SECRET_KEY` (present in Vercel, deliberately not decrypted without
+   an explicit request) or the Stripe dashboard directly — see the Executive
+   Summary for the exact two-minute Stripe-side step. Once that link exists,
+   flipping the page, `prices.config.json`, and this document is immediate.
 
 ### Medium Priority
 3. **Add a dollar-scaled caveat** to `worth_appealing` findings: when

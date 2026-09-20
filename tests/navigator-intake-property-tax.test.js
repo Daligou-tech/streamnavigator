@@ -90,7 +90,7 @@ test('the old free-text-address-only shape (the pre-fix behavior) is now rejecte
   assert.equal(inserted.length, 0, 'no row should be inserted for an insufficient submission');
 });
 
-test('current value plus a prior value plus both booleans answered is accepted', async (t) => {
+test('current value plus a prior value plus both booleans answered is accepted, with a tax rate', async (t) => {
   const { inserted } = installFakeSupabaseAdmin();
   t.after(uninstallFakeSupabaseAdmin);
 
@@ -101,7 +101,7 @@ test('current value plus a prior value plus both booleans answered is accepted',
     formData: {
       address: '123 Main St, Springfield, IL',
       new_assessed_value: 360000, prior_assessed_value: 300000,
-      physical_changes: false, factual_errors: false,
+      physical_changes: false, factual_errors: false, tax_rate_pct: 1.2,
     },
     files: [],
   });
@@ -112,6 +112,27 @@ test('current value plus a prior value plus both booleans answered is accepted',
   assert.equal(res.body.ok, true);
   assert.equal(inserted.length, 1);
   assert.equal(inserted[0].product, 'property-tax');
+});
+
+test('a prior value with no tax rate is rejected, so a report can never ship with no dollar figure', async (t) => {
+  const { inserted } = installFakeSupabaseAdmin();
+  t.after(uninstallFakeSupabaseAdmin);
+
+  const handler = require('../api/navigator-intake');
+  const { req, res } = makeReqRes({
+    product: 'property-tax',
+    email: 'homeowner@example.com',
+    formData: {
+      new_assessed_value: 360000, prior_assessed_value: 300000,
+      physical_changes: false, factual_errors: false,
+    },
+    files: [],
+  });
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(inserted.length, 0);
 });
 
 test('a factual error flag alone, with no prior value, is accepted', async (t) => {

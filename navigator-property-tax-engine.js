@@ -166,7 +166,13 @@
   // Arithmetic on comparables the CUSTOMER supplied — never ones this engine
   // invents. See the file header: this is what "tell them to pull their own
   // comps" becomes when there is a structured field to put them in.
-  function comparablesFinding(f) {
+  //
+  // Carries a dollarImpact the same way trendFinding does, and for the same
+  // reason: docs/PROPERTY-TAX-AUDIT.md found this finding always shipped
+  // with dollarImpact: null, regardless of whether a tax rate existed, which
+  // is a second, narrower instance of the report's main gap — a "worth
+  // appealing" category with no dollar figure behind it.
+  function comparablesFinding(f, taxRatePct) {
     const comps = Array.isArray(f.comparables)
       ? f.comparables.map((c) => num(c && c.assessed_value)).filter((v) => v !== null)
       : [];
@@ -178,6 +184,7 @@
     const excessPct = (current - average) / average;
 
     if (excessPct >= ABOVE_COMPARABLES_THRESHOLD) {
+      const dollarImpact = taxRatePct !== null ? (current - average) * (taxRatePct / 100) : null;
       return {
         checkId: 'ABOVE_OWN_COMPARABLES',
         title: 'Assessment is above the comparable properties you provided',
@@ -187,7 +194,7 @@
           + `(${money(average)}), at or above the ${pct(ABOVE_COMPARABLES_THRESHOLD, 0)} this review treats as worth citing.`,
         recommendedAction: 'Bring these specific comparables to the assessor\'s office or the appeal board — citing '
           + 'named nearby properties assessed lower is the same evidence assessors themselves use.',
-        dollarImpact: null,
+        dollarImpact,
       };
     }
     return null;
@@ -204,7 +211,7 @@
     const trend = trendFinding(f, taxRatePct);
     if (trend) findings.push(trend);
 
-    const comp = comparablesFinding(f);
+    const comp = comparablesFinding(f, taxRatePct);
     if (comp) findings.push(comp);
 
     const hasBaseline = num(f.prior_assessed_value) !== null
@@ -256,13 +263,32 @@
       });
     }
 
-    const hasBaseline = num(f.prior_assessed_value) !== null
-      || (Array.isArray(f.comparables) && f.comparables.filter((c) => c && String(c.address || '').trim() && num(c.assessed_value) !== null).length > 0)
-      || f.factual_errors === true;
+    const hasPriorValue = num(f.prior_assessed_value) !== null;
+    const hasComparables = Array.isArray(f.comparables)
+      && f.comparables.filter((c) => c && String(c.address || '').trim() && num(c.assessed_value) !== null).length > 0;
+    const hasNumericBaseline = hasPriorValue || hasComparables;
+    const hasBaseline = hasNumericBaseline || f.factual_errors === true;
     if (!hasBaseline) {
       missing.push({
         key: 'baseline', label: 'Add last year\'s assessed value, or at least one comparable property, or confirm a factual error',
         why: 'Without one of these three, there is nothing to compare this year\'s assessment against.',
+      });
+    }
+
+    // docs/PROPERTY-TAX-AUDIT.md's highest-impact finding: a numeric baseline
+    // (a prior value or comparables) produces a dollarImpact ONLY when a tax
+    // rate exists — trendFinding and comparablesFinding both return
+    // dollarImpact: null without one. Making the rate required exactly when
+    // it would otherwise be used is what closes that gap, without asking for
+    // it when it would do nothing — a factual-error-only submission has no
+    // delta to multiply a rate against, so it stays optional there.
+    if (hasNumericBaseline && num(f.tax_rate_pct) === null) {
+      missing.push({
+        key: 'tax_rate_pct',
+        label: 'Add your effective tax rate',
+        why: 'This is what turns a percentage change into an actual dollar figure — usually printed on your '
+          + 'tax bill as a mill rate or effective rate — and without it this review can only tell you whether '
+          + 'you have a case, not what it is worth.',
       });
     }
 
