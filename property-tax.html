@@ -4,12 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Property Tax Navigator — StreamNavigator AI</title>
-<meta name="description" content="Find out if your property tax assessment is too high. Property Tax Navigator compares your assessment to comparable properties and builds your appeal package — for $99." />
+<meta name="description" content="Find out if your property tax assessment is too high. Property Tax Navigator compares this year's assessment against last year's and against comparables you provide, and builds your appeal package — for $99." />
 <link rel="canonical" href="https://streamnavigator.ai/property-tax" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
+<link rel="stylesheet" href="/navigator-closing-theme.css">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -40,7 +42,22 @@
     <div class="wrap">
       <div class="pill"><span class="dot">✓</span> Before you pay another overassessed tax bill</div>
       <h1>Find out if you're <span class="grad">overpaying on property taxes.</span></h1>
-      <p class="sub">Enter your address and upload your latest assessment. StreamNavigator compares it against comparable properties and builds the evidence package you need to appeal.</p>
+      <p class="sub">Enter your assessed value, this year and last, and anything else you know — a factual error, comparable properties you've found, your own tax rate. StreamNavigator does the arithmetic and tells you if it's worth appealing.</p>
+      <div class="check-card" style="margin:32px auto 0; max-width:460px; text-align:left; padding:20px 24px;">
+        <div class="check-card-kicker" style="justify-content:space-between; margin-bottom:14px;">
+          <span>Example finding</span>
+          <span style="background:var(--yellow); color:var(--ink); border:2px solid var(--ink); border-radius:999px; padding:3px 11px; font-size:11px; font-weight:800;">Worth appealing</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--border);">
+          <span style="font-size:13.5px; color:var(--text-dim); font-weight:600;">Assessed value</span>
+          <span style="font-size:14.5px; font-weight:700; color:var(--ink);">$300,000 → $360,000</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; padding:8px 0;">
+          <span style="font-size:13.5px; color:var(--text-dim); font-weight:600;">At your own tax rate</span>
+          <span style="font-size:14.5px; font-weight:700; color:var(--ink);">≈ $720 more annually</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-dim); margin:12px 0 0; line-height:1.5;">The assessment rose 20% with no renovation, addition, or other change reported — and no comparable property is invented here to make the case. That's your own two figures, compared, at your own rate.</p>
+      </div>
     </div>
   </section>
   <section id="how-it-works">
@@ -52,8 +69,8 @@
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-num">1</div>
-        <h4>Enter your address</h4>
-        <p>Tell us where the property is and upload your latest assessment notice if you have it.</p>
+        <h4>Enter your assessed values</h4>
+        <p>This year's assessment, and last year's if you have it — the comparison starts from your own two figures.</p>
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
@@ -62,18 +79,18 @@
       </div>
       <div class="step-card">
         <div class="step-num">3</div>
-        <h4>AI pulls comparable properties</h4>
-        <p>Recent assessments and sales of similar homes nearby are gathered and compared.</p>
+        <h4>We check your own numbers</h4>
+        <p>Year-over-year change, a factual error you flag, or comparable properties you've found — arithmetic on what you actually give us, never an invented comparable.</p>
       </div>
       <div class="step-card">
         <div class="step-num">4</div>
-        <h4>AI estimates overassessment</h4>
-        <p>Your assessment is checked against those comparables for signs of overvaluation.</p>
+        <h4>Get a verdict, not a guess</h4>
+        <p>Worth appealing, likely justified, or nothing to flag — with the reasoning and the dollar impact at your own tax rate.</p>
       </div>
       <div class="step-card">
         <div class="step-num">5</div>
         <h4>Get your appeal package</h4>
-        <p>A clear estimate of potential savings, plus the evidence and documentation your appeal needs.</p>
+        <p>A clear read on your case, plus a practical checklist for what your local process actually needs.</p>
       </div>
     </div>
   </section>
@@ -86,12 +103,12 @@
     <div class="wrap" style="max-width:680px;">
       <div class="check-card">
         <ul class="check-list">
-          <li><span class="tick">✓</span> How your assessment compares to similar nearby properties</li>
-          <li><span class="tick">✓</span> An estimate of your potential overassessment, in dollars</li>
-          <li><span class="tick">✓</span> Projected annual savings if your appeal succeeds</li>
-          <li><span class="tick">✓</span> The specific comparable properties used as evidence</li>
-          <li><span class="tick">✓</span> A structured appeal package formatted for your local assessor</li>
-          <li><span class="tick">✓</span> What to expect from your local appeal process and deadlines</li>
+          <li><span class="tick">✓</span> Whether your assessment rose more than a reported change to the property explains</li>
+          <li><span class="tick">✓</span> A factual-error check — the single fastest appeal ground when it applies</li>
+          <li><span class="tick">✓</span> Your case against comparable properties you supply, never ones we invent</li>
+          <li><span class="tick">✓</span> The dollar impact at your own tax rate, if you give us one</li>
+          <li><span class="tick">✓</span> A practical appeal checklist and what to expect from your local process</li>
+          <li><span class="tick">✓</span> An honest "not worth appealing" when that's the truth</li>
         </ul>
       </div>
     </div>
@@ -127,13 +144,50 @@
       <div class="price-card featured" id="intake-card">
         <span class="price-badge">One-time</span>
         <h3>Property Tax Navigator Report</h3>
-        <p class="desc">A full comparable-property analysis and appeal package for one property.</p>
+        <p class="desc">A year-over-year and comparable-property analysis for one property.</p>
         <div class="price-amount">$99<span>/property</span></div>
         <div class="price-period">one-time payment per property</div>
 
         <div class="field-block">
           <label>Property address</label>
-          <textarea id="intake-description" placeholder="e.g. 123 Main St, Springfield, IL — plus anything else worth knowing (recent renovations, purchase price, etc.)"></textarea>
+          <textarea id="intake-address" placeholder="e.g. 123 Main St, Springfield, IL"></textarea>
+        </div>
+        <div class="field-block">
+          <label>Current assessed value ($)</label>
+          <input type="number" id="intake-new-value" min="0" placeholder="e.g. 360000">
+        </div>
+        <div class="field-block">
+          <label>Prior year's assessed value ($, if you have it)</label>
+          <input type="number" id="intake-prior-value" min="0" placeholder="e.g. 300000">
+        </div>
+        <div class="field-block">
+          <label>Has anything about the property changed since the last assessment?</label>
+          <div class="chip-row">
+            <button type="button" class="chip-toggle bool-chip" id="chip-changes-yes" data-field="physical_changes" data-value="true">Yes</button>
+            <button type="button" class="chip-toggle bool-chip" id="chip-changes-no" data-field="physical_changes" data-value="false">No</button>
+          </div>
+          <textarea id="intake-changes-notes" placeholder="What changed? (e.g. added a 400 sq ft addition in 2025)" style="margin-top:10px; display:none;"></textarea>
+        </div>
+        <div class="field-block">
+          <label>Does the assessment notice have anything factually wrong about the property?</label>
+          <div class="chip-row">
+            <button type="button" class="chip-toggle bool-chip" id="chip-errors-yes" data-field="factual_errors" data-value="true">Yes</button>
+            <button type="button" class="chip-toggle bool-chip" id="chip-errors-no" data-field="factual_errors" data-value="false">No</button>
+          </div>
+          <textarea id="intake-errors-notes" placeholder="What's wrong? (e.g. notice lists 4 bedrooms; house has 3)" style="margin-top:10px; display:none;"></textarea>
+        </div>
+        <div class="field-block">
+          <label>Your effective tax rate, % (optional)</label>
+          <input type="number" id="intake-tax-rate" min="0" step="0.01" placeholder="e.g. 1.2">
+          <p class="field-hint">Usually printed on your tax bill as a mill rate or effective rate. With it, we can compute the actual dollar impact of any change — without it, we'll skip that figure rather than guess.</p>
+        </div>
+        <div class="field-block">
+          <label>Comparable properties you've found (optional)</label>
+          <input type="text" id="intake-comp1-address" placeholder="Address of a comparable property">
+          <input type="number" id="intake-comp1-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
+          <input type="text" id="intake-comp2-address" placeholder="A second comparable, if you have one" style="margin-top:14px;">
+          <input type="number" id="intake-comp2-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
+          <p class="field-hint">Pull these from your county assessor's public records site — we compare your assessment against what you found, never one we invent.</p>
         </div>
         <div class="field-block">
           <label>Upload your latest assessment notice (optional)</label>
@@ -144,15 +198,14 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
-          <p class="field-hint">If you don't have it handy, we can often work from the address alone — but the notice helps accuracy.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
           <input type="email" id="intake-email" placeholder="you@example.com">
         </div>
         <ul class="price-feats">
-          <li><span class="tick">✓</span> Comparable-property analysis for your specific address</li>
-          <li><span class="tick">✓</span> Dollar estimate of potential overassessment</li>
+          <li><span class="tick">✓</span> A real year-over-year comparison, using your own figures</li>
+          <li><span class="tick">✓</span> Dollar impact at your own tax rate, never a guessed one</li>
           <li><span class="tick">✓</span> Appeal package formatted for your local assessor</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
@@ -184,11 +237,11 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Does this work in my county? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">Property tax assessment and appeal processes vary by state and county — your report is tailored to publicly available data for your specific address.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">Property tax assessment and appeal processes vary by state and county, so the checklist stays general unless you tell us your location and we're genuinely confident about that jurisdiction's process. We don't hold a live county-by-county database — the comparison itself runs on your own figures either way.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">How is the overassessment estimate calculated? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">By comparing your assessed value against recent assessments and sales of genuinely comparable nearby properties — the same evidence assessors themselves rely on.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">We don't hold a live MLS or county assessor database, so we never invent a comparable property. The comparison is arithmetic: your assessed value this year against last year, and — if you supply them — comparable properties you found yourself on your county assessor's public records site. Same evidence assessors weigh, sourced by you rather than guessed at by us.</div></div>
       </div>
     </div>
   </section>
@@ -246,21 +299,54 @@
   <span class="ico">✓</span> <span id="toast-text"></span>
 </div>
 <script src="/navigator-shared.js"></script>
+<script src="/navigator-property-tax-engine.js"></script>
 <script>
 (function(){
   const zone = document.getElementById('upload-zone');
   const input = document.getElementById('upload-input');
   const list = document.getElementById('upload-list');
   const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = null;
 
-  document.querySelectorAll('.category-chip').forEach(function(chip){
+  const boolState = { physical_changes: null, factual_errors: null };
+  const notesFor = { physical_changes: document.getElementById('intake-changes-notes'), factual_errors: document.getElementById('intake-errors-notes') };
+
+  document.querySelectorAll('.bool-chip').forEach(function(chip){
     chip.addEventListener('click', function(){
-      document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
+      const field = chip.dataset.field;
+      const value = chip.dataset.value === 'true';
+      boolState[field] = value;
+      document.querySelectorAll('.bool-chip[data-field="' + field + '"]').forEach(function(c){ c.classList.remove('active'); });
       chip.classList.add('active');
-      selectedCategory = chip.dataset.value;
+      if (notesFor[field]) notesFor[field].style.display = value ? 'block' : 'none';
     });
   });
+
+  function num(v) {
+    const n = Number(String(v || '').trim());
+    return v !== '' && Number.isFinite(n) ? n : null;
+  }
+
+  function buildFormData() {
+    const comparables = [];
+    const c1addr = document.getElementById('intake-comp1-address').value.trim();
+    const c1val = num(document.getElementById('intake-comp1-value').value);
+    if (c1addr && c1val !== null) comparables.push({ address: c1addr, assessed_value: c1val });
+    const c2addr = document.getElementById('intake-comp2-address').value.trim();
+    const c2val = num(document.getElementById('intake-comp2-value').value);
+    if (c2addr && c2val !== null) comparables.push({ address: c2addr, assessed_value: c2val });
+
+    return {
+      address: document.getElementById('intake-address').value.trim(),
+      new_assessed_value: num(document.getElementById('intake-new-value').value),
+      prior_assessed_value: num(document.getElementById('intake-prior-value').value),
+      physical_changes: boolState.physical_changes,
+      physical_changes_notes: document.getElementById('intake-changes-notes').value.trim(),
+      factual_errors: boolState.factual_errors,
+      factual_errors_notes: document.getElementById('intake-errors-notes').value.trim(),
+      tax_rate_pct: num(document.getElementById('intake-tax-rate').value),
+      comparables: comparables,
+    };
+  }
 
   document.getElementById('pay-btn').addEventListener('click', async function(e){
     e.preventDefault();
@@ -274,12 +360,14 @@
     }
     errEl.style.display = 'none';
     const emailEl = document.getElementById('intake-email');
-    const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
     if (!email || email.indexOf('@') === -1) { fail('Enter a valid email so we can reach you.', emailEl); return; }
+
+    const formData = buildFormData();
+    const sufficiency = PropertyTaxEngine.checkSufficiency(formData);
+    if (!sufficiency.sufficient) { fail(sufficiency.missing[0].label + '.'); return; }
+
     const files = uploader.getFiles();
-    const description = descEl.value.trim();
-    if (!description && files.length === 0) { fail('Add your property address or upload your assessment notice so we have something to work with.', descEl); return; }
     const originalText = btn.textContent;
     btn.textContent = 'Saving your submission…';
     btn.style.pointerEvents = 'none';
@@ -287,7 +375,7 @@
       const submission = await submitNavigatorIntake({
         product: 'property-tax',
         email: email,
-        formData: { category: selectedCategory, description: descEl.value.trim() },
+        formData: formData,
         files: files,
       });
       goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'property-tax' }, email);

@@ -1,0 +1,86 @@
+/* navigator-closing-theme.css — restyles a navigator-shared.css page to
+   match /closing's typography and palette, without touching the shared
+   file the other eight Navigator pages still use.
+
+   Loaded AFTER navigator-shared.css. Same trick closing.html's own <style>
+   block already uses on itself (the "bridge: names the transplanted
+   components expect, mapped to this page's palette" section) — redefine the
+   same custom-property names navigator-shared.css's components already
+   consume, and most of the page reskins for free. A handful of rules in
+   navigator-shared.css use a hardcoded value instead of a token (a font
+   name, an rgba() tint) and need an explicit override below; each one is
+   named so it can be checked against navigator-shared.css directly rather
+   than trusted blind.
+
+   Requires the page's own <head> to load Newsreader, IBM Plex Sans and IBM
+   Plex Mono the same way closing.html does — this file does not @import
+   fonts. */
+
+:root{
+  --bg:#FBFAF7;
+  --bg-alt:#F4F2ED;
+  --bg-gradient:#FBFAF7;
+  --surface:#FFFFFF;
+  --surface-2:#F4F2ED;
+  --ink:#1B2A3A;
+  --border:#D8DAD5;
+  --border-strong:#BFC3BC;
+  --text:#1B2A3A;
+  --text-dim:#5B6570;
+  --text-dimmer:#7C8791;
+  --accent:#FFFFFF;
+  --accent-deep:#B01F12;
+  --accent-2:#2C6A57;
+  --accent-2-deep:#22513F;
+  --accent-3:#B01F12;
+  --accent-3-deep:#B01F12;
+  --yellow:#FAF3E2;
+  --status-active:#2C6A57;
+  --status-active-deep:#22513F;
+  --status-paused:#8A6A16;
+  --gradient:#1B2A3A;
+  --gradient-text:#1B2A3A;
+  --gradient-warm:#1B2A3A;
+  --radius:3px;
+  --radius-sm:2px;
+  --shadow-hard:5px 5px 0 rgba(27,42,58,.10);
+  --shadow-hard-sm:4px 4px 0 rgba(27,42,58,.09);
+  --shadow-hard-xs:3px 3px 0 rgba(27,42,58,.08);
+  --shadow-soft:0 24px 60px -32px rgba(27,42,58,.16);
+  --shadow-glow:0 0 0 1px rgba(27,42,58,.14);
+}
+
+/* Typography — navigator-shared.css hardcodes 'Sora'/'Inter' in a handful
+   of rules instead of a token, so each needs its own override. */
+body{ font-family:"IBM Plex Sans", system-ui, -apple-system, sans-serif; }
+h1, h2, h3, h4{ font-family:"Newsreader", Georgia, serif; font-weight:500; letter-spacing:-0.01em; }
+.logo{ font-family:"Newsreader", Georgia, serif; font-weight:600; }
+.price-amount{ font-family:"Newsreader", Georgia, serif; font-weight:500; }
+.step-num{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
+
+/* The decorative violet/mint/pink radial texture behind the hero has no
+   equivalent on the flat-paper /closing page. */
+.bg-noise{ display:none; }
+
+/* header{} sets a hardcoded cream rgba() rather than a token. */
+header{ background:rgba(251,250,247,0.9); border-bottom:1px solid var(--border); backdrop-filter:blur(10px); }
+
+/* .nav-subbrand and .chip-toggle.active both hardcode an rgba() tint tied
+   to the old teal accent rather than referencing --accent-3. */
+.nav-subbrand{ background:var(--surface); border:1.5px solid var(--border-strong); color:var(--text-dim); }
+.chip-toggle.active{ background:var(--bg-alt); border-color:var(--accent-deep); color:var(--accent-deep); }
+
+/* .btn-primary/.btn-ghost hardcode a white-fill/bordered look; /closing's
+   actual buttons (closing.html:173-178, restated at 307-309) are a solid
+   flat fill with square-ish corners, no offset hard-shadow hover. */
+.btn{ border-radius:var(--radius-sm); }
+.btn-primary{ background:var(--ink); color:var(--bg); box-shadow:none; }
+.btn-primary:hover{ background:#12202E; box-shadow:none; transform:none; }
+.btn-ghost{ background:transparent; color:var(--ink); box-shadow:none; }
+.btn-ghost:hover{ background:var(--surface-2); box-shadow:none; transform:none; }
+
+/* check-card/.faq-item's border color and .price-card featured gradient
+   overlay read as busier than /closing's flat, 1px-rule cards. */
+.price-card.featured{ background:var(--surface); box-shadow:none; }
+.check-card{ box-shadow:none; }
+.cta-final{ background:var(--surface); box-shadow:none; }
