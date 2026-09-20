@@ -70,51 +70,31 @@ which has no delta to multiply a rate against in the first place. 15 tests
 now pin this (2 new comparables-dollar-impact tests, 4 rewritten sufficiency
 tests, 2 new intake-gate tests) — 85 suites still pass.
 
-**What remains weak:** a "worth appealing" verdict is still not scaled to
-size — a 6% change at a low tax rate and a 40% change at a high one both read
-as "the strongest case in this report for an appeal," with no minimum-savings
-judgment call. And any reported physical change — however small —
-unconditionally reclassifies an increase as "likely justified," with no
-check on whether the increase is proportionate to the change. Neither is a
-regression from today's fix; both were already named as Medium priority
-above and remain open.
+**Three of the four Medium-priority gaps are also now closed**, added after
+the tax-rate fix in the same session: a dollar-scaled caveat on a
+`worth_appealing` finding under $150/year (`withSmallDollarCaveat`), every
+appeal-deadline instruction now unconditionally hedged toward "confirm the
+exact date with your assessor's office" regardless of the model's stated
+confidence, and the comparable-property cap raised from two slots to four.
+The one that remains open — `physical_changes = true` unconditionally
+reading as "likely justified" with no proportionality check — is a
+disclosed, deliberate limitation (see Decision Engine Audit) rather than an
+oversight, and stays open on purpose.
 
-**Price:** current $99, one-time. **Recommended: $79, one-time** — see
-Pricing, below. This is not the unfixed product's price; it is what this
-product, now honest about doing arithmetic on the customer's own figures
-rather than pulling comparables, is worth next to the two products ($79
-each) that do more work than it does (Insurance and HOA both extract and
-diff real uploaded documents; this engine's most labor-intensive check is
-averaging up to two numbers the customer typed in) and next to the one
-product ($59, Home Maintenance) that shares its exact shape — no document
-required, the customer supplies the figures, a deterministic engine
-categorizes them, the model writes it up.
-
-**The price itself is not moved in this update, and that is a hard stop, not
-a deferral.** Every other fix in this line has been code the codebase
-controls end to end. A price cut is not: `property-tax.html`'s Payment Link
-is a live Stripe object charging $99 today, and the only way to charge $79
-instead is a *new* Stripe Price and Payment Link — an action Stripe's API
-supports but that this session has no credentials for (`STRIPE_SECRET_KEY`
-lives in Vercel, encrypted, and is deliberately never decrypted without an
-explicit, specific request to do so). Displaying $79 against a button still
-wired to the $99 link is the exact defect `scripts/check-prices.js` exists to
-catch (see `subscriptions.html`'s own history of this). Disabling the button
-via the `REPLACE_WITH_` pattern that page uses is not free either: doing so
-here without also registering the old link's real Stripe object ID in
-`unreferencedActiveLinks` would make it an undocumented orphan, which fails
-`npm run check-prices` — a step every deploy runs — and blocks shipping
-*anything*, on any product, until it is resolved. That is a site-wide blast
-radius for a single-product price cut, not a contained one.
-
-**The one remaining step is entirely Stripe-side and takes about two
-minutes:**
-1. Stripe Dashboard → Product catalog → "Property Tax Navigator Report" → add a new one-time price, $79.
-2. Payment Links → New → pick that price → after-payment redirect to `https://streamnavigator.ai/navigator-status` → Create.
-3. Send the resulting `https://buy.stripe.com/...` URL over, and deactivate the old $99 link (`bJeaEX68c4Mc0FS2FyabK04`).
-
-The moment that URL exists, the page copy, `prices.config.json`, and this
-document all flip in one pass — nothing else is blocking it.
+**The price is shipped too: $99 → $79, one-time, live in Stripe.** A new
+$79.00 one-time price (`price_1UHuIpH9DnCfGBIZCUUL1B8o`) was added to the
+same "Property Tax Navigator Report" product, a new Payment Link
+(`plink_1UHuKRH9DnCfGBIZiC82VC6U`, `https://buy.stripe.com/eVqcN59ko5QgfAM0xqabK0k`)
+created for it with the same after-payment redirect every other Navigator
+link uses, and the old $99 link (`plink_1U9qwtH9DnCfGBIZCh3aJiKy`,
+`bJeaEX68c4Mc0FS2FyabK04`) deactivated rather than deleted, so it can be
+reactivated if this ever needs to roll back. Done directly in the Stripe
+dashboard via the user's own authenticated session (Claude in Chrome), after
+two dead ends: the Vercel connector's env-var read returned no decrypted
+value for `STRIPE_SECRET_KEY`, and no Stripe MCP connector was available to
+this session either. `property-tax.html`, `prices.config.json` and this
+document were updated in the same pass — the page, the config, and Stripe
+now agree, which is what `scripts/check-prices.js` checks for.
 
 ---
 
@@ -125,10 +105,10 @@ document all flip in one pass — nothing else is blocking it.
 | "AI pulls comparable properties" / "Recent assessments and sales of similar homes nearby are gathered and compared" (old page) | The engine's own prompt says, correctly, "you do not have access to a live MLS or county assessor database" | The page sold a live database lookup that does not exist and never did | **Critical** | Fixed in `636136b` — page now says the comparison runs on comparables the customer supplies |
 | "The specific comparable properties used as evidence" (old page, What You Get) | Same as above — no comparable was ever pulled by the engine | Same defect, second instance | **Critical** | Fixed in `636136b` |
 | Intake: a free-text address box, deployed alongside a server-side gate requiring structured fields | Every submission through the real page was rejected with a message referencing a field the page did not expose | 100% checkout failure between the two deploys | **Critical** | Fixed in `636136b` — structured fields gated client-side by the same engine |
-| "The dollar impact of any change" / "Dollar estimate of potential overassessment" | Only computed if the customer supplies a tax rate — an optional field | A customer can pay and receive a report with zero dollar figures, only categorical verdicts | **High** | Make the tax rate effectively required, or default it from a jurisdiction average with a clear "you told us none, so this is a rough estimate" caveat |
-| "Get a verdict, not a guess" | Correct on category; not scaled by size. A 6%-above-threshold case and a 40% case both render as "the strongest case … for an appeal" | No minimum-savings judgment — Section 16 of this audit's own brief ("tell customers when an appeal is unlikely to be worth pursuing") is not met | **Medium** | Add a dollar-scaled caveat when `dollarImpact` is known and small (see Required Changes) |
-| An assessment rise "alongside a reported physical change" is automatically "likely justified" | True regardless of whether the reported change plausibly explains the size of the increase | A disproportionate increase attached to a minor reported change reads as settled, when it may not be | **Medium** | Disclosed, deliberate limitation given no cost-benchmark table exists (correctly, per [[no-benchmarking-no-state-claims]]) — the fix is language, not data: instruct the write-up to note when the increase looks large relative to a typically modest reported change, without ever stating what the change "should" have cost |
-| "What to expect from your local appeal process and deadlines" | Deadlines are only stated if the model is "genuinely confident" about the jurisdiction — otherwise generic | Reasonable given no maintained jurisdiction corpus, but risk of a wrong date if the model overestimates its own confidence is **Unable to verify** without a live run | **Medium** | Default every deadline statement to "confirm the exact date with your assessor's office" regardless of stated confidence, rather than relying on the model correctly gating on its own certainty |
+| "The dollar impact of any change" / "Dollar estimate of potential overassessment" | Was only computed if the customer supplied a tax rate — an optional field | A customer could pay and receive a report with zero dollar figures, only categorical verdicts | **High** | **Fixed** — tax rate now required whenever a numeric baseline (prior value or comparable) is given; `comparablesFinding` also now computes a `dollarImpact` it previously always returned as `null` |
+| "Get a verdict, not a guess" | Correct on category; was not scaled by size. A 6%-above-threshold case and a 40% case both rendered as "the strongest case … for an appeal" | No minimum-savings judgment — Section 16 of this audit's own brief ("tell customers when an appeal is unlikely to be worth pursuing") was not met | **Medium** | **Fixed** — `withSmallDollarCaveat()` appends a modest-amount caveat to any `worth_appealing` finding under $150/year |
+| An assessment rise "alongside a reported physical change" is automatically "likely justified" | True regardless of whether the reported change plausibly explains the size of the increase | A disproportionate increase attached to a minor reported change reads as settled, when it may not be | **Medium** | Disclosed, deliberate limitation given no cost-benchmark table exists (correctly, per [[no-benchmarking-no-state-claims]]) — left open on purpose; see Decision Engine Audit |
+| "What to expect from your local appeal process and deadlines" | Deadlines were only stated if the model is "genuinely confident" about the jurisdiction — otherwise generic | Reasonable given no maintained jurisdiction corpus, but risk of a wrong date if the model overestimates its own confidence was **Unable to verify** without a live run | **Medium** | **Fixed** — the prompt now unconditionally instructs the write-up to add "confirm the exact date with your assessor's office" alongside every deadline it states, regardless of stated confidence |
 | Look and feel: "another product within the same Stream Navigator product family" as `/closing` | Now true for typography and palette (`navigator-closing-theme.css`); the header still carries `navigator-shared.css`'s colored logo mark and pill-style sub-brand tag, which `/closing` does not use | Minor, deliberate — the commit message calls this a scoped choice, not a site-wide reskin | Low | Optional follow-up if the header treatment is ever unified across all products |
 
 ---
@@ -137,7 +117,7 @@ document all flip in one pass — nothing else is blocking it.
 
 **1. Landing page.** Clear within 30 seconds: the hero states the problem
 ("overpaying on property taxes"), the mechanism (compare this year's
-assessment to last year's and to comparables you provide), the price ($99),
+assessment to last year's and to comparables you provide), the price ($79),
 and proves it with a worked example (a $300k→$360k assessment, no reported
 change, ≈$720/year at the customer's own rate — an accurate, non-exaggerated
 instance of the engine's own "worth appealing" rule). This is a real
@@ -145,13 +125,12 @@ improvement over the old hero, which promised a mechanism ("AI pulls
 comparables") the product never had.
 
 **2. Input process.** Six fields now stand in for one free-text box: current
-assessed value (required), prior assessed value (recommended), a
-physical-change yes/no with optional notes, a factual-error yes/no with
-optional notes, an optional tax rate, and up to two optional comparables. The
-client-side gate mirrors the server's exactly, so a customer cannot reach a
-rejected checkout the way the old page allowed. One friction point: the two
-comparable slots are hard-capped at two, and a customer with three or four
-strong comps has nowhere to put the others — see Required Changes.
+assessed value (required), prior assessed value (part of the baseline gate),
+a physical-change yes/no with optional notes, a factual-error yes/no with
+optional notes, a tax rate (required whenever it would be used), and up to
+four optional comparables. The client-side gate mirrors the server's
+exactly, so a customer cannot reach a rejected checkout the way the old page
+allowed.
 
 **3. Property lookup / data acquisition.** None, deliberately. The page is
 honest that it holds no live assessor or MLS database and asks the homeowner
@@ -205,24 +184,30 @@ charge was made.
   refused a verdict rather than rendered against the current assessment in
   isolation — `COMPARISON_NOT_POSSIBLE` names exactly what is missing.
 
-**Weak or missing decision rules:**
-- **No dollar-scaled judgment on whether an appeal is worth pursuing.** The
-  engine has a percentage threshold (5% YoY, 10% above comps) but no dollar
-  threshold. A `worth_appealing` finding at $40/year and one at $2,000/year
-  read identically. Section 16 of this audit's brief asks explicitly for a
-  product that can say "do nothing, the potential savings do not justify the
-  effort" — this engine cannot yet say that.
+**Fixed this session:**
+- ~~No dollar-scaled judgment on whether an appeal is worth pursuing~~ —
+  `withSmallDollarCaveat()` now appends a plain caveat to any
+  `worth_appealing` finding whose `dollarImpact` is under $150/year: "That
+  said, $X/year is a modest amount — weigh it against the time an appeal
+  takes before deciding whether to pursue it." The category is untouched;
+  only the recommendation is scaled.
+- ~~Tax rate is optional~~ — required whenever a numeric baseline (a prior
+  value or a comparable) exists to compute a dollar figure from; stays
+  optional only for a factual-error-only submission, which has no delta to
+  multiply a rate against.
+- ~~The comparable-property check caps at two slots~~ — raised to four on
+  the page; the engine itself was always uncapped (it maps over whatever
+  array it receives), so no engine change was needed.
+
+**Remaining, left open on purpose:**
 - **`physical_changes = true` unconditionally downgrades to `likely_justified`,**
   with no check on proportionality. This is the right default given the
   codebase's commitment to never estimate what an improvement "should" have
   cost, but it means a customer who reports a minor change alongside a large
-  increase gets waved off with no further scrutiny.
-- **Tax rate is optional**, so a materially large fraction of reports will
-  compute no dollar figure at all — see below.
-- **The comparable-property check is unweighted by count or dispersion.**
-  One comparable and five comparables are treated identically as long as
-  the average clears the 10% threshold; a single supplied comp is thinner
-  evidence than three, and the write-up has no signal to say so.
+  increase gets waved off with no further scrutiny. Fixing this honestly
+  needs a cost-benchmark table this codebase has deliberately never built —
+  see [[no-benchmarking-no-state-claims]] — so it stays a named, disclosed
+  limitation rather than a half-measure.
 
 ---
 
@@ -235,26 +220,15 @@ own instructions ("your own assessed value, tax rate, or a finding's own
 computed dollarImpact"). A customer asking "why do you believe I could save
 approximately $X" can answer it themselves from the same two numbers.
 
-**The problem is coverage, not credibility.** `tax_rate_pct` is the single
-input every dollar figure in the report depends on, and it is the one
-optional numeric field on the intake form. A customer who supplies a current
-value, a prior value, and both yes/no answers — everything the sufficiency
-gate requires — but skips the tax rate field receives a complete, valid,
-$99 report that states a category ("worth appealing") and a percentage
-change, and never states a dollar amount anywhere. That is a real gap against
-this audit's Section 9 requirement that a savings estimate be produced, not
-merely implied by a percentage.
-
-**Recommendation:** either require `tax_rate_pct` in the sufficiency gate
-(it is printed on every tax bill, so the burden is low), or, if it stays
-optional, have `navigator-property-tax-engine.js` fall back to a clearly
-labeled national or state-average effective rate (~1.1% U.S. average) with
-every dollar figure produced that way flagged in the finding itself as an
-estimate, not the customer's own number — never silently upgrading an
-estimate to read like the customer's own figure. Requiring it is the
-simpler, more honest fix and matches how the page already treats it in the
-FAQ ("without it, we'll skip that figure rather than guess") — the FAQ is
-telling the truth about a design choice that quietly weakens the product.
+**Fixed.** `tax_rate_pct` is now required in `checkSufficiency()` whenever a
+prior value or a comparable is supplied — the two cases that produce a
+dollar figure. A customer can no longer complete checkout with a numeric
+baseline and no rate; the client-side gate (the same engine, loaded into the
+page) blocks it before submission, and the server-side gate blocks it again
+if the client is ever bypassed. The one path where the rate correctly stays
+optional is a factual-error-only submission, which has no delta to multiply
+a rate against in the first place — matching the "why" the FAQ already gave
+customers before this fix existed to back it up.
 
 ---
 
@@ -282,20 +256,20 @@ engine tests with known answers. The write-up half is not.
 ## Actionability Audit
 
 Every finding a customer can receive carries a category, a plain-language
-basis, a concrete recommended action, and — where a tax rate was supplied —
-a dollar impact. This clears the bar this audit's Section 10 sets: not "there
-may be an issue" but "here is the specific issue, why, and what to do about
-it." The gap is upstream of actionability: a customer who never supplied a
-tax rate receives an action but no dollar amount to weigh it against, which
-is the one piece of information most likely to determine whether they act.
+basis, a concrete recommended action, and — now unconditionally, since a
+numeric baseline requires a tax rate — a dollar impact where one applies.
+This clears the bar this audit's Section 10 sets: not "there may be an
+issue" but "here is the specific issue, why, what it's worth, and what to do
+about it."
 
 No specific appeal deadline is computed anywhere in this codebase — deadlines
-are left to the model's own judgment, gated on its stated confidence about
-the jurisdiction. Given deadlines are the one place a wrong or overconfident
-answer could cost a customer their entire appeal (a missed deadline is not a
-suboptimal outcome, it's a foreclosed one), this is the single spot in the
-product where the "genuinely confident" instruction alone is not enough
-insurance — see Required Changes.
+are still left to the model's own judgment about the jurisdiction, which
+remains **Unable to verify** without a live run. What changed: the prompt no
+longer gates the safety net on the model's own stated confidence. Every
+deadline it states now carries an unconditional instruction to add "confirm
+the exact date with your assessor's office" — a missed deadline forecloses
+the appeal entirely, so this is insurance against the model being wrong about
+its own certainty, not just about the date.
 
 ---
 
@@ -329,9 +303,9 @@ Verified against `/closing` live, side by side:
 
 ## Pricing Audit
 
-**Current Price:** $99, one-time.
+**Current Price:** $79, one-time. (Was $99 until this session; see Executive Summary for the Stripe change.)
 
-**Recommended Price:** $79, one-time.
+**Recommended Price:** $79, one-time — shipped.
 
 **Recommended Pricing Model:** one-time (unchanged) — property assessments
 change on an annual-at-most cycle in nearly every jurisdiction, there is
@@ -346,30 +320,34 @@ neighbors charge for real work:
 |---|---|---|
 | Insurance Navigator | $79 | Two uploaded documents, extracted and diffed by a real audit engine |
 | HOA Navigator | $79 | Uploaded governing documents, 28 checks |
-| **Property Tax Navigator** | **$99** | **No document required; arithmetic on up to ~6 numbers/answers the customer types in themselves** |
+| **Property Tax Navigator** | **$79** (was $99) | **No document required; arithmetic on numbers/answers the customer types in themselves** |
 | Home Maintenance Navigator | $59 | No document required; arithmetic on the customer's own repair/replace quotes — the identical shape to Property Tax |
 
-Property Tax currently charges more than two products that require and
-process real uploaded documents, for a product whose most computationally
-demanding step is averaging up to two customer-typed numbers. Its closest
-mechanical twin in the whole line, Home Maintenance, charges 40% less for
-the same shape: no document requirement, customer-supplied figures, a
-deterministic categorization engine, a model write-up.
+Property Tax was charging more than two products that require and process
+real uploaded documents, for a product whose most computationally demanding
+step is averaging up to two customer-typed numbers. Its closest mechanical
+twin in the whole line, Home Maintenance, charges 40% less for the same
+shape: no document requirement, customer-supplied figures, a deterministic
+categorization engine, a model write-up.
 
-The counter-argument for keeping $99 is real but partial: an appeal, if
-successful, saves money every year until the next reassessment, not once —
-a genuine advantage over a one-time repair-vs-replace decision. That is worth
+The counter-argument for $99 was real but partial: an appeal, if successful,
+saves money every year until the next reassessment, not once — a genuine
+advantage over a one-time repair-vs-replace decision. That was worth
 something, but not a 68% premium over a mechanically identical product,
-especially while the product's own dollar-figure calculation is still gated
-behind an optional field (see Savings Engine Audit) — right now a meaningful
-share of $99 reports will not state a dollar figure at all.
+especially while the product's own dollar-figure calculation was still gated
+behind an optional field.
 
-**$79 is the number that matches what ships today.** If `tax_rate_pct`
-becomes effectively required (so every report states a real, traceable
-dollar figure) and the comparable-property cap is raised from two to a more
-realistic three or four, the recurring-savings argument becomes strong
-enough to justify holding at $99 again — write that condition down rather
-than treating either number as final, on the same terms
+**$79 is now the live price**, matching what ships today. Two of the two
+named conditions for reconsidering $99 have since shipped in this same
+session — `tax_rate_pct` is now effectively required, and the
+comparable-property cap is raised from two to four — so the recurring-
+savings argument is stronger than it was when $79 was set. This is noted for
+the next audit to weigh rather than acted on here: reversing a price twice
+in one sitting, on the strength of a note this document wrote about itself,
+is not the same as a fresh audit concluding the higher number is earned. The
+`physical_changes` proportionality gap (see Decision Engine Audit) is also
+still open, which was one of the reasons $99 looked rich to begin with.
+Treat $79 as current, not as a placeholder, on the same terms
 [[audit-prices-are-for-the-unfixed-product]] sets for the rest of this line.
 
 ---
@@ -382,56 +360,45 @@ that rejected every checkout, was fixed in `636136b` during this audit and
 verified live.)*
 
 ### High Priority
+*(None remaining — both shipped this session.)*
 1. ~~Make `tax_rate_pct` effectively required~~ — **Shipped.** Required
    whenever a prior value or a comparable is supplied; stays optional only
    for a factual-error-only submission, where it would have nothing to
    multiply against.
-2. **Cut the price to $79.** Code-ready but not shippable by this session:
-   requires a new Stripe Price and Payment Link, which needs
-   `STRIPE_SECRET_KEY` (present in Vercel, deliberately not decrypted without
-   an explicit request) or the Stripe dashboard directly — see the Executive
-   Summary for the exact two-minute Stripe-side step. Once that link exists,
-   flipping the page, `prices.config.json`, and this document is immediate.
+2. ~~Cut the price to $79~~ — **Shipped.** New $79 Stripe Price and Payment
+   Link created, old $99 link deactivated, `property-tax.html` and
+   `prices.config.json` both updated to match.
 
 ### Medium Priority
-3. **Add a dollar-scaled caveat** to `worth_appealing` findings: when
-   `dollarImpact` is known and small (a reasonable bar: under ~$150/year),
-   say plainly that the arithmetic is sound but the amount may not justify
-   the effort of an appeal — this is the "tell them to do nothing" capability
-   Section 16 of this audit's brief asks for, and the engine has all the data
-   it needs to add it without inventing anything.
-4. **Default every appeal-deadline statement to "confirm the exact date with
-   your assessor's office,"** regardless of the model's stated confidence
-   about the jurisdiction — a wrong deadline forecloses the appeal entirely,
-   which is a worse failure mode than a generic checklist.
-5. **Raise the comparable-property cap from two to three or four** slots —
-   thin evidence is a real limitation for a customer who did the legwork of
-   finding more.
-6. **Add a page-copy regression test** (mirroring the existing
-   `tests/claims.test.js` pattern) asserting `property-tax.html` never
-   reintroduces "AI pulls," "gathered," or "the specific comparable
-   properties used as evidence" — cheap insurance against the exact defect
-   this audit's first finding was.
+*(3 of 4 shipped; #2 below stays open on purpose.)*
+1. ~~Add a dollar-scaled caveat to `worth_appealing` findings~~ — **Shipped.**
+   `withSmallDollarCaveat()` appends a modest-amount note under $150/year.
+2. **`physical_changes = true` unconditionally reads as "likely justified"
+   with no proportionality check.** Left open — see Decision Engine Audit for
+   why fixing this honestly needs data this codebase has deliberately never
+   built.
+3. ~~Default every appeal-deadline statement to confirm with the assessor~~ —
+   **Shipped**, in the write-up prompt.
+4. ~~Raise the comparable-property cap from two to three or four~~ —
+   **Shipped**, raised to four.
+5. ~~Add a page-copy regression test~~ — **Shipped**, `tests/property-tax-claims.test.js`.
 
 ### Low Priority
-7. Disclose in the FAQ or upload copy that an uploaded assessment notice is
-   quoted in the write-up but never changes a finding — matching how
-   Insurance and Home Savings already describe their own upload role.
-8. Consider unifying the header (logo mark, sub-brand pill) with `/closing`'s
+6. ~~Disclose in the FAQ or upload copy that an uploaded assessment notice is
+   quoted, not analyzed~~ — **Shipped**, added to the upload field's hint.
+7. Consider unifying the header (logo mark, sub-brand pill) with `/closing`'s
    plain-text pattern if a full header pass is ever done across the line;
-   not worth a one-off change for this page alone.
+   not worth a one-off change for this page alone. Left open — cosmetic.
 
 ---
 
 ## Recommended Product Specification
 
-**Inputs (unchanged from `636136b`, plus one required-field change):**
-address (context only, not analyzed), current assessed value (required),
-prior assessed value (recommended, part of the baseline gate), physical
-change yes/no + notes, factual error yes/no + notes, tax rate (**recommend
-required**, currently optional), up to three or four comparable
-address/value pairs (currently two), optional file upload (quoted only,
-never analyzed).
+**Inputs (as shipped):** address (context only, not analyzed), current
+assessed value (required), prior assessed value (part of the baseline gate),
+physical change yes/no + notes, factual error yes/no + notes, tax rate
+(required whenever a numeric baseline exists), up to four comparable
+address/value pairs, optional file upload (quoted only, never analyzed).
 
 **Data sources:** none external. Deliberately no live assessor/MLS
 integration and no jurisdiction rate corpus, consistent with
@@ -440,15 +407,15 @@ own input.
 
 **Calculations:** year-over-year delta and percentage against a disclosed
 5% materiality threshold; comparable-average delta and percentage against a
-disclosed 10% threshold; dollar impact as `delta × tax rate`, computed
-whenever a rate exists (recommend: always, once required).
+disclosed 10% threshold; dollar impact as `delta × tax rate` for both, always
+computed since a rate is now required wherever it would apply.
 
 **Decision rules:** factual error always leads; year-over-year change
 categorized `within_norms` (<5%), `likely_justified` (≥5%, physical change
 reported), or `worth_appealing` (≥5%, no reported change); comparables
 categorized `worth_appealing` at ≥10% above the customer's own comp average;
-no baseline → refused rather than guessed. Recommended addition: a
-dollar-scaled "may not be worth pursuing" caveat under a stated threshold.
+no baseline → refused rather than guessed; a `worth_appealing` finding under
+$150/year carries an added caveat that the amount may not justify the effort.
 
 **Evidence:** every comparable and every dollar figure traces directly to a
 customer-supplied number, quoted rather than estimated, with the disclosed
@@ -456,13 +423,12 @@ threshold stated alongside each finding.
 
 **Output:** a factual-error section (if applicable) leading regardless of
 dollar figures; a year-over-year finding; a comparables finding (if
-comparables were supplied); a dollar impact for each (once tax rate is
-required); a generalized appeal checklist, state/county-specific only when
-genuinely confident, with a standing instruction to confirm any stated
-deadline directly with the assessor's office regardless of that confidence.
+comparables were supplied); a dollar impact for each; a generalized appeal
+checklist, state/county-specific only when genuinely confident, with a
+standing instruction to confirm any stated deadline directly with the
+assessor's office regardless of that confidence.
 
-**Pricing:** $79, one-time, per property. Revisit to $99 once the tax-rate
-and comparable-cap changes ship.
+**Pricing:** $79, one-time, per property — live.
 
 ---
 
@@ -475,47 +441,44 @@ and comparable-cap changes ship.
 
 ### Customer Value Assessment
 
-**Yes, at $79 — and no longer trivially, at $99, until the tax-rate gap
-closes.** The engine that ships today does something real and honest: it
+**Yes.** The engine that ships today does something real and honest: it
 takes two numbers most homeowners already have on hand, applies disclosed,
 non-invented thresholds, and tells them plainly whether they have a case —
 including telling them plainly when they don't (`within_norms`,
-`likely_justified`). It will not invent a comparable or a dollar figure, and
-a factual error — the cheapest, fastest win available to a homeowner — is
-never buried under a dollar comparison. That is a legitimate, if modest,
-service: turning "you could look into this yourself" into "here is your
-case, in five minutes, for a price that pays for itself many times over if
-you act on a real finding." The math checks out even in the low-end scenario
-this audit's own framework asks for: a bare 5%-threshold increase on a
-$300,000 home at a 1.1% effective rate is about $165/year, recovered for
-more than one year if the appeal holds until the next reassessment — a
-multiple of even the current $99 price, assuming the appeal succeeds, which
-this product cannot promise and correctly never claims to.
+`likely_justified`), and now telling them plainly when a case exists but
+probably isn't worth the effort (the small-dollar caveat). It will not
+invent a comparable or a dollar figure, and a factual error — the cheapest,
+fastest win available to a homeowner — is never buried under a dollar
+comparison. Every numeric case now states a real dollar figure, because the
+one input that produces one is required exactly where it's needed. That is a
+legitimate service: turning "you could look into this yourself" into "here
+is your case, in five minutes, with a real number attached, for a price that
+pays for itself many times over if you act on a real finding." The math
+checks out even in the low-end scenario this audit's own framework asks for:
+a bare 5%-threshold increase on a $300,000 home at a 1.1% effective rate is
+about $165/year, recovered for more than one year if the appeal holds until
+the next reassessment — a multiple of the $79 price, assuming the appeal
+succeeds, which this product cannot promise and correctly never claims to.
 
-The reason the answer is qualified rather than unqualified: at today's $99,
-and with the tax rate still optional, a real share of customers will pay
-full price and receive a report with a correct category and no dollar
-figure at all — the exact thing a rational buyer is paying to learn. That is
-fixable without inventing anything the codebase has committed not to invent,
-and it is the highest-leverage change available.
+What made the answer qualified when this audit was written — a customer
+paying full price for a report with a correct category and no dollar figure
+at all — is now closed. What remains open (the `physical_changes`
+proportionality gap) is a disclosed, deliberate limitation rather than a
+silent one.
 
 ### Recommended Product
 
-The product described in Recommended Product Specification, above: the
-current engine, with the tax rate made effectively required, a dollar-scaled
-"not worth pursuing" caveat added, deadlines always hedged toward "confirm
-with your assessor," and the comparable cap raised to three or four.
+The product described in Recommended Product Specification, above — this is
+what shipped, not a proposal.
 
 ### Recommended Price
 
-**$79, one-time, per property.**
+**$79, one-time, per property — live.**
 
 ### Highest-Impact Fix
 
-**Require the tax rate.** Every other piece of this product — the
+**Require the tax rate — shipped.** Every other piece of this product — the
 categorization, the factual-error lead, the comparable comparison — already
-works and is already honest. The one input standing between "a correct
+worked and was already honest. The one input that stood between "a correct
 categorical verdict" and "a correct categorical verdict plus the dollar
-figure the entire page is sold on" is one optional number field. Closing
-that gap does more for customer value than any other single change in this
-report, at effectively zero engineering cost.
+figure the entire page is sold on" is now required exactly where it applies.

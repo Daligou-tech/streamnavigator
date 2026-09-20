@@ -48,6 +48,26 @@ test('a material rise with no reported property change is worth appealing', () =
   assert.equal(f.dollarImpact, 720, '$60,000 increase at a 1.2% rate');
 });
 
+test('a worth-appealing finding with a modest dollar impact carries a caveat about the effort', () => {
+  const { findings } = E.analyze({
+    prior_assessed_value: 300000, new_assessed_value: 316000, // 5.33%, just over the threshold
+    physical_changes: false, factual_errors: false, tax_rate_pct: 0.5,
+  });
+  const f = one(findings, 'ASSESSMENT_ROSE_NO_CHANGE_REPORTED');
+  assert.equal(f.dollarImpact, 80, '$16,000 increase at a 0.5% rate');
+  assert.match(f.recommendedAction, /modest amount/);
+});
+
+test('a worth-appealing finding with a large dollar impact carries no small-amount caveat', () => {
+  const { findings } = E.analyze({
+    prior_assessed_value: 300000, new_assessed_value: 360000,
+    physical_changes: false, factual_errors: false, tax_rate_pct: 1.2,
+  });
+  const f = one(findings, 'ASSESSMENT_ROSE_NO_CHANGE_REPORTED');
+  assert.equal(f.dollarImpact, 720);
+  assert.doesNotMatch(f.recommendedAction, /modest amount/);
+});
+
 test('a material rise alongside a reported renovation is likely justified', () => {
   const { findings } = E.analyze({
     prior_assessed_value: 300000, new_assessed_value: 360000,

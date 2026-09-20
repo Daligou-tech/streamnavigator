@@ -65,6 +65,13 @@
   const MATERIAL_CHANGE_THRESHOLD = 0.05; // a 5%+ year-over-year change is worth flagging
   const ABOVE_COMPARABLES_THRESHOLD = 0.10; // 10%+ above the customer's OWN supplied comparables
 
+  // docs/PROPERTY-TAX-AUDIT.md, Required Changes (Medium) #3: a WORTH_APPEALING
+  // category was never scaled by size — a $40/year case and a $2,000/year case
+  // read identically. This is a dollar floor, not a percentage one, because the
+  // percentage thresholds above already decide whether a case exists at all;
+  // this only decides whether it is worth the customer's time once one does.
+  const SMALL_DOLLAR_THRESHOLD = 150; // below this annual amount, say so plainly
+
   function num(v) {
     if (v === null || v === undefined || v === '') return null;
     const n = typeof v === 'number' ? v : Number(String(v).replace(/[$,\s]/g, ''));
@@ -77,6 +84,17 @@
 
   function money(n) {
     return '$' + Math.round(Math.abs(n)).toLocaleString('en-US');
+  }
+
+  // Appended to a WORTH_APPEALING finding's own recommendedAction — never
+  // replaces it, and never touches the category itself. The category answers
+  // "is there a case"; this answers "is it worth your time", which is a
+  // different question this review has evidence to answer once a dollar
+  // figure exists.
+  function withSmallDollarCaveat(recommendedAction, dollarImpact) {
+    if (dollarImpact === null || Math.abs(dollarImpact) >= SMALL_DOLLAR_THRESHOLD) return recommendedAction;
+    return recommendedAction + ` That said, ${money(dollarImpact)}/year is a modest amount — weigh it against the `
+      + 'time an appeal takes before deciding whether to pursue it.';
   }
 
   function rankFindings(findings) {
@@ -146,8 +164,11 @@
         category: Category.WORTH_APPEALING,
         basis: `The assessment rose ${money(delta)} (${pct(changePct)}) from the prior year, and no physical `
           + 'change to the property was reported.',
-        recommendedAction: 'This is the strongest case in this report for an appeal: ask the assessor\'s office '
-          + 'directly what drove the increase, and request the comparable properties or valuation method they used.',
+        recommendedAction: withSmallDollarCaveat(
+          'This is the strongest case in this report for an appeal: ask the assessor\'s office '
+            + 'directly what drove the increase, and request the comparable properties or valuation method they used.',
+          dollarImpact,
+        ),
         dollarImpact,
       };
     }
@@ -192,8 +213,11 @@
         basis: `Your assessment (${money(current)}) is ${pct(excessPct)} above the average of the `
           + `${comps.length} comparable ${comps.length === 1 ? 'property' : 'properties'} you supplied `
           + `(${money(average)}), at or above the ${pct(ABOVE_COMPARABLES_THRESHOLD, 0)} this review treats as worth citing.`,
-        recommendedAction: 'Bring these specific comparables to the assessor\'s office or the appeal board — citing '
-          + 'named nearby properties assessed lower is the same evidence assessors themselves use.',
+        recommendedAction: withSmallDollarCaveat(
+          'Bring these specific comparables to the assessor\'s office or the appeal board — citing '
+            + 'named nearby properties assessed lower is the same evidence assessors themselves use.',
+          dollarImpact,
+        ),
         dollarImpact,
       };
     }

@@ -55,8 +55,9 @@
     },
     "property-tax.html": {
       "label": "Property Tax Navigator",
-      "expectedPriceCents": 9900,
-      "stripeLinkId": "bJeaEX68c4Mc0FS2FyabK04"
+      "expectedPriceCents": 7900,
+      "stripeLinkId": "eVqcN59ko5QgfAM0xqabK0k",
+      "_price": "$99 -> $79 on 2026-09-20 (docs/PROPERTY-TAX-AUDIT.md): the product does less computational work than Insurance and HOA ($79 each, both diff real uploaded documents) and shares its exact no-document, customer-supplied-figures shape with Home Maintenance ($59), so $99 was a 68% premium over its closest mechanical twin with nothing to justify it. New Payment Link plink_1UHuKRH9DnCfGBIZiC82VC6U on price price_1UHuIpH9DnCfGBIZCUUL1B8o, same product (prod_VABIBlcwYuU7oS). The old $99 link is deactivated below, not deleted."
     },
     "rental.html": {
       "label": "Rental Navigator",

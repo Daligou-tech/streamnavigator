@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Property Tax Navigator — StreamNavigator AI</title>
-<meta name="description" content="Find out if your property tax assessment is too high. Property Tax Navigator compares this year's assessment against last year's and against comparables you provide, and builds your appeal package — for $99." />
+<meta name="description" content="Find out if your property tax assessment is too high. Property Tax Navigator compares this year's assessment against last year's and against comparables you provide, and builds your appeal package — for $79." />
 <link rel="canonical" href="https://streamnavigator.ai/property-tax" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,7 +74,7 @@
       </div>
       <div class="step-card">
         <div class="step-num">2</div>
-        <h4>Pay $99</h4>
+        <h4>Pay $79</h4>
         <p>One flat price per property, secured by Stripe.</p>
       </div>
       <div class="step-card">
@@ -115,20 +115,13 @@
   </section>
   <!--
     ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    PAYMENT PORTAL — repriced $99 -> $79 on 2026-09-20 (docs/PROPERTY-TAX-AUDIT.md)
     ============================================================================
-    To go live for Property Tax Navigator:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Property Tax Navigator Report" — $99 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/navigator-status
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/bJeaEX68c4Mc0FS2FyabK04 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+    The button below now points at a new $79 one-time Payment Link
+    (plink_1UHuKRH9DnCfGBIZiC82VC6U, price price_1UHuIpH9DnCfGBIZCUUL1B8o)
+    on the same "Property Tax Navigator Report" product. The old $99 link
+    (bJeaEX68c4Mc0FS2FyabK04, plink_1U9qwtH9DnCfGBIZCh3aJiKy) is deactivated,
+    not deleted, so it can be reactivated if this ever needs to roll back.
     This page already appends ?client_reference_id=<submission id> to the
     link automatically (see navigator-shared.js) so payment ties back to the
     right submission — nothing else to configure here.
@@ -145,7 +138,7 @@
         <span class="price-badge">One-time</span>
         <h3>Property Tax Navigator Report</h3>
         <p class="desc">A year-over-year and comparable-property analysis for one property.</p>
-        <div class="price-amount">$99<span>/property</span></div>
+        <div class="price-amount">$79<span>/property</span></div>
         <div class="price-period">one-time payment per property</div>
 
         <div class="field-block">
@@ -182,12 +175,16 @@
           <p class="field-hint">Usually printed on your tax bill as a mill rate or effective rate. This is what turns a percentage change into an actual dollar figure — required if you're entering a prior assessed value or a comparable property, since otherwise there'd be nothing to compute one from. Not needed if you're reporting a factual error alone.</p>
         </div>
         <div class="field-block">
-          <label>Comparable properties you've found (optional)</label>
+          <label>Comparable properties you've found (optional, up to 4)</label>
           <input type="text" id="intake-comp1-address" placeholder="Address of a comparable property">
           <input type="number" id="intake-comp1-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
           <input type="text" id="intake-comp2-address" placeholder="A second comparable, if you have one" style="margin-top:14px;">
           <input type="number" id="intake-comp2-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
-          <p class="field-hint">Pull these from your county assessor's public records site — we compare your assessment against what you found, never one we invent.</p>
+          <input type="text" id="intake-comp3-address" placeholder="A third comparable, if you have one" style="margin-top:14px;">
+          <input type="number" id="intake-comp3-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
+          <input type="text" id="intake-comp4-address" placeholder="A fourth comparable, if you have one" style="margin-top:14px;">
+          <input type="number" id="intake-comp4-value" min="0" placeholder="Its assessed value ($)" style="margin-top:8px;">
+          <p class="field-hint">Pull these from your county assessor's public records site — we compare your assessment against what you found, never one we invent. More comparables make a stronger case, but even one is enough to run this check.</p>
         </div>
         <div class="field-block">
           <label>Upload your latest assessment notice (optional)</label>
@@ -198,6 +195,7 @@
           </div>
           <input type="file" id="upload-input" multiple accept=".pdf,.jpg,.jpeg,.png,.webp" style="display:none;">
           <div class="upload-file-list" id="upload-list"></div>
+          <p class="field-hint">Every finding in your report comes from the figures and answers above, not from this file — the notice is only quoted in the write-up if it helps make your case clearer, never analyzed for a finding of its own.</p>
         </div>
         <div class="field-block">
           <label>Email</label>
@@ -209,7 +207,7 @@
           <li><span class="tick">✓</span> Appeal package formatted for your local assessor</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
-        <a href="https://buy.stripe.com/bJeaEX68c4Mc0FS2FyabK04" data-stripe-link="property-tax" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <a href="https://buy.stripe.com/eVqcN59ko5QgfAM0xqabK0k" data-stripe-link="property-tax" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
              Someone who reloads the page (which empties the email box), then
@@ -248,7 +246,7 @@
   <section style="padding-top:0; padding-bottom:90px;">
     <div class="cta-final">
       <h2>You can't appeal an assessment you never checked.</h2>
-      <p>A $99 check could be worth thousands in the years ahead.</p>
+      <p>A $79 check could be worth thousands in the years ahead.</p>
       <a href="#pricing" class="btn btn-primary btn-sm" style="padding:14px 28px; font-size:15px;">Check My Assessment</a>
     </div>
   </section>
@@ -327,13 +325,18 @@
   }
 
   function buildFormData() {
+    // Up to 4 comparable slots (docs/PROPERTY-TAX-AUDIT.md, Required Changes
+    // (Medium) #5 — 2 was thin evidence for a customer who did the legwork
+    // of finding more).
     const comparables = [];
-    const c1addr = document.getElementById('intake-comp1-address').value.trim();
-    const c1val = num(document.getElementById('intake-comp1-value').value);
-    if (c1addr && c1val !== null) comparables.push({ address: c1addr, assessed_value: c1val });
-    const c2addr = document.getElementById('intake-comp2-address').value.trim();
-    const c2val = num(document.getElementById('intake-comp2-value').value);
-    if (c2addr && c2val !== null) comparables.push({ address: c2addr, assessed_value: c2val });
+    for (let i = 1; i <= 4; i++) {
+      const addrEl = document.getElementById('intake-comp' + i + '-address');
+      const valEl = document.getElementById('intake-comp' + i + '-value');
+      if (!addrEl || !valEl) continue;
+      const addr = addrEl.value.trim();
+      const val = num(valEl.value);
+      if (addr && val !== null) comparables.push({ address: addr, assessed_value: val });
+    }
 
     return {
       address: document.getElementById('intake-address').value.trim(),
