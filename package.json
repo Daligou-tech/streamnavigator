@@ -13,7 +13,8 @@
     "check": "npm test && npm run harness",
     "stripe-pricing": "node scripts/stripe-migrate-pricing.js",
     "contractor-harness": "node scripts/contractor-harness.js",
-    "subscriptions-link": "node scripts/set-subscriptions-link.js"
+    "subscriptions-link": "node scripts/set-subscriptions-link.js",
+    "home-maintenance-link": "node scripts/set-home-maintenance-link.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
