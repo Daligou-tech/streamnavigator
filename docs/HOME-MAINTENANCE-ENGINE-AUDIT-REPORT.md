@@ -1,19 +1,17 @@
 # STREAM NAVIGATOR — HOME MAINTENANCE ENGINE AUDIT REPORT
 
 **Status, 2026-09-20 (same day): all eight Required Changes below have
-shipped.** The two Critical fixes (the silent category default, the
-thin-result refund), the price cut to $39, the material/type question, the
-prior-repair signal, and the design/font cleanup are all live in the
-repository — see the strikethrough notes under Required Changes for what
-changed and where. The one piece that could not be completed autonomously:
-**a new $39 Stripe Payment Link could not be minted** — no Stripe
-credentials were available in the environment that made this change, so the
-checkout button is switched off (`REPLACE_WITH_39_ONE_TIME_LINK`) rather
-than either charging the old $59 or pointing at a link that doesn't exist,
-following the exact pattern already shipped on `subscriptions.html` for the
-identical situation. Creating that link, and deactivating the old $59 one,
-requires a few minutes in the Stripe Dashboard — see the setup comment in
-`home-maintenance.html` for the exact steps.
+shipped, including the price change end to end.** The two Critical fixes
+(the silent category default, the thin-result refund), the price cut to
+$39, the material/type question, the prior-repair signal, and the
+design/font cleanup are all live in the repository. The new $39 Stripe
+Price and Payment Link (`buy.stripe.com/eVqfZh2W0diI4W80xqabK0l`) were
+created on the existing "Home Maintenance Navigator Report" product and
+wired into `home-maintenance.html`/`prices.config.json` via
+`scripts/set-home-maintenance-link.js`; the old $59 link
+(`buy.stripe.com/28EeVd9ko3I80FS1BuabK09`) is deactivated in Stripe, not
+deleted. `npm run check-prices` confirms all 11 checked pages, including
+this one, are consistent.
 
 Conducted 2026-09-20 against `/home-maintenance` and `/closing` on the live
 site, `navigator-home-maintenance-engine.js`, `api/_lib/navigator-engine.js`,
@@ -427,10 +425,9 @@ already told about itself.
 
 ## Pricing Audit
 
-**Current Price:** ~~$59~~ **$39, one-time — shipped.** The page, the button
-placeholder, and `prices.config.json` all agree on $39; only the live Stripe
-Payment Link remains to be created (no credentials available to do it
-autonomously — see Status note at the top of this report).
+**Current Price:** ~~$59~~ **$39, one-time — shipped and live.** The page,
+the Stripe Payment Link, and `prices.config.json` all agree on $39; the old
+$59 link is deactivated in Stripe.
 
 **Recommended Price:** **$39, one-time.**
 
@@ -511,18 +508,19 @@ Payment Link — that still needs a human with Stripe credentials.)*
 
 ### High Priority
 
-*(Both shipped; one is code-complete pending a Stripe credential.)*
+*(Both shipped, end to end.)*
 
-3. ~~Cut the price to $39, one-time.~~ **Code-complete, Stripe link
-   pending.** The page displays $39, `prices.config.json` moved this page to
-   `_skipped` with the reasoning recorded, and the checkout button is a
-   switched-off `REPLACE_WITH_39_ONE_TIME_LINK` placeholder rather than
-   either charging $59 or pointing at a dead link — exactly the
-   `subscriptions.html` pattern, verified live: the button correctly refuses
-   to navigate and shows a clear message instead. Creating the new Stripe
-   Price/Payment Link and deactivating the old $59 one needs a human with
-   Stripe Dashboard access; the setup comment in `home-maintenance.html`
-   gives the exact steps.
+3. ~~Cut the price to $39, one-time.~~ **Shipped.** A new $39.00 one-time
+   price was added to the existing "Home Maintenance Navigator Report"
+   Stripe product and set as its default; a Payment Link for it
+   (`buy.stripe.com/eVqfZh2W0diI4W80xqabK0l`) was created with the same
+   after-payment redirect as every other Navigator product
+   (`/navigator-status`); the old $59 link
+   (`buy.stripe.com/28EeVd9ko3I80FS1BuabK09`) is deactivated, not deleted.
+   `scripts/set-home-maintenance-link.js` wired the new URL into
+   `home-maintenance.html` and moved `prices.config.json`'s entry for this
+   page back from `_skipped` into `pages` at 3900 cents. `npm run
+   check-prices` confirms the page, the config, and the button all agree.
 4. ~~Ask the material/type question for Roof and Water Heater~~ — **Shipped.**
    `navigator-home-maintenance-engine.js` now holds a `MATERIAL_RANGES` table
    for both categories (metal/tile/slate roofing, tankless water heaters),

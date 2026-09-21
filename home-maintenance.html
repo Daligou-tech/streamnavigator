@@ -125,41 +125,22 @@
   </section>
   <!--
     ============================================================================
-    PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
+    PAYMENT PORTAL — Stripe Payment Link
     ============================================================================
     docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md cut this product's price from
-    $59 to $39 (Required Changes, High #3). The OLD $59 link
-    (buy.stripe.com/28EeVd9ko3I80FS1BuabK09) must be RETIRED, not reused —
-    reusing it would charge $59 while this page advertises $39, which is the
-    exact defect scripts/check-prices.js exists to catch. No Stripe
-    credentials were available to mint the new link automatically, so the
-    button below is switched off (REPLACE_WITH_39_ONE_TIME_LINK) rather than
-    either charging the old price or pointing at a link that doesn't exist —
-    the same pattern already shipped on subscriptions.html for the identical
-    situation. See prices.config.json's `_skipped` entry for this file.
+    $59 to $39 (Required Changes, High #3), live as of 2026-09-20: a new
+    one-time $39 price and Payment Link on the existing "Home Maintenance
+    Navigator Report" product, wired in below via
+    scripts/set-home-maintenance-link.js. The prior $59 Payment Link is
+    deactivated in Stripe, not deleted, so its history stays intact.
 
-    To go live at $39:
-      1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Home Maintenance Navigator Report" — $39 one-time
-      2. Payment links -> New -> pick that price -> Create link.
-      3. In the link's "After payment" step, set the redirect to:
-           https://streamnavigator.ai/navigator-status
-      4. Paste the resulting https://buy.stripe.com/... URL over
-         REPLACE_WITH_39_ONE_TIME_LINK on the button below.
-      5. In Stripe, deactivate the old $59 link
-         (buy.stripe.com/28EeVd9ko3I80FS1BuabK09) so nobody holding that URL
-         can still be charged $59 for a $39 product.
-      6. Update prices.config.json: move "home-maintenance.html" back from
-         `_skipped` into `pages` with expectedPriceCents: 3900 and the new
-         link's suffix as stripeLinkId.
-      7. Webhook (shared across all Navigator products, skip if already done):
-         Stripe Dashboard -> Developers -> Webhooks -> Add endpoint ->
-         https://streamnavigator.ai/api/navigator-stripe-webhook -> event:
-         checkout.session.completed -> copy its signing secret into this
-         Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
     This page already appends ?client_reference_id=<submission id> to the
     link automatically (see navigator-shared.js) so payment ties back to the
-    right submission — nothing else to configure here.
+    right submission — nothing else to configure here. The webhook is shared
+    across all Navigator products: Stripe Dashboard -> Developers -> Webhooks
+    -> https://streamnavigator.ai/api/navigator-stripe-webhook -> event:
+    checkout.session.completed -> its signing secret lives in this Vercel
+    project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
     ============================================================================
   -->
   <section id="pricing">
@@ -263,7 +244,7 @@
           <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
-        <a href="REPLACE_WITH_39_ONE_TIME_LINK" data-stripe-link="home-maintenance" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <a href="https://buy.stripe.com/eVqfZh2W0diI4W80xqabK0l" data-stripe-link="home-maintenance" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
              Someone who reloads the page (which empties the email box), then
