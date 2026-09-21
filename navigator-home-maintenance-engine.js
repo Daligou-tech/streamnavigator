@@ -58,6 +58,41 @@
 
   const CATEGORIES = ['Roof', 'HVAC', 'Water Heater', 'Windows', 'Generator', 'Other'];
 
+  // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (High) #4:
+  // the lifespan-range table's own caveat names material/type as the reason a
+  // customer's actual unit might sit well outside the default range — a metal
+  // or tile roof commonly outlives asphalt shingle by decades, and a tankless
+  // water heater commonly outlives a storage tank by years — but the intake
+  // never asked. This table is additive, not a replacement: LIFESPAN_RANGES
+  // below stays exactly as it was (the default used when material is unknown
+  // or the category has none), and every existing test that doesn't pass a
+  // material keeps passing unchanged.
+  const MATERIAL_OPTIONS = {
+    'Roof': [
+      { value: 'asphalt_shingle', label: 'Asphalt shingle' },
+      { value: 'metal', label: 'Metal' },
+      { value: 'tile', label: 'Tile' },
+      { value: 'slate', label: 'Slate' },
+    ],
+    'Water Heater': [
+      { value: 'storage_tank', label: 'Storage tank' },
+      { value: 'tankless', label: 'Tankless' },
+    ],
+  };
+
+  const MATERIAL_RANGES = {
+    'Roof': {
+      asphalt_shingle: { low: 20, high: 25, caveat: 'Standard three-tab or architectural asphalt shingle.' },
+      metal: { low: 40, high: 70, caveat: 'Standing-seam or metal-shingle roofing.' },
+      tile: { low: 50, high: 100, caveat: 'Clay or concrete tile.' },
+      slate: { low: 75, high: 100, caveat: 'Natural slate, well installed and maintained.' },
+    },
+    'Water Heater': {
+      storage_tank: { low: 8, high: 12, caveat: 'Standard storage-tank unit.' },
+      tankless: { low: 15, high: 20, caveat: 'Tankless (on-demand) unit.' },
+    },
+  };
+
   const SYMPTOMS = [
     'stopped_working', 'leaking_or_damage', 'declining_performance',
     'safety_concern', 'comparing_before_failure', 'other',
@@ -148,15 +183,22 @@
     return Math.round(fraction * 100) + '%';
   }
 
-  function lifespanContext(category, ageYears) {
-    const range = LIFESPAN_RANGES[category];
+  function lifespanContext(category, ageYears, material) {
+    const materialRange = material && MATERIAL_RANGES[category] && MATERIAL_RANGES[category][material];
+    const range = materialRange || LIFESPAN_RANGES[category];
     if (!range) return null;
-    if (ageYears === null) return { range, ageYears: null, pastTypicalRange: null, withinTypicalRange: null };
+    // materialSpecific tells the write-up whether it may state this range with
+    // the customer's own material named plainly, or must keep the "this
+    // assumes the most common material" caveat — never state the narrower
+    // range as if it came from a material that was never confirmed.
+    const materialSpecific = Boolean(materialRange);
+    if (ageYears === null) return { range, ageYears: null, pastTypicalRange: null, withinTypicalRange: null, materialSpecific };
     return {
       range,
       ageYears,
       pastTypicalRange: ageYears > range.high,
       withinTypicalRange: ageYears >= range.low && ageYears <= range.high,
+      materialSpecific,
     };
   }
 
@@ -190,8 +232,9 @@
     const symptoms = Array.isArray(f.symptoms) ? f.symptoms.filter((s) => SYMPTOMS.includes(s)) : [];
     const repairQuote = num(f.repair_quote);
     const replacementQuote = num(f.replacement_quote);
+    const material = typeof f.material === 'string' ? f.material : null;
 
-    const ageContext = lifespanContext(category, ageYears);
+    const ageContext = lifespanContext(category, ageYears, material);
 
     const safety = applySafetyOverride(category, symptoms, ageContext);
     if (safety) return safety;
@@ -217,6 +260,17 @@
         if (ageContext && ageContext.pastTypicalRange) {
           cautions.push(`This system is already past the typical service-life range for ${category.toLowerCase()} `
             + `given below, so a repair now may only buy a limited amount of time before this decision comes up again.`);
+        }
+        // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+        // (Medium) #6: a system already repaired once for the same issue is a
+        // stronger real-world replace signal than a first-time repair, and it
+        // costs nothing to ask. This is additive, exactly like the age
+        // caution above — it never changes the verdict the customer's own
+        // numbers already earned, it only tells them what the numbers don't.
+        if (f.already_repaired_before) {
+          cautions.push('This system has already been repaired once before for the same issue. A repeat '
+            + 'repair is a stronger signal toward replacing than a first-time repair would be, even though '
+            + 'the cost comparison above still favors repairing for now on this quote alone.');
         }
       }
     } else if (repairQuote !== null && replacementQuote === null) {
@@ -277,6 +331,7 @@
 
   const api = {
     CATEGORIES, SYMPTOMS, Verdict, REPLACE_RATIO_THRESHOLD, LIFESPAN_RANGES, CHECKLISTS,
+    MATERIAL_OPTIONS, MATERIAL_RANGES,
     analyze, checkSufficiency,
     _internal: { num, pct, lifespanContext },
   };

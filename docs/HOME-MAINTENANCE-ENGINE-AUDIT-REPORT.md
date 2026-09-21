@@ -1,5 +1,20 @@
 # STREAM NAVIGATOR — HOME MAINTENANCE ENGINE AUDIT REPORT
 
+**Status, 2026-09-20 (same day): all eight Required Changes below have
+shipped.** The two Critical fixes (the silent category default, the
+thin-result refund), the price cut to $39, the material/type question, the
+prior-repair signal, and the design/font cleanup are all live in the
+repository — see the strikethrough notes under Required Changes for what
+changed and where. The one piece that could not be completed autonomously:
+**a new $39 Stripe Payment Link could not be minted** — no Stripe
+credentials were available in the environment that made this change, so the
+checkout button is switched off (`REPLACE_WITH_39_ONE_TIME_LINK`) rather
+than either charging the old $59 or pointing at a link that doesn't exist,
+following the exact pattern already shipped on `subscriptions.html` for the
+identical situation. Creating that link, and deactivating the old $59 one,
+requires a few minutes in the Stripe Dashboard — see the setup comment in
+`home-maintenance.html` for the exact steps.
+
 Conducted 2026-09-20 against `/home-maintenance` and `/closing` on the live
 site, `navigator-home-maintenance-engine.js`, `api/_lib/navigator-engine.js`,
 `api/navigator-intake.js`, `prices.config.json`, and `tests/` at the
@@ -55,7 +70,7 @@ demand. Nothing on the page claims an insurance benefit, an efficiency
 saving, or a cost-of-ownership figure it doesn't compute — the prior audit
 already cut those claims, and they have not crept back.
 
-**What is materially weak or broken, found in this pass:**
+**What is materially weak or broken, found in this pass — all fixed same-day; see Required Changes for what shipped:**
 
 1. **A confirmed live UI bug lets a customer pay for the wrong system's
    report without ever knowing it.** The category selector shows no default
@@ -412,7 +427,10 @@ already told about itself.
 
 ## Pricing Audit
 
-**Current Price:** $59, one-time.
+**Current Price:** ~~$59~~ **$39, one-time — shipped.** The page, the button
+placeholder, and `prices.config.json` all agree on $39; only the live Stripe
+Payment Link remains to be created (no credentials available to do it
+autonomously — see Status note at the top of this report).
 
 **Recommended Price:** **$39, one-time.**
 
@@ -469,62 +487,74 @@ law.
 
 ## Required Changes
 
+*(All eight items below shipped 2026-09-20, same day as this report. See the
+Status note at the top of this document for the one piece — the live Stripe
+Payment Link — that still needs a human with Stripe credentials.)*
+
 ### Critical — Must Fix
 
-1. **Add a thin-result auto-refund for `NEED_BOTH_QUOTES`.** Follow the exact
-   pattern already live for Government Money Finder
-   (`api/_lib/navigator-engine.js:2178-2188`, `refund_state: 'due_thin_result'`,
-   picked up by `api/process-refunds.js`'s existing `REFUND_STATE_THIN` queue)
-   and for Contractor Navigator (`api/_lib/contractor-engine.js:403`). When
-   `homeMaintenanceAnalysis.verdict === Verdict.NEED_BOTH_QUOTES`, the
-   customer has paid $59 for a category-level checklist and, at most, one
-   boilerplate age sentence — nothing computed about their specific
-   situation. The infrastructure for this exact fix already exists in this
-   codebase in two other places; wiring it to a third product is mechanical,
-   not a design question.
-2. **Fix the silent category default.** In `home-maintenance.html:316`,
-   change `let selectedCategory = "Roof";` to `let selectedCategory = null;`
-   and update `buildFormData()` to send `category: selectedCategory` as-is
-   (rather than always sending a string). `checkSufficiency()` already
-   correctly rejects a missing/empty category (`navigator-home-maintenance-engine.js:242-249`)
-   — the only change needed is to stop the page from silently supplying a
-   fake one before the gate ever runs. Confirmed live this session: no chip
-   shows as active on page load, and the current code would let a customer
-   through with the wrong category never having clicked anything.
+*(None remaining — both shipped.)*
+
+1. ~~Add a thin-result auto-refund for `NEED_BOTH_QUOTES`.~~ **Shipped.**
+   `api/_lib/navigator-engine.js` now sets `refund_state: 'due_thin_result'`
+   the moment `homeMaintenanceAnalysis.verdict === Verdict.NEED_BOTH_QUOTES`,
+   picked up by `api/process-refunds.js`'s existing `REFUND_STATE_THIN` queue
+   — the same mechanism Government Money Finder and Contractor Navigator
+   already use for the identical shape of problem. The page's field hint and
+   FAQ both now disclose this before payment. Covered by
+   `tests/home-maintenance-page.test.js`.
+2. ~~Fix the silent category default.~~ **Shipped.** `home-maintenance.html`'s
+   inline script now starts `selectedCategory` at `null`; a customer who
+   never clicks a category chip is blocked by `checkSufficiency()` instead of
+   silently defaulting to Roof. Verified live in this session (no chip shows
+   active on load) and pinned by `tests/home-maintenance-page.test.js`.
 
 ### High Priority
 
-3. **Cut the price to $39, one-time.** New Stripe Price and Payment Link;
-   update `home-maintenance.html`'s button href and displayed price, and
-   `prices.config.json`'s `expectedPriceCents`/`stripeLinkId` for
-   `home-maintenance.html`, following the exact procedure already used for
-   the `/property-tax` $99→$79 change in this same session (deactivate, don't
-   delete, the old link).
-4. **Ask the material/type question for Roof and Water Heater**, the two
-   categories whose lifespan-range caveat names material as the dominant
-   variable (asphalt vs. tile/metal/slate; storage-tank vs. tankless). One
-   additional chip row per category, feeding a lookup that picks the correct
-   range instead of always defaulting to the most common material.
+*(Both shipped; one is code-complete pending a Stripe credential.)*
+
+3. ~~Cut the price to $39, one-time.~~ **Code-complete, Stripe link
+   pending.** The page displays $39, `prices.config.json` moved this page to
+   `_skipped` with the reasoning recorded, and the checkout button is a
+   switched-off `REPLACE_WITH_39_ONE_TIME_LINK` placeholder rather than
+   either charging $59 or pointing at a dead link — exactly the
+   `subscriptions.html` pattern, verified live: the button correctly refuses
+   to navigate and shows a clear message instead. Creating the new Stripe
+   Price/Payment Link and deactivating the old $59 one needs a human with
+   Stripe Dashboard access; the setup comment in `home-maintenance.html`
+   gives the exact steps.
+4. ~~Ask the material/type question for Roof and Water Heater~~ — **Shipped.**
+   `navigator-home-maintenance-engine.js` now holds a `MATERIAL_RANGES` table
+   for both categories (metal/tile/slate roofing, tankless water heaters),
+   additive to the existing default table so every prior test still passes
+   unchanged. The page renders the material chips only for these two
+   categories, reading the options from the engine so the two can't drift
+   apart. Covered by new tests in `tests/home-maintenance-engine.test.js`.
 
 ### Medium Priority
 
-5. **Tell the customer how to get a missing quote quickly**, not just that
-   one is missing — e.g., a same-day-estimate note appropriate to the
-   category, consistent with this audit's "No Action" evidence standard
-   (Section 11: state what would change the recommendation and when to
-   revisit, not just what's absent).
-6. **Ask whether the system has already been repaired before for the same
-   issue.** This is a strong, free, real-world replace signal the intake
-   currently never collects.
+*(Both shipped.)*
+
+5. ~~Tell the customer how to get a missing quote quickly~~ — **Shipped.**
+   The write-up prompt (`api/_lib/navigator-engine.js`) now instructs the
+   model to point a missing-quote customer at the checklist's own
+   "get another quote" reminder as the concrete next step, rather than only
+   naming what's absent.
+6. ~~Ask whether the system has already been repaired before for the same
+   issue.~~ **Shipped.** A new checkbox feeds `already_repaired_before` into
+   the engine, which adds a disclosed caution on a `repair` verdict without
+   ever changing the verdict itself — additive, exactly like the existing
+   age-based caution. Covered by new tests in
+   `tests/home-maintenance-engine.test.js`.
 
 ### Low Priority
 
-7. Drop the colored logo-mark icon and pill sub-brand badge from the header
-   to match `/closing`'s plain-text treatment (same fix already deferred on
-   `/property-tax`; worth doing once, on both pages, rather than deferring
-   indefinitely).
-8. Remove the unused Inter/Sora `<link>` tags (`home-maintenance.html:11`) —
-   dead weight once `navigator-closing-theme.css` overrides those rules away.
+*(Both shipped.)*
+
+7. ~~Drop the colored logo-mark icon and pill sub-brand badge from the
+   header~~ — **Shipped**, on `home-maintenance.html` (the `/property-tax`
+   instance of this same gap is unchanged and remains open there).
+8. ~~Remove the unused Inter/Sora `<link>` tags~~ — **Shipped.**
 
 ---
 

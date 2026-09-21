@@ -111,6 +111,70 @@ test('unknown age produces no lifespan comparison, not a guessed one', () => {
   assert.equal(r.ageContext.pastTypicalRange, null);
 });
 
+// --- material/type sharpens the range without changing existing behavior --
+// docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (High) #4.
+
+test('naming the material swaps in the material-specific range, not the category default', () => {
+  const r = E.analyze({
+    category: 'Roof', material: 'metal', system_age_years: 30, symptoms: ['comparing_before_failure'],
+  });
+  assert.equal(r.ageContext.range.low, 40);
+  assert.equal(r.ageContext.range.high, 70);
+  assert.equal(r.ageContext.materialSpecific, true);
+  assert.equal(r.ageContext.pastTypicalRange, false, 'a 30-year-old metal roof is not past a 40-70yr range, unlike the asphalt default');
+});
+
+test('no material given falls back to the exact default range as before — existing behavior is unchanged', () => {
+  const r = E.analyze({ category: 'Roof', system_age_years: 30, symptoms: ['comparing_before_failure'] });
+  assert.equal(r.ageContext.range.low, 20);
+  assert.equal(r.ageContext.range.high, 25);
+  assert.equal(r.ageContext.materialSpecific, false);
+});
+
+test('a material not held for this category is ignored, not guessed at', () => {
+  const r = E.analyze({ category: 'HVAC', material: 'metal', system_age_years: 10, symptoms: ['comparing_before_failure'] });
+  assert.equal(r.ageContext.materialSpecific, false, 'HVAC holds no material table, so the category default applies');
+  assert.equal(r.ageContext.range.low, 15);
+});
+
+test('tankless water heaters get their own, much longer range than the storage-tank default', () => {
+  const r = E.analyze({
+    category: 'Water Heater', material: 'tankless', system_age_years: 14, symptoms: ['comparing_before_failure'],
+  });
+  assert.equal(r.ageContext.range.low, 15);
+  assert.equal(r.ageContext.range.high, 20);
+  assert.equal(r.ageContext.pastTypicalRange, false, 'the FAQ example age (14) is past the storage-tank range but not the tankless one');
+});
+
+// --- a repeat repair is a stronger signal, disclosed as a caution ----------
+// docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (Medium) #6.
+
+test('a repair already tried once before adds a caution without changing the verdict', () => {
+  const r = E.analyze({
+    category: 'HVAC', system_age_years: 8, symptoms: ['declining_performance'],
+    repair_quote: 300, replacement_quote: 6000, already_repaired_before: true,
+  });
+  assert.equal(r.verdict, Verdict.REPAIR, 'the cost math still says repair — this is additive, like the age caution');
+  assert.ok(r.cautions.some((c) => /already been repaired once before/.test(c)));
+});
+
+test('the repeat-repair caution does not appear unless the customer said so', () => {
+  const r = E.analyze({
+    category: 'HVAC', system_age_years: 8, symptoms: ['declining_performance'],
+    repair_quote: 300, replacement_quote: 6000,
+  });
+  assert.ok(!r.cautions.some((c) => /already been repaired once before/.test(c)));
+});
+
+test('the repeat-repair flag does nothing on a REPLACE or safety verdict — it only qualifies a repair', () => {
+  const replace = E.analyze({
+    category: 'HVAC', system_age_years: 8, symptoms: ['declining_performance'],
+    repair_quote: 4000, replacement_quote: 6000, already_repaired_before: true,
+  });
+  assert.equal(replace.verdict, Verdict.REPLACE);
+  assert.ok(!replace.cautions.some((c) => /already been repaired once before/.test(c)));
+});
+
 // --- sufficiency gate --------------------------------------------------
 
 test('a completely empty submission is insufficient on every field', () => {

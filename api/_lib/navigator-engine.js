@@ -463,9 +463,9 @@ The deterministic decision engine has already run. The verdict, the reasons behi
 Hard rules:
 - NEVER STATE A DOLLAR FIGURE that is not the customer's own repair_quote or replacement_quote, exactly as given. You hold no price data for what any repair or replacement "usually" costs, and neither does the engine — inventing one is the single most damaging thing this report could do.
 - NEVER CHANGE THE VERDICT. If it is urgent_safety, nothing about cost may be discussed until the safety guidance is given first and completely on its own — do not soften it into a repair-vs-replace comparison, however clearly the numbers might seem to favor repair.
-- THE LIFESPAN RANGE, WHEN GIVEN, IS CONTEXT — never a cost, never a claim about this specific unit's remaining life, and always paired with the caveat the engine supplies (e.g. that it assumes a common material/type). If age is unknown or the category is "Other," there is no range — say nothing about typical life rather than estimating one.
-- If the verdict is need_repair_quote, need_replacement_quote, or need_both_quotes, say plainly that no financial recommendation can be made yet and name exactly what would complete it. Do not fill the gap with general guidance dressed up as a recommendation.
-- Reproduce every caution given, in the engine's own terms — a caution attached to a "repair" verdict (e.g. the system is already past its typical range) matters as much as the verdict itself.
+- THE LIFESPAN RANGE, WHEN GIVEN, IS CONTEXT — never a cost, never a claim about this specific unit's remaining life. When the customer named their actual material/type, the range applies to that material and may be stated plainly; otherwise it is the default range for the most common material/type, and the caveat about that must be kept. If age is unknown or the category is "Other," there is no range — say nothing about typical life rather than estimating one.
+- If the verdict is need_repair_quote, need_replacement_quote, or need_both_quotes, say plainly that no financial recommendation can be made yet and name exactly what would complete it. Point them at the checklist's own reminder to get another quote as the concrete next step — do not estimate what the missing figure is likely to be, and do not fill the gap with general guidance dressed up as a recommendation.
+- Reproduce every caution given, in the engine's own terms — a caution attached to a "repair" verdict (e.g. the system is already past its typical range, or it has already been repaired once before for this same issue) matters as much as the verdict itself.
 - The checklist of contractor questions is the one part of this report that is a fixed reference list, not a finding — present it as practical next steps, not as something the engine "discovered."
 
 Close by stating plainly that this is not a substitute for an in-person inspection by a licensed professional, and that repair and replacement costs vary by contractor and region — the customer's own quotes are the only figures in this report, and getting more than one quote is worth doing regardless of the verdict.`,
@@ -1915,8 +1915,20 @@ async function generateNavigatorReport(submissionId) {
           a.ageContext
             ? [
               '',
-              `AGE CONTEXT — for ${a.category}, the typical service-life range is `
-                + `${a.ageContext.range.low}-${a.ageContext.range.high} years (${a.ageContext.range.caveat}).`,
+              a.ageContext.materialSpecific
+                // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required
+                // Changes (High) #4: when the customer named their actual
+                // material/type, the range is specific to it and may be
+                // stated as such rather than hedged with the "most common
+                // material" caveat that only applies to the unconfirmed
+                // default.
+                ? `AGE CONTEXT — for a ${a.category.toLowerCase()} of this material/type, the typical `
+                  + `service-life range is ${a.ageContext.range.low}-${a.ageContext.range.high} years `
+                  + `(${a.ageContext.range.caveat}).`
+                : `AGE CONTEXT — for ${a.category}, the typical service-life range is `
+                  + `${a.ageContext.range.low}-${a.ageContext.range.high} years (${a.ageContext.range.caveat}). `
+                  + 'The customer did not confirm the material/type, so this is the default range for the '
+                  + 'most common one — say so plainly rather than stating it as if it were confirmed.',
               a.ageContext.ageYears !== null
                 ? `This system is ${a.ageContext.ageYears} years old, which is `
                   + `${a.ageContext.pastTypicalRange ? 'past' : (a.ageContext.withinTypicalRange ? 'within' : 'before')} `
@@ -1929,6 +1941,20 @@ async function generateNavigatorReport(submissionId) {
           '',
           `CHECKLIST — practical questions to ask a contractor, not a finding:`,
           JSON.stringify(a.checklist, null, 1),
+          (a.verdict === V.NEED_REPAIR_QUOTE || a.verdict === V.NEED_REPLACEMENT_QUOTE || a.verdict === V.NEED_BOTH_QUOTES)
+            // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+            // (Medium) #5: naming what's missing is not the same as helping
+            // the customer go get it. This does not invent a cost or a
+            // timeline — it points at the checklist item already computed
+            // above that speaks to getting more than one quote.
+            ? [
+              '',
+              'This customer does not yet have enough of their own numbers for a financial verdict. Beyond',
+              'naming exactly what is missing, close this section by pointing them at the checklist above —',
+              'specifically, the reminder to get at least one more quote — as the concrete next step that',
+              'gets them a verdict. Do not estimate what the missing figure is likely to be.',
+            ].join('\n')
+            : '',
         ].filter(Boolean).join('\n');
       } else {
         // The intake gate blocks this client- and server-side, so reaching
@@ -2136,6 +2162,35 @@ Then do what you can. Work only from what is legibly present, flag anything that
 
     if (submission.product === 'home-maintenance' && homeMaintenanceAnalysis) {
       report.home_maintenance_analysis = homeMaintenanceAnalysis;
+
+      // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+      // (Critical) #1: NEED_BOTH_QUOTES is the one outcome this product
+      // explicitly, deliberately sells — "honestly scoped, not blocked," per
+      // this engine's own test suite — where the customer receives no
+      // financial verdict at all, only a category checklist and (at most) a
+      // boilerplate age sentence. Nothing computed here is specific to this
+      // customer's situation beyond echoing their own category/age back to
+      // them. Same queue Government Money Finder uses for the identical
+      // shape of problem (api/_lib/navigator-engine.js, government-money
+      // block above, `refund_state: 'due_thin_result'`, picked up by
+      // api/process-refunds.js's existing REFUND_STATE_THIN queue) — the
+      // row stays 'complete', the report exists, the customer keeps it, and
+      // they do not pay for it.
+      //
+      // Deliberately NOT triggered by NEED_REPAIR_QUOTE or
+      // NEED_REPLACEMENT_QUOTE: those customers gave one real quote and get
+      // a concrete, single-item next step to complete their own comparison,
+      // which is real value received for the charge.
+      if (homeMaintenanceAnalysis.verdict === homeMaintenanceEngine.Verdict.NEED_BOTH_QUOTES) {
+        try {
+          await admin
+            .from('navigator_submissions')
+            .update({ refund_state: 'due_thin_result', updated_at: new Date().toISOString() })
+            .eq('id', submissionId);
+        } catch (err) {
+          console.error('[home-maintenance] could not queue the refund:', err.message);
+        }
+      }
     }
 
     if (submission.product === 'property-tax' && propertyTaxAnalysis) {

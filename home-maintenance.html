@@ -4,11 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Home Maintenance Navigator — StreamNavigator AI</title>
-<meta name="description" content="Repair or replace? Home Maintenance Navigator runs the real economics on your roof, HVAC, water heater, windows, and more — $59, once." />
+<meta name="description" content="Repair or replace? Home Maintenance Navigator runs the real economics on your roof, HVAC, water heater, windows, and more — $39, once." />
 <link rel="canonical" href="https://streamnavigator.ai/home-maintenance" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<!-- docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (Low) #8:
+     the Inter/Sora link below was dead weight — navigator-closing-theme.css
+     overrides every rule that referenced those fonts, so nothing on this
+     page ever rendered in them. Only the fonts closing's theme actually
+     uses are loaded now. -->
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/navigator-shared.css">
 <link rel="stylesheet" href="/navigator-closing-theme.css">
@@ -20,6 +24,7 @@
 .field-block input[type="number"]:focus{ border-color:var(--accent-deep); }
 .field-checkbox{ display:flex; align-items:center; gap:8px; margin-top:10px; font-size:13.5px; font-weight:500; text-transform:none; color:var(--text-dim); cursor:pointer; }
 .field-checkbox input{ width:16px; height:16px; accent-color:var(--accent-deep); cursor:pointer; }
+.logo-subbrand-text{ color:var(--text-dim); font-weight:500; }
 </style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
@@ -31,9 +36,11 @@
 <div class="bg-noise"></div>
 <header>
   <nav>
+    <!-- docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (Low)
+         #7: the colored logo-mark icon and pill sub-brand badge are dropped
+         here to match /closing's plain-text header treatment. -->
     <a href="/home-maintenance#top" class="logo">
-      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1B2A3A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>
-      StreamNavigator<span class="nav-subbrand">Home Maintenance Navigator</span>
+      StreamNavigator <span class="logo-subbrand-text">/ Home Maintenance Navigator</span>
     </a>
     <div class="nav-links">
       <a href="#how-it-works">How it works</a>
@@ -120,18 +127,36 @@
     ============================================================================
     PAYMENT PORTAL SETUP (Stripe Payment Link — no backend required)
     ============================================================================
-    To go live for Home Maintenance Navigator:
+    docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md cut this product's price from
+    $59 to $39 (Required Changes, High #3). The OLD $59 link
+    (buy.stripe.com/28EeVd9ko3I80FS1BuabK09) must be RETIRED, not reused —
+    reusing it would charge $59 while this page advertises $39, which is the
+    exact defect scripts/check-prices.js exists to catch. No Stripe
+    credentials were available to mint the new link automatically, so the
+    button below is switched off (REPLACE_WITH_39_ONE_TIME_LINK) rather than
+    either charging the old price or pointing at a link that doesn't exist —
+    the same pattern already shipped on subscriptions.html for the identical
+    situation. See prices.config.json's `_skipped` entry for this file.
+
+    To go live at $39:
       1. Stripe Dashboard -> Product catalog -> add a one-time Product/Price:
-           "Home Maintenance Navigator Report" — $59 one-time
+           "Home Maintenance Navigator Report" — $39 one-time
       2. Payment links -> New -> pick that price -> Create link.
       3. In the link's "After payment" step, set the redirect to:
            https://streamnavigator.ai/navigator-status
       4. Paste the resulting https://buy.stripe.com/... URL over
-         https://buy.stripe.com/28EeVd9ko3I80FS1BuabK09 on the button below.
-      5. Once, for ALL 10 Navigator products: Stripe Dashboard -> Developers
-         -> Webhooks -> Add endpoint -> https://streamnavigator.ai/api/navigator-stripe-webhook
-         -> event: checkout.session.completed -> copy its signing secret into
-         this Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
+         REPLACE_WITH_39_ONE_TIME_LINK on the button below.
+      5. In Stripe, deactivate the old $59 link
+         (buy.stripe.com/28EeVd9ko3I80FS1BuabK09) so nobody holding that URL
+         can still be charged $59 for a $39 product.
+      6. Update prices.config.json: move "home-maintenance.html" back from
+         `_skipped` into `pages` with expectedPriceCents: 3900 and the new
+         link's suffix as stripeLinkId.
+      7. Webhook (shared across all Navigator products, skip if already done):
+         Stripe Dashboard -> Developers -> Webhooks -> Add endpoint ->
+         https://streamnavigator.ai/api/navigator-stripe-webhook -> event:
+         checkout.session.completed -> copy its signing secret into this
+         Vercel project's NAVIGATOR_STRIPE_WEBHOOK_SECRET env var.
     This page already appends ?client_reference_id=<submission id> to the
     link automatically (see navigator-shared.js) so payment ties back to the
     right submission — nothing else to configure here.
@@ -148,11 +173,19 @@
         <span class="price-badge">One-time</span>
         <h3>Home Maintenance Navigator Report</h3>
         <p class="desc">Repair-vs-replace analysis for one home system — roof, HVAC, water heater, and more — any time of year.</p>
-        <div class="price-amount">$59</div>
+        <!-- docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+             (High) #3: cut from $59. This engine is the smallest, simplest
+             deterministic engine in the product line — no document
+             extraction, no external cost-reference data, no recurring
+             benefit — and $59 sat above Government Money Finder ($39), its
+             closest mechanical twin, and within $10 of Contractor Navigator
+             ($49), which does substantially more real work. See the report's
+             Pricing Audit for the full comparison. -->
+        <div class="price-amount">$39</div>
         <div class="price-period">charged once &middot; not a subscription</div>
       <div class="field-block">
         <label>Category</label>
-        <div class="chip-row">
+        <div class="chip-row" id="category-chips">
           <button type="button" class="chip-toggle category-chip" data-value="Roof">Roof</button>
           <button type="button" class="chip-toggle category-chip" data-value="HVAC">HVAC</button>
           <button type="button" class="chip-toggle category-chip" data-value="Water Heater">Water Heater</button>
@@ -161,6 +194,19 @@
           <button type="button" class="chip-toggle category-chip" data-value="Other">Other</button>
         </div>
       </div>
+        <!-- docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+             (High) #4: the lifespan-range table's own caveat names
+             material/type as the reason its default range might not apply —
+             asphalt shingle vs. metal/tile/slate roofing, storage-tank vs.
+             tankless water heaters — so ask it instead of only disclosing it.
+             Shown only for the two categories the engine actually holds a
+             material-specific range for; toggled by the category-chip
+             handler below. -->
+        <div class="field-block" id="material-block" style="display:none;">
+          <label id="material-label">Material / type</label>
+          <div class="chip-row" id="material-chips"></div>
+          <p class="field-hint">Optional, but it sharpens the typical-service-life range below — the default assumes the most common material for this category.</p>
+        </div>
         <div class="field-block">
           <label>System age (years)</label>
           <input type="number" id="intake-age" min="0" max="100" placeholder="e.g. 14">
@@ -180,12 +226,17 @@
         <div class="field-block">
           <label>Repair quote ($, if you have one)</label>
           <input type="number" id="intake-repair-quote" min="0" placeholder="e.g. 1400">
+          <!-- docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+               (Medium) #6: a system already repaired once for the same issue
+               is a stronger real-world replace signal than a first-time
+               repair, and costs nothing to ask. -->
+          <label class="field-checkbox"><input type="checkbox" id="intake-already-repaired"> This has already been repaired once before for the same issue</label>
         </div>
         <div class="field-block">
           <label>Replacement quote ($, if you have one)</label>
           <input type="number" id="intake-replacement-quote" min="0" placeholder="e.g. 2600">
           <label class="field-checkbox"><input type="checkbox" id="intake-no-quotes"> I don't have a quote for either yet</label>
-          <p class="field-hint">Every dollar figure in your report comes from your own quotes — never a guess at what either one "usually" costs. Without at least one, you'll get the service-life context and the contractor checklist, not a financial recommendation.</p>
+          <p class="field-hint">Every dollar figure in your report comes from your own quotes — never a guess at what either one "usually" costs. Without at least one, you'll get the service-life context and the contractor checklist, not a financial recommendation — and that submission is refunded automatically, because that isn't what this report is for.</p>
         </div>
         <div class="field-block">
           <label>Anything else worth knowing? (optional)</label>
@@ -212,7 +263,7 @@
           <li><span class="tick">✓</span> One charge, with no subscription and nothing to cancel</li>
           <li><span class="tick">✓</span> Delivered automatically, usually within a couple of minutes</li>
         </ul>
-        <a href="https://buy.stripe.com/28EeVd9ko3I80FS1BuabK09" data-stripe-link="home-maintenance" class="btn btn-primary" id="pay-btn">Get My Report →</a>
+        <a href="REPLACE_WITH_39_ONE_TIME_LINK" data-stripe-link="home-maintenance" class="btn btn-primary" id="pay-btn">Get My Report →</a>
         <!-- The checks that run before the upload starts report themselves
              here rather than through a toast that clears after 3.6 seconds.
              Someone who reloads the page (which empties the email box), then
@@ -236,7 +287,7 @@
       </div>
       <div class="faq-item">
         <button class="faq-q">Do I need a contractor's quote first? <span class="plus">+</span></button>
-        <div class="faq-a"><div class="faq-a-inner">You can submit without one and still get the service-life context and the contractor checklist. But the actual repair-or-replace verdict is arithmetic on your own quoted numbers — we hold no data on what things "usually" cost, so without at least a repair or replacement quote, there's no financial recommendation to give you yet.</div></div>
+        <div class="faq-a"><div class="faq-a-inner">You can submit without one and still get the service-life context and the contractor checklist. But the actual repair-or-replace verdict is arithmetic on your own quoted numbers — we hold no data on what things "usually" cost, so without at least a repair or replacement quote, there's no financial recommendation to give you yet. If you submit with neither quote, we refund the charge automatically — you keep the checklist, but you shouldn't pay for a report with no verdict in it.</div></div>
       </div>
       <div class="faq-item">
         <button class="faq-q">What if this is a safety issue? <span class="plus">+</span></button>
@@ -313,14 +364,49 @@
   const input = document.getElementById('upload-input');
   const list = document.getElementById('upload-list');
   const uploader = wireUploadZone(zone, input, list);
-  let selectedCategory = "Roof";
+  // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes
+  // (Critical) #2: this used to default to "Roof" with no chip ever shown as
+  // active, so a customer who never clicked a category chip was silently
+  // charged for the wrong system's report — checkSufficiency() could not
+  // catch it because "Roof" is a valid category value. null is not a valid
+  // category, so the sufficiency gate below now genuinely blocks checkout
+  // until a customer clicks one.
+  let selectedCategory = null;
+  let selectedMaterial = null;
   const selectedSymptoms = new Set();
+
+  const materialBlock = document.getElementById('material-block');
+  const materialChips = document.getElementById('material-chips');
+  const materialLabel = document.getElementById('material-label');
+
+  function renderMaterialChips(category) {
+    selectedMaterial = null;
+    materialChips.innerHTML = '';
+    const options = (window.HomeMaintenanceEngine && HomeMaintenanceEngine.MATERIAL_OPTIONS[category]) || null;
+    if (!options) { materialBlock.style.display = 'none'; return; }
+    materialLabel.textContent = 'Material / type (' + category + ')';
+    options.forEach(function(opt){
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip-toggle material-chip';
+      chip.dataset.value = opt.value;
+      chip.textContent = opt.label;
+      chip.addEventListener('click', function(){
+        materialChips.querySelectorAll('.material-chip').forEach(function(c){ c.classList.remove('active'); });
+        if (selectedMaterial === opt.value) { selectedMaterial = null; }
+        else { selectedMaterial = opt.value; chip.classList.add('active'); }
+      });
+      materialChips.appendChild(chip);
+    });
+    materialBlock.style.display = '';
+  }
 
   document.querySelectorAll('.category-chip').forEach(function(chip){
     chip.addEventListener('click', function(){
       document.querySelectorAll('.category-chip').forEach(function(c){ c.classList.remove('active'); });
       chip.classList.add('active');
       selectedCategory = chip.dataset.value;
+      renderMaterialChips(selectedCategory);
     });
   });
 
@@ -342,6 +428,7 @@
   const repairEl = document.getElementById('intake-repair-quote');
   const replacementEl = document.getElementById('intake-replacement-quote');
   const noQuotesEl = document.getElementById('intake-no-quotes');
+  const alreadyRepairedEl = document.getElementById('intake-already-repaired');
   noQuotesEl.addEventListener('change', function(){
     repairEl.disabled = noQuotesEl.checked;
     replacementEl.disabled = noQuotesEl.checked;
@@ -351,12 +438,14 @@
   function buildFormData(descEl) {
     return {
       category: selectedCategory,
+      material: selectedMaterial,
       system_age_years: ageUnknownEl.checked ? null : (ageInput.value === '' ? null : Number(ageInput.value)),
       age_unknown: ageUnknownEl.checked,
       symptoms: Array.from(selectedSymptoms),
       repair_quote: noQuotesEl.checked || repairEl.value === '' ? null : Number(repairEl.value),
       replacement_quote: noQuotesEl.checked || replacementEl.value === '' ? null : Number(replacementEl.value),
       no_quotes_yet: noQuotesEl.checked,
+      already_repaired_before: alreadyRepairedEl.checked,
       description: descEl.value.trim(),
     };
   }
@@ -372,6 +461,19 @@
       if (focusEl) focusEl.focus();
     }
     errEl.style.display = 'none';
+
+    // docs/HOME-MAINTENANCE-ENGINE-AUDIT-REPORT.md, Required Changes (High)
+    // #3: the price moved to $39 and the Stripe link for it does not exist
+    // yet. Checked first, before ever creating a submission, so nobody's
+    // details get saved for a checkout that cannot complete — the same
+    // guard subscriptions.html uses for the identical situation.
+    const href = btn.getAttribute('href') || '';
+    if (href.indexOf('REPLACE_WITH_') !== -1) {
+      fail('Checkout is being updated and this button is switched off rather than charging you '
+        + 'the old price. Email hello@streamnavigator.ai and we will send you the link.');
+      return;
+    }
+
     const emailEl = document.getElementById('intake-email');
     const descEl = document.getElementById('intake-description');
     const email = emailEl.value.trim();
@@ -392,7 +494,7 @@
         formData: formData,
         files: files,
       });
-      goToStripe(btn.getAttribute('href'), { id: submission.id, token: submission.token, product: 'home-maintenance' }, email);
+      goToStripe(href, { id: submission.id, token: submission.token, product: 'home-maintenance' }, email);
     } catch (err) {
       fail(err.message || 'Something went wrong — please try again.');
       btn.textContent = originalText;
