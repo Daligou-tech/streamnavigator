@@ -38,6 +38,10 @@ const OWN_TABLE = {
 };
 
 const SITE = 'https://streamnavigator.ai';
+// Where a customer's reply lands. The from address is on send.streamnavigator.ai,
+// the domain verified in Resend, whose only MX is Amazon SES's bounce-feedback
+// inbox -- so without this, 'Reply to this email' went nowhere.
+const REPLY_TO = 'hello@streamnavigator.ai';
 
 // Sent once per submission. Recorded in form_data rather than a new column so
 // this needs no migration to go live — the marker is small, it belongs to the
@@ -132,6 +136,7 @@ async function deliverReportByEmail(admin, submissionId) {
   const link = statusLink(submission);
   const payload = {
     from: RESEND_FROM_EMAIL,
+    reply_to: REPLY_TO,
     to: submission.email,
     subject: 'Your StreamNavigator report is ready',
     text: body(submission, link),

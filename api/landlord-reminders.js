@@ -51,6 +51,8 @@ const LEAD_DAYS = {
 // the report sweep is: a wall clock, and a mail provider with its own limits.
 const MAX_PER_SWEEP = 40;
 const SITE = 'https://streamnavigator.ai';
+// Replies go to a mailbox; see api/_lib/report-delivery.js.
+const REPLY_TO = 'hello@streamnavigator.ai';
 
 function parseDate(value) {
   if (!value) return null;
@@ -251,7 +253,7 @@ module.exports = async function handler(req, res) {
           const response = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: entitlement.email, subject, text }),
+            body: JSON.stringify({ from: RESEND_FROM_EMAIL, reply_to: REPLY_TO, to: entitlement.email, subject, text }),
           });
           if (!response.ok) {
             // Give the claim back. A rejection is proof nothing was sent, and

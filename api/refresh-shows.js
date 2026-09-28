@@ -65,6 +65,9 @@
 
 const { createClient } = require('@supabase/supabase-js');
 
+// Replies go to a mailbox; see api/_lib/report-delivery.js.
+const REPLY_TO = 'hello@streamnavigator.ai';
+
 module.exports = async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.authorization;
@@ -458,7 +461,7 @@ async function sendDigestEmail({ apiKey, from, to, dashboardUrl, off, paying, sa
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject: `You saved $${savedThisMonth.toFixed(2)} last month`, html }),
+      body: JSON.stringify({ from, reply_to: REPLY_TO, to, subject: `You saved $${savedThisMonth.toFixed(2)} last month`, html }),
     });
     return res.ok;
   } catch (err) {
@@ -594,7 +597,7 @@ async function sendActionEmail({ apiKey, from, to, dashboardUrl, serviceName, ac
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject, html }),
+      body: JSON.stringify({ from, reply_to: REPLY_TO, to, subject, html }),
     });
     return res.ok;
   } catch (err) {

@@ -17,6 +17,8 @@
 'use strict';
 
 const SITE = process.env.SITE_URL || 'https://streamnavigator.ai';
+// Replies go to a mailbox; see api/_lib/report-delivery.js.
+const REPLY_TO = 'hello@streamnavigator.ai';
 
 // In form_data rather than a column, for the reason report-delivery.js gives
 // for its own marker: the flag belongs to the submission, it is small, and it
@@ -80,6 +82,7 @@ async function emailScorecardLink(admin, submission) {
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: RESEND_FROM_EMAIL,
+        reply_to: REPLY_TO,
         to: submission.email,
         subject: 'Your free Closing Disclosure scorecard',
         text: body(scorecardLink(submission)),

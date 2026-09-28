@@ -14,6 +14,9 @@ const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 const { statusLink } = require('./_lib/report-delivery');
 const { buildReportPdfBuffer } = require('./_lib/pdf-report');
 
+// Replies go to a mailbox; see api/_lib/report-delivery.js.
+const REPLY_TO = 'hello@streamnavigator.ai';
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'Method not allowed' });
@@ -110,6 +113,7 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         from: RESEND_FROM_EMAIL,
+        reply_to: REPLY_TO,
         to: email,
         subject: 'Your StreamNavigator report (PDF)',
         // The link is the point of this email as much as the attachment is.

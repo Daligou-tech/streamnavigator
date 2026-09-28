@@ -19,6 +19,9 @@
 
 const { getSupabaseAdmin } = require('./_lib/supabaseAdmin');
 
+// Replies go to a mailbox; see api/_lib/report-delivery.js.
+const REPLY_TO = 'hello@streamnavigator.ai';
+
 // Six weeks out. Far enough that a notice period and a market check still fit
 // before the renewal has to be sent, close enough that it is the next thing on
 // the landlord's desk rather than a note for later.
@@ -206,7 +209,7 @@ module.exports = async function handler(req, res) {
         const response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from: RESEND_FROM_EMAIL, to: entitlement.email, subject, text }),
+          body: JSON.stringify({ from: RESEND_FROM_EMAIL, reply_to: REPLY_TO, to: entitlement.email, subject, text }),
         });
         if (!response.ok) {
           const body = await response.text().catch(() => '');
