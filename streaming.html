@@ -1129,6 +1129,11 @@
       if (link.getAttribute('href').includes('REPLACE_WITH_')) {
         e.preventDefault();
         showToast("Checkout isn't open yet — the analyzer above is free and works now. Nothing has been charged.");
+      } else if (link.dataset.stripeLink === 'annual') {
+        // Sign in first: the dashboard puts the account on the Payment Link,
+        // which is how the webhook knows whose subscription to unlock.
+        e.preventDefault();
+        window.location.href = 'dashboard.html#subscribe';
       }
     });
   });

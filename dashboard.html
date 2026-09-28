@@ -2496,6 +2496,22 @@
       history.replaceState(null, '', window.location.pathname + window.location.search);
       openBillingPortal();
     }
+    // /streaming's Subscribe button sends visitors here first, because only a
+    // signed-in account can put client_reference_id on the Payment Link -- and
+    // without it api/stripe-webhook.js skips the checkout: charged, nothing
+    // unlocked. Once signed in, a free account goes straight on to Stripe.
+    if (window.location.hash === '#subscribe') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+      loadPlan(user).then(() => {
+        const a = document.getElementById('upgrade-annual-link');
+        if (userPlan === 'free' && a && a.getAttribute('href').indexOf('REPLACE_WITH_') !== 0) {
+          window.location.href = a.href;
+        } else {
+          const s = document.getElementById('upgrade-section');
+          if (s) s.scrollIntoView();
+        }
+      });
+    }
   }
   function showLoggedOut(){
     authView.hidden = false;

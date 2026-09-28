@@ -137,6 +137,7 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.config = { api: { bodyParser: false } };
+module.exports.planFromSubscription = planFromSubscription;
 
 // Which plan a subscription's price maps to. There are only two real prices
 // today ($4.99 Pro / $8.99 Family), so this compares the actual cents Stripe
@@ -147,6 +148,10 @@ module.exports.config = { api: { bodyParser: false } };
 function planFromSubscription(subscription){
   const item = subscription.items && subscription.items.data && subscription.items.data[0];
   const unitAmount = item && item.price ? item.price.unit_amount : null;
+  // $19.99/yr is the only tier sold now and it includes the household, which
+  // api/invite-household-member.js only allows on 'family'. Filing it under the
+  // 'pro' fallback would take the money and refuse the feature the page sells.
+  if (unitAmount === 1999) return 'family';
   if (unitAmount === 899) return 'family';
   if (unitAmount === 499) return 'pro';
   return 'pro';
