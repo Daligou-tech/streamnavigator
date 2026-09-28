@@ -161,7 +161,7 @@ footer{padding:42px 0 56px;font-size:.87rem;color:var(--ink-soft)}
 /* ---- bridge: names the transplanted components expect, mapped to this page's palette ---- */
 :root{
   --bg:var(--paper); --bg-alt:#F4F2ED; --surface:var(--panel); --surface-2:#F4F2ED;
-  --text:var(--ink); --text-dim:var(--ink-soft); --text-dimmer:#7C8791;
+  --text:var(--ink); --text-dim:var(--ink-soft); --text-dimmer:#636D77;
   --border:var(--rule); --border-strong:#BFC3BC;
   --accent:#FFFFFF; --accent-deep:var(--flag); --accent-2:var(--ok); --accent-2-deep:#22513F;
   --accent-3:var(--flag); --accent-3-deep:var(--flag); --yellow:var(--hold-tint);

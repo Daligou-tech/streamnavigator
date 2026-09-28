@@ -27,7 +27,7 @@
   --border-strong:#BFC3BC;
   --text:#1B2A3A;
   --text-dim:#5B6570;
-  --text-dimmer:#7C8791;
+  --text-dimmer:#636D77;
   --accent:#FFFFFF;
   --accent-deep:#B01F12;
   --accent-2:#2C6A57;
@@ -49,6 +49,10 @@
   --shadow-soft:0 24px 60px -32px rgba(27,42,58,.16);
   --shadow-glow:0 0 0 1px rgba(27,42,58,.14);
 }
+
+/* navigator-shared.css draws the pill's check as --ink on --gradient; here both
+   are #1B2A3A, so the check was invisible. */
+.pill span.dot{ color:var(--surface); }
 
 /* Typography — navigator-shared.css hardcodes 'Sora'/'Inter' in a handful
    of rules instead of a token, so each needs its own override. */
