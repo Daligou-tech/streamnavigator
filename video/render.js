@@ -2,7 +2,7 @@
 // A composition exposes window.DURATION and window.seek(t) (t in seconds);
 // every frame is a pure function of t, so the render is deterministic.
 //
-//   node video/render.js <composition.html[?query]> <out.mp4> [--audio a.wav] [--stills 1,4.5,9] [--score score.json]
+//   node video/render.js <composition.html[?query]> <out.mp4> [--audio a.wav] [--stills 1,4.5,9] [--score score.json] [--size 1080x1920]
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -14,7 +14,8 @@ const opt = (k) => { const i = args.indexOf(k); return i > -1 ? args[i + 1] : nu
 const audio = opt('--audio');
 const stills = opt('--stills');
 const scoreOut = opt('--score');
-const FPS = 30, W = 1920, H = 1080;
+const [W, H] = (opt('--size') || '1920x1080').split('x').map(Number);
+const FPS = 30;
 
 (async () => {
   const browser = await chromium.launch();

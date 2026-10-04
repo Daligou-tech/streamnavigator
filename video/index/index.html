@@ -27,7 +27,7 @@
 
   #sys{ position:absolute; inset:0; }
   .ring{ position:absolute; left:50%; top:50%; border-radius:50%; border:2px dashed rgba(150,185,255,0.22); transform:translate(-50%,-50%); }
-  .sun{ position:absolute; left:50%; top:492px; width:190px; height:190px; border-radius:50%; transform:translate(-50%,-50%);
+  .sun{ position:absolute; left:50%; top:var(--cy,492px); width:190px; height:190px; border-radius:50%; transform:translate(-50%,-50%);
     background:radial-gradient(circle at 38% 32%, #fff3d6, var(--gold) 45%, var(--gold-deep) 78%, #b5641c 100%);
     display:flex; align-items:center; justify-content:center; text-align:center; z-index:3; }
   .sun span{ font-family:'Sora',sans-serif; font-weight:800; color:#3c2405; font-size:30px; line-height:1.15; }
@@ -51,10 +51,23 @@
   .btn{ margin-top:46px; font-family:'Sora',sans-serif; font-weight:700; font-size:38px; color:#0a0f1f;
     background:linear-gradient(135deg, var(--accent-2), var(--accent)); padding:20px 48px; border-radius:999px;
     box-shadow:0 8px 30px -6px rgba(91,157,255,.55); }
+
+  /* Vertical 1080x1920 (index.html?fmt=v) */
+  .vertical, .vertical body{ width:1080px; height:1920px; }
+  .vertical h1{ font-size:118px; }
+  .vertical .sun{ width:170px; height:170px; }
+  .vertical .lbl{ font-size:24px; }
+  .vertical .planet{ width:200px; margin-left:-100px; }
+  .vertical .caption{ bottom:110px; padding:0 70px; font-size:40px; line-height:1.3; }
+  .vertical .tool .v{ font-size:84px; max-width:940px; }
+  .vertical .tool{ padding:0 60px; }
+  .vertical .logo{ font-size:76px; gap:20px; } .vertical .logo-mark{ width:88px; height:88px; }
+  .vertical .sub{ font-size:44px; text-align:center; max-width:920px; }
 </style>
 </head>
 <body>
-<canvas id="stars" width="1920" height="1080"></canvas>
+<script>if (new URLSearchParams(location.search).get('fmt') === 'v') document.documentElement.classList.add('vertical');</script>
+<canvas id="stars"></canvas>
 
 <section class="scene" id="s1">
   <div class="eyebrow">✦ StreamNavigator AI</div>
@@ -86,8 +99,9 @@ const appear = (el, t, at, dy = 30, dur = 0.45) => { const k = out(p(t, at, at +
 
 // Stars: fixed positions from a seeded generator, twinkle as a function of t
 let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const STARS = Array.from({ length: 220 }, () => [rnd() * 1920, rnd() * 1080, rnd() * 1.6 + 0.3, rnd() * 6.28]);
-const ctx = $('stars').getContext('2d');
+const cv = $('stars'); cv.width = document.documentElement.classList.contains('vertical') ? 1080 : 1920; cv.height = cv.width === 1080 ? 1920 : 1080;
+const STARS = Array.from({ length: 220 }, () => [rnd() * cv.width, rnd() * cv.height, rnd() * 1.6 + 0.3, rnd() * 6.28]);
+const ctx = cv.getContext('2d');
 
 // Tools and orbits exactly as index.html lays them out
 const TOOLS = [
@@ -95,9 +109,11 @@ const TOOLS = [
   ['Property Tax Navigator', 2, 45], ['Insurance Navigator', 2, 135], ['Rental Navigator', 2, 225], ['Landlord Navigator', 2, 315],
   ['Contractor Navigator', 3, 0], ['HOA Navigator', 3, 60], ['Home Maintenance Navigator', 3, 120], ['Government Money Finder', 3, 180],
   ['Closing Navigator', 3, 240], ['Purchase Navigator', 3, 300]];
-const R = { 1: [310, 200], 2: [530, 300], 3: [745, 392] }; const CY = 492;
+const VERT = document.documentElement.classList.contains('vertical');
+const W0 = VERT ? 1080 : 1920, H0 = VERT ? 1920 : 1080, CX = W0 / 2;
+const R = VERT ? { 1: [200, 290], 2: [330, 520], 3: [420, 760] } : { 1: [310, 200], 2: [530, 300], 3: [745, 392] }; const CY = VERT ? 900 : 492;
 const sys = $('sys');
-[1, 2, 3].forEach((r) => { const d = document.createElement('div'); d.className = 'ring'; d.id = 'ring' + r; d.style.width = R[r][0] * 2 + 'px'; d.style.height = R[r][1] * 2 + 'px'; d.style.top = CY + 'px'; sys.appendChild(d); });
+[1, 2, 3].forEach((r) => { const d = document.createElement('div'); d.className = 'ring'; d.id = 'ring' + r; d.style.width = R[r][0] * 2 + 'px'; d.style.height = R[r][1] * 2 + 'px'; d.style.top = CY + 'px'; document.documentElement.style.setProperty('--cy', CY + 'px'); sys.appendChild(d); });
 const planets = TOOLS.map(([name]) => { const d = document.createElement('div'); d.className = 'planet'; d.innerHTML = `<div class="orb"></div><div class="lbl">${name}</div>`; sys.appendChild(d); return d; });
 
 // One line per tool, each the page's own headline
@@ -114,8 +130,8 @@ const scene = (el, t, a, b) => {
 };
 
 window.seek = (t) => {
-  ctx.clearRect(0, 0, 1920, 1080);
-  for (const [x, y, r, ph] of STARS) { ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 1.3 + ph); ctx.fillStyle = '#cfe0ff'; ctx.beginPath(); ctx.arc(x, (y + t * 4) % 1080, r, 0, 6.29); ctx.fill(); }
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (const [x, y, r, ph] of STARS) { ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 1.3 + ph); ctx.fillStyle = '#cfe0ff'; ctx.beginPath(); ctx.arc(x, (y + t * 4) % cv.height, r, 0, 6.29); ctx.fill(); }
   ctx.globalAlpha = 1;
 
   // 1. headline 0 - 4.2
@@ -138,7 +154,7 @@ window.seek = (t) => {
     TOOLS.forEach(([, ring, ang], i) => {
       const at = 5.3 + i * 0.22, kp = p(t, at, at + 0.4);
       const a = (ang + spin * (ring === 2 ? -1 : 1) / ring) * Math.PI / 180;
-      planets[i].style.left = 960 + Math.cos(a) * R[ring][0] + 'px';
+      planets[i].style.left = CX + Math.cos(a) * R[ring][0] + 'px';
       planets[i].style.top = CY - Math.sin(a) * R[ring][1] + 'px';
       planets[i].style.opacity = clamp(kp * 2);
       planets[i].style.transform = `scale(${lerp(0.4, 1, back(kp))})`;

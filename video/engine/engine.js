@@ -139,8 +139,8 @@
         // keep the newest ticked item around the middle of the list
         const rowH = items[0].offsetHeight || 86;
         const progress = clamp((t - a - 0.5) / step, 0, items.length);
-        const maxShift = Math.max(0, inner.offsetHeight - 600);
-        inner.style.transform = `translateY(${-clamp(progress * rowH - 260, 0, maxShift)}px)`;
+        const listH = inner.parentNode.offsetHeight, maxShift = Math.max(0, inner.offsetHeight - listH + 40);
+        inner.style.transform = `translateY(${-clamp(progress * rowH - listH * 0.4, 0, maxShift)}px)`;
         items.forEach((it, i) => {
           const k = p(t, at(i), at(i) + 0.2), tk = it.querySelector('.tk');
           tk.textContent = k > 0 ? '✓' : '';

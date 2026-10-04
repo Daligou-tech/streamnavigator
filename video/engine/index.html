@@ -9,7 +9,8 @@
 <body>
 <script>
   // index.html?v=<name> loads video/<name>/spec.js, then the engine.
-  const v = new URLSearchParams(location.search).get('v');
+  const q = new URLSearchParams(location.search), v = q.get('v');
+  if (q.get('fmt') === 'v') document.documentElement.classList.add('vertical');
   document.write('<script src="../' + v + '/spec.js"><\/script><script src="engine.js"><\/script>');
 </script>
 </body>
