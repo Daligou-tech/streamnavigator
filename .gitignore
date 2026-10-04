@@ -9,3 +9,4 @@ node_modules/
 .claude/settings.local.json
 tmp-test-docs/
 tmp-home-savings-docs/
+brag-output*/
