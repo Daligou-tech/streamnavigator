@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>StreamNavigator — streaming launch video</title>
+<link rel="stylesheet" href="../fonts/fonts.css" />
+<style>
+  /* Tokens and component styles copied from /streaming.html */
+  :root{
+    --bg:#FBFAF7; --surface:#FFFFFF; --surface-2:#F4F2ED; --ink:#1B2A3A;
+    --border:#D8DAD5; --border-strong:#B9BCB5; --text:#1B2A3A; --text-dim:#5B6570;
+    --text-dimmer:#636D77; --accent-2:#EDF3F0; --accent-2-deep:#2C6A57; --ok-tint:#EDF3F0;
+    --status-active-deep:#2C6A57; --gradient: linear-gradient(135deg, #1B2A3A 0%, #1B2A3A 100%);
+    --gradient-warm: linear-gradient(135deg, #2C6A57 0%, #2C6A57 100%);
+    --shadow-hard-xs: 3px 3px 0 rgba(27,42,58,.06);
+    --shadow-soft: 0 18px 44px -30px rgba(27,42,58,.22);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{width:1920px; height:1080px; overflow:hidden; background:var(--bg);}
+  body{ color:var(--text); font-family:"IBM Plex Sans", sans-serif; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,h4{ font-family:"Newsreader", Georgia, serif; letter-spacing:-0.01em; font-weight:500; }
+  h3,h4{ font-weight:600; }
+  .scene{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; opacity:0; }
+  .rule{ position:absolute; left:120px; right:120px; height:1px; background:var(--border); }
+
+  .chat-thread{ display:flex; flex-direction:column; gap:18px; width:640px; zoom:1.75; }
+  .chat-row{ display:flex; gap:10px; align-items:flex-end; }
+  .chat-row.you{ flex-direction:row-reverse; }
+  .chat-avatar{ width:42px; height:42px; border-radius:999px; flex-shrink:0; position:relative;
+    display:flex; align-items:center; justify-content:center; border:2px solid var(--ink); box-shadow:var(--shadow-hard-xs); }
+  .chat-avatar.bot{ background:var(--gradient); }
+  .chat-avatar.you{ background:var(--surface-2); }
+  .chat-avatar svg{ width:20px; height:20px; }
+  .chat-live-dot{ position:absolute; bottom:-2px; right:-2px; width:13px; height:13px; border-radius:999px;
+    background:var(--accent-2); border:2px solid var(--surface); }
+  .chat-col{ display:flex; flex-direction:column; max-width:84%; }
+  .chat-row.you .chat-col{ align-items:flex-end; }
+  .chat-name{ font-size:13.5px; font-weight:700; color:var(--text-dimmer); margin-bottom:7px; padding:0 4px; text-transform:uppercase; letter-spacing:0.04em; }
+  .chat-name .chat-time{ text-transform:none; font-weight:600; }
+  .pro-flag{ font-size:10px; font-weight:700; margin-left:8px; padding:1px 6px; border:1px solid var(--accent-2-deep); color:var(--accent-2-deep); border-radius:3px; letter-spacing:.06em; }
+  .chat-bubble{ background:var(--surface-2); border:1.5px solid var(--border-strong); border-radius:16px 16px 16px 4px;
+    padding:16px 20px; font-size:17px; color:var(--text-dim); line-height:1.55; box-shadow:var(--shadow-hard-xs); }
+  .chat-bubble.you{ background:#fff; color:var(--ink); border-color:var(--ink); font-weight:600; border-radius:16px 16px 4px 16px; min-height:57px; }
+  .chat-action{ display:flex; width:fit-content; align-items:center; gap:8px; margin-top:12px; padding:9px 16px;
+    background:var(--surface); border:1.5px solid var(--ink); border-radius:999px;
+    font-size:14.5px; font-weight:700; color:var(--accent-2-deep); box-shadow:var(--shadow-hard-xs); position:relative; }
+  .dots span{ display:inline-block; width:7px; height:7px; border-radius:9px; background:var(--text-dimmer); margin-right:5px; }
+  .toast{ position:absolute; top:150px; left:50%; transform:translateX(-50%); background:var(--ok-tint); color:var(--accent-2-deep);
+    border:1.5px solid var(--accent-2-deep); font-weight:700; font-size:30px; padding:14px 30px; border-radius:999px; opacity:0; }
+  .cursor{ position:absolute; width:46px; height:46px; opacity:0; z-index:5; }
+  .ripple{ position:absolute; width:60px; height:60px; border-radius:999px; border:3px solid var(--accent-2-deep); opacity:0; z-index:4; }
+
+  h1.big{ font-size:120px; line-height:1.06; text-align:center; max-width:1500px; }
+  h1.big .w{ display:inline-block; }
+  h1.big .grad{ color:var(--accent-2-deep); font-style:italic; position:relative; }
+  .underline{ position:absolute; left:0; bottom:4px; height:6px; background:var(--accent-2-deep); transform-origin:left; }
+
+  .eyebrow{ font-family:"IBM Plex Mono", monospace; font-size:24px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dimmer); margin-bottom:28px; }
+  .shot{ width:600px; zoom:1.65; background:var(--surface); border:1.5px solid var(--border-strong); border-radius:14px; box-shadow:var(--shadow-soft); overflow:hidden; }
+  .shot-bar{ display:flex; gap:6px; padding:10px 14px; border-bottom:1px solid var(--border); background:var(--surface-2); }
+  .shot-bar span{ width:9px; height:9px; border-radius:9px; background:var(--border-strong); }
+  .shot-body{ padding:18px; }
+  .search-row{ display:flex; align-items:center; gap:10px; border:1.5px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-weight:600; font-size:15px; }
+  .search-row .ico{ width:18px; height:18px; color:var(--accent-2-deep); }
+  .result-card{ background:var(--surface); border:1.5px solid var(--border); border-radius:12px; padding:14px; display:flex; gap:14px; align-items:center; margin-bottom:10px; }
+  .thumb{ width:96px; height:56px; border-radius:8px; flex-shrink:0; background:var(--gradient); opacity:0.9; }
+  .result-meta h4{ font-size:15px; margin-bottom:2px; }
+  .result-meta p{ font-size:12.5px; color:var(--text-dimmer); }
+  .timestamp-chip{ display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:999px; margin-top:6px; border:1px solid; }
+  .chip-save{ background:var(--ok-tint); color:var(--status-active-deep); border-color:rgba(44,106,87,0.30); }
+  .chip-alert{ background:var(--surface-2); color:var(--text-dim); border-color:var(--border-strong); }
+  .chip-danger{ background:#FBEEEC; color:#B01F12; border-color:rgba(176,31,18,.3); }
+
+  h2.mid{ font-size:84px; text-align:center; margin-bottom:56px; }
+  .cards{ display:flex; gap:48px; }
+  .day{ width:640px; background:var(--surface); border:1.5px solid var(--ink); border-radius:18px; padding:40px 44px; box-shadow:6px 6px 0 rgba(27,42,58,.08); }
+  .day .k{ font-family:"IBM Plex Mono", monospace; font-size:22px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:16px; }
+  .day .v{ font-family:"Newsreader", serif; font-size:52px; line-height:1.12; font-weight:500; }
+  .day.off .k{ color:#8A6A16; } .day.on .k{ color:var(--accent-2-deep); }
+
+  .logo{ display:flex; align-items:center; gap:24px; font-family:"Newsreader", serif; font-weight:700; font-size:96px; }
+  .logo-mark{ width:104px; height:104px; border-radius:28px; background:var(--gradient); display:flex; align-items:center; justify-content:center; border:4px solid var(--ink); }
+  .logo-mark svg{ width:58px; height:58px; }
+  .tag{ font-size:48px; margin-top:40px; font-family:"Newsreader", serif; }
+  .url{ font-family:"IBM Plex Mono", monospace; font-size:36px; margin-top:28px; color:var(--accent-2-deep); border:2px solid var(--accent-2-deep); padding:10px 28px; border-radius:999px; }
+  .fine{ font-size:26px; color:var(--text-dim); margin-top:30px; }
+  .pz{ display:inline-block; width:.7em; height:.75em; border-left:.22em solid currentColor; border-right:.22em solid currentColor; vertical-align:-.05em; }
+  .pl{ display:inline-block; width:0; height:0; border-top:.4em solid transparent; border-bottom:.4em solid transparent; border-left:.65em solid currentColor; vertical-align:-.02em; }
+
+  /* Vertical 1080x1920 (index.html?fmt=v) */
+  .vertical, .vertical body{ width:1080px; height:1920px; }
+  .vertical .rule{ left:60px; right:60px; }
+  .vertical .rule:first-of-type{ top:90px !important; }
+  .vertical .chat-thread{ zoom:1.5; width:620px; }
+  .vertical .toast{ top:300px; font-size:36px; }
+  .vertical h1.big{ font-size:104px; max-width:960px; }
+  .vertical .shot{ width:580px; zoom:1.62; }
+  .vertical h2.mid{ font-size:80px; max-width:940px; }
+  .vertical .cards{ flex-direction:column; gap:36px; }
+  .vertical .day{ width:900px; }
+  .vertical .logo{ font-size:80px; gap:20px; } .vertical .logo-mark{ width:88px; height:88px; }
+  .vertical .tag{ font-size:48px; text-align:center; max-width:940px; }
+  .vertical .fine{ font-size:30px; text-align:center; max-width:900px; }
+</style>
+</head>
+<body>
+<script>if (new URLSearchParams(location.search).get('fmt') === 'v') document.documentElement.classList.add('vertical');</script>
+<div class="rule" style="top:60px"></div><div class="rule" style="bottom:60px"></div>
+
+<!-- 1. The chat from the page's own product section -->
+<section class="scene" id="s1">
+  <div class="toast" id="toast">✓ HBO Max paused</div>
+  <div class="chat-thread">
+    <div class="chat-row you" id="you">
+      <div class="chat-avatar you"><svg viewBox="0 0 24 24" fill="none" stroke="#1F1B16" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.5-6.2 7.5-6.2s7.5 2.2 7.5 6.2"/></svg></div>
+      <div class="chat-col">
+        <div class="chat-name">You <span class="chat-time">&middot; 8:14 PM</span></div>
+        <div class="chat-bubble you" id="youText"></div>
+      </div>
+    </div>
+    <div class="chat-row bot" id="bot">
+      <div class="chat-avatar bot"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg><span class="chat-live-dot"></span></div>
+      <div class="chat-col">
+        <div class="chat-name">StreamNavigator <span class="chat-time">&middot; now</span><span class="pro-flag">PRO</span></div>
+        <div class="chat-bubble" id="botBubble">
+          <div class="dots" id="dots"><span></span><span></span><span></span></div>
+          <div id="botText">Time to pause HBO Max &mdash; you'll save $16.99/mo. Here's your direct link to do it in one tap.</div>
+          <span class="chat-action" id="action"><i class="pz"></i> Pause HBO Max &rarr;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2. The hero headline -->
+<section class="scene" id="s2">
+  <h1 class="big" id="h1"></h1>
+</section>
+
+<!-- 3. The sample-account screen from the page -->
+<section class="scene" id="s3">
+  <div class="eyebrow">Example account</div>
+  <div class="shot">
+    <div class="shot-bar"><span></span><span></span><span></span></div>
+    <div class="shot-body">
+      <div class="search-row"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 11-14h-7l1-6z"/></svg><span><span id="amt">$0</span>/mo in potential savings found</span></div>
+      <div class="result-card r"><div class="thumb"></div><div class="result-meta"><h4>Disney+ — Premium Bundle</h4><p>$19.99/mo &middot; Paused</p><span class="timestamp-chip chip-danger c">✕ Cancel to save $19.99/mo</span></div></div>
+      <div class="result-card r"><div class="thumb" style="background:var(--gradient-warm)"></div><div class="result-meta"><h4>HBO Max — Ad-Free Plan</h4><p>$16.99/mo &middot; Active</p><span class="timestamp-chip chip-alert c">⚠ Downgrade to save $7/mo</span></div></div>
+      <div class="result-card r" style="margin-bottom:0"><div class="thumb" style="background:var(--surface-2)"></div><div class="result-meta"><h4>Prime Video</h4><p>$8.99/mo &middot; Active</p><span class="timestamp-chip chip-save c">✓ Optimized</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. The two dates -->
+<section class="scene" id="s4">
+  <div class="eyebrow">It checks the real TV schedule</div>
+  <h2 class="mid" id="h2">And tells you two dates.</h2>
+  <div class="cards">
+    <div class="day off" id="d1"><div class="k"><i class="pz"></i> Switch off</div><div class="v">Which day to switch something off</div></div>
+    <div class="day on" id="d2"><div class="k"><i class="pl"></i> Turn back on</div><div class="v">Which day your show is back</div></div>
+  </div>
+</section>
+
+<!-- 5. Outro -->
+<section class="scene" id="s5">
+  <div class="logo" id="logo"><span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></svg></span>StreamNavigator</div>
+  <div class="tag" id="tag">Free analyzer. No account, no card.</div>
+  <div class="url" id="url">streamnavigator.ai/streaming</div>
+  <div class="fine" id="fine">$19.99/year if you want us watching the schedule for you.</div>
+</section>
+
+<svg class="cursor" id="cursor" viewBox="0 0 24 24"><path d="M4 2l15 11-6.5 1 3.6 7-2.7 1.3-3.6-7L4 20z" fill="#1B2A3A" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+<div class="ripple" id="ripple"></div>
+
+<script>
+window.DURATION = 20;
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const out = (x) => 1 - Math.pow(1 - x, 3);
+const back = (x) => { const c = 1.7; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const lerp = (a, b, x) => a + (b - a) * x;
+const appear = (el, t, at, dy = 30, dur = 0.45) => {
+  const k = out(p(t, at, at + dur));
+  el.style.opacity = k; el.style.transform = `translateY(${(1 - k) * dy}px)`;
+};
+const pop = (el, t, at, dur = 0.35) => {
+  const k = p(t, at, at + dur);
+  el.style.opacity = clamp(k * 3); el.style.transform = `scale(${lerp(0.6, 1, back(k))})`;
+};
+// scene window: fade in over 0.3s from a, fade out over 0.3s to b
+const scene = (el, t, a, b) => {
+  const v = Math.min(p(t, a, a + 0.3), 1 - p(t, b - 0.3, b));
+  el.style.opacity = v; el.style.display = v > 0 ? 'flex' : 'none';
+  el.style.transform = `translateY(${(1 - out(p(t, a, a + 0.5))) * 24 - p(t, b - 0.3, b) * 24}px)`;
+  return v > 0;
+};
+
+const YOU = '"I haven\'t opened HBO Max in weeks."';
+const H1 = ['Stop', 'paying', 'for', 'streaming', '<br>', 'you', '<g>don\'t', 'even', 'watch</g>.'];
+$('h1').innerHTML = H1.map((w) => w === '<br>' ? '<br>'
+  : w.startsWith('<g>') ? '<span class="grad" id="g"><span class="w">' + w.slice(3) + '</span>'
+  : w.endsWith('</g>.') ? '<span class="w">watch</span><span class="underline" id="ul"></span></span><span class="w">.</span>'
+  : '<span class="w">' + w + '</span>').join(' ');
+
+window.seek = (t) => {
+  // 1. chat 0 - 5.5
+  if (scene($('s1'), t, -1, 5.5)) {
+    appear($('you'), t, 0.1);
+    $('youText').textContent = YOU.slice(0, Math.round(YOU.length * p(t, 0.3, 1.5)));
+    appear($('bot'), t, 2.0);
+    const typing = t < 2.6;
+    $('dots').style.display = typing ? 'block' : 'none';
+    $('dots').querySelectorAll('span').forEach((d, i) => d.style.transform = `translateY(${-5 * Math.max(0, Math.sin((t * 6 - i * 0.8)))}px)`);
+    $('botText').style.display = typing ? 'none' : 'block';
+    $('action').style.display = typing ? 'none' : 'flex';
+    if (!typing) appear($('botText'), t, 2.6, 8, 0.3);
+    pop($('action'), t, 3.3);
+    const press = t > 4.3 && t < 4.45 ? 0.93 : 1;
+    if (t > 3.6) $('action').style.transform = `scale(${press})`;
+    $('action').style.background = t > 4.35 ? 'var(--ok-tint)' : '#fff';
+    pop($('toast'), t, 4.45);
+    $('toast').style.transform = `translateX(-50%) scale(${lerp(0.6, 1, back(p(t, 4.45, 4.8)))})`;
+  }
+  // cursor travels to the action pill and taps it
+  const r = $('action').getBoundingClientRect();
+  const tx = r.left + r.width * 0.55, ty = r.top + r.height * 0.6;
+  const m = out(p(t, 3.5, 4.2));
+  const cv = Math.min(p(t, 3.5, 3.7), 1 - p(t, 5.0, 5.3));
+  $('cursor').style.opacity = cv;
+  const V = document.documentElement.classList.contains('vertical');
+  $('cursor').style.left = lerp(V ? 900 : 1500, tx, m) + 'px';
+  $('cursor').style.top = lerp(V ? 1750 : 1000, ty, m) + 'px';
+  const rp = p(t, 4.3, 4.9);
+  $('ripple').style.opacity = rp > 0 && rp < 1 ? 1 - rp : 0;
+  $('ripple').style.left = tx - 30 + 'px'; $('ripple').style.top = ty - 30 + 'px';
+  $('ripple').style.transform = `scale(${0.4 + rp * 1.6})`;
+
+  // 2. headline 5.5 - 9.0
+  if (scene($('s2'), t, 5.5, 9.0)) {
+    document.querySelectorAll('#h1 .w').forEach((w, i) => {
+      const k = out(p(t, 5.65 + i * 0.09, 6.15 + i * 0.09));
+      w.style.opacity = k; w.style.transform = `translateY(${(1 - k) * 60}px)`;
+    });
+    $('ul').style.width = '100%';
+    $('ul').style.transform = `scaleX(${out(p(t, 6.6, 7.1))})`;
+  }
+
+  // 3. sample account 9.0 - 14.0
+  if (scene($('s3'), t, 9.0, 14.0)) {
+    $('amt').textContent = '$' + Math.round(187 * out(p(t, 9.3, 10.6)));
+    document.querySelectorAll('#s3 .r').forEach((el, i) => appear(el, t, 9.6 + i * 0.35, 40));
+    document.querySelectorAll('#s3 .c').forEach((el, i) => pop(el, t, 10.9 + i * 0.4));
+  }
+
+  // 4. two dates 14.0 - 17.0
+  if (scene($('s4'), t, 14.0, 17.0)) {
+    appear($('h2'), t, 14.2, 30);
+    pop($('d1'), t, 14.7, 0.4); pop($('d2'), t, 15.1, 0.4);
+  }
+
+  // 5. outro 17.0 - 20
+  if (scene($('s5'), t, 17.0, 99)) {
+    pop($('logo'), t, 17.1, 0.45);
+    appear($('tag'), t, 17.5); appear($('url'), t, 17.8); appear($('fine'), t, 18.1);
+  }
+};
+window.seek(0);
+// Soundtrack cues for synth.js (same as score.json)
+window.SCORE = [{"t": 0.1, "type": "pop"}, {"t": 0.35, "type": "type"}, {"t": 0.45, "type": "type"}, {"t": 0.58, "type": "type"}, {"t": 0.7, "type": "type"}, {"t": 0.8, "type": "type"}, {"t": 0.95, "type": "type"}, {"t": 1.05, "type": "type"}, {"t": 1.18, "type": "type"}, {"t": 1.3, "type": "type"}, {"t": 1.42, "type": "type"}, {"t": 2.0, "type": "pop"}, {"t": 2.6, "type": "pop"}, {"t": 3.3, "type": "pop"}, {"t": 4.3, "type": "tap"}, {"t": 4.45, "type": "chime"}, {"t": 5.3, "type": "whoosh"}, {"t": 6.6, "type": "pop"}, {"t": 8.8, "type": "whoosh"}, {"t": 9.6, "type": "pop", "note": 72}, {"t": 9.95, "type": "pop", "note": 76}, {"t": 10.3, "type": "pop", "note": 79}, {"t": 10.9, "type": "pop", "note": 84}, {"t": 11.3, "type": "pop", "note": 81}, {"t": 11.7, "type": "pop", "note": 88}, {"t": 13.8, "type": "whoosh"}, {"t": 14.7, "type": "pop"}, {"t": 15.1, "type": "pop"}, {"t": 16.8, "type": "whoosh"}, {"t": 17.1, "type": "chime"}];
+</script>
+</body>
+</html>
