@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>StreamNavigator launch video</title>
+<link rel="stylesheet" href="../fonts/fonts.css" />
+<link rel="stylesheet" href="engine.css" />
+</head>
+<body>
+<script>
+  // index.html?v=<name> loads video/<name>/spec.js, then the engine.
+  const v = new URLSearchParams(location.search).get('v');
+  document.write('<script src="../' + v + '/spec.js"><\/script><script src="engine.js"><\/script>');
+</script>
+</body>
+</html>

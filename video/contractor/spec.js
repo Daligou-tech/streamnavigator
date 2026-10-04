@@ -1,0 +1,23 @@
+// Copy and figures from /contractor.html (hero ledger, check list, sample report).
+window.SPEC = { scenes: [
+  { type: 'hook', dur: 3.6, eyebrow: 'Contractor Estimate Audit',
+    text: 'Before you sign, know what the estimate actually says.', accent: 'actually says.' },
+  { type: 'ledger', dur: 5.0, eyebrow: 'Example finding',
+    head: ['Quote 1 — HVAC changeout', 'California'],
+    rows: [['Contract price', '$14,850'], ['Deposit at signing', '$4,000', true], ['Statutory cap', '$1,000']],
+    note: 'California caps a home improvement down payment at the lesser of $1,000 or 10% of the contract price.',
+    foot: '$3,000.00 — not payable at signing' },
+  { type: 'checks', dur: 4.4, total: 32, label: 'checks on an HVAC estimate',
+    items: ['Quantity times unit price equals the amount on each line', 'The tax charged matches the tax rate the estimate prints',
+      'The deposit is within your state’s statutory limit', 'The estimate carries a contractor licence number you can look up',
+      'Extra work needs your written approval before it is charged', 'A contract signed at your home carries the three-day cancellation notice',
+      'Any tax credit the estimate promises still exists', 'The unit price sits inside published national cost ranges',
+      'The equipment meets the federal minimum efficiency for your region'] },
+  { type: 'finding', dur: 3.8, eyebrow: 'A sample report',
+    title: 'Quantity times unit price equals the amount on each line — failed', amt: '$200.00',
+    p: 'One line does not multiply out.',
+    basis: '“Installation labour”: 16 at $145.00 is $2,320.00, but the line reads $2,520.00. Both figures are printed on the estimate.',
+    cite: 'Ran on the estimate’s own figures', pill: ['Fix before you sign', 'flag'] },
+  { type: 'outro', dur: 3.2, product: 'Contractor Estimate Audit', tag: 'HVAC, roofing, windows, plumbing, electrical.',
+    url: 'streamnavigator.ai/contractor', fine: '$49, before you sign.' },
+] };
