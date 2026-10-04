@@ -1,0 +1,105 @@
+name: videos
+
+# Re-renders the launch videos (landscape and vertical) and attaches them to
+# the run as downloadable artifacts, named the way the Dropbox Videos folder
+# names them ("StreamNavigator - Contractor.mp4").
+#
+# It renders when a video's own script in video/<name>/ changes, or when the
+# shared engine does (then every video). The videos carry their own copy of
+# each page's words, so a page edit alone would render the same video again;
+# instead the run summary lists those videos as possibly out of date.
+#
+# To render by hand: Actions -> videos -> Run workflow, and enter "all" or a
+# list such as "contractor,hoa".
+
+on:
+  push:
+    branches: [main]
+    paths: ['video/**', '*.html', '.github/workflows/videos.yml']
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: 'Videos to render: "all", or names such as contractor,hoa'
+        default: all
+        required: true
+
+concurrency:
+  group: videos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      render: ${{ steps.plan.outputs.render }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          PAGES: ${{ github.event.inputs.pages }}
+          BASE: ${{ github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            out=$(node video/changed.js --pages "$PAGES")
+          else
+            out=$(node video/changed.js "$BASE" "$HEAD")
+          fi
+          echo "$out"
+          render=$(node -e "console.log(JSON.stringify(JSON.parse(process.argv[1]).render))" "$out")
+          stale=$(node -e "console.log(JSON.parse(process.argv[1]).stale.join(', '))" "$out")
+          echo "render=$render" >> "$GITHUB_OUTPUT"
+          echo "any=$([ "$render" = "[]" ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Videos"
+            echo "Rendering: ${render}"
+            if [ -n "$stale" ]; then
+              echo ""
+              echo "**Possibly out of date:** $stale"
+              echo ""
+              echo "These pages changed but their video scripts (video/<name>/spec.js or index.html) did not."
+              echo "Update the script with the page's new copy and the video will re-render on the next push."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  render:
+    needs: plan
+    if: needs.plan.outputs.any == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        video: ${{ fromJSON(needs.plan.outputs.render) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install ffmpeg and a headless browser
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          npm install -g playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Render landscape and vertical
+        run: |
+          bash video/build.sh "${{ matrix.video }}"
+          FORMAT=v bash video/build.sh "${{ matrix.video }}"
+      - name: Name files for the Dropbox folder
+        run: |
+          title=$(node -e '
+            const t = { index: "Homepage", buying: "Purchase", hoa: "HOA" };
+            const n = process.argv[1];
+            console.log(t[n] || n.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "));
+          ' "${{ matrix.video }}")
+          mkdir -p out/landscape out/vertical
+          cp "brag-output/${{ matrix.video }}/brag.mp4" "out/landscape/StreamNavigator - $title.mp4"
+          cp "brag-output/${{ matrix.video }}/vertical.mp4" "out/vertical/StreamNavigator - $title.mp4"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: video-${{ matrix.video }}
+          path: out/
+          retention-days: 30
