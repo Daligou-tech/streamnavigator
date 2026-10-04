@@ -10,7 +10,7 @@ if [ -f "video/$name/index.html" ]; then src="video/$name/index.html"; else src=
 node video/render.js "$src" "$out/work/x" --score "$out/work/score.json"
 node video/synth.js "$out/work/score.json" "$out/work/audio.wav"
 dur=$(node -e "console.log(require('./$out/work/score.json').duration)")
-poster=$(node -e "console.log(($dur - 0.6).toFixed(2))")
+poster=${POSTER_T:-$(node -e "console.log(($dur - 0.6).toFixed(2))")}
 node video/render.js "$src" "$out/work/x.mp4" --stills "$poster"
 cp "$out/work/still-$poster.jpg" "$out/brag.jpg"
 node video/render.js "$src" "$out/work/noposter.mp4" --audio "$out/work/audio.wav" > /dev/null
