@@ -8,17 +8,19 @@ license: MIT
 
 Behavioral guidelines to reduce common LLM coding mistakes, derived from [Andrej Karpathy's observations](https://x.com/karpathy/status/2015883857489522876) on LLM coding pitfalls.
 
+> Local edit: section 1 is adapted to prefer sensible defaults over asking. Upstream: multica-ai/andrej-karpathy-skills.
+
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
 ## 1. Think Before Coding
 
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
+**Don't hide assumptions. Don't hide confusion. Surface tradeoffs.**
 
 Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
+- State your assumptions explicitly.
+- If multiple interpretations exist, pick the most sensible default and say which one you picked and why - never pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
+- Only stop and ask when you are genuinely blocked: missing information you cannot find, or a decision only the user can make.
 
 ## 2. Simplicity First
 
