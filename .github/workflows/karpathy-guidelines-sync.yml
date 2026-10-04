@@ -1,0 +1,39 @@
+name: Check karpathy-guidelines upstream
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"  # Mondays 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare upstream with pinned version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          FILE=skills/karpathy-guidelines/SKILL.md
+          PINNED=$(cat .claude/skills/karpathy-guidelines/UPSTREAM_SHA)
+          LATEST=$(gh api "repos/multica-ai/andrej-karpathy-skills/commits?path=$FILE&per_page=1" --jq '.[0].sha')
+          echo "pinned=$PINNED latest=$LATEST"
+          if gh api "repos/multica-ai/andrej-karpathy-skills/compare/$PINNED...$LATEST" --jq '.files[].filename' | grep -qx "$FILE"; then
+            TITLE="karpathy-guidelines upstream changed (${LATEST:0:7})"
+            if gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq 'length' | grep -qx 0; then
+              {
+                echo "Upstream \`$FILE\` changed since the pinned commit \`${PINNED:0:7}\`."
+                echo
+                echo "Diff: https://github.com/multica-ai/andrej-karpathy-skills/compare/$PINNED...$LATEST"
+                echo
+                echo "To adopt: merge the changes into \`.claude/skills/karpathy-guidelines/SKILL.md\` (keep the local section 1 edit) and set \`UPSTREAM_SHA\` to \`$LATEST\`."
+              } > body.md
+              gh issue create --title "$TITLE" --body-file body.md
+            fi
+          else
+            echo "No upstream changes to $FILE."
+          fi
