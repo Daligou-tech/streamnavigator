@@ -2,7 +2,8 @@ name: videos
 
 # Re-renders the launch videos (landscape and vertical) and attaches them to
 # the run as downloadable artifacts, named the way the Dropbox Videos folder
-# names them ("StreamNavigator - Contractor.mp4").
+# names them ("StreamNavigator - Contractor.mp4"). With the Dropbox secrets
+# set, the vertical cut also replaces the file in that folder.
 #
 # It renders when a video's own script in video/<name>/ changes, or when the
 # shared engine does (then every video). The videos carry their own copy of
@@ -103,3 +104,30 @@ jobs:
           name: video-${{ matrix.video }}
           path: out/
           retention-days: 30
+      # Replaces the vertical video in the Dropbox Videos folder. Needs three
+      # repository secrets: DROPBOX_APP_KEY, DROPBOX_APP_SECRET and
+      # DROPBOX_REFRESH_TOKEN (a refresh token never expires; the access token
+      # it buys lasts four hours, which is why a fixed token is not used).
+      # Without them this step is skipped and the artifact is the delivery.
+      - name: Upload to Dropbox
+        env:
+          DROPBOX_APP_KEY: ${{ secrets.DROPBOX_APP_KEY }}
+          DROPBOX_APP_SECRET: ${{ secrets.DROPBOX_APP_SECRET }}
+          DROPBOX_REFRESH_TOKEN: ${{ secrets.DROPBOX_REFRESH_TOKEN }}
+          DROPBOX_FOLDER: /AI Business/StreamNavigator/Videos
+        run: |
+          if [ -z "$DROPBOX_REFRESH_TOKEN" ]; then
+            echo "Dropbox secrets not set; skipping upload."
+            exit 0
+          fi
+          token=$(curl -sSf https://api.dropbox.com/oauth2/token \
+            -d grant_type=refresh_token -d refresh_token="$DROPBOX_REFRESH_TOKEN" \
+            -u "$DROPBOX_APP_KEY:$DROPBOX_APP_SECRET" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).access_token))')
+          echo "::add-mask::$token"
+          for f in out/vertical/*.mp4; do
+            arg=$(node -e 'console.log(JSON.stringify({ path: process.argv[1], mode: "overwrite", mute: true }))' "$DROPBOX_FOLDER/$(basename "$f")")
+            curl -sSf https://content.dropboxapi.com/2/files/upload \
+              -H "Authorization: Bearer $token" -H "Content-Type: application/octet-stream" \
+              -H "Dropbox-API-Arg: $arg" --data-binary @"$f" > /dev/null
+            echo "Uploaded $DROPBOX_FOLDER/$(basename "$f")"
+          done
