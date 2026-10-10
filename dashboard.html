@@ -1196,27 +1196,10 @@
     // very next load with no separate cleanup needed.
     if (userPlan === 'free') {
       try {
-        const { data: memberRow } = await client
-          .from('household_members')
-          .select('household_id')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
-        if (memberRow && memberRow.household_id) {
-          const { data: houseRow } = await client
-            .from('households')
-            .select('owner_user_id')
-            .eq('id', memberRow.household_id)
-            .maybeSingle();
-          if (houseRow && houseRow.owner_user_id) {
-            const { data: ownerPlanRow } = await client
-              .from('subscribers')
-              .select('plan')
-              .eq('user_id', houseRow.owner_user_id)
-              .maybeSingle();
-            if (ownerPlanRow && ownerPlanRow.plan === 'family') userPlan = 'family';
-          }
-        }
+        // household_plan() reads the owner's plan server-side, so the owner's
+        // subscriber row never has to be readable by members.
+        const { data: householdPlan } = await client.rpc('household_plan');
+        if (householdPlan === 'family') userPlan = 'family';
       } catch (err) { /* stay on whatever plan was already resolved */ }
     }
 
