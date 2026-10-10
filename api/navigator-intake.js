@@ -18,6 +18,7 @@
 // (see api/_lib/contractor-engine.js for the one product wired up so far).
 
 const { getSupabaseAdmin, ALLOWED_PRODUCTS } = require('./_lib/supabaseAdmin');
+const { canTakePaidWork } = require('./_lib/provider-health');
 const { isTestEmail } = require('./_lib/test-submissions');
 const { checkBuyingSufficiency } = require('../navigator-buying-rules');
 const { checkEntitlement, consumeEntitlement, ENTITLED_PRODUCTS } = require('./_lib/rental-entitlement');
@@ -72,6 +73,13 @@ module.exports = async function handler(req, res) {
   const product = String(body.product || '');
   if (!ALLOWED_PRODUCTS.includes(product)) {
     res.status(400).json({ ok: false, error: 'Unknown product' });
+    return;
+  }
+
+  // Don't send anyone to checkout for a report we cannot write right now.
+  const health = await canTakePaidWork();
+  if (!health.ok) {
+    res.status(503).json({ ok: false, error: 'Reports are temporarily unavailable. You have not been charged — please try again later.' });
     return;
   }
 
