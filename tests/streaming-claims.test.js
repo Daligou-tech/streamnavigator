@@ -242,6 +242,14 @@ test('the retired Stripe links are documented as needing deactivation', () => {
   const entries = Object.entries(cfg.unreferencedActiveLinks).filter(([k]) => k !== '_comment');
   assert.ok(entries.length >= 2, 'the old monthly links are no longer listed');
   for (const [id, reason] of entries) {
+    // The one live exception is the $19.99/year link itself: streaming.html
+    // sits in _skipped, so no `pages` entry can point at it.
+    if (/^LIVE\b/.test(reason)) {
+      const page = fs.readFileSync(path.join(root, 'streaming.html'), 'utf8');
+      assert.ok(/href="https:\/\/buy\.stripe\.com\//.test(page),
+        `${id} is listed as LIVE but streaming.html links to no Payment Link`);
+      continue;
+    }
     assert.ok(/DEACTIVATED/.test(reason),
       `${id} is unreferenced but its note does not say it must be deactivated in Stripe`);
   }
