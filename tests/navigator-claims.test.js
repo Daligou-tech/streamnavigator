@@ -91,7 +91,9 @@ test('no page sells a year the code does not grant', () => {
   for (const { file, product, src } of PRODUCT_PAGES) {
     if (ENTITLED_PRODUCTS.includes(product)) continue;
     visible(src).split('\n').forEach((line, i) => {
-      if (claim.test(line) && !/year_built|Year Built/i.test(line)) {
+      // The customer's own subscriptions billed per year (the form's
+      // "Billed: per year" option) are not something we sell.
+      if (claim.test(line) && !/year_built|Year Built|&ldquo;Billed&rdquo; to per year/i.test(line)) {
         offenders.push(`${file}:${i + 1} ${line.trim().replace(/<[^>]+>/g, '').slice(0, 80)}`);
       }
     });
