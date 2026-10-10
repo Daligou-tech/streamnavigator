@@ -98,9 +98,12 @@ test('only link targets are rewritten, never the placeholder named in prose', ()
   const site = fs.readFileSync(path.join(root, 'streaming.html'), 'utf8');
   const total = site.split(M.PLACEHOLDER).length - 1;
   const hrefs = M.countHrefs(site);
+  // Migrated on 2026-10-10: the link now carries the live URL, and the setup
+  // instructions that name the placeholder in prose must still be intact.
   assert.ok(total > hrefs,
     'this test is pointless unless streaming.html mentions the placeholder outside an href');
-  assert.strictEqual(hrefs, 1, `expected exactly one placeholder link, found ${hrefs}`);
+  assert.strictEqual(hrefs, 0, `expected no placeholder link after migration, found ${hrefs}`);
+  assert.ok(site.includes('href="https://buy.stripe.com/'), 'the subscribe button should carry the live Payment Link');
 });
 
 test('the placeholder is replaced in every link, and nowhere else', () => {
