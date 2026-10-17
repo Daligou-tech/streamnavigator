@@ -98,9 +98,6 @@
   .five div:last-child{border-bottom:none}}
 .five b{display:block;font-size:.95rem;margin-bottom:5px}
 .five span{font-size:.84rem;color:var(--ink-soft);line-height:1.45;display:block}
-
-.pending{border:1px solid var(--hold);background:var(--hold-tint);padding:13px 16px;
-  font-size:.88rem;line-height:1.55;margin-top:14px}
 </style>
 </head>
 <body>
@@ -292,39 +289,6 @@
         <a href="https://buy.stripe.com/8x2dR98gk2E4gEQ7ZSabK0m" data-stripe-link="subscriptions" class="btn" id="pay-btn" style="width:100%;text-align:center">Get the full report &mdash; $29</a>
         <p id="intake-error" style="display:none; margin-top:12px; margin-bottom:0; color:var(--flag); font-size:.88rem; line-height:1.5; font-weight:500;"></p>
 
-        <!--
-          ====================================================================
-          ONE MANUAL STEP REMAINS BEFORE THIS PAGE CAN TAKE MONEY.
-
-          The price moved from $49 to $29 on 2026-09-19 (see
-          docs/SUBSCRIPTIONS-AUDIT.md, section H). The old $49 Payment Link
-          4gMaEXbsw2E49co5RKabK07 is still what Stripe holds, so it is
-          deliberately NOT linked here: a page showing $29 against a link that
-          charges $49 is the exact defect scripts/check-prices.js was written
-          for after buying.html displayed $39 while its button pointed at the
-          $19 link.
-
-          To go live:
-            1. Stripe -> Product catalog -> Subscription Navigator Report ->
-               add a $29 one-time price.
-            2. Payment links -> New -> pick it -> after payment, redirect to
-               https://streamnavigator.ai/navigator-status
-            3. Put the resulting https://buy.stripe.com/... URL in the href
-               above AND in prices.config.json (stripeLinkId), then move
-               subscriptions.html back out of "_skipped" into "pages".
-            4. Deactivate the old $49 link so nobody holding the URL can buy
-               at a price we no longer sell.
-            5. npm run check-prices
-
-          Until then the button below refuses to send anyone to checkout
-          rather than charging them $49 for a $29 product. See the
-          REPLACE_WITH_ guard in the script at the bottom of this file and
-          tests/subscriptions-page.test.js.
-          ====================================================================
-        -->
-        <div class="pending" id="pending-note">
-          <strong>Checkout is being updated.</strong> The price moved to $29 and the new checkout link is not live yet, so this button is switched off rather than charging you the old price. Email <a href="mailto:hello@streamnavigator.ai">hello@streamnavigator.ai</a> and we will send you the link. Your scorecard above is complete and costs nothing.
-        </div>
       </div>
     </div>
   </div>
